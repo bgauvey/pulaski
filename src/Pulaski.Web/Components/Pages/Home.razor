@@ -13,20 +13,20 @@
 @inject CurrentUser User
 @inject TimeProvider Time
 
-<PageTitle>Overview · Pulaski</PageTitle>
+<PageTitle>@L["Overview"] · Pulaski</PageTitle>
 
 <header class="ov-head">
     <div>
-        <h1 class="ov-title">@(Site?.Name ?? "Overview")</h1>
+        <h1 class="ov-title">@(Site?.Name ?? L["Overview"])</h1>
         <p class="ov-when">
-            <span>@SiteNow.ToString("dddd d MMMM", CultureInfo.InvariantCulture)</span>
-            <span class="ov-clock">@SiteNow.ToString("HH:mm", CultureInfo.InvariantCulture) site time</span>
+            <span>@SiteNow.ToString("dddd d MMMM", CultureInfo.CurrentCulture)</span>
+            <span class="ov-clock">@L["{0} site time", SiteNow.ToString("HH:mm", CultureInfo.InvariantCulture)]</span>
         </p>
     </div>
     <div class="ov-tools">
         @if (_sites.Count > 1)
         {
-            <select class="form-select" aria-label="Site" value="@_siteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select" aria-label="@L["Site"]" value="@_siteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in _sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -35,9 +35,9 @@
         }
         <span class="ov-live @(IsStale ? "is-stale" : "")" role="status">
             <span class="ov-live-dot" aria-hidden="true"></span>
-            @(_loadedAt is null ? "Connecting…" : IsStale ? $"Stale since {ScheduleFormat.Time(_loadedAt.Value, Tz)}" : $"Live, updated {ScheduleFormat.Time(_loadedAt.Value, Tz)}")
+            @(_loadedAt is null ? L["Connecting…"] : IsStale ? L["Stale since {0}", ScheduleFormat.Time(_loadedAt.Value, Tz)] : L["Live, updated {0}", ScheduleFormat.Time(_loadedAt.Value, Tz)])
         </span>
-        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Refresh now" title="Refresh now"
+        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="@L["Refresh now"]" title="@L["Refresh now"]"
                 disabled="@_loading" @onclick="RefreshAsync">
             <Icon Name="refresh" Size="18" />
         </button>
@@ -50,13 +50,13 @@
 {
     <div class="ov-stale" role="alert">
         <Icon Name="alert" Size="18" />
-        These figures are from @ScheduleFormat.Time(_loadedAt.Value, Tz) and may be out of date: Pulaski can't reach the API. It keeps retrying.
+        @L["These figures are from {0} and may be out of date: Pulaski can't reach the API. It keeps retrying.", ScheduleFormat.Time(_loadedAt.Value, Tz)]
     </div>
 }
 
 @* ---- Needs attention ---- *@
 <section class="ov-attention" aria-labelledby="attention-title">
-    <h2 id="attention-title" class="visually-hidden">Needs attention</h2>
+    <h2 id="attention-title" class="visually-hidden">@L["Needs attention"]</h2>
     @foreach (var cell in Attention)
     {
         var tone = cell.IsPlaceholder ? "is-placeholder" : cell.Count > 0 ? $"is-{cell.Tone}" : "is-zero";
@@ -74,12 +74,12 @@
 @* ---- This shift: OEE is calculated from machine data; other measures remain placeholders. *@
 <section class="ov-summary" aria-labelledby="summary-title">
     <div class="ov-summary-head">
-        <h2 id="summary-title" class="ov-h2">This shift</h2>
+        <h2 id="summary-title" class="ov-h2">@L["This shift"]</h2>
         <span class="ov-pending"><Icon Name="plug" Size="16" /> @OeeSummaryNote</span>
     </div>
     <div class="ov-summary-band">
         <div class="ov-sum">
-            <span class="ov-sum-label">OEE</span>
+            <span class="ov-sum-label">@L["OEE"]</span>
             <span class="ov-sum-value @(CurrentShiftOee?.OeePct is null ? "is-ghost" : "")">@FormatPct(CurrentShiftOee?.OeePct)</span>
             <div class="ov-apq" aria-label="@OeeSummaryLabel">
                 @foreach (var part in OeeParts(CurrentShiftOee))
@@ -99,7 +99,7 @@
             </div>
         </div>
         <div class="ov-sum">
-            <span class="ov-sum-label">Good output</span>
+            <span class="ov-sum-label">@L["Good output"]</span>
             @if (_overview is null)
             {
                 <span class="ov-sum-value is-ghost">—</span>
@@ -113,17 +113,17 @@
             {
                 @foreach (var q in GoodOutput)
                 {
-                    <span class="ov-sum-value @(GoodOutput.Count > 1 ? "is-small" : "")">@Number(q.Qty) <span class="ov-sum-unit">@(q.Of > 0 ? $"of {Number(q.Of)} {q.UomCode}" : q.UomCode)</span></span>
+                    <span class="ov-sum-value @(GoodOutput.Count > 1 ? "is-small" : "")">@Number(q.Qty) <span class="ov-sum-unit">@(q.Of > 0 ? L["of {0} {1}", Number(q.Of), q.UomCode] : q.UomCode)</span></span>
                     @if (q.Of > 0)
                     {
                         <span class="ov-meter is-wide"><span class="ov-meter-fill" style="width: @MeterWidth(q.Qty / q.Of * 100m)"></span></span>
                     }
                 }
             }
-            <span class="ov-sum-note">@(_overview is null ? "From production reports" : GoodOutput.Count == 0 ? "Nothing reported or planned this shift" : "Reported this shift, against the plan for the shift")</span>
+            <span class="ov-sum-note">@(_overview is null ? L["From production reports"] : GoodOutput.Count == 0 ? L["Nothing reported or planned this shift"] : L["Reported this shift, against the plan for the shift"])</span>
         </div>
         <div class="ov-sum">
-            <span class="ov-sum-label">Scrap</span>
+            <span class="ov-sum-label">@L["Scrap"]</span>
             @if (_overview is null)
             {
                 <span class="ov-sum-value is-ghost">—</span>
@@ -139,25 +139,25 @@
                     <span class="ov-sum-value @(ScrapOutput.Count > 1 ? "is-small" : "")">@Number(q.Qty) <span class="ov-sum-unit">@q.UomCode@(q.Of > 0 ? $" · {FormatPct(Math.Round(q.Qty / q.Of * 100m, 1))}" : "")</span></span>
                 }
             }
-            <span class="ov-sum-note">@(_overview is not null && ScrapOutput.Count == 0 ? "Nothing reported this shift" : "Quantity and share of output")</span>
+            <span class="ov-sum-note">@(_overview is not null && ScrapOutput.Count == 0 ? L["Nothing reported this shift"] : L["Quantity and share of output"])</span>
         </div>
         <div class="ov-sum">
-            <span class="ov-sum-label">Downtime</span>
+            <span class="ov-sum-label">@L["Downtime"]</span>
             @if (_overview is null || !AnyTracked)
             {
-                <span class="ov-sum-value is-ghost">— <span class="ov-sum-unit">min</span></span>
+                <span class="ov-sum-value is-ghost">— <span class="ov-sum-unit">@L["min"]</span></span>
                 <span class="ov-sum-note">
                     @if (_overview is not null)
                     {
                         <Icon Name="plug" Size="14" />
                     }
-                    @(_overview is null ? "With the biggest reason named" : "Needs machine data: no line reports its state")
+                    @(_overview is null ? L["With the biggest reason named"] : L["Needs machine data: no line reports its state"])
                 </span>
             }
             else
             {
-                <span class="ov-sum-value">@Number(Math.Round(DownMinutes)) <span class="ov-sum-unit">min</span></span>
-                <span class="ov-sum-note">@(TopReason is { } top ? $"Top: {top.Name}, {Number(Math.Round(top.Minutes))} min" : "No down time this shift")</span>
+                <span class="ov-sum-value">@Number(Math.Round(DownMinutes)) <span class="ov-sum-unit">@L["min"]</span></span>
+                <span class="ov-sum-note">@(TopReason is { } top ? L["Top: {0}, {1} min", top.Name, Number(Math.Round(top.Minutes))] : L["No down time this shift"])</span>
             }
         </div>
     </div>
@@ -166,15 +166,15 @@
 @* ---- Line board ---- *@
 <section class="ov-board" aria-labelledby="board-title">
     <div class="ov-board-head">
-        <h2 id="board-title" class="ov-h2">Lines</h2>
-        <ul class="ov-key" aria-label="Key">
-            <li><span class="ov-swatch is-run"></span>Running</li>
-            <li><span class="ov-swatch is-down"></span>Down</li>
-            <li><span class="ov-swatch is-stop"></span>Planned stop</li>
-            <li><span class="ov-swatch is-nosignal"></span>No signal</li>
-            <li><span class="ov-swatch is-planned"></span>Planned</li>
-            <li><span class="ov-swatch is-published"></span>Dispatched or firmed</li>
-            <li><span class="ov-swatch is-changeover"></span>Changeover</li>
+        <h2 id="board-title" class="ov-h2">@L["Lines"]</h2>
+        <ul class="ov-key" aria-label="@L["Key"]">
+            <li><span class="ov-swatch is-run"></span>@L["Running"]</li>
+            <li><span class="ov-swatch is-down"></span>@L["Down"]</li>
+            <li><span class="ov-swatch is-stop"></span>@L["Planned stop"]</li>
+            <li><span class="ov-swatch is-nosignal"></span>@L["No signal"]</li>
+            <li><span class="ov-swatch is-planned"></span>@L["Planned"]</li>
+            <li><span class="ov-swatch is-published"></span>@L["Dispatched or firmed"]</li>
+            <li><span class="ov-swatch is-changeover"></span>@L["Changeover"]</li>
         </ul>
     </div>
 
@@ -190,25 +190,25 @@
     else if (_lines.Count == 0)
     {
         <div class="ov-empty">
-            <p class="mb-1 fw-semibold">No lines in @(Site?.Code ?? "this site") yet.</p>
-            <p class="mb-0 text-muted">Add a work center that can run jobs on <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink>, and it appears here.</p>
+            <p class="mb-1 fw-semibold">@(Site?.Code is { } code ? L["No lines in {0} yet.", code] : L["No lines in this site yet."])</p>
+            <p class="mb-0 text-muted">@L["Add a work center that can run jobs on"] <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">@L["Equipment"]</ScreenLink>@L[", and it appears here."]</p>
         </div>
     }
     else
     {
-        <div class="ov-rows" role="table" aria-label="Lines">
+        <div class="ov-rows" role="table" aria-label="@L["Lines"]">
             <div class="ov-row is-head" role="row">
-                <span role="columnheader">Line</span>
-                <span role="columnheader">State</span>
-                <span role="columnheader">Now or next</span>
+                <span role="columnheader">@L["Line"]</span>
+                <span role="columnheader">@L["State"]</span>
+                <span role="columnheader">@L["Now or next"]</span>
                 <span role="columnheader" class="ov-scale">
                     @foreach (var (percent, label) in _window.Ticks(Tz, _window.TickStep))
                     {
                         <span class="ov-tick" style="left: @Pct(percent)">@label</span>
                     }
                 </span>
-                <span role="columnheader">OEE</span>
-                <span role="columnheader"><span class="visually-hidden">Flags</span></span>
+                <span role="columnheader">@L["OEE"]</span>
+                <span role="columnheader"><span class="visually-hidden">@L["Flags"]</span></span>
             </div>
 
             @foreach (var line in _lines)
@@ -246,7 +246,7 @@
                         }
                         else if (live is not { TracksState: true })
                         {
-                            <span class="ov-state is-untracked" title="This line doesn't report its machine state. Bind its tags through an edge node and switch on state tracking to see it here.">Not tracked</span>
+                            <span class="ov-state is-untracked" title="@L["This line doesn't report its machine state. Bind its tags through an edge node and switch on state tracking to see it here."]">@L["Not tracked"]</span>
                         }
                         else
                         {
@@ -259,7 +259,7 @@
                                 {
                                     <span class="ov-state-dot" aria-hidden="true"></span>
                                 }
-                                @(live.EdgeQuiet ? "Edge quiet" : MachineView.CategoryLabel(live.Category))
+                                @(live.EdgeQuiet ? L["Edge quiet"] : L[MachineView.CategoryLabel(live.Category)])
                             </span>
                             <span class="ov-state-note">@StateNote(live)</span>
                         }
@@ -268,7 +268,7 @@
                     <span role="cell" class="ov-job">
                         @if (job is null)
                         {
-                            <span class="text-muted">Nothing planned</span>
+                            <span class="text-muted">@L["Nothing planned"]</span>
                         }
                         else
                         {
@@ -284,12 +284,12 @@
                             <span class="ov-job-material">@job.MaterialCode</span>
                             <span class="ov-progress">
                                 <span class="ov-meter"><span class="ov-meter-fill" style="width: @Pct(OverviewModel.Made(job) * 100)"></span></span>
-                                <span class="ov-progress-text">@Number(job.PlannedQty - job.RemainingQty) of @ScheduleFormat.Qty(job.PlannedQty, job.UomCode)</span>
+                                <span class="ov-progress-text">@L["{0} of {1}", Number(job.PlannedQty - job.RemainingQty), ScheduleFormat.Qty(job.PlannedQty, job.UomCode)]</span>
                             </span>
                         }
                         @if (live is { Output.Count: > 0 })
                         {
-                            <span class="ov-shift-output">This shift: @string.Join(", ", live.Output.Select(o => $"{Number(o.GoodQty)} {o.UomCode} good" + (o.ScrapQty > 0 ? $", {Number(o.ScrapQty)} scrap" : "")))</span>
+                            <span class="ov-shift-output">@L["This shift:"] @string.Join(", ", live.Output.Select(o => L["{0} {1} good", Number(o.GoodQty), o.UomCode] + (o.ScrapQty > 0 ? L[", {0} scrap", Number(o.ScrapQty)] : "")))</span>
                         }
                     </span>
 
@@ -310,7 +310,7 @@
                         <span class="ov-lane is-plan">
                             @if (!OverviewModel.Bars(segments, _window).Any())
                             {
-                                <span class="ov-lane-empty">@(job is null ? "Nothing planned" : $"Nothing planned until {ScheduleFormat.When(job.Start, Tz)}")</span>
+                                <span class="ov-lane-empty">@(job is null ? L["Nothing planned"] : L["Nothing planned until {0}", ScheduleFormat.When(job.Start, Tz)])</span>
                             }
                             @foreach (var bar in OverviewModel.Bars(segments, _window))
                             {
@@ -357,7 +357,7 @@
 @* ---- Orders and what starts next ---- *@
 <div class="ov-lower">
     <section aria-labelledby="flow-title">
-        <h2 id="flow-title" class="ov-h2">Work orders</h2>
+        <h2 id="flow-title" class="ov-h2">@L["Work orders"]</h2>
         <ol class="ov-flow">
             @foreach (var status in FlowStatuses)
             {
@@ -367,14 +367,14 @@
                     {
                         <a class="ov-flow-step @(count == 0 ? "is-zero" : "")" href="work-orders?status=@status">
                             <span class="ov-flow-count">@count</span>
-                            <span class="ov-flow-label">@Display.Label(status)</span>
+                            <span class="ov-flow-label">@L.Label(status)</span>
                         </a>
                     }
                     else
                     {
                         <span class="ov-flow-step @(count == 0 ? "is-zero" : "")">
                             <span class="ov-flow-count">@count</span>
-                            <span class="ov-flow-label">@Display.Label(status)</span>
+                            <span class="ov-flow-label">@L.Label(status)</span>
                         </span>
                     }
                 </li>
@@ -384,16 +384,16 @@
             @_orders.Count(o => o.Status == "closed") closed and @_orders.Count(o => o.Status == "cancelled") cancelled.
             @if (User.Can(PermissionCodes.WorkOrderManage))
             {
-                <a href="schedule/work-orders/new">New work order</a>
+                <a href="schedule/work-orders/new">@L["New work order"]</a>
             }
         </p>
     </section>
 
     <section aria-labelledby="next-title">
-        <h2 id="next-title" class="ov-h2">Starting next</h2>
+        <h2 id="next-title" class="ov-h2">@L["Starting next"]</h2>
         @if (StartingNext.Count == 0)
         {
-            <p class="text-muted">Nothing is planned to start. <ScreenLink Href="schedule" Permission="@PermissionCodes.ScheduleView">Open the schedule</ScreenLink> to place work on a line.</p>
+            <p class="text-muted">@L["Nothing is planned to start."] <ScreenLink Href="schedule" Permission="@PermissionCodes.ScheduleView">@L["Open the schedule"]</ScreenLink> @L["to place work on a line."]</p>
         }
         else
         {
@@ -479,69 +479,71 @@
             var machines = User.Can(PermissionCodes.MachinesView, _siteId) ? "machines" : null;
 
             // Machine figures are unavailable, not zero, until a line reports its state (D-070).
-            const string uncodedHelp = "Stops in each line's current shift, longer than a micro-stop, that no one has given a reason yet.";
+            var uncodedHelp = L["Stops in each line's current shift, longer than a micro-stop, that no one has given a reason yet."];
             if (tracked.Count == 0)
             {
-                yield return new("stop", "Uncoded stops", 0, "Needs machine data", "danger", null, uncodedHelp, IsPlaceholder: true);
+                yield return new("stop", L["Uncoded stops"], 0, L["Needs machine data"], "danger", null, uncodedHelp, IsPlaceholder: true);
             }
             else
             {
                 var uncoded = tracked.Sum(l => l.UncodedStops ?? 0);
-                yield return new("stop", "Uncoded stops", uncoded, uncoded == 0 ? "All coded" : "Give them a reason", "danger", machines, uncodedHelp);
+                yield return new("stop", L["Uncoded stops"], uncoded, uncoded == 0 ? L["All coded"] : L["Give them a reason"], "danger", machines, uncodedHelp);
             }
 
             var alerts = _overview?.OpenSpcAlerts ?? 0;
-            yield return new("spc", "Open SPC alerts", alerts, alerts == 0 ? "None" : "Find the cause", "danger",
+            yield return new("spc", L["Open SPC alerts"], alerts, alerts == 0 ? L["None"] : L["Find the cause"], "danger",
                 User.Can(PermissionCodes.QualityView, _siteId) ? "quality/alerts" : null,
-                "Control charts that signalled (beyond their limits, or a run rule) and wait for someone to record the cause and what was done.");
-            yield return new("clock", "Orders behind", behind, behind == 0 ? "All on time" : "Late or slipping", "danger", "work-orders",
-                "Open orders projected to finish after their due date, or to start more than 15 minutes after their published baseline.");
+                L["Control charts that signalled (beyond their limits, or a run rule) and wait for someone to record the cause and what was done."]);
+            yield return new("clock", L["Orders behind"], behind, behind == 0 ? L["All on time"] : L["Late or slipping"], "danger", "work-orders",
+                L["Open orders projected to finish after their due date, or to start more than 15 minutes after their published baseline."]);
             var (onHold, quarantine) = (_overview?.LotsOnHold ?? 0, _overview?.LotsInQuarantine ?? 0);
-            yield return new("lot", "Lots on hold", onHold + quarantine,
-                onHold + quarantine == 0 ? "None" : quarantine == 0 ? $"{onHold} on hold" : onHold == 0 ? $"{quarantine} in quarantine" : $"{onHold} on hold, {quarantine} in quarantine",
+            yield return new("lot", L["Lots on hold"], onHold + quarantine,
+                onHold + quarantine == 0 ? L["None"] : quarantine == 0 ? L["{0} on hold", onHold] : onHold == 0 ? L["{0} in quarantine", quarantine] : L["{0} on hold, {1} in quarantine", onHold, quarantine],
                 "warning", User.Can(PermissionCodes.InventoryView, _siteId) ? $"inventory/lots?status={(onHold > 0 || quarantine == 0 ? "on_hold" : "quarantine")}" : null,
-                "Lots with stock on hold or in quarantine at this site.");
-            yield return new("alert", "Schedule conflicts", conflicts, overlaps > 0 ? $"{overlaps} with an overlap" : conflicts == 0 ? "None" : "Warnings to review", "warning", "schedule",
-                "Open orders with a schedule warning (late, no rate, unit mismatch…) or work that overlaps on a line.");
-            const string silentHelp = "Lines that report their state but send nothing now: no signal, or their edge node has been quiet for over 2 minutes.";
+                L["Lots with stock on hold or in quarantine at this site."]);
+            yield return new("alert", L["Schedule conflicts"], conflicts, overlaps > 0 ? L["{0} with an overlap", overlaps] : conflicts == 0 ? L["None"] : L["Warnings to review"], "warning", "schedule",
+                L["Open orders with a schedule warning (late, no rate, unit mismatch…) or work that overlaps on a line."]);
+            var silentHelp = L["Lines that report their state but send nothing now: no signal, or their edge node has been quiet for over 2 minutes."];
             if (tracked.Count == 0)
             {
-                yield return new("signal-off", "Lines with no signal", 0, "No line reports its state", "muted", null, silentHelp, IsPlaceholder: true);
+                yield return new("signal-off", L["Lines with no signal"], 0, L["No line reports its state"], "muted", null, silentHelp, IsPlaceholder: true);
             }
             else
             {
                 var silent = tracked.Count(l => l.Category == "no_signal" || l.EdgeQuiet);
-                yield return new("signal-off", "Lines with no signal", silent, silent == 0 ? "All reporting" : "Not reporting", "muted", machines, silentHelp);
+                yield return new("signal-off", L["Lines with no signal"], silent, silent == 0 ? L["All reporting"] : L["Not reporting"], "muted", machines, silentHelp);
             }
 
-            yield return new("schedule", "Not on a line", unplaced, unplaced == 0 ? "Everything placed" : "Quantity to place", "warning", "schedule",
-                "Planned orders with quantity not yet on a line or department.");
+            yield return new("schedule", L["Not on a line"], unplaced, unplaced == 0 ? L["Everything placed"] : L["Quantity to place"], "warning", "schedule",
+                L["Planned orders with quantity not yet on a line or department."]);
             var erp = open.Count(p => p.Order.PendingChange is not null);
-            yield return new("erp", "ERP changes to accept", erp, erp == 0 ? "None" : "Accept or reject", "warning",
+            yield return new("erp", L["ERP changes to accept"], erp, erp == 0 ? L["None"] : L["Accept or reject"], "warning",
                 User.Can(PermissionCodes.WorkOrdersView) ? "work-orders" : null,
-                "Open orders the ERP changed after they left planning, waiting for a planner to accept or reject the change.");
+                L["Open orders the ERP changed after they left planning, waiting for a planner to accept or reject the change."]);
             yield return LaborCell();
         }
     }
 
     private AttentionCell LaborCell()
     {
-        const string help = "Shifts of the last two weeks that have ended with labor no one has approved yet.";
+        var help = L["Shifts of the last two weeks that have ended with labor no one has approved yet."];
         if (!CanSeeLabor)
         {
-            return new("labor", "Labor to approve", 0, "Needs permission to see labor", "muted", null, help, IsPlaceholder: true, PlaceholderIcon: "lock");
+            return new("labor", L["Labor to approve"], 0, L["Needs permission to see labor"], "muted", null, help, IsPlaceholder: true, PlaceholderIcon: "lock");
         }
 
         var shifts = _labor?.Shifts ?? [];
         if (shifts.Count == 0)
         {
-            return new("labor", "Labor to approve", 0, "Nothing waiting", "muted", "labor/review", help);
+            return new("labor", L["Labor to approve"], 0, L["Nothing waiting"], "muted", "labor/review", help);
         }
 
         var oldest = shifts[0].ProductionDate;
         var sessions = shifts.Sum(s => s.Sessions);
-        return new("labor", "Labor to approve", shifts.Count,
-            $"{sessions} {(sessions == 1 ? "session" : "sessions")}, oldest {oldest.ToString("ddd d MMM", CultureInfo.InvariantCulture)}", "muted",
+        return new("labor", L["Labor to approve"], shifts.Count,
+            sessions == 1
+                ? L["1 session, oldest {0}", oldest.ToString("ddd d MMM", CultureInfo.CurrentCulture)]
+                : L["Sessions: {0}, oldest {1}", sessions, oldest.ToString("ddd d MMM", CultureInfo.CurrentCulture)], "muted",
             $"labor/review?day={oldest.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}", help);
     }
 
@@ -549,7 +551,7 @@
         @<text>
             <span class="ov-att-top">
                 <span class="ov-att-icon"><Icon Name="@cell.Icon" Size="18" /></span>
-                <span class="ov-att-count">@(cell.IsPlaceholder ? "—" : cell.Count.ToString(CultureInfo.InvariantCulture))</span>
+                <span class="ov-att-count">@(cell.IsPlaceholder ? "—" : cell.Count.ToString(CultureInfo.CurrentCulture))</span>
             </span>
             <span class="ov-att-label">@cell.Label</span>
             <span class="ov-att-detail">
@@ -668,7 +670,7 @@
             .Distinct()
             .Take(5)
             .ToList();
-        return (overlaps, overlaps == 1 ? "1 overlap on this line" : $"{overlaps} overlaps on this line", warnings);
+        return (overlaps, overlaps == 1 ? L["1 overlap on this line"] : L["{0} overlaps on this line", overlaps], warnings);
     }
 
     private static string BarClass(OverviewBar bar) =>
@@ -677,8 +679,8 @@
     private string BarTitle(OverviewBar bar)
     {
         var s = bar.Segment;
-        var what = bar.IsChangeover ? "Changeover" : $"{s.JobNumber}, {s.MaterialCode}, {ScheduleFormat.Qty(s.PlannedQty, s.UomCode)}";
-        return $"{what}: {ScheduleFormat.Time(s.Start, Tz)} to {ScheduleFormat.Time(s.End, Tz)}, {Display.Label(s.Status)}";
+        var what = bar.IsChangeover ? L["Changeover"] : $"{s.JobNumber}, {s.MaterialCode}, {ScheduleFormat.Qty(s.PlannedQty, s.UomCode)}";
+        return L["{0}: {1} to {2}, {3}", what, ScheduleFormat.Time(s.Start, Tz), ScheduleFormat.Time(s.End, Tz), L.Label(s.Status)];
     }
 
     private string StripLabel(EquipmentDto line, IReadOnlyList<TimelineSegmentDto> segments)
@@ -686,9 +688,9 @@
         var jobs = segments.Count(s => s.Kind == "job" && s.End > _window.Start && s.Start < _window.End);
         var live = LiveOf(line.Id);
         var state = live is not { TracksState: true } ? "doesn't report its state"
-            : live.DownMinutes is { } down ? $"{MachineView.CategoryLabel(live.Category).ToLowerInvariant()}, down {Number(Math.Round(down))} min this shift"
-            : MachineView.CategoryLabel(live.Category).ToLowerInvariant();
-        return $"{line.Code}: {state}; {jobs} planned jobs between {ScheduleFormat.Time(_window.Start, Tz)} and {ScheduleFormat.Time(_window.End, Tz)}";
+            : live.DownMinutes is { } down ? L["{0}, down {1} min this shift", L[MachineView.CategoryLabel(live.Category)].ToLowerInvariant(), Number(Math.Round(down))]
+            : L[MachineView.CategoryLabel(live.Category)].ToLowerInvariant();
+        return L["{0}: {1}; {2} planned jobs between {3} and {4}", line.Code, state, jobs, ScheduleFormat.Time(_window.Start, Tz), ScheduleFormat.Time(_window.End, Tz)];
     }
 
     private OverviewLineDto? LiveOf(Guid lineId) => _live.GetValueOrDefault(lineId);
@@ -709,10 +711,10 @@
 
     private string StateTitle(OverviewLineDto live)
     {
-        var parts = new List<string> { live.PackMlName ?? MachineView.CategoryLabel(live.Category) };
+        var parts = new List<string> { live.PackMlName ?? L[MachineView.CategoryLabel(live.Category)] };
         if (live.StateSince is { } since)
         {
-            parts.Add($"since {ScheduleFormat.Time(since, Tz)}");
+            parts.Add(L["since {0}", ScheduleFormat.Time(since, Tz)]);
         }
 
         if (live.StopText is { } stop)
@@ -727,7 +729,7 @@
 
         if (live.DownMinutes is { } down)
         {
-            parts.Add($"down {Number(Math.Round(down))} min this shift");
+            parts.Add(L["down {0} min this shift", Number(Math.Round(down))]);
         }
 
         return string.Join("; ", parts);
@@ -749,7 +751,7 @@
 
         if (live.UncodedStops is > 0 and var uncoded)
         {
-            parts.Add(uncoded == 1 ? "1 stop to code" : $"{uncoded} stops to code");
+            parts.Add(uncoded == 1 ? L["1 stop to code"] : L["{0} stops to code", uncoded]);
         }
 
         return string.Join(" · ", parts);
@@ -768,13 +770,13 @@
     {
         var what = span.Use switch
         {
-            "run" => "Running",
-            "down" => "Down",
-            "planned" => "Planned stop",
-            "non_production" => "Not in production mode",
-            _ => "No signal",
+            "run" => L["Running"],
+            "down" => L["Down"],
+            "planned" => L["Planned stop"],
+            "non_production" => L["Not in production mode"],
+            _ => L["No signal"],
         };
-        return $"{what}: {ScheduleFormat.Time(span.Start, Tz)} to {ScheduleFormat.Time(span.End, Tz)} ({MachineView.Duration(span.End - span.Start)})";
+        return L["{0}: {1} to {2} ({3})", what, ScheduleFormat.Time(span.Start, Tz), ScheduleFormat.Time(span.End, Tz), MachineView.Duration(span.End - span.Start)];
     }
 
     // "06:00" today, "Mon 19 Oct 06:00" on another day.
@@ -783,9 +785,9 @@
 
     // "Now", "Next at 06:00" today, or "Next Mon 19 Oct 06:00" on another day.
     private string NowOrNextLabel(TimelineSegmentDto job) =>
-        job.Start <= Now ? "Now"
-        : ScheduleLayout.SiteDate(job.Start, Tz) == ScheduleLayout.SiteDate(Now, Tz) ? $"Next at {ScheduleFormat.Time(job.Start, Tz)}"
-        : $"Next {ScheduleFormat.When(job.Start, Tz)}";
+        job.Start <= Now ? L["Now"]
+        : ScheduleLayout.SiteDate(job.Start, Tz) == ScheduleLayout.SiteDate(Now, Tz) ? L["Next at {0}", ScheduleFormat.Time(job.Start, Tz)]
+        : L["Next {0}", ScheduleFormat.When(job.Start, Tz)];
 
     private static string Pct(double value) => value.ToString("0.###", CultureInfo.InvariantCulture) + "%";
 
@@ -795,33 +797,33 @@
         _oeeReport is null ? null : OverviewModel.CurrentShift(_oeeReport.Shifts, equipmentId, Now);
 
     private string OeeSummaryNote => _oeeReport is null
-        ? _siteId == Guid.Empty ? "Choose a site to view OEE" : "Loading current-shift OEE…"
+        ? _siteId == Guid.Empty ? L["Choose a site to view OEE"] : L["Loading current-shift OEE…"]
         : CurrentShiftOee?.OeePct is not null
-            ? "Current-shift OEE from reported machine data · refreshes every 30 seconds"
-            : "No rated production data has been reported this shift";
+            ? L["Current-shift OEE from reported machine data · refreshes every 30 seconds"]
+            : L["No rated production data has been reported this shift"];
 
     private string OeeSummaryLabel => CurrentShiftOee is { } oee
-        ? $"Current-shift OEE {FormatPct(oee.OeePct)}; availability {FormatPct(oee.AvailabilityPct)}, performance {FormatPct(oee.PerformancePct)}, quality {FormatPct(oee.QualityPct)}"
-        : "No current-shift OEE data";
+        ? L["Current-shift OEE {0}; availability {1}, performance {2}, quality {3}", FormatPct(oee.OeePct), FormatPct(oee.AvailabilityPct), FormatPct(oee.PerformancePct), FormatPct(oee.QualityPct)]
+        : L["No current-shift OEE data"];
 
-    private static IReadOnlyList<(string Label, decimal? Value)> OeeParts(OverviewOee? oee) =>
+    private IReadOnlyList<(string Label, decimal? Value)> OeeParts(OverviewOee? oee) =>
     [
-        ("Availability", oee?.AvailabilityPct),
-        ("Performance", oee?.PerformancePct),
-        ("Quality", oee?.QualityPct),
+        (L["Availability"], oee?.AvailabilityPct),
+        (L["Performance"], oee?.PerformancePct),
+        (L["Quality"], oee?.QualityPct),
     ];
 
     private static string FormatPct(decimal? value) =>
-        value is { } percent ? percent.ToString("0.#", CultureInfo.InvariantCulture) + "%" : "—";
+        value is { } percent ? percent.ToString("0.#", CultureInfo.CurrentCulture) + "%" : "—";
 
     private static string MeterWidth(decimal? value) =>
         Math.Clamp(value ?? 0m, 0m, 100m).ToString("0.###", CultureInfo.InvariantCulture) + "%";
 
-    private static string OeeTitle(OeeFiguresDto? figures) => figures is null
-        ? "No current-shift OEE data"
-        : $"Availability {FormatPct(figures.AvailabilityPct)}, performance {FormatPct(figures.PerformancePct)}, quality {FormatPct(figures.QualityPct)}";
+    private string OeeTitle(OeeFiguresDto? figures) => figures is null
+        ? L["No current-shift OEE data"]
+        : L["Availability {0}, performance {1}, quality {2}", FormatPct(figures.AvailabilityPct), FormatPct(figures.PerformancePct), FormatPct(figures.QualityPct)];
 
-    private static string Number(decimal? value) => (value ?? 0m).ToString("#,##0.###", CultureInfo.InvariantCulture);
+    private static string Number(decimal? value) => (value ?? 0m).ToString("#,##0.###", CultureInfo.CurrentCulture);
 
     public void Dispose() => _timer?.Dispose();
 }

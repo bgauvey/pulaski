@@ -83,7 +83,7 @@ else
                                 <span class="chip ms-1" title="Lots put in it join one balance per material (@(c.FlowModel == "fifo" ? "first in, first out" : "mixed"))">Mixes lots</span>
                             }
                         </td>
-                        <td>@Display.Label(c.Kind)</td>
+                        <td>@L.Label(c.Kind)</td>
                         <td>@c.LocationCode@(c.ParentContainerCode is { } parent ? $" · in {parent}" : "")</td>
                         <td class="inv-num">@c.LotCount@(c.ContainerCount > 0 ? $" + {c.ContainerCount} inside" : "")</td>
                         <td class="text-end text-nowrap">
@@ -163,7 +163,7 @@ else
                         @foreach (var inner in _open.Containers)
                         {
                             <tr @key="inner.Id" class="small">
-                                <td class="ps-5"><span class="chip">@Display.Label(inner.Kind)</span> @inner.Code</td>
+                                <td class="ps-5"><span class="chip">@L.Label(inner.Kind)</span> @inner.Code</td>
                                 <td colspan="2">container</td>
                                 <td class="inv-num">@inner.LotCount@(inner.ContainerCount > 0 ? $" + {inner.ContainerCount} inside" : "")</td>
                                 <td></td>
@@ -178,7 +178,7 @@ else
                             <tr @key="l.Id" class="small">
                                 <td class="ps-5"><a href="inventory/lots/@l.Id">@l.LotNumber</a></td>
                                 <td>@l.MaterialCode</td>
-                                <td><span class="@InventoryView.StatusChip(l.Status)">@Display.Label(l.Status)</span></td>
+                                <td><span class="@InventoryView.StatusChip(l.Status)">@L.Label(l.Status)</span></td>
                                 <td class="inv-num">@InventoryView.Qty(l.Quantity) @l.UomCode</td>
                                 <td></td>
                             </tr>

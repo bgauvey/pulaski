@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Execution;
 using Pulaski.Web.Services.Execution;
 
@@ -27,7 +28,7 @@ public class ProductionByShiftViewTests
     [Fact]
     public void Rows_group_by_shift_with_totals_per_unit()
     {
-        var groups = ProductionByShiftView.Groups([Row("N", "EXT-01", "kg", 100, 5), Row("N", "EXT-02", "kg", 50), Row("N", "PACK", "ea", 7), Row(null, "EXT-01", "kg", 3)]);
+        var groups = ProductionByShiftView.Groups(Text.English, [Row("N", "EXT-01", "kg", 100, 5), Row("N", "EXT-02", "kg", 50), Row("N", "PACK", "ea", 7), Row(null, "EXT-01", "kg", 3)]);
 
         Assert.Equal(2, groups.Count);
         Assert.Equal("Mon 19 Oct 2026 · Nights (N, 2X12) 18:00–06:00 +1 · BLUE", groups[0].Label);

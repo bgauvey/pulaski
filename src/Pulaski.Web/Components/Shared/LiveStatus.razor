@@ -5,9 +5,9 @@
    The page keeps what it showed when a reload fails; the pill then turns stale. *@
 <span class="live-pill @(LiveRefresh.IsStale(LoadedAt, Clock.GetUtcNow()) ? "is-stale" : "")" role="status">
     <span class="live-dot" aria-hidden="true"></span>
-    @LiveRefresh.Status(LoadedAt, Clock.GetUtcNow(), TimeZone)
+    @LiveRefresh.Status(L, LoadedAt, Clock.GetUtcNow(), TimeZone)
 </span>
-<button type="button" class="btn btn-outline-secondary btn-square" aria-label="Refresh now" title="Refresh now" disabled="@_refreshing" @onclick="RefreshAsync">
+<button type="button" class="btn btn-outline-secondary btn-square" aria-label="@L["Refresh now"]" title="@L["Refresh now"]" disabled="@_refreshing" @onclick="RefreshAsync">
     <Icon Name="refresh" Size="18" />
 </button>
 

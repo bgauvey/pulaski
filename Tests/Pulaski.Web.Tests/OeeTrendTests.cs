@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.MachineData;
 using Pulaski.Web.Services.MachineData;
 
@@ -73,12 +74,12 @@ public class OeeTrendTests
         Assert.Equal([null, Line], OeeTargetsView.InForce(targets, Day).Select(t => t.EquipmentId));
         Assert.Equal(Day.AddDays(-30), Assert.Single(OeeTargetsView.InForce(targets, Day.AddDays(-1))).EffectiveFrom);
         Assert.Equal(Day, OeeTargetsView.Latest(targets, null)!.EffectiveFrom);
-        Assert.Equal("Sat 26 Sep 2026 – Sun 25 Oct 2026", OeeTargetsView.Period(targets[1]));
-        Assert.Equal("from Mon 26 Oct 2026", OeeTargetsView.Period(targets[0]));
+        Assert.Equal("Sat 26 Sep 2026 – Sun 25 Oct 2026", OeeTargetsView.Period(Text.English, targets[1]));
+        Assert.Equal("from Mon 26 Oct 2026", OeeTargetsView.Period(Text.English, targets[0]));
 
-        Assert.Equal("Give at least one target.", OeeTargetsView.Problem(null, null, null, null));
-        Assert.NotNull(OeeTargetsView.Problem(101m, null, null, null));
-        Assert.NotNull(OeeTargetsView.Problem(65.25m, null, null, null));
-        Assert.Null(OeeTargetsView.Problem(null, null, null, 65.5m));
+        Assert.Equal("Give at least one target.", OeeTargetsView.Problem(Text.English, null, null, null, null));
+        Assert.NotNull(OeeTargetsView.Problem(Text.English, 101m, null, null, null));
+        Assert.NotNull(OeeTargetsView.Problem(Text.English, 65.25m, null, null, null));
+        Assert.Null(OeeTargetsView.Problem(Text.English, null, null, null, 65.5m));
     }
 }

@@ -8,21 +8,19 @@
 @inject CurrentUser User
 
 @* Machines (D-050): each machine's live state, its stops to code, and utilization and OEE reports (D-052). The board refreshes itself every 5 seconds. *@
-<PageTitle>Machines · Pulaski</PageTitle>
+<PageTitle>@L["Machines"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Machines</h1>
+        <h1 class="mb-1">@L["Machines"]</h1>
         <p class="text-muted mb-0">
-            What every machine is doing now, as its edge node reports it, and its stops. A stop is time a machine isn't executing; stops shorter
-            than the machine's micro-stop threshold aren't coded. Give each stop its reason, or confirm the one its stop code maps to. Where the
-            machine's record is wrong or missing, a supervisor can enter a stop by hand, or split or merge stops.
+            @L["What every machine is doing now, as its edge node reports it, and its stops. A stop is time a machine isn't executing; stops shorter than the machine's micro-stop threshold aren't coded. Give each stop its reason, or confirm the one its stop code maps to. Where the machine's record is wrong or missing, a supervisor can enter a stop by hand, or split or merge stops."]
         </p>
     </div>
     @if (Sites.Sites.Count > 1)
     {
         <div class="inv-head-tools">
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -32,14 +30,14 @@
     }
 </div>
 
-<nav class="inv-tabs" aria-label="Machines">
-    <button type="button" class="inv-tab btn btn-link @(_tab == "status" ? "active" : "")" @onclick="@(() => _tab = "status")">Status</button>
+<nav class="inv-tabs" aria-label="@L["Machines"]">
+    <button type="button" class="inv-tab btn btn-link @(_tab == "status" ? "active" : "")" @onclick="@(() => _tab = "status")">@L["Status"]</button>
     <button type="button" class="inv-tab btn btn-link @(_tab == "stops" ? "active" : "")" @onclick="ShowStopsAsync">
-        Stops @if (_status?.Sum(m => m.UncodedStops) is > 0 and var n) { <span class="chip chip-warning ms-1">@n to code</span> }
+        @L["Stops"] @if (_status?.Sum(m => m.UncodedStops) is > 0 and var n) { <span class="chip chip-warning ms-1">@L["{0} to code", n]</span> }
     </button>
-    <button type="button" class="inv-tab btn btn-link @(_tab == "alarms" ? "active" : "")" @onclick="@(() => _tab = "alarms")">Alarms</button>
-    <button type="button" class="inv-tab btn btn-link @(_tab == "values" ? "active" : "")" @onclick="@(() => _tab = "values")">Process values</button>
-    <button type="button" class="inv-tab btn btn-link @(_tab == "reports" ? "active" : "")" @onclick="@(() => _tab = "reports")">Utilization and OEE</button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "alarms" ? "active" : "")" @onclick="@(() => _tab = "alarms")">@L["Alarms"]</button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "values" ? "active" : "")" @onclick="@(() => _tab = "values")">@L["Process values"]</button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "reports" ? "active" : "")" @onclick="@(() => _tab = "reports")">@L["Utilization and OEE"]</button>
 </nav>
 
 <ProblemAlert Error="_error" />
@@ -50,13 +48,13 @@
     {
         @if (_error is null)
         {
-            <p class="text-muted">Loading…</p>
+            <p class="text-muted">@L["Loading…"]</p>
         }
     }
     else if (_status.Count == 0)
     {
         <div class="empty-panel">
-            <p class="text-muted mb-0">No equipment at @(Sites.Site?.Code ?? "this site") tracks state. Tick <strong>Tracks state</strong> on the Equipment screen, and bind its signals on an edge node.</p>
+            <p class="text-muted mb-0">@L["No equipment at {0} tracks state. Tick Tracks state on the Equipment screen, and bind its signals on an edge node.", Sites.Site?.Code ?? L["this site"]]</p>
         </div>
     }
     else
@@ -73,7 +71,7 @@
                 </div>
             </section>
         }
-        <p class="small text-muted">Updated @Display.SiteTime(_loadedAt, Sites.Site?.TimeZone) · refreshes every 5 seconds.</p>
+        <p class="small text-muted">@L["Updated {0} · refreshes every 5 seconds.", Display.SiteTime(_loadedAt, Sites.Site?.TimeZone)]</p>
     }
 }
 else if (_tab == "alarms")
@@ -100,46 +98,46 @@ else if (_tab == "reports")
 else
 {
     <div class="inv-toolbar flex-wrap">
-        <select class="form-select w-auto" aria-label="Equipment" value="@(_equipment?.ToString() ?? "")" @onchange="OnEquipmentChangedAsync">
-            <option value="">All equipment</option>
+        <select class="form-select w-auto" aria-label="@L["Equipment"]" value="@(_equipment?.ToString() ?? "")" @onchange="OnEquipmentChangedAsync">
+            <option value="">@L["All equipment"]</option>
             @foreach (var m in _status ?? [])
             {
                 <option value="@m.EquipmentId">@m.Code · @m.Name</option>
             }
         </select>
-        <select class="form-select w-auto" aria-label="Period" value="@_hours" @onchange="OnPeriodChangedAsync">
-            <option value="8">Last 8 hours</option>
-            <option value="24">Last 24 hours</option>
-            <option value="168">Last 7 days</option>
+        <select class="form-select w-auto" aria-label="@L["Period"]" value="@_hours" @onchange="OnPeriodChangedAsync">
+            <option value="8">@L["Last 8 hours"]</option>
+            <option value="24">@L["Last 24 hours"]</option>
+            <option value="168">@L["Last 7 days"]</option>
         </select>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="uncoded-only" checked="@_uncodedOnly" @onchange="@(e => ToggleAsync(() => _uncodedOnly = e.Value is true))" />
-            <label class="form-check-label" for="uncoded-only">Only stops to code</label>
+            <label class="form-check-label" for="uncoded-only">@L["Only stops to code"]</label>
         </div>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="micro" checked="@_micro" @onchange="@(e => ToggleAsync(() => _micro = e.Value is true))" />
-            <label class="form-check-label" for="micro">Show micro-stops</label>
+            <label class="form-check-label" for="micro">@L["Show micro-stops"]</label>
         </div>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="replaced" checked="@_superseded" @onchange="@(e => ToggleAsync(() => _superseded = e.Value is true))" />
-            <label class="form-check-label" for="replaced">Show replaced stops</label>
+            <label class="form-check-label" for="replaced">@L["Show replaced stops"]</label>
         </div>
         @if (CanAdjustAny && _entry is null)
         {
-            <button type="button" class="btn btn-outline-primary ms-auto" @onclick="StartEntry">Enter a stop</button>
+            <button type="button" class="btn btn-outline-primary ms-auto" @onclick="StartEntry">@L["Enter a stop"]</button>
         }
     </div>
 
     @if (_entry is { } entry)
     {
         <form class="table-panel p-3 mb-3" @onsubmit="SaveEntryAsync" @onsubmit:preventDefault>
-            <h2 class="h6">Enter a stop</h2>
-            <p class="small text-muted">For time the machine didn't report, such as an outage with no signal. It may not overlap the machine's other stops.</p>
+            <h2 class="h6">@L["Enter a stop"]</h2>
+            <p class="small text-muted">@L["For time the machine didn't report, such as an outage with no signal. It may not overlap the machine's other stops."]</p>
             <div class="d-flex flex-wrap gap-2 align-items-end">
                 <div>
-                    <label class="form-label" for="entry-machine">Machine</label>
+                    <label class="form-label" for="entry-machine">@L["Machine"]</label>
                     <select id="entry-machine" class="form-select" value="@(entry.EquipmentId?.ToString() ?? "")" @onchange="OnEntryEquipmentChangedAsync">
-                        <option value="">Machine…</option>
+                        <option value="">@L["Machine…"]</option>
                         @foreach (var m in _status ?? [])
                         {
                             <option value="@m.EquipmentId">@m.Code · @m.Name</option>
@@ -147,18 +145,18 @@ else
                     </select>
                 </div>
                 <div>
-                    <label class="form-label" for="entry-start">Started</label>
+                    <label class="form-label" for="entry-start">@L["Started"]</label>
                     <input id="entry-start" type="datetime-local" class="form-control" @bind="entry.Start" />
                 </div>
                 <div>
-                    <label class="form-label" for="entry-end">Ended</label>
+                    <label class="form-label" for="entry-end">@L["Ended"]</label>
                     <input id="entry-end" type="datetime-local" class="form-control" @bind="entry.End" />
                 </div>
                 <div>
-                    <label class="form-label" for="entry-reason">Reason</label>
+                    <label class="form-label" for="entry-reason">@L["Reason"]</label>
                     <select id="entry-reason" class="form-select" value="@(entry.ReasonId?.ToString() ?? "")"
                             @onchange="@(e => entry.ReasonId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
-                        <option value="">Reason…</option>
+                        <option value="">@L["Reason…"]</option>
                         @foreach (var r in _entryReasons)
                         {
                             <option value="@r.Id">@MachineProfileView.ReasonLabel(r)</option>
@@ -166,12 +164,12 @@ else
                     </select>
                 </div>
                 <div class="inv-grow">
-                    <label class="form-label" for="entry-comment">Why</label>
-                    <input id="entry-comment" class="form-control" maxlength="1000" placeholder="Why it is entered (needed)" @bind="entry.Comment" @bind:event="oninput" />
+                    <label class="form-label" for="entry-comment">@L["Why"]</label>
+                    <input id="entry-comment" class="form-control" maxlength="1000" placeholder="@L["Why it is entered (needed)"]" @bind="entry.Comment" @bind:event="oninput" />
                 </div>
                 <button type="submit" class="btn btn-primary"
-                        disabled="@(_saving || entry.EquipmentId is null || entry.ReasonId is null || entry.Start is null || entry.End is null || string.IsNullOrWhiteSpace(entry.Comment))">Save</button>
-                <button type="button" class="btn btn-link" @onclick="@(() => _entry = null)">Cancel</button>
+                        disabled="@(_saving || entry.EquipmentId is null || entry.ReasonId is null || entry.Start is null || entry.End is null || string.IsNullOrWhiteSpace(entry.Comment))">@L["Save"]</button>
+                <button type="button" class="btn btn-link" @onclick="@(() => _entry = null)">@L["Cancel"]</button>
             </div>
         </form>
     }
@@ -179,34 +177,34 @@ else
     @if (_chosen.Count > 0)
     {
         <form class="table-panel p-3 mb-3 d-flex flex-wrap gap-2 align-items-center" @onsubmit="MergeAsync" @onsubmit:preventDefault>
-            <span class="fw-semibold">@_chosen.Count @(_chosen.Count == 1 ? "stop" : "stops") chosen</span>
-            @if (MachineView.MergeProblem(_chosen.Values) is { } problem)
+            <span class="fw-semibold">@(_chosen.Count == 1 ? L["1 stop chosen"] : L["Stops chosen: {0}", _chosen.Count])</span>
+            @if (MachineView.MergeProblem(L, _chosen.Values) is { } problem)
             {
                 <span class="small text-muted">@problem</span>
             }
             else
             {
-                <input class="form-control inv-grow" maxlength="1000" aria-label="Why merge" placeholder="Why merge them (needed)" @bind="_adjustComment" @bind:event="oninput" />
-                <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_adjustComment))">Merge into one stop</button>
+                <input class="form-control inv-grow" maxlength="1000" aria-label="@L["Why merge"]" placeholder="@L["Why merge them (needed)"]" @bind="_adjustComment" @bind:event="oninput" />
+                <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_adjustComment))">@L["Merge into one stop"]</button>
             }
-            <button type="button" class="btn btn-link" @onclick="@(() => _chosen.Clear())">Clear</button>
+            <button type="button" class="btn btn-link" @onclick="@(() => _chosen.Clear())">@L["Clear"]</button>
         </form>
     }
 
     @if (_stops is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
     else if (_stops.Count == 0)
     {
-        <div class="empty-panel"><p class="text-muted mb-0">@(_uncodedOnly ? "Nothing to code: every stop in this period has its reason." : "No stops in this period.")</p></div>
+        <div class="empty-panel"><p class="text-muted mb-0">@(_uncodedOnly ? L["Nothing to code: every stop in this period has its reason."] : L["No stops in this period."])</p></div>
     }
     else
     {
         <div class="table-panel">
             <table class="table align-middle">
                 <thead>
-                    <tr>@if (CanAdjustAny) { <th><span class="visually-hidden">Choose to merge</span></th> }<th>Started</th><th class="inv-num">Duration</th><th>Equipment</th><th>Stopped in</th><th>Stop code</th><th>Reason</th><th>Job</th><th></th></tr>
+                    <tr>@if (CanAdjustAny) { <th><span class="visually-hidden">@L["Choose to merge"]</span></th> }<th>@L["Started"]</th><th class="inv-num">@L["Duration"]</th><th>@L["Equipment"]</th><th>@L["Stopped in"]</th><th>@L["Stop code"]</th><th>@L["Reason"]</th><th>@L["Job"]</th><th></th></tr>
                 </thead>
                 <tbody>
                     @foreach (var s in _stops)
@@ -217,7 +215,7 @@ else
                                 <td>
                                     @if (MachineView.CanAdjust(s))
                                     {
-                                        <input class="form-check-input" type="checkbox" aria-label="Choose to merge" checked="@_chosen.ContainsKey(s.Id)" @onchange="@(e => Choose(s, e.Value is true))" />
+                                        <input class="form-check-input" type="checkbox" aria-label="@L["Choose to merge"]" checked="@_chosen.ContainsKey(s.Id)" @onchange="@(e => Choose(s, e.Value is true))" />
                                     }
                                 </td>
                             }
@@ -226,16 +224,16 @@ else
                                 @MachineView.Duration(TimeSpan.FromSeconds(s.DurationSeconds))
                                 @if (s.EndedAt is null)
                                 {
-                                    <span class="chip chip-warning ms-1">ongoing</span>
+                                    <span class="chip chip-warning ms-1">@L["ongoing"]</span>
                                 }
                             </td>
                             <td class="fw-semibold">@s.EquipmentCode</td>
-                            <td>@s.PackMlName @(s.UnitMode == 1 ? "" : $"({MachineView.UnitModeLabel(s.UnitMode)})")</td>
+                            <td>@s.PackMlName @(s.UnitMode == 1 ? "" : $"({L[MachineView.UnitModeLabel(s.UnitMode)]})")</td>
                             <td>@(s.StopCode is { } code ? $"{code}{(s.StopCodeText is null ? "" : " · " + s.StopCodeText)}" : "")</td>
                             <td>
                                 @if (s.IsMicroStop)
                                 {
-                                    <span class="small">Micro-stop</span>
+                                    <span class="small">@L["Micro-stop"]</span>
                                 }
                                 else if (s.OperatorReasonCode is not null)
                                 {
@@ -246,13 +244,13 @@ else
                                     }
                                     @if (s.OperatorReasonId != s.MappedReasonId && s.MappedReasonCode is not null)
                                     {
-                                        <div class="small text-muted">The code said @s.MappedReasonCode</div>
+                                        <div class="small text-muted">@L["The code said {0}", s.MappedReasonCode]</div>
                                     }
                                     <div class="small text-muted">@s.CodedBy@(s.Comment is null ? "" : " · " + s.Comment)</div>
                                 }
                                 else if (s.MappedReasonCode is not null)
                                 {
-                                    <span>@MachineView.ReasonText(s)</span> <span class="chip ms-1" title="From the stop code; confirm it or give another">to confirm</span>
+                                    <span>@MachineView.ReasonText(s)</span> <span class="chip ms-1" title="@L["From the stop code; confirm it or give another"]">@L["to confirm"]</span>
                                     @if (s.ReasonGroupPath is { } path)
                                     {
                                         <div class="small text-muted">@path</div>
@@ -260,13 +258,13 @@ else
                                 }
                                 else
                                 {
-                                    <span class="chip chip-warning">Uncoded</span>
+                                    <span class="chip chip-warning">@L["Uncoded"]</span>
                                 }
                                 @if (s.SupersededAt is not null)
                                 {
-                                    <div class="small"><span class="chip">@(s.SupersededNote is null ? "replaced" : "removed")</span> by @s.SupersededBy, @Display.SiteTime(s.SupersededAt, Sites.Site?.TimeZone)@(s.SupersededNote is { } note ? $" · {note}" : "")</div>
+                                    <div class="small"><span class="chip">@(s.SupersededNote is null ? L["replaced"] : L["removed"])</span> @L["by {0}, {1}{2}", s.SupersededBy, Display.SiteTime(s.SupersededAt, Sites.Site?.TimeZone), s.SupersededNote is { } note ? $" · {note}" : ""]</div>
                                 }
-                                @if (MachineView.SourceLabel(s.Source) is { } source)
+                                @if (L.Of(MachineView.SourceLabel(s.Source)) is { } source)
                                 {
                                     <div class="small text-muted"><span class="chip">@source</span> @s.AdjustedBy · @s.AdjustmentComment</div>
                                 }
@@ -275,20 +273,20 @@ else
                             <td class="text-end">
                                 @if (CanCode(s) && _coding?.Id != s.Id)
                                 {
-                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => StartCodingAsync(s)">@(s.OperatorReasonCode is null ? "Code" : "Change")</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => StartCodingAsync(s)">@(s.OperatorReasonCode is null ? L["Code"] : L["Change"])</button>
                                 }
                                 @if (CanAdjustAny && MachineView.CanAdjust(s) && _splitting?.Id != s.Id && _acting?.Stop.Id != s.Id)
                                 {
-                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => StartSplit(s)">Split</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="@(() => StartAction(s, "retime"))">Change times</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => StartSplit(s)">@L["Split"]</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="@(() => StartAction(s, "retime"))">@L["Change times"]</button>
                                 }
                                 @if (CanAdjustAny && MachineView.CanVoid(s) && _acting?.Stop.Id != s.Id)
                                 {
-                                    <button type="button" class="btn btn-sm btn-outline-danger ms-1" @onclick="@(() => StartAction(s, "void"))">Remove</button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger ms-1" @onclick="@(() => StartAction(s, "void"))">@L["Remove"]</button>
                                 }
                                 @if (CanAdjustAny && MachineView.CanUndo(s) && _acting?.Stop.Id != s.Id)
                                 {
-                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="@(() => StartAction(s, "undo"))">Undo @(MachineView.SourceLabel(s.Source)?.ToLowerInvariant())</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="@(() => StartAction(s, "undo"))">@L["Undo {0}", L.Of(MachineView.SourceLabel(s.Source))?.ToLowerInvariant()]</button>
                                 }
                             </td>
                         </tr>
@@ -299,15 +297,15 @@ else
                                     <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="ActAsync" @onsubmit:preventDefault>
                                         @if (acting.Kind == "retime")
                                         {
-                                            <label class="small" for="retime-from">From</label>
+                                            <label class="small" for="retime-from">@L["From"]</label>
                                             <input id="retime-from" type="datetime-local" step="1" class="form-control w-auto" @bind="_newStart" />
-                                            <label class="small" for="retime-to">to</label>
+                                            <label class="small" for="retime-to">@L["to"]</label>
                                             <input id="retime-to" type="datetime-local" step="1" class="form-control w-auto" @bind="_newEnd" />
                                         }
-                                        <input class="form-control inv-grow" maxlength="1000" aria-label="Why" placeholder="@ActionPrompt(acting.Kind)" @bind="_adjustComment" @bind:event="oninput" />
+                                        <input class="form-control inv-grow" maxlength="1000" aria-label="@L["Why"]" placeholder="@ActionPrompt(acting.Kind)" @bind="_adjustComment" @bind:event="oninput" />
                                         <button type="submit" class="btn @(acting.Kind == "void" ? "btn-danger" : "btn-primary")"
                                                 disabled="@(_saving || string.IsNullOrWhiteSpace(_adjustComment) || (acting.Kind == "retime" && (_newStart is null || _newEnd is null)))">@ActionLabel(acting)</button>
-                                        <button type="button" class="btn btn-link" @onclick="@(() => _acting = null)">Cancel</button>
+                                        <button type="button" class="btn btn-link" @onclick="@(() => _acting = null)">@L["Cancel"]</button>
                                     </form>
                                     <div class="small text-muted mt-1">@ActionHelp(acting)</div>
                                 </td>
@@ -318,13 +316,13 @@ else
                             <tr @key="(s.Id, 2)">
                                 <td colspan="@Columns">
                                     <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="SplitAsync" @onsubmit:preventDefault>
-                                        <label class="small" for="split-at">Split at</label>
+                                        <label class="small" for="split-at">@L["Split at"]</label>
                                         <input id="split-at" type="datetime-local" step="1" class="form-control w-auto" @bind="_splitAt" />
-                                        <input class="form-control inv-grow" maxlength="1000" aria-label="Why split" placeholder="Why split it (needed)" @bind="_adjustComment" @bind:event="oninput" />
-                                        <button type="submit" class="btn btn-primary" disabled="@(_saving || _splitAt is null || string.IsNullOrWhiteSpace(_adjustComment))">Split</button>
-                                        <button type="button" class="btn btn-link" @onclick="@(() => _splitting = null)">Cancel</button>
+                                        <input class="form-control inv-grow" maxlength="1000" aria-label="@L["Why split"]" placeholder="@L["Why split it (needed)"]" @bind="_adjustComment" @bind:event="oninput" />
+                                        <button type="submit" class="btn btn-primary" disabled="@(_saving || _splitAt is null || string.IsNullOrWhiteSpace(_adjustComment))">@L["Split"]</button>
+                                        <button type="button" class="btn btn-link" @onclick="@(() => _splitting = null)">@L["Cancel"]</button>
                                     </form>
-                                    <div class="small text-muted mt-1">Both parts keep the stop's reason; code each one afterwards.</div>
+                                    <div class="small text-muted mt-1">@L["Both parts keep the stop's reason; code each one afterwards."]</div>
                                 </td>
                             </tr>
                         }
@@ -334,16 +332,16 @@ else
                                 <td colspan="@Columns">
                                     <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="SaveCodeAsync" @onsubmit:preventDefault>
                                         <div class="touch-full">
-                                            <ReasonPicker Reasons="_reasons" SelectClass="w-auto" AriaLabel="Reason for the stop" OptionLabel="MachineProfileView.ReasonLabel" @bind-Value="_reasonId" />
+                                            <ReasonPicker Reasons="_reasons" SelectClass="w-auto" AriaLabel="@L["Reason for the stop"]" OptionLabel="MachineProfileView.ReasonLabel" @bind-Value="_reasonId" />
                                         </div>
-                                        <input class="form-control inv-grow" maxlength="1000" aria-label="Comment" placeholder="@(NeedsComment ? "Comment (needed for this reason)" : "Comment (optional)")"
+                                        <input class="form-control inv-grow" maxlength="1000" aria-label="@L["Comment"]" placeholder="@(NeedsComment ? L["Comment (needed for this reason)"] : L["Comment (optional)"])"
                                                @bind="_comment" @bind:event="oninput" />
                                         @if (s.MappedReasonId is { } mapped && _reasons.Any(r => r.Id == mapped))
                                         {
-                                            <button type="button" class="btn btn-outline-primary" disabled="@_saving" @onclick="() => ConfirmAsync(mapped)">Confirm @s.MappedReasonCode</button>
+                                            <button type="button" class="btn btn-outline-primary" disabled="@_saving" @onclick="() => ConfirmAsync(mapped)">@L["Confirm {0}", s.MappedReasonCode]</button>
                                         }
-                                        <button type="submit" class="btn btn-primary" disabled="@(_saving || _reasonId is null || (NeedsComment && string.IsNullOrWhiteSpace(_comment)))">Save</button>
-                                        <button type="button" class="btn btn-link" @onclick="@(() => _coding = null)">Cancel</button>
+                                        <button type="submit" class="btn btn-primary" disabled="@(_saving || _reasonId is null || (NeedsComment && string.IsNullOrWhiteSpace(_comment)))">@L["Save"]</button>
+                                        <button type="button" class="btn btn-link" @onclick="@(() => _coding = null)">@L["Cancel"]</button>
                                     </form>
                                 </td>
                             </tr>
@@ -355,8 +353,8 @@ else
         @if (_next is not null)
         {
             <div class="d-flex align-items-center gap-2" role="status">
-                <span class="small text-muted">Showing the latest @_stops.Count stops in this period; there are more.</span>
-                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_loadingMore" @onclick="LoadMoreStopsAsync">Load more</button>
+                <span class="small text-muted">@L["Showing the latest {0} stops in this period; there are more.", _stops.Count]</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_loadingMore" @onclick="LoadMoreStopsAsync">@L["Load more"]</button>
             </div>
         }
     }
@@ -691,27 +689,27 @@ else
         (_newStart, _newEnd) = (Local(stop.StartedAt), Local(stop.EndedAt));
     }
 
-    private static string ActionPrompt(string kind) => kind switch
+    private string ActionPrompt(string kind) => kind switch
     {
-        "retime" => "Why change its times (needed)",
-        "void" => "Why remove it (needed)",
-        _ => "Why undo it (needed)",
+        "retime" => L["Why change its times (needed)"],
+        "void" => L["Why remove it (needed)"],
+        _ => L["Why undo it (needed)"],
     };
 
-    private static string ActionLabel((DowntimeDto Stop, string Kind) acting) => acting.Kind switch
+    private string ActionLabel((DowntimeDto Stop, string Kind) acting) => acting.Kind switch
     {
-        "retime" => "Change times",
-        "void" => "Remove stop",
-        _ => "Undo " + (MachineView.SourceLabel(acting.Stop.Source)?.ToLowerInvariant() ?? "adjustment"),
+        "retime" => L["Change times"],
+        "void" => L["Remove stop"],
+        _ => "Undo " + (L.Of(MachineView.SourceLabel(acting.Stop.Source))?.ToLowerInvariant() ?? "adjustment"),
     };
 
-    private static string ActionHelp((DowntimeDto Stop, string Kind) acting) => acting.Kind switch
+    private string ActionHelp((DowntimeDto Stop, string Kind) acting) => acting.Kind switch
     {
-        "retime" => "It keeps its reason and coding; the new times may not overlap another stop of the machine.",
-        "void" => "It stays in the list as removed, with why; nothing replaces it.",
+        "retime" => L["It keeps its reason and coding; the new times may not overlap another stop of the machine."],
+        "void" => L["It stays in the list as removed, with why; nothing replaces it."],
         _ => acting.Stop.Source == "split"
-            ? "Both parts of the split are replaced by the stop they came from, with its reason and coding. Only if neither part was adjusted since."
-            : "This stop is replaced by the stops it came from, with their reasons and coding. Only if it wasn't adjusted since.",
+            ? L["Both parts of the split are replaced by the stop they came from, with its reason and coding. Only if neither part was adjusted since."]
+            : L["This stop is replaced by the stops it came from, with their reasons and coding. Only if it wasn't adjusted since."],
     };
 
     private Task ActAsync()
@@ -770,23 +768,23 @@ else
     }
 
     private RenderFragment Tile(MachineStatusDto m, bool isHead) =>
-        @<article class="machine-tile @MachineView.CategoryClass(m.Category) @(isHead ? "is-head" : "")" aria-label="@m.Code: @MachineView.CategoryLabel(m.Category)">
+        @<article class="machine-tile @MachineView.CategoryClass(m.Category) @(isHead ? "is-head" : "")" aria-label="@m.Code: @(L[MachineView.CategoryLabel(m.Category)])">
             <div class="machine-tile-head">
                 <span class="machine-tile-code">@m.Code</span>
-                <span class="machine-tile-state">@MachineView.CategoryLabel(m.Category)</span>
+                <span class="machine-tile-state">@(L[MachineView.CategoryLabel(m.Category)])</span>
             </div>
             <div class="machine-tile-line">@m.Name</div>
             @if (m.PackMlName is not null)
             {
                 <div class="machine-tile-line">
-                    @m.PackMlName@(m.StateSince is { } since ? $" for {MachineView.Duration(_loadedAt - since)}" : "")
+                    @m.PackMlName@(m.StateSince is { } since ? L[" for {0}", MachineView.Duration(_loadedAt - since)] : "")
                     @if (m.UnitMode is { } mode && mode != 1)
                     {
-                        <span class="chip ms-1">@MachineView.UnitModeLabel(mode)</span>
+                        <span class="chip ms-1">@(L[MachineView.UnitModeLabel(mode)])</span>
                     }
                 </div>
             }
-            @if (MachineView.DerivationNote(m) is { } note)
+            @if (L.Of(MachineView.DerivationNote(m)) is { } note)
             {
                 <div class="machine-tile-line">@note</div>
             }
@@ -800,7 +798,7 @@ else
                     }
                     else
                     {
-                        <span class="chip chip-warning">uncoded</span>
+                        <span class="chip chip-warning">@L["uncoded"]</span>
                     }
                     @if (m.StopCodeText is not null)
                     {
@@ -810,19 +808,19 @@ else
             }
             @if (m.JobNumber is not null)
             {
-                <div class="machine-tile-line">@m.JobNumber@(m.MaterialCode is null ? "" : $" · {m.MaterialCode}")@(m.RunGoodCount is { } good ? $" · {MachineView.Count(good)} good" : "")</div>
+                <div class="machine-tile-line">@m.JobNumber@(m.MaterialCode is null ? "" : $" · {m.MaterialCode}")@(m.RunGoodCount is { } good ? $" · {L["{0} good", MachineView.Count(good)]}" : "")</div>
             }
             @if (m.MachineSpeed is { } speed && m.Category == "producing")
             {
-                <div class="machine-tile-line">Speed @EdgeView.Reading(speed)</div>
+                <div class="machine-tile-line">@L["Speed {0}", EdgeView.Reading(speed)]</div>
             }
             @if (m.EdgeQuiet)
             {
-                <div class="machine-tile-line"><span class="chip chip-warning">@m.EdgeNodeCode quiet</span></div>
+                <div class="machine-tile-line"><span class="chip chip-warning">@L["{0} quiet", m.EdgeNodeCode]</span></div>
             }
             @if (m.UncodedStops > 0)
             {
-                <div class="mt-auto"><button type="button" class="btn btn-sm btn-link p-0" @onclick="() => ShowStopsOfAsync(m.EquipmentId)">@m.UncodedStops @(m.UncodedStops == 1 ? "stop" : "stops") to code</button></div>
+                <div class="mt-auto"><button type="button" class="btn btn-sm btn-link p-0" @onclick="() => ShowStopsOfAsync(m.EquipmentId)">@(m.UncodedStops == 1 ? L["1 stop to code"] : L["{0} stops to code", m.UncodedStops])</button></div>
             }
         </article>;
 }

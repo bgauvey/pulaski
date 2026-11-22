@@ -163,7 +163,7 @@ else
                                 <tr @key="l.JobId" class="small">
                                     <td class="ps-5">
                                         <a href="inventory/jobs/@l.JobId">@l.JobNumber</a>
-                                        <span class="text-muted">· @l.LineCode · @Display.Label(l.JobStatus)</span>
+                                        <span class="text-muted">· @l.LineCode · @L.Label(l.JobStatus)</span>
                                     </td>
                                     <td class="inv-num" title="@($"{InventoryView.Qty(l.Cumulative)} needed by this job and every one before it")">@InventoryView.Qty(l.Remaining)</td>
                                     <td class="inv-num text-muted">@(l.FromStock > 0 ? $"{InventoryView.Qty(l.FromStock)} from stock" : "")</td>

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.MachineData;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.MachineData;
 
@@ -22,25 +23,25 @@ public static class OeeTargetsView
         targets.Where(t => t.EquipmentId == equipmentId).MaxBy(t => t.EffectiveFrom);
 
     /// <summary>Why the form's figures can't be saved, or null: each blank or above 0 and at most 100 with one decimal, one at least.</summary>
-    public static string? Problem(decimal? availability, decimal? performance, decimal? quality, decimal? oee)
+    public static string? Problem(Text l, decimal? availability, decimal? performance, decimal? quality, decimal? oee)
     {
         decimal?[] values = [availability, performance, quality, oee];
         if (values.All(v => v is null))
         {
-            return "Give at least one target.";
+            return l["Give at least one target."];
         }
 
         return values.Any(v => v is { } x && (x <= 0 || x > 100 || decimal.Round(x, 1) != x))
-            ? "Each target is a percentage above 0 and at most 100, with one decimal at most."
+            ? l["Each target is a percentage above 0 and at most 100, with one decimal at most."]
             : null;
     }
 
     public static string Pct(decimal? value) => value is { } v ? v.ToString("0.#", CultureInfo.InvariantCulture) + "%" : "—";
 
     /// <summary>"from Mon 3 Nov 2026" or "Mon 3 Nov – Sun 30 Nov 2026" (the last day in force).</summary>
-    public static string Period(OeeTargetDto target) => target.EffectiveTo is { } to
-        ? $"{target.EffectiveFrom.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)} – {to.AddDays(-1).ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)}"
-        : $"from {target.EffectiveFrom.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)}";
+    public static string Period(Text l, OeeTargetDto target) => target.EffectiveTo is { } to
+        ? $"{target.EffectiveFrom.ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture)} – {to.AddDays(-1).ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture)}"
+        : l["from {0}", target.EffectiveFrom.ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture)];
 
     /// <summary>True when the figure is below its target, false when it meets it, null when either is missing.</summary>
     public static bool? Below(decimal? figure, decimal? target) => figure is { } f && target is { } t ? f < t : null;

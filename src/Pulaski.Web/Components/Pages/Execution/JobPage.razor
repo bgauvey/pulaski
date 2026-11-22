@@ -15,16 +15,16 @@
             @(_job?.JobNumber ?? "Job")
             @if (_job is { } h)
             {
-                <span class="@Display.JobStatusChip(h.Status) ms-2 align-middle">@Display.Label(h.Status)</span>
+                <span class="@Display.JobStatusChip(h.Status) ms-2 align-middle">@L.Label(h.Status)</span>
             }
         </h1>
         @if (_job is { } d)
         {
             <p class="text-muted mb-0">
-                @(d.MaterialCode is { } code ? $"Makes {code} · {d.MaterialName} on {d.LineCode}" : $"{Display.Label(d.JobType)} on {d.LineCode}")
+                @(d.MaterialCode is { } code ? $"Makes {code} · {d.MaterialName} on {d.LineCode}" : $"{L.Label(d.JobType)} on {d.LineCode}")
                 @if (d.WorkOrderNumber is { } order)
                 {
-                    <span> · work order @order (@Display.Label(d.WorkOrderStatus))</span>
+                    <span> · work order @order (@L.Label(d.WorkOrderStatus))</span>
                 }
             </p>
         }
@@ -168,7 +168,7 @@
                                 <td>@p.RunNo</td>
                                 <td><ScreenLink Href="@($"inventory/lots/{p.LotId}")" Permission="@PermissionCodes.InventoryView">@p.LotNumber</ScreenLink></td>
                                 <td class="inv-num">@FloorView.Qty(p.Quantity) of @FloorView.Qty(p.BatchSize) @p.UomCode</td>
-                                <td><span class="@(p.Status == "pending" ? "chip chip-warning" : "chip")">@Display.Label(p.Status)</span></td>
+                                <td><span class="@(p.Status == "pending" ? "chip chip-warning" : "chip")">@L.Label(p.Status)</span></td>
                                 <td class="small">@Display.SiteTime(p.OccurredAt, job.SiteTimeZone)</td>
                                 <td class="small">@(p.DecidedAt is { } decided ? $"{Display.SiteTime(decided, job.SiteTimeZone)} by {p.DecidedBy}{(p.DecisionComment is { } c ? ": " + c : "")}" : "")</td>
                                 <td class="text-end text-nowrap">

@@ -58,6 +58,12 @@ public sealed class Text(TranslationCache? cache)
         return error.Detail;
     }
 
+    /// <summary>A term chosen in code (a helper's label, marked with <see cref="Term.Mark"/>) in the reader's language; null stays null.</summary>
+    public string? Of(string? term) => term is null ? null : this[term];
+
+    /// <summary>A status or kind code as words in the reader's language: 'in_progress' → 'In progress' (<see cref="LabelTerms"/>).</summary>
+    public string Label(string? code) => this[Display.Label(code)];
+
     /// <summary>A refusal in one line: its message, else its title, in the reader's language.</summary>
     public string Problem(ApiException error) => Message(error) ?? Title(error);
 

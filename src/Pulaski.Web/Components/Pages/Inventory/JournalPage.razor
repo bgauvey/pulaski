@@ -91,7 +91,7 @@ else
                             @InventoryView.EventLabel(e.Kind)
                             @if (e.ToStatus is { } to)
                             {
-                                <div class="small text-muted">@Display.Label(e.FromStatus) → @Display.Label(to)</div>
+                                <div class="small text-muted">@L.Label(e.FromStatus) → @L.Label(to)</div>
                             }
                         </td>
                         <td>

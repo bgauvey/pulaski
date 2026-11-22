@@ -15,10 +15,10 @@
             var group = s.GroupEquipmentId is { } groupId ? Controller.Board.FindLine(groupId) : null;
             <header class="drawer-head">
                 <div>
-                    <div class="small text-muted">@Display.Label(s.JobType) job · @item.LineCode</div>
+                    <div class="small text-muted">@L.Label(s.JobType) job · @item.LineCode</div>
                     <h2 id="drawer-title" class="mb-0">@s.JobNumber</h2>
                 </div>
-                <span class="@Display.JobStatusChip(s.Status)">@Display.Label(s.Status)</span>
+                <span class="@Display.JobStatusChip(s.Status)">@L.Label(s.Status)</span>
                 <button type="button" class="icon-button" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
             </header>
 
@@ -63,7 +63,7 @@
                     @if (order is not null)
                     {
                         <dt>Work order</dt>
-                        <dd><button type="button" class="link-button" @onclick="() => OnSelectWorkOrder.InvokeAsync(order.Id)">@order.OrderNumber</button> · @Display.Label(order.Status)</dd>
+                        <dd><button type="button" class="link-button" @onclick="() => OnSelectWorkOrder.InvokeAsync(order.Id)">@order.OrderNumber</button> · @L.Label(order.Status)</dd>
                     }
                     @if (s.MaterialCode is not null)
                     {
@@ -289,7 +289,7 @@
                     <div class="small text-muted">Work order · @wo.SiteCode</div>
                     <h2 id="drawer-title" class="mb-0">@wo.OrderNumber</h2>
                 </div>
-                <span class="@Display.StatusChip(wo.Status)">@Display.Label(wo.Status)</span>
+                <span class="@Display.StatusChip(wo.Status)">@L.Label(wo.Status)</span>
                 <button type="button" class="icon-button" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
             </header>
 
@@ -310,7 +310,7 @@
                         <dd>@wo.ProcessCode <span class="text-muted">v@(wo.ProcessVersionNumber)</span></dd>
                     }
                     <dt>Origin</dt>
-                    <dd>@Display.Label(wo.Origin)</dd>
+                    <dd>@L.Label(wo.Origin)</dd>
                     @if (wo.Notes is not null)
                     {
                         <dt>Notes</dt>
@@ -336,7 +336,7 @@
                             {
                                 <button type="button" class="btn btn-sm @(next == "cancelled" ? "btn-outline-danger" : "btn-outline-primary")"
                                         disabled="@Controller.Saving.Contains(key)" @onclick="() => Controller.MoveWorkOrderAsync(wo, next)">
-                                    @Display.StatusAction(wo.Status, next)
+                                    @(L[Display.StatusAction(wo.Status, next)])
                                 </button>
                             }
                         </div>

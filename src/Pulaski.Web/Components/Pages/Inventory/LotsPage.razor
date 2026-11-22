@@ -30,7 +30,7 @@
         <option value="">On hand</option>
         @foreach (var s in InventoryView.Statuses)
         {
-            <option value="@s">@Display.Label(s)</option>
+            <option value="@s">@L.Label(s)</option>
         }
     </select>
     <select class="form-select" aria-label="Expiry" @bind="_expiryDays">
@@ -113,7 +113,7 @@ else
                     <tr @key="l.Id">
                         <td><a class="fw-semibold" href="inventory/lots/@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode)</a></td>
                         <td><a href="inventory/materials/@l.MaterialId">@l.MaterialCode</a> <div class="small text-muted">@l.MaterialName</div></td>
-                        <td><span class="@InventoryView.StatusChip(l.Status)">@Display.Label(l.Status)</span></td>
+                        <td><span class="@InventoryView.StatusChip(l.Status)">@L.Label(l.Status)</span></td>
                         <td class="inv-num">@InventoryView.Qty(l.Quantity) <span class="small text-muted">@l.UomCode</span></td>
                         <td>@l.LocationCode</td>
                         <td>@l.SupplierLot</td>

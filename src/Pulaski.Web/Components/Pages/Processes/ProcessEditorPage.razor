@@ -28,7 +28,7 @@
             {
                 <a role="tab" aria-selected="@(v.Id == _version.Id ? "true" : "false")" href="@VersionHref(v.Id)"
                    class="version-chip status-@v.Status @(v.Id == _version.Id ? "is-active" : "")">
-                    Version @v.Number <span class="version-status">@Display.Label(v.Status)</span>
+                    Version @v.Number <span class="version-status">@L.Label(v.Status)</span>
                 </a>
             }
         </div>

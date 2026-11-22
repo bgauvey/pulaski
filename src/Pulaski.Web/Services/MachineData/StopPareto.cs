@@ -1,4 +1,5 @@
 using Pulaski.Contracts.MachineData;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.MachineData;
 
@@ -8,9 +9,9 @@ public sealed record ParetoRow(
 {
     /// <summary>What the row is, as the table names it: the reason, else Uncoded, No signal or Micro-stops.</summary>
     public string Label => ReasonCode is not null ? $"{ReasonCode} · {ReasonName}"
-        : Use == "micro_stop" ? "Micro-stops"
-        : NoSignal ? "No signal"
-        : "Uncoded";
+        : Use == "micro_stop" ? Term.Mark("Micro-stops")
+        : NoSignal ? Term.Mark("No signal")
+        : Term.Mark("Uncoded");
 }
 
 /// <summary>

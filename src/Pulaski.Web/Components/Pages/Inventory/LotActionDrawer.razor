@@ -221,7 +221,7 @@
 
                     case LotAction.Merge:
                         <p class="small text-muted">
-                            Lots of @Lot!.MaterialCode at @Lot.LocationCode that are @Display.Label(Lot.Status).ToLowerInvariant() can be merged in.
+                            Lots of @Lot!.MaterialCode at @Lot.LocationCode that are @L.Label(Lot.Status).ToLowerInvariant() can be merged in.
                             They go to zero; @Lot.LotNumber takes their stock and the earliest expiry.
                         </p>
                         @if (_lots.Count == 0)

@@ -3,7 +3,7 @@
 
 <div class="picker" @onkeydown="OnKeyDown">
     <button type="button" class="btn btn-outline-secondary picker-button" aria-haspopup="listbox" aria-expanded="@(_open ? "true" : "false")"
-            aria-label="Equipment: @Path" @onclick="Toggle">
+            aria-label="@L["Equipment: {0}", Path]" @onclick="Toggle">
         <Icon Name="equipment" Size="18" />
         <span class="picker-path">@Path</span>
         <Icon Name="chevron-down" Size="16" />
@@ -15,15 +15,15 @@
         <div class="picker-panel">
             <div class="picker-search">
                 <Icon Name="search" Size="16" />
-                <input type="search" class="form-control" placeholder="Find a site, department or line" aria-label="Find equipment"
+                <input type="search" class="form-control" placeholder="@L["Find a site, department or line"]" aria-label="@L["Find equipment"]"
                        @bind="_filter" @bind:event="oninput" @ref="_input" />
             </div>
-            <ul class="picker-list" role="listbox" aria-label="Equipment">
+            <ul class="picker-list" role="listbox" aria-label="@L["Equipment"]">
                 @if (string.IsNullOrWhiteSpace(_filter))
                 {
                     <li role="option" aria-selected="@(Value is null ? "true" : "false")">
                         <button type="button" class="picker-option @(Value is null ? "is-selected" : "")" @onclick="() => SelectAsync(null)">
-                            All equipment
+                            @L["All equipment"]
                         </button>
                     </li>
                 }
@@ -40,7 +40,7 @@
                 }
                 @if (!Rows.Any())
                 {
-                    <li class="picker-empty">Nothing matches.</li>
+                    <li class="picker-empty">@L["Nothing matches."]</li>
                 }
             </ul>
         </div>
@@ -74,7 +74,7 @@
             || e.Code.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase)
             || e.Name.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    private string Path => Value is { } id && Equipment.Any(e => e.Id == id) ? PathOf(id) : "All equipment";
+    private string Path => Value is { } id && Equipment.Any(e => e.Id == id) ? PathOf(id) : L["All equipment"];
 
     protected override void OnParametersSet() =>
         _top = Equipment.Where(e => Levels.Contains(e.Level)).Select(e => e.Depth).DefaultIfEmpty(0).Min();
@@ -105,12 +105,12 @@
         return string.Join(" › ", codes);
     }
 
-    private static string Kind(EquipmentDto e) => e switch
+    private string Kind(EquipmentDto e) => e switch
     {
-        { Level: "site" } => "Site",
-        { IsSchedulable: true, CanRunJob: false } => "Department",
-        { CanRunJob: true } => "Line",
-        _ => Display.Label(e.Level),
+        { Level: "site" } => L["Site"],
+        { IsSchedulable: true, CanRunJob: false } => L["Department"],
+        { CanRunJob: true } => L["Line"],
+        _ => L.Label(e.Level),
     };
 
     private void Toggle()

@@ -5,10 +5,10 @@
 @if (_issuing)
 {
     <div class="d-flex gap-1">
-        <input type="password" class="form-control form-control-sm" style="width: 9rem" autocomplete="off" placeholder="Scan badge" aria-label="Badge of @Person.DisplayName" @bind="_value" />
-        <input type="password" inputmode="numeric" class="form-control form-control-sm" style="width: 6rem" autocomplete="off" placeholder="PIN" aria-label="PIN (optional)" @bind="_pin" />
-        <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_value))" @onclick="IssueAsync">Issue</button>
-        <button type="button" class="btn btn-sm btn-link" @onclick="() => _issuing = false">Cancel</button>
+        <input type="password" class="form-control form-control-sm" style="width: 9rem" autocomplete="off" placeholder="@L["Scan badge"]" aria-label="@L["Badge of {0}", Person.DisplayName]" @bind="_value" />
+        <input type="password" inputmode="numeric" class="form-control form-control-sm" style="width: 6rem" autocomplete="off" placeholder="@L["PIN"]" aria-label="@L["PIN (optional)"]" @bind="_pin" />
+        <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_value))" @onclick="IssueAsync">@L["Issue"]</button>
+        <button type="button" class="btn btn-sm btn-link" @onclick="() => _issuing = false">@L["Cancel"]</button>
     </div>
 }
 else
@@ -16,19 +16,19 @@ else
     <span class="small">
         @if (Badge is { } b)
         {
-            <span>Since @b.IssuedAt.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)@(b.HasPin ? ", PIN" : "")@(b.LockedUntil is not null ? " · locked" : "")</span>
+            <span>@L["Since {0}{1}{2}", b.IssuedAt.ToString("d MMM yyyy", System.Globalization.CultureInfo.CurrentCulture), b.HasPin ? ", PIN" : "", b.LockedUntil is not null ? $" · {L["locked"]}" : ""]</span>
         }
         else
         {
-            <span class="text-muted">No badge</span>
+            <span class="text-muted">@L["No badge"]</span>
         }
     </span>
     @if (CanManage && Person.IsActive)
     {
-        <button type="button" class="btn btn-sm btn-link" @onclick="() => _issuing = true">@(Badge is null ? "Issue" : "Replace")</button>
+        <button type="button" class="btn btn-sm btn-link" @onclick="() => _issuing = true">@(Badge is null ? L["Issue"] : L["Replace"])</button>
         @if (Badge is not null)
         {
-            <button type="button" class="btn btn-sm btn-link text-danger" disabled="@_busy" @onclick="RevokeAsync">Revoke</button>
+            <button type="button" class="btn btn-sm btn-link text-danger" disabled="@_busy" @onclick="RevokeAsync">@L["Revoke"]</button>
         }
     }
 }

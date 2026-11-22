@@ -3076,7 +3076,13 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   (`TermExtractor.Messages`: one literal argument, or literals joined with `+`); a message chosen by a conditional, or built elsewhere, falls back
   to the English as sent. Helpers that word sentences take the `Text` (`l[…]`; `Text.English` in tests); each combination is its own term rather
   than joined lists.
-- **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens, terminals and server messages; #175 office screens.
+- **Labels and helpers (#178):** status and kind codes read as words through `L.Label(code)` (`Display.Label` translated); the words of every
+  code in the schema's CHECK lists are terms in `LabelTerms` (a test keeps it in step with `db/schema-draft.sql`). A helper's plain label is a
+  `Term.Mark` the page shows with `L[…]` (`L.Of` when it may be null); a helper that words a sentence takes the `Text`. Values a page compares
+  stay English and are translated only when shown (the Labor tabs). CSV exports keep English column names, like the import formats. Dates with
+  day or month names use the reader's culture (invariant without a region).
+- **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens, terminals and server messages; #175 office screens,
+  split by area: #178 Overview, Inbox, Machines, Quality, Labor; #179 inventory and lots; #180 planning; #181 configuration.
 
 ## Application architecture
 

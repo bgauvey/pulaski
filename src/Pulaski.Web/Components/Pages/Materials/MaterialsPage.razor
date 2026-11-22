@@ -52,7 +52,7 @@
                 <select id="new-type" class="form-select" @bind="_new.MaterialType">
                     @foreach (var t in MaterialProperties.Types)
                     {
-                        <option value="@t">@Display.Label(t)</option>
+                        <option value="@t">@L.Label(t)</option>
                     }
                 </select>
             </div>
@@ -118,7 +118,7 @@
         <option value="">All types</option>
         @foreach (var t in MaterialProperties.Types)
         {
-            <option value="@t">@Display.Label(t)</option>
+            <option value="@t">@L.Label(t)</option>
         }
     </select>
     <select class="form-select" aria-label="Origin" @bind="_origin">
@@ -177,7 +177,7 @@ else
                                     <a class="fw-semibold" href="materials/@m.Id">@m.Code</a>
                                     <div class="small text-muted">@m.Name@(m.IsActive ? "" : " · inactive")</div>
                                 </td>
-                                <td>@Display.Label(m.MaterialType)</td>
+                                <td>@L.Label(m.MaterialType)</td>
                                 <td>@m.BaseUomCode</td>
                                 <td>@(m.IsLotTracked ? "Lots" : "Balance")</td>
                                 <td class="inv-num">@(m.ShelfLifeDays is { } d ? $"{d} days" : "—")</td>

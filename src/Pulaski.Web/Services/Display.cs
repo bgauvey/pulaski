@@ -12,14 +12,14 @@ public static class Display
     /// <summary>Button text for moving a work order from one status to another.</summary>
     public static string StatusAction(string from, string to) => (from, to) switch
     {
-        (_, "dispatched") => "Dispatch",
-        ("dispatched", "planned") => "Un-dispatch",
-        (_, "firmed") => "Firm",
-        (_, "in_progress") when from == "completed" => "Reopen",
-        (_, "in_progress") => "Start",
-        (_, "completed") => "Complete",
-        (_, "closed") => "Close",
-        (_, "cancelled") => "Cancel",
+        (_, "dispatched") => Localization.Term.Mark("Dispatch"),
+        ("dispatched", "planned") => Localization.Term.Mark("Un-dispatch"),
+        (_, "firmed") => Localization.Term.Mark("Firm"),
+        (_, "in_progress") when from == "completed" => Localization.Term.Mark("Reopen"),
+        (_, "in_progress") => Localization.Term.Mark("Start"),
+        (_, "completed") => Localization.Term.Mark("Complete"),
+        (_, "closed") => Localization.Term.Mark("Close"),
+        (_, "cancelled") => Localization.Term.Mark("Cancel"),
         _ => Label(to),
     };
 

@@ -107,7 +107,9 @@ In detail:
 - The choice is kept on your user, so it follows you to any computer when you sign in.
 - Where a screen hasn't been translated yet, it shows in English. Pulaski ships Spanish for the menu, the header, signing in, these
   pages, the floor screens (Floor, reporting production, pausing and completing, Andon, Handover) and the terminals (badge kiosk, operator
-  station, line boards); the office screens follow.
+  station, line boards), the Overview, Inbox, Machines (status, stops, utilization and OEE, alarms, process values), Quality and Labor;
+  inventory, planning and configuration screens follow.
+- Exported CSV files keep English column names, so spreadsheets and scripts that read them work whatever language exported them.
 - When Pulaski refuses something (*EXT-01 can't make that much in 5 minutes…*), the message is in your language too.
 - Without a region, numbers and dates keep Pulaski's usual form (*2026-11-22 15:04*, *1,234.5*); with one, the screens that follow regions
   use its form (so far the shared ones: times, quantities and percentages).
@@ -3187,7 +3189,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
-- **Languages:** the menu, header, sign-in, language pages, floor screens and terminals are translated; the office screens follow (#175).
+- **Languages:** inventory and lots (#179), planning (work orders, schedule, processes, BOMs, materials; #180) and the configuration screens
+  (#181) are still in English; the menu, sign-in, floor, terminals, Overview, Inbox, Machines, Quality and Labor are translated.
   Refusals from the server are translated, but not yet the field checks of a form (*Reason Other needs a comment.*), the notes and warnings
   that come back after an action (such as a missing qualification), a few refusals worded in parts (they stay English), or words the server
   puts into a message (*tracked by lot*). Quantities inside a refusal keep Pulaski's usual form (*1,234.5*). Your plant's own names (reasons,

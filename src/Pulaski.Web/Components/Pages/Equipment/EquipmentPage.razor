@@ -207,11 +207,11 @@ else
         if (_selectedId == EquipmentTreeGrid.DraftId && _draft is not null)
         {
             var title = string.IsNullOrWhiteSpace(_draft.Code) ? "New equipment" : _draft.Code;
-            return (EquipmentProperties.ForDraft(_draft, _types!), title, $"{Display.Label(_draft.Role)} · unsaved");
+            return (EquipmentProperties.ForDraft(_draft, _types!), title, $"{L.Label(_draft.Role)} · unsaved");
         }
 
         return SelectedExisting is { } e
-            ? (EquipmentProperties.ForExisting(e, _tree, _schedules, CanChange, User.Can(PermissionCodes.Shifts, e.SiteId), _profiles), e.Code, Display.Label(e.EquipmentRole))
+            ? (EquipmentProperties.ForExisting(e, _tree, _schedules, CanChange, User.Can(PermissionCodes.Shifts, e.SiteId), _profiles), e.Code, L.Label(e.EquipmentRole))
             : ([], null, null);
     }
 
