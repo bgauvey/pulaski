@@ -280,6 +280,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Report defaults and auto labels (D-111, proposed, #122): line `output_location_id` / `label_printer_id` (`SetLineOutputCommand`,
   `PUT /equipment/{id}/output`); `ReportDefaults.Location` prefills. Lots closed (`ReportProductionResponse.ClosedLotIds`: lot-per-report lots,
   filled to size, cut by age/shift; start new lot; job complete now closes filling lots) print after commit via `ILineLabels` (`lot.produced`).
+- Inbox (D-112, proposed, #123): `GetInboxQuery` (`/api/me/inbox`) gathers pending partial batches, open SPC alerts, unapproved labor, ERP work
+  order changes and rate proposals where the user holds the deciding permission (`InboxKinds`); links to the deciding page; menu count (`InboxView`).
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

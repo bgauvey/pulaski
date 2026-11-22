@@ -1492,6 +1492,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     // OEE targets (D-073)
 
+    /// <summary>What waits for the signed-in user to decide (#123).</summary>
+    public Task<Pulaski.Contracts.Inbox.InboxDto> GetInboxAsync(CancellationToken ct = default) => GetAsync<Pulaski.Contracts.Inbox.InboxDto>("api/me/inbox", ct);
+
     /// <summary>The signed-in user's e-mail alerts (#121).</summary>
     public Task<MyAlertsDto> GetMyAlertsAsync(CancellationToken ct = default) => GetAsync<MyAlertsDto>("api/me/alerts", ct);
 

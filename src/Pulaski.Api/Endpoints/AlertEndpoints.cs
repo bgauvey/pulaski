@@ -37,6 +37,13 @@ internal static class AlertEndpoints
                 await CallerAccess.RequireAsync(http), id, request.Version, request.Minutes, request.IsActive), ct)))
         .RequireAnyView();
 
+        // Everything waiting for the signed-in user to decide, at the sites where they may (#123).
+        routes.MapGet("/me/inbox", async Task<Ok<Contracts.Inbox.InboxDto>> (
+            HttpContext http, IQueryHandler<Application.Inbox.GetInboxQuery, Contracts.Inbox.InboxDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new Application.Inbox.GetInboxQuery(await CallerAccess.RequireAsync(http)), ct)))
+        .WithTags("Inbox")
+        .RequireAnyView();
+
         return routes;
     }
 }

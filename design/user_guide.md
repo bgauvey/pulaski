@@ -83,14 +83,29 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
 
 ### The screen
 
-- **Menu (left).** Two groups of pages:
+- **Menu (left).** **Inbox** at the top, when your role decides anything it gathers, with how many items wait (see
+  [Your inbox](#your-inbox)). Then two groups of pages:
   - **Operate:** **Overview**, **Work orders**, **Schedule**, **Floor**, **Inventory**, **Labor**: the pages you use day to day.
   - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons**, **Shifts**, **Site settings**, **Integrations**, **People** (and **Users**, for administrators, with tabs for users, roles and permissions): the setup you do once and change now and then.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
-- **You (top right).** Your name and roles; the padlock changes your password, and the door signs you out.
+- **You (top right).** Your name and roles; the warning sign opens **My alerts** (e-mails when something needs you), the padlock changes your
+  password, and the door signs you out.
 - **Touch layout (top right).** The hand button switches to larger buttons and fields for a touch screen; see [Use a touch screen](#use-a-touch-screen).
 - **Theme (top right).** The sun/moon button switches between light and dark.
 - **Main area.** The page you picked.
+
+### Your inbox
+
+**Inbox** gathers what waits for you to decide, at every site where your role decides it:
+
+1. Click **Inbox** at the top of the menu; its number says how many items wait.
+2. Items are grouped by what they are, oldest first: **Partial batches to approve or reject**, **SPC alerts to close**, **Labor to approve**,
+   **ERP changes to work orders** and **Planning rates to review**. Each says where it is and how long it has waited.
+3. Click an item to open the page where it is decided, and decide it there. It leaves the inbox once decided.
+
+In detail: each kind shows only where you hold the permission that decides it (*partial batches: decide*, *quality: record*, *labor: approve*,
+*work orders: manage*, *rates: modify*). Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
+does. The page refreshes every 30 seconds; the menu's number every minute, and when you move to another page.
 
 ### How saving works
 
@@ -3109,6 +3124,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
+- **The inbox** gathers five kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It
+  links to the page where an item is decided rather than deciding it in place.
 - **Alerts** come by e-mail only. Each person keeps their own; nobody can subscribe others. A lot made on hold (rather than put on hold
   later) doesn't alert, and a shortage that clears and comes back for the same job isn't e-mailed again.
 - **Report defaults** are kept per line, not per line and material, and the capability CSV doesn't set them. A lot filled past its age or

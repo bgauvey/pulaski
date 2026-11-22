@@ -3020,6 +3020,17 @@ being printed. A drop folder (D-080) works but gives no answer back.
   `ILineLabels` (`NoLineLabels` outside the API; `LineLabels` in the API): the line's active printer, the lot labels as for printing by hand, the
   BarTender operation `lot.produced` (D-110). It never fails the command: what happened is a note (`label_printed`, `label_not_printed`).
 
+### D-112 · One inbox for decisions (#123) · *Proposed*
+
+**Context.** Pending decisions sat on separate pages: partial batches, SPC alerts, labor approval, ERP order changes, rate proposals.
+
+**Decision.** `GetInboxQuery` (`GET /api/me/inbox`, any user with a role) gathers, per kind, the items at the active sites where the user holds
+the permission that decides it (`InboxKinds`: `partial_batch` / `partial_batch.decide`, `spc_alert` / `quality.record`, `labor` /
+`labor.approve`, `erp_change` / `work_order.manage`, `rate_proposal` / `rate.modify`). Items come from the rows the deciding pages read
+(`InboxQueries`; labor from `ListPendingLaborApprovalsQuery`, per site), so deciding an item there takes it off; nothing is stored. Each item
+links to its page (relative to the UI). The menu shows **Inbox** with a count to anyone who decides any of them (`InboxView`), recounted every
+minute and on navigation. Deciding stays on the pages that own it.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

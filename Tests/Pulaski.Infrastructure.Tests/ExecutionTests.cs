@@ -681,6 +681,56 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task The_inbox_gathers_open_spc_alerts_erp_changes_and_rate_proposals_and_drops_them_once_decided()
+    {
+        var plant = await PlantAsync();
+        var admin = new Pulaski.Domain.Security.UserAccess(Guid.CreateVersion7(), "admin", "Admin", "admin", true,
+            [new Pulaski.Domain.Security.RoleGrant(Guid.CreateVersion7(), Pulaski.Domain.Security.Roles.Administrator, "Administrator", null, [])]);
+        var alertId = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                WITH q AS (
+                    INSERT INTO core.quality_characteristic (id, site_id, code, name, data_kind, chart_type)
+                    VALUES (uuidv7(), @Site, 'IB' || @S, 'Width', 'variable', 'i_mr') RETURNING id)
+                INSERT INTO core.spc_alert (id, site_id, characteristic_id, material_id, equipment_id, rules, breaks, first_sample_id, first_sample_at,
+                                            last_sample_id, last_sample_at, raised_at)
+                SELECT @AlertId, @Site, q.id, (SELECT material_id FROM core.job WHERE id = @Job), @Line, '{1}', 2, uuidv7(), now(), uuidv7(), now(), now() FROM q;
+                INSERT INTO core.run_standard (equipment_id, material_id, uom_id, calculated_rate_per_hour, calculation_basis, calculated_at)
+                SELECT @Line, material_id, uom_id, 100, 'ideal_rate', now() FROM core.job WHERE id = @Job
+                ON CONFLICT DO NOTHING;
+                UPDATE core.work_order SET origin = 'erp', external_system = 'ERP', external_key = 'K' || @S, erp_change_pending = true,
+                                           erp_pending_change = '{}'::jsonb
+                WHERE id = @Order;
+                INSERT INTO core.run_standard_proposal (run_standard_id, proposed_rate_per_hour, uom_id, calculation_basis, window_days, window_from,
+                                                        window_to, used_runs, used_hours, used_good_qty, calculated_rate_per_hour, effective_rate_per_hour,
+                                                        review_reason, proposed_at)
+                SELECT id, 120, uom_id, 'run_history', 90, now() - interval '90 days', now(), 6, 40, 4800, 100, 100, 'Over the threshold', now()
+                FROM core.run_standard WHERE equipment_id = @Line AND material_id = (SELECT material_id FROM core.job WHERE id = @Job);
+                """,
+                new { plant.Site, S = _s, AlertId = alertId, Job = plant.Extrude, Line = plant.Extruder, plant.Order });
+        }
+
+        async Task<IReadOnlyList<Contracts.Inbox.InboxItemDto>> InboxAsync() =>
+            (await QueryAsync<Pulaski.Application.Inbox.GetInboxQuery, Contracts.Inbox.InboxDto>(new Pulaski.Application.Inbox.GetInboxQuery(admin))).Items
+                .Where(i => i.SiteId == plant.Site).ToList();
+
+        var items = await InboxAsync();
+        Assert.Contains(items, i => i.Kind == "spc_alert" && i.Key == $"spc_alert:{alertId}" && i.Link == "quality/alerts");
+        Assert.Contains(items, i => i.Kind == "erp_change" && i.Link == "work-orders");
+        Assert.Contains(items, i => i.Kind == "rate_proposal" && i.Detail!.Contains("Over the threshold", StringComparison.Ordinal));
+
+        // Decided, it leaves.
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.work_order SET erp_change_pending = false, erp_pending_change = NULL WHERE id = @Order", new { plant.Order });
+        }
+
+        Assert.DoesNotContain(await InboxAsync(), i => i.Kind == "erp_change");
+    }
+
+    [Fact]
     public async Task A_line_keeps_a_default_output_location_and_a_label_printer_that_its_jobs_show()
     {
         var plant = await PlantAsync();
