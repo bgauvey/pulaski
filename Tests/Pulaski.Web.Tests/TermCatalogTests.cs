@@ -1,0 +1,54 @@
+using Pulaski.Contracts.Localization;
+using Pulaski.Web.Services.Localization;
+
+namespace Pulaski.Web.Tests;
+
+/// <summary>
+/// The term catalog (#128) is exactly the terms the web's source translates. When it isn't, run the tests with PULASKI_UPDATE_TERMS=1 to rewrite
+/// <c>src/Pulaski.Contracts/Localization/terms.txt</c>, then add translations on Configure → Languages.
+/// </summary>
+public class TermCatalogTests
+{
+    [Fact]
+    public void The_catalog_is_every_term_the_web_translates()
+    {
+        var root = Root();
+        var web = Path.Combine(root, "src", "Pulaski.Web");
+        var found = Directory.EnumerateFiles(web, "*.*", SearchOption.AllDirectories)
+            .Where(f => (f.EndsWith(".razor", StringComparison.Ordinal) || f.EndsWith(".cs", StringComparison.Ordinal))
+                && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                && !f.EndsWith("TermExtractor.cs", StringComparison.Ordinal))
+            .SelectMany(f => TermExtractor.Terms(File.ReadAllText(f)));
+        var catalog = TermExtractor.Catalog(found);
+
+        var path = Path.Combine(root, "src", "Pulaski.Contracts", "Localization", "terms.txt");
+        if (Environment.GetEnvironmentVariable("PULASKI_UPDATE_TERMS") == "1")
+        {
+            File.WriteAllText(path, catalog);
+            return;
+        }
+
+        Assert.Equal(catalog, TermExtractor.Catalog(TermCatalog.Terms));
+    }
+
+    [Fact]
+    public void Terms_are_found_in_indexers_and_marks_with_their_quotes()
+    {
+        const string Source = """
+            <h1>@L["Sign in"]</h1> @L["Run {0} ended", run] new("x", Term.Mark("Work orders")) L[group.Label] @L["Say \"hello\""]
+            """;
+        Assert.Equal(["Sign in", "Run {0} ended", "Work orders", "Say \"hello\""], TermExtractor.Terms(Source));
+    }
+
+    private static string Root()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "src", "Pulaski.Web")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir?.FullName ?? throw new InvalidOperationException("The repository root wasn't found.");
+    }
+}

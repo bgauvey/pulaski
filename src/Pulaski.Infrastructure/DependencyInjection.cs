@@ -121,6 +121,10 @@ public static class DependencyInjection
         services.AddScoped<Application.Alerts.IAlertRepository, Alerts.AlertRepository>();
         services.AddSingleton<Application.Alerts.IAlertReadStore, Alerts.AlertQueries>();
         services.AddSingleton<Application.Inbox.IInboxReadStore, Inbox.InboxQueries>();
+        services.AddScoped<Localization.LanguageRepository>();
+        services.AddScoped<Application.Localization.ILanguageRepository>(sp => sp.GetRequiredService<Localization.LanguageRepository>());
+        services.AddScoped<Application.Localization.IPreferencesRepository>(sp => sp.GetRequiredService<Localization.LanguageRepository>());
+        services.AddSingleton<Application.Localization.ILanguageReadStore, Localization.LanguageQueries>();
         services.AddScoped<Application.Handover.IHandoverRepository, Handover.HandoverRepository>();
         services.AddSingleton<Application.Handover.IHandoverReadStore, Handover.HandoverQueries>();
         services.AddSingleton<Application.Andon.IAndonReadStore, Andon.AndonQueries>();

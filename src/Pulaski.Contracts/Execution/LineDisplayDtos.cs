@@ -9,6 +9,10 @@ public sealed record LineDisplayDto
     public required string Title { get; init; }
     public DateTimeOffset AsOf { get; init; }
     public IReadOnlyList<LineDisplayLineDto> Lines { get; init; } = [];
+
+    /// <summary>The board terminal's language and region (#128); null: English and the usual formats.</summary>
+    public string? Language { get; init; }
+    public string? Region { get; init; }
 }
 
 public sealed record LineDisplayLineDto
@@ -137,6 +141,10 @@ public sealed record StationDto
 
     /// <summary>Minutes without anything done before the station signs its person off.</summary>
     public int IdleMinutes { get; init; }
+
+    /// <summary>The terminal's language and region (#128); null: English and the usual formats.</summary>
+    public string? Language { get; init; }
+    public string? Region { get; init; }
 }
 
 public sealed record StationLineDto(Guid Id, string Code, string? Name);

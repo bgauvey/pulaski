@@ -798,6 +798,9 @@ CREATE TABLE sec.app_user (
     username        text,                                       -- for local sign-in (D-037): the subject under issuer 'pulaski-local'
     updated_at      timestamptz NOT NULL DEFAULT now(),
     is_service_account boolean NOT NULL DEFAULT false,          -- a machine's local account (the edge), allowed passwords when only administrators are (D-091)
+    language        text,                                       -- the screens' language (#128); null: English
+    region          text,                                       -- a culture name for dates and numbers, such as es-MX
+    CONSTRAINT app_user_culture_ck CHECK (length(language) <= 20 AND length(region) <= 20),
     CONSTRAINT app_user_idp_uq UNIQUE (idp_issuer, idp_subject)
 );
 CREATE UNIQUE INDEX app_user_username_uq ON sec.app_user (lower(username)) WHERE username IS NOT NULL;
@@ -923,6 +926,8 @@ CREATE TABLE sec.terminal (
     scope_equipment_id      uuid NOT NULL REFERENCES core.equipment(id),
     default_equipment_id    uuid REFERENCES core.equipment(id),     -- the line offered first
     auth_mode               text NOT NULL CHECK (auth_mode IN ('badge','badge_plus_pin')),
+    language                text,                                   -- its screens' language and region (#128)
+    region                  text,
     is_active               boolean NOT NULL DEFAULT true,
     secret_hash             bytea UNIQUE,                           -- SHA-256 of the device secret; null until enrolled
     enrolled_at             timestamptz,
@@ -932,7 +937,8 @@ CREATE TABLE sec.terminal (
     created_at              timestamptz NOT NULL DEFAULT now(),
     updated_at              timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT terminal_uq UNIQUE (site_id, code),
-    CONSTRAINT terminal_enrolment_ck CHECK ((enrolment_code_hash IS NULL) = (enrolment_expires_at IS NULL))
+    CONSTRAINT terminal_enrolment_ck CHECK ((enrolment_code_hash IS NULL) = (enrolment_expires_at IS NULL)),
+    CONSTRAINT terminal_culture_ck CHECK (length(language) <= 20 AND length(region) <= 20)
 );
 
 -- Badges (D-049). The badge value is a credential: only a keyed hash (HMAC) is kept, never the raw value. A PIN, for
@@ -2506,6 +2512,25 @@ CREATE TABLE core.handover_entry (
 CREATE INDEX handover_entry_line_ix ON core.handover_entry (line_id, production_date DESC, written_at DESC);
 CREATE INDEX handover_entry_open_ix ON core.handover_entry (line_id) WHERE kind = 'open_item' AND closed_at IS NULL;
 
+-- Languages (#128, D-114): the languages the screens can show, and translations keyed by the English text (the term); cleared = null.
+CREATE TABLE core.language (
+    code                text PRIMARY KEY CONSTRAINT language_code_ck CHECK (code ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$'),
+    name                text NOT NULL CONSTRAINT language_name_ck CHECK (length(name) BETWEEN 1 AND 100),
+    is_active           boolean NOT NULL DEFAULT true,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE core.translation (
+    language_code       text NOT NULL REFERENCES core.language(code),
+    term                text NOT NULL CONSTRAINT translation_term_ck CHECK (length(term) BETWEEN 1 AND 2000),
+    text                text CONSTRAINT translation_text_ck CHECK (length(text) BETWEEN 1 AND 4000),   -- null: cleared, the English shows
+    is_shipped          boolean NOT NULL DEFAULT false,                                              -- Pulaski's starter text, not yet changed here
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    updated_by          text,
+    PRIMARY KEY (language_code, term)
+);
+
 -- Grants (role names are deployment-specific):
 --   GRANT INSERT, SELECT ON evt.event TO pulaski_app;
 --   REVOKE UPDATE, DELETE, TRUNCATE ON evt.event FROM pulaski_app;
@@ -2732,7 +2757,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0071_alert_subscriptions'),
     ('0072_bartender_printers'),
     ('0073_line_output'),
-    ('0074_shift_handover');
+    ('0074_shift_handover'),
+    ('0075_languages');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2799,7 +2825,8 @@ INSERT INTO sec.permission (code, description) VALUES
     ('specs.manage', 'Maintain quality characteristics and material specifications'),
     ('andon.call', 'Call for help from a line: maintenance, quality, materials or a supervisor'),
     ('andon.respond', 'Answer andon calls: acknowledge them on arrival and resolve them'),
-    ('handover.write', 'Write shift handover notes and open items for lines, and close open items')
+    ('handover.write', 'Write shift handover notes and open items for lines, and close open items'),
+    ('languages.manage', 'Add languages and keep their translations')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.

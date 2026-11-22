@@ -16,6 +16,10 @@ public sealed record TerminalDto
 
     /// <summary><c>badge</c> or <c>badge_plus_pin</c>.</summary>
     public string AuthMode { get; init; } = "badge";
+
+    /// <summary>Its screens' language and region (#128); null: English and the usual formats.</summary>
+    public string? Language { get; init; }
+    public string? Region { get; init; }
     public bool IsActive { get; init; }
     public DateTimeOffset? EnrolledAt { get; init; }
 
@@ -34,6 +38,10 @@ public sealed record CreateTerminalRequest
     public Guid ScopeEquipmentId { get; init; }
     public Guid? DefaultEquipmentId { get; init; }
     public string AuthMode { get; init; } = "badge";
+
+    /// <summary>Its screens' language and region (#128); null: English and the usual formats.</summary>
+    public string? Language { get; init; }
+    public string? Region { get; init; }
 }
 
 public sealed record UpdateTerminalRequest
@@ -43,6 +51,10 @@ public sealed record UpdateTerminalRequest
     public Guid ScopeEquipmentId { get; init; }
     public Guid? DefaultEquipmentId { get; init; }
     public string AuthMode { get; init; } = "badge";
+
+    /// <summary>Its screens' language and region (#128); null: English and the usual formats.</summary>
+    public string? Language { get; init; }
+    public string? Region { get; init; }
     public bool IsActive { get; init; } = true;
 }
 
@@ -118,6 +130,10 @@ public sealed record TerminalStatusDto
     public required string TerminalCode { get; init; }
     public required string TerminalName { get; init; }
     public string AuthMode { get; init; } = "badge";
+
+    /// <summary>Its screens' language and region (#128); null: English and the usual formats.</summary>
+    public string? Language { get; init; }
+    public string? Region { get; init; }
     public string? TimeZone { get; init; }
     public Guid? DefaultEquipmentId { get; init; }
     public IReadOnlyList<TerminalLineDto> Lines { get; init; } = [];

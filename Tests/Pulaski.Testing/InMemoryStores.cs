@@ -116,6 +116,8 @@ public sealed class InMemoryStores
 
     public InMemoryHandover Handover { get; } = new();
 
+    public InMemoryLanguages Languages { get; } = new();
+
     public InMemoryOverview Overview { get; } = new();
 
     public InMemoryMachineHistory MachineHistory { get; } = new();
@@ -211,6 +213,9 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Inbox.IInboxReadStore>();
         services.RemoveAll<Application.Handover.IHandoverRepository>();
         services.RemoveAll<Application.Handover.IHandoverReadStore>();
+        services.RemoveAll<Application.Localization.ILanguageRepository>();
+        services.RemoveAll<Application.Localization.ILanguageReadStore>();
+        services.RemoveAll<Application.Localization.IPreferencesRepository>();
         services.RemoveAll<IOverviewReadStore>();
         services.RemoveAll<IMachineHistoryReadStore>();
         services.RemoveAll<IQualificationRepository>();
@@ -300,6 +305,9 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Inbox.IInboxReadStore>(Inbox);
         services.AddSingleton<Application.Handover.IHandoverRepository>(Handover);
         services.AddSingleton<Application.Handover.IHandoverReadStore>(Handover);
+        services.AddSingleton<Application.Localization.ILanguageRepository>(Languages);
+        services.AddSingleton<Application.Localization.ILanguageReadStore>(Languages);
+        services.AddSingleton<Application.Localization.IPreferencesRepository>(Languages);
         services.AddSingleton<IOverviewReadStore>(Overview);
         services.AddSingleton<IMachineHistoryReadStore>(MachineHistory);
         services.AddSingleton<IQualificationRepository>(Labor);

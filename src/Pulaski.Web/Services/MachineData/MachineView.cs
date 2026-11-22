@@ -73,7 +73,7 @@ public static class MachineView
     };
 
     /// <summary>A percentage as the reports show it, or a dash when there is nothing to measure it against.</summary>
-    public static string Pct(decimal? value) => value is { } v ? $"{v.ToString("0.0", CultureInfo.InvariantCulture)}%" : "—";
+    public static string Pct(decimal? value) => value is { } v ? $"{v.ToString("0.0", CultureInfo.CurrentCulture)}%" : "—";
 
     /// <summary>The label of a use of time in the utilization report (D-052).</summary>
     public static string UseLabel(string use) => use switch

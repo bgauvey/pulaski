@@ -91,6 +91,21 @@ else
                     <option value="badge_plus_pin">Badge and PIN</option>
                 </select>
             </div>
+            @* Its screens' language and region (#128): a station or board for a line whose people read another language. *@
+            <div class="col-sm-2">
+                <label class="form-label small" for="term-language">Language</label>
+                <select id="term-language" class="form-select" @bind="_form.Language">
+                    <option value="">English</option>
+                    @foreach (var language in _languages.Where(l => l.IsActive || l.Code == _form.Language))
+                    {
+                        <option value="@language.Code">@language.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-sm-2">
+                <label class="form-label small" for="term-region">Region <span class="text-muted">(dates, numbers)</span></label>
+                <input id="term-region" class="form-control" maxlength="20" placeholder="e.g. es-MX" @bind="_form.Region" />
+            </div>
             <div class="col-sm-1">
                 @if (_form.Id is not null)
                 {
@@ -197,6 +212,7 @@ else
         try
         {
             _terminals = await Api.ListTerminalsAsync(site);
+            _languages = await Api.ListLanguagesAsync();
             if (_form.ScopeId == Guid.Empty)
             {
                 ResetForm();
@@ -254,6 +270,8 @@ else
         DefaultId = t.DefaultEquipmentId ?? Guid.Empty,
         AuthMode = t.AuthMode,
         IsActive = t.IsActive,
+        Language = t.Language ?? "",
+        Region = t.Region ?? "",
     };
 
     private Task SaveAsync() => RunAsync(async () =>
@@ -269,6 +287,8 @@ else
                 DefaultEquipmentId = defaultId,
                 AuthMode = _form.AuthMode,
                 IsActive = _form.IsActive,
+                Language = NullIfEmpty(_form.Language),
+                Region = NullIfEmpty(_form.Region),
             });
         }
         else
@@ -280,6 +300,8 @@ else
                 ScopeEquipmentId = _form.ScopeId,
                 DefaultEquipmentId = defaultId,
                 AuthMode = _form.AuthMode,
+                Language = NullIfEmpty(_form.Language),
+                Region = NullIfEmpty(_form.Region),
             });
         }
 
@@ -307,6 +329,10 @@ else
         }
     }
 
+    private IReadOnlyList<LanguageDto> _languages = [];
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private sealed class TerminalForm
     {
         public Guid? Id { get; init; }
@@ -322,6 +348,8 @@ else
         public Guid DefaultId { get; set; }
 
         public string AuthMode { get; set; } = "badge";
+        public string Language { get; set; } = "";
+        public string Region { get; set; } = "";
 
         public bool IsActive { get; set; } = true;
     }

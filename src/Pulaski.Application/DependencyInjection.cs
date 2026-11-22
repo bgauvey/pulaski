@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<Materials.ScheduledConnections>();
         services.AddScoped<Labor.QualificationExpiryNotices>();
         services.AddScoped<Alerts.AlertSender>();
+        services.AddScoped<Localization.ShippedTranslations>();
         services.TryAddScoped<Execution.ILineLabels, Execution.NoLineLabels>();
         services.TryAddSingleton<Alerts.IAlertSettings, Alerts.NoAlertLinks>();
 

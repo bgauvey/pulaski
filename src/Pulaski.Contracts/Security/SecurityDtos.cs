@@ -27,6 +27,10 @@ public sealed record MeDto
 
     /// <summary>True until a temporary password is replaced; until then only changing it is allowed.</summary>
     public bool MustChangePassword { get; init; }
+
+    /// <summary>The screens' language and region (#128): a language code (null: English) and a culture name for dates and numbers.</summary>
+    public string? Language { get; init; }
+    public string? Region { get; init; }
     public IReadOnlyList<RoleGrantDto> Roles { get; init; } = [];
 
     /// <summary>Each permission the user holds, with the sites it holds it at; null sites means everywhere.</summary>

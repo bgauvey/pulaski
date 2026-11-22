@@ -6,16 +6,16 @@
 @inject NavigationManager Navigation
 @inject TimeProvider Clock
 
-<nav class="side-nav" aria-label="Main">
+<nav class="side-nav" aria-label="@L["Main"]">
     @if (InboxView.MayDecideAny(User))
     {
         @* What waits for this user to decide (#123), with how many, refreshed as they move around and every minute. *@
         <div class="nav-group">
-            <NavLink class="nav-item" href="inbox" title="Inbox: what waits for you to decide">
-                <Icon Name="info" /><span class="nav-text">Inbox</span>
+            <NavLink class="nav-item" href="inbox" title="@L["Inbox: what waits for you to decide"]">
+                <Icon Name="info" /><span class="nav-text">@L["Inbox"]</span>
                 @if (_inbox is > 0)
                 {
-                    <span class="nav-badge" aria-label="@_inbox waiting">@InboxView.Badge(_inbox.Value)</span>
+                    <span class="nav-badge" aria-label="@L["{0} waiting", _inbox.Value]">@InboxView.Badge(_inbox.Value)</span>
                 }
             </NavLink>
         </div>
@@ -26,11 +26,11 @@
         @if (links.Count > 0)
         {
             <div class="nav-group">
-                <div class="nav-group-label">@group.Label</div>
+                <div class="nav-group-label">@L[group.Label]</div>
                 @foreach (var link in links)
                 {
-                    <NavLink class="nav-item" href="@link.Href" Match="@(link.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@link.Title">
-                        <Icon Name="@link.Icon" /><span class="nav-text">@link.Text</span>
+                    <NavLink class="nav-item" href="@link.Href" Match="@(link.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@L[link.Title]">
+                        <Icon Name="@link.Icon" /><span class="nav-text">@L[link.Text]</span>
                     </NavLink>
                 }
             </div>
@@ -88,38 +88,39 @@
 
     private static readonly IReadOnlyList<Group> Groups =
     [
-        new("Operate",
+        new(Term.Mark("Operate"),
         [
-            new("", "overview", "Overview", "Overview", PermissionCodes.OverviewView),
-            new("work-orders", "work-orders", "Work orders", "Work orders", PermissionCodes.WorkOrdersView),
-            new("schedule", "schedule", "Schedule", "Schedule", PermissionCodes.ScheduleView),
-            new("floor", "labor", "Floor", "Floor: run jobs and report production", PermissionCodes.FloorView),
-            new("machines", "gauge", "Machines", "Machines: live state and stops to code", PermissionCodes.MachinesView),
-            new("andon", "alert", "Andon", "Andon: calls for help from the lines", PermissionCodes.FloorView),
-            new("handover", "kanban", "Handover", "Shift handover: notes and open items per line", PermissionCodes.FloorView),
-            new("inventory", "lot", "Inventory", "Inventory", PermissionCodes.InventoryView),
-            new("quality/results", "spc", "Quality", "Quality results: record and review what was measured or inspected", PermissionCodes.QualityView),
-            new("labor", "users", "Labor", "Labor: who is on, shift review and reports", PermissionCodes.LaborView),
+            new("", "overview", Term.Mark("Overview"), Term.Mark("Overview"), PermissionCodes.OverviewView),
+            new("work-orders", "work-orders", Term.Mark("Work orders"), Term.Mark("Work orders"), PermissionCodes.WorkOrdersView),
+            new("schedule", "schedule", Term.Mark("Schedule"), Term.Mark("Schedule"), PermissionCodes.ScheduleView),
+            new("floor", "labor", Term.Mark("Floor"), Term.Mark("Floor: run jobs and report production"), PermissionCodes.FloorView),
+            new("machines", "gauge", Term.Mark("Machines"), Term.Mark("Machines: live state and stops to code"), PermissionCodes.MachinesView),
+            new("andon", "alert", Term.Mark("Andon"), Term.Mark("Andon: calls for help from the lines"), PermissionCodes.FloorView),
+            new("handover", "kanban", Term.Mark("Handover"), Term.Mark("Shift handover: notes and open items per line"), PermissionCodes.FloorView),
+            new("inventory", "lot", Term.Mark("Inventory"), Term.Mark("Inventory"), PermissionCodes.InventoryView),
+            new("quality/results", "spc", Term.Mark("Quality"), Term.Mark("Quality results: record and review what was measured or inspected"), PermissionCodes.QualityView),
+            new("labor", "users", Term.Mark("Labor"), Term.Mark("Labor: who is on, shift review and reports"), PermissionCodes.LaborView),
         ]),
-        new("Configure",
+        new(Term.Mark("Configure"),
         [
-            new("equipment", "equipment", "Equipment", "Equipment", PermissionCodes.EquipmentView),
-            new("machine-profiles", "plug", "Machine profiles", "Machine profiles: state values and stop codes", PermissionCodes.EquipmentView),
-            new("edge-nodes", "signal", "Edge nodes", "Edge nodes: connections and tags that collect machine data", PermissionCodes.EquipmentView),
-            new("materials", "categorized", "Materials", "Materials and classes", PermissionCodes.MaterialsView),
-            new("processes", "process", "Processes", "Processes", PermissionCodes.ProcessesView),
-            new("boms", "bom", "BOMs", "Bills of materials", PermissionCodes.ProcessesView),
-            new("quality/specs", "spc", "Specifications", "Material specifications and quality characteristics", PermissionCodes.QualityView),
-            new("units", "units", "Units", "Units and conversions", PermissionCodes.UnitsView),
-            new("reasons", "info", "Reasons", "Reason codes", PermissionCodes.ReasonsView),
-            new("shifts", "clock", "Shifts", "Shift schedules", PermissionCodes.ShiftsView),
-            new("rate-proposals", "gauge", "Planning rates", "Planning rates from run history proposed for review", PermissionCodes.MaterialsView, PermissionCodes.ScheduleView),
-            new("changeovers", "refresh", "Changeovers", "Changeover rules: how long each change of material takes", PermissionCodes.ScheduleView, PermissionCodes.MaterialsView),
-            new("site-settings", "calendar", "Site settings", "Changeover mode, reporting tolerances, OEE targets, planning rates, holidays and shutdowns", PermissionCodes.SiteSettingsView),
-            new("integrations", "signal", "Integrations", "Integrations: events sent to the ERP and failed deliveries", PermissionCodes.IntegrationsView),
-            new("people", "user", "People", "People and crews", PermissionCodes.People),
-            new("terminals", "plug", "Terminals", "Shop-floor terminals for badging", PermissionCodes.Terminals),
-            new("users", "users", "Users", "Users, roles and permissions", PermissionCodes.Security),
+            new("equipment", "equipment", Term.Mark("Equipment"), Term.Mark("Equipment"), PermissionCodes.EquipmentView),
+            new("machine-profiles", "plug", Term.Mark("Machine profiles"), Term.Mark("Machine profiles: state values and stop codes"), PermissionCodes.EquipmentView),
+            new("edge-nodes", "signal", Term.Mark("Edge nodes"), Term.Mark("Edge nodes: connections and tags that collect machine data"), PermissionCodes.EquipmentView),
+            new("materials", "categorized", Term.Mark("Materials"), Term.Mark("Materials and classes"), PermissionCodes.MaterialsView),
+            new("processes", "process", Term.Mark("Processes"), Term.Mark("Processes"), PermissionCodes.ProcessesView),
+            new("boms", "bom", Term.Mark("BOMs"), Term.Mark("Bills of materials"), PermissionCodes.ProcessesView),
+            new("quality/specs", "spc", Term.Mark("Specifications"), Term.Mark("Material specifications and quality characteristics"), PermissionCodes.QualityView),
+            new("units", "units", Term.Mark("Units"), Term.Mark("Units and conversions"), PermissionCodes.UnitsView),
+            new("reasons", "info", Term.Mark("Reasons"), Term.Mark("Reason codes"), PermissionCodes.ReasonsView),
+            new("shifts", "clock", Term.Mark("Shifts"), Term.Mark("Shift schedules"), PermissionCodes.ShiftsView),
+            new("rate-proposals", "gauge", Term.Mark("Planning rates"), Term.Mark("Planning rates from run history proposed for review"), PermissionCodes.MaterialsView, PermissionCodes.ScheduleView),
+            new("changeovers", "refresh", Term.Mark("Changeovers"), Term.Mark("Changeover rules: how long each change of material takes"), PermissionCodes.ScheduleView, PermissionCodes.MaterialsView),
+            new("site-settings", "calendar", Term.Mark("Site settings"), Term.Mark("Changeover mode, reporting tolerances, OEE targets, planning rates, holidays and shutdowns"), PermissionCodes.SiteSettingsView),
+            new("integrations", "signal", Term.Mark("Integrations"), Term.Mark("Integrations: events sent to the ERP and failed deliveries"), PermissionCodes.IntegrationsView),
+            new("people", "user", Term.Mark("People"), Term.Mark("People and crews"), PermissionCodes.People),
+            new("terminals", "plug", Term.Mark("Terminals"), Term.Mark("Shop-floor terminals for badging"), PermissionCodes.Terminals),
+            new("users", "users", Term.Mark("Users"), Term.Mark("Users, roles and permissions"), PermissionCodes.Security),
+            new("languages", "categorized", Term.Mark("Languages"), Term.Mark("Languages and their translations"), PermissionCodes.Languages),
         ]),
     ];
 }

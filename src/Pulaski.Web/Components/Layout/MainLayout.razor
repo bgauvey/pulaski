@@ -6,7 +6,7 @@
 
 <div class="shell">
     <header class="app-header">
-        <button type="button" class="icon-button" aria-label="Toggle navigation" onclick="pulaski.toggleSidebar()">
+        <button type="button" class="icon-button" aria-label="@L["Toggle navigation"]" onclick="pulaski.toggleSidebar()">
             <Icon Name="menu" />
         </button>
         <a class="brand" href="">
@@ -18,7 +18,7 @@
             </svg>
             <span>Pulaski</span>
         </a>
-        <span class="chip">Pre-alpha</span>
+        <span class="chip">@L["Pre-alpha"]</span>
         <div class="header-end">
             @if (User.Me is { } me)
             {
@@ -29,17 +29,18 @@
                         <span class="header-user-roles">@User.RoleSummary</span>
                     </span>
                 </span>
-                <a class="icon-button" href="my-alerts" title="My alerts: e-mails when something needs you" aria-label="My alerts"><Icon Name="alert" /></a>
-                <a class="icon-button" href="account/password" title="Change your password" aria-label="Change your password"><Icon Name="lock" /></a>
+                <a class="icon-button" href="preferences" title="@L["Language and region"]" aria-label="@L["Language and region"]"><Icon Name="categorized" /></a>
+                <a class="icon-button" href="my-alerts" title="@L["My alerts: e-mails when something needs you"]" aria-label="@L["My alerts"]"><Icon Name="alert" /></a>
+                <a class="icon-button" href="account/password" title="@L["Change your password"]" aria-label="@L["Change your password"]"><Icon Name="lock" /></a>
                 <form method="post" action="account/logout" class="m-0">
-                    <button type="submit" class="icon-button" title="Sign out" aria-label="Sign out"><Icon Name="sign-out" /></button>
+                    <button type="submit" class="icon-button" title="@L["Sign out"]" aria-label="@L["Sign out"]"><Icon Name="sign-out" /></button>
                 </form>
             }
-            <button type="button" class="icon-button touch-toggle" aria-label="Switch the touch layout on or off" title="Touch layout: larger buttons and fields for a touch screen"
+            <button type="button" class="icon-button touch-toggle" aria-label="@L["Switch the touch layout on or off"]" title="@L["Touch layout: larger buttons and fields for a touch screen"]"
                     onclick="pulaski.toggleTouch()">
                 <Icon Name="touch" />
             </button>
-            <button type="button" class="icon-button" aria-label="Switch light or dark theme" onclick="pulaski.toggleTheme()">
+            <button type="button" class="icon-button" aria-label="@L["Switch light or dark theme"]" onclick="pulaski.toggleTheme()">
                 <span class="when-light"><Icon Name="moon" /></span>
                 <span class="when-dark"><Icon Name="sun" /></span>
             </button>
@@ -64,24 +65,24 @@
                 }
                 else
                 {
-                    <p class="text-muted">Loading…</p>
+                    <p class="text-muted">@L["Loading…"]</p>
                 }
             }
             else if (!User.CanSeeAnything)
             {
-                <AccessPanel Kind="locked" Title="Nothing to see here yet"
-                             Message="Your roles don't let you see any screens in Pulaski yet. Ask an administrator to give you a role that does, then sign in again.">
+                <AccessPanel Kind="locked" Title="@L["Nothing to see here yet"]"
+                             Message="@L["Your roles don't let you see any screens in Pulaski yet. Ask an administrator to give you a role that does, then sign in again."]">
                     <form method="post" action="account/logout">
-                        <button type="submit" class="btn btn-outline-secondary">Sign out</button>
+                        <button type="submit" class="btn btn-outline-secondary">@L["Sign out"]</button>
                     </form>
                 </AccessPanel>
             }
             else if (!MaySeePage)
             {
                 @* A page the user may not see answers like one that doesn't exist, so it isn't advertised. *@
-                <PageTitle>Not found · Pulaski</PageTitle>
-                <AccessPanel Title="Page not found" Message="There's nothing here, or nothing you can see. Check the address, or use the menu.">
-                    <a class="btn btn-primary" href="@(User.FirstScreen ?? "")">Go to the start</a>
+                <PageTitle>@L["Not found"] · Pulaski</PageTitle>
+                <AccessPanel Title="@L["Page not found"]" Message="@L["There's nothing here, or nothing you can see. Check the address, or use the menu."]">
+                    <a class="btn btn-primary" href="@(User.FirstScreen ?? "")">@L["Go to the start"]</a>
                 </AccessPanel>
             }
             else
@@ -98,9 +99,9 @@
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <button type="button" class="dismiss" aria-label="Dismiss"><Icon Name="close" Size="16" /></button>
+    @L["An unhandled error has occurred."]
+    <a href="." class="reload">@L["Reload"]</a>
+    <button type="button" class="dismiss" aria-label="@L["Dismiss"]"><Icon Name="close" Size="16" /></button>
 </div>
 
 @code {
@@ -132,6 +133,8 @@
     {
         try
         {
+            // The reader's language first (#128), so nothing shows in English for a moment.
+            await L.EnsureAsync();
             await User.EnsureAsync(Api);
             OnParametersSet();
         }

@@ -1,0 +1,267 @@
+@page "/languages"
+@attribute [RequiresView(PermissionCodes.Languages)]
+@using Microsoft.AspNetCore.Components.Forms
+@inject PulaskiApiClient Api
+@inject Downloads Downloads
+@inject CurrentUser User
+
+<PageTitle>@L["Languages"] · Pulaski</PageTitle>
+
+@* Languages (#128, D-114): the languages the screens can show and their translations, keyed by the English text. Pulaski ships starter
+   translations; what is changed here is never overwritten. A term with no translation shows in English. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">@L["Languages"]</h1>
+        <p class="text-muted mb-0">@L["The languages Pulaski's screens can show, and their translations. Where a term has none, it shows in English."]</p>
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success small" role="status">@message</div>
+}
+
+@if (_languages is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">@L["Loading…"]</p>
+    }
+}
+else
+{
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>@L["Language"]</th><th>@L["Code"]</th><th class="inv-num">@L["Translated"]</th><th>@L["Offered"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var language in _languages)
+                {
+                    <tr @key="language.Code" class="@(language.IsActive ? "" : "text-muted")">
+                        <td class="fw-semibold">@language.Name</td>
+                        <td><code>@language.Code</code></td>
+                        <td class="inv-num">@L["{0} of {1}", language.Translated, language.Terms]</td>
+                        <td>@(language.IsActive ? L["Yes"] : L["Switched off"])</td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-link" @onclick="() => OpenAsync(language)">@L["Translations"]</button>
+                            <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => SwitchAsync(language)">@(language.IsActive ? L["Switch off"] : L["Switch on"])</button>
+                        </td>
+                    </tr>
+                }
+                @if (_languages.Count == 0)
+                {
+                    <tr><td colspan="5" class="text-muted small">@L["Only English so far; add a language below."]</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <form class="row g-2 align-items-end mb-4" @onsubmit="AddAsync" @onsubmit:preventDefault>
+        <div class="col-6 col-md-2">
+            <label class="form-label small fw-semibold" for="lang-code">@L["Code"]</label>
+            <input id="lang-code" class="form-control form-control-sm" maxlength="20" placeholder="fr" @bind="_newCode" />
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold" for="lang-name">@L["Name"]</label>
+            <input id="lang-name" class="form-control form-control-sm" maxlength="100" placeholder="Français" @bind="_newName" />
+        </div>
+        <div class="col-12 col-md-3 form-actions">
+            <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
+                          Reason="@(string.IsNullOrWhiteSpace(_newCode) || string.IsNullOrWhiteSpace(_newName) ? L["Give the language's code and name."] : null)">@L["Add a language"]</ActionButton>
+        </div>
+    </form>
+
+    @if (_open is { } open && _terms is not null)
+    {
+        var shown = LanguagesView.Filter(_terms, _edits, _filter, _search);
+        <section class="inv-facts" aria-labelledby="terms-heading">
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+                <h2 class="h6 mb-0 me-auto" id="terms-heading">@L["{0}: translations", open.Name]</h2>
+                <div class="btn-group btn-group-sm" role="group" aria-label="@L["Show"]">
+                    <button type="button" class="btn @(_filter == "untranslated" ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _filter = "untranslated")">@L["Untranslated"]</button>
+                    <button type="button" class="btn @(_filter == "all" ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => _filter = "all")">@L["All"]</button>
+                </div>
+                <input class="form-control form-control-sm w-auto" placeholder="@L["Search"]" aria-label="@L["Search terms"]" @bind="_search" @bind:event="oninput" />
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => ExportAsync(open)">@L["Export CSV"]</button>
+            </div>
+            <div class="mb-2 d-flex flex-wrap gap-2 align-items-center">
+                <InputFile OnChange="PickAsync" accept=".csv,text/csv,text/plain" class="form-control form-control-sm" style="max-width: 24rem" aria-label="@L["Translations file"]" disabled="@_busy" />
+                @if (_check is { } check)
+                {
+                    <span class="small">@L["Would change: {0}. Unchanged: {1}.", check.Changed, check.Unchanged]</span>
+                    <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(check.Changed == 0 ? L["Nothing to change."] : null)" OnClick="() => ImportAsync(open)">@L["Import"]</ActionButton>
+                }
+            </div>
+            <p class="small text-muted">@L["Keep the placeholders {0}, {1}… of the English where they are: they stand for the values shown."]</p>
+            <div class="table-panel mb-2">
+                <table class="table table-sm align-top mb-0">
+                    <thead><tr><th style="width: 45%">@L["English"]</th><th>@open.Name</th></tr></thead>
+                    <tbody>
+                        @foreach (var term in shown.Take(LanguagesView.PageSize))
+                        {
+                            <tr @key="term.Term">
+                                <td class="small">@term.Term</td>
+                                <td>
+                                    <textarea class="form-control form-control-sm" rows="1" maxlength="4000" aria-label="@L["Translation of: {0}", term.Term]"
+                                              value="@(_edits.TryGetValue(term.Term, out var edited) ? edited : term.Text)"
+                                              @onchange="e => _edits[term.Term] = e.Value?.ToString() ?? string.Empty"></textarea>
+                                    @if (term.IsShipped && !_edits.ContainsKey(term.Term))
+                                    {
+                                        <div class="form-text">@L["Pulaski's translation"]</div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (shown.Count == 0)
+                        {
+                            <tr><td colspan="2" class="text-muted small">@(_filter == "untranslated" ? L["Every term is translated."] : L["No term matches."])</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (shown.Count > LanguagesView.PageSize)
+            {
+                <p class="small text-muted">@L["Showing {0} of {1}; search to narrow them.", LanguagesView.PageSize, shown.Count]</p>
+            }
+            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(_edits.Count == 0 ? L["Change a translation first."] : null)" OnClick="() => SaveAsync(open)">
+                @L["Save changes ({0})", _edits.Count]
+            </ActionButton>
+        </section>
+    }
+}
+
+@code {
+    private const int MaxFileBytes = 5 * 1024 * 1024;
+
+    private IReadOnlyList<LanguageDto>? _languages;
+    private LanguageDto? _open;
+    private IReadOnlyList<TranslationTermDto>? _terms;
+    private readonly Dictionary<string, string> _edits = new(StringComparer.Ordinal);
+    private string _filter = "untranslated";
+    private string _search = "";
+    private string? _newCode;
+    private string? _newName;
+    private string? _csv;
+    private ImportTranslationsResponse? _check;
+    private bool _busy;
+    private string? _message;
+    private ApiException? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _languages = await Api.ListLanguagesAsync();
+            if (_open is { } open)
+            {
+                _open = _languages.FirstOrDefault(l => l.Code == open.Code);
+                _terms = _open is null ? null : await Api.GetLanguageTermsAsync(_open.Code);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OpenAsync(LanguageDto language)
+    {
+        (_open, _terms, _check, _csv, _message, _error) = (language, null, null, null, null, null);
+        _edits.Clear();
+        try
+        {
+            _terms = await Api.GetLanguageTermsAsync(language.Code);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private Task AddAsync() => RunAsync(async () =>
+    {
+        await Api.AddLanguageAsync(new CreateLanguageRequest { Code = _newCode ?? "", Name = _newName ?? "" });
+        var name = _newName;
+        (_newCode, _newName) = (null, null);
+        return L["Added {0}. Translate its terms, or import them from a file.", name ?? ""];
+    });
+
+    private Task SwitchAsync(LanguageDto language) => RunAsync(async () =>
+    {
+        await Api.UpdateLanguageAsync(language.Code, new UpdateLanguageRequest { Name = language.Name, IsActive = !language.IsActive });
+        return language.IsActive ? L["Switched off {0}; whoever chose it sees English.", language.Name] : L["Switched {0} on again.", language.Name];
+    });
+
+    private Task SaveAsync(LanguageDto language) => RunAsync(async () =>
+    {
+        var count = _edits.Count;
+        await Api.SetTranslationsAsync(language.Code, new SetTranslationsRequest { Items = [.. _edits.Select(e => new TranslationInput(e.Key, e.Value))] });
+        _edits.Clear();
+        return L["Translations saved: {0}.", count];
+    });
+
+    private async Task ExportAsync(LanguageDto language)
+    {
+        _error = null;
+        try
+        {
+            var (content, type, name) = await Api.ExportTranslationsAsync(language.Code);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        (_check, _csv, _error, _message) = (null, null, null, null);
+        if (_open is not { } open)
+        {
+            return;
+        }
+
+        if (e.File.Size > MaxFileBytes)
+        {
+            _message = L["That file is larger than 5 MB."];
+            return;
+        }
+
+        using var reader = new StreamReader(e.File.OpenReadStream(MaxFileBytes));
+        _csv = await reader.ReadToEndAsync();
+        await RunAsync(async () =>
+        {
+            _check = await Api.ImportTranslationsAsync(open.Code, _csv, dryRun: true);
+            return null;
+        });
+    }
+
+    private Task ImportAsync(LanguageDto language) => RunAsync(async () =>
+    {
+        var result = await Api.ImportTranslationsAsync(language.Code, _csv ?? "", dryRun: false);
+        (_check, _csv) = (null, null);
+        _edits.Clear();
+        return L["Translations imported: {0}.", result.Changed];
+    });
+
+    private async Task RunAsync(Func<Task<string?>> action)
+    {
+        (_busy, _error, _message) = (true, null, null);
+        try
+        {
+            _message = await action();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

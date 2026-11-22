@@ -505,6 +505,11 @@ else
         {
             var response = await Api.GetStationAsync(Secret!, ticket, LineCode);
             _station = response.Station;
+
+            // The terminal's own language and region (#128), whoever stands at it.
+            Cultures.Apply(_station?.Language, _station?.Region);
+            L.Use(_station?.Language);
+            await L.EnsureAsync();
             if (ticket is not null && response.Ticket is null && !HttpContext.Response.HasStarted)
             {
                 TerminalCookie.ClearStation(HttpContext);

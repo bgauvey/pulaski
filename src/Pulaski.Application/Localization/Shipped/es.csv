@@ -1,0 +1,142 @@
+term,translation
+Add a language,Agregar un idioma
+"Added {0}. Translate its terms, or import them from a file.",Se agregó {0}. Traduzca sus términos o impórtelos desde un archivo.
+Administrators and service accounts:,Administradores y cuentas de servicio:
+All,Todos
+An unhandled error has occurred.,Ocurrió un error inesperado.
+Andon,Andon
+Andon: calls for help from the lines,Andon: llamadas de ayuda desde las líneas
+"At least 10 characters, with two of: lower case, upper case, digits, symbols. Not your user name.","Al menos 10 caracteres, con dos de: minúsculas, mayúsculas, dígitos, símbolos. No su nombre de usuario."
+BOMs,Listas de materiales
+Back to Pulaski,Volver a Pulaski
+Bills of materials,Listas de materiales
+Change a translation first.,Primero cambie una traducción.
+Change password,Cambiar contraseña
+Change your password,Cambie su contraseña
+"Changeover mode, reporting tolerances, OEE targets, planning rates, holidays and shutdowns","Modo de cambio, tolerancias de reporte, metas de OEE, tasas de planeación, días festivos y paros"
+Changeover rules: how long each change of material takes,Reglas de cambio: cuánto tarda cada cambio de material
+Changeovers,Cambios
+Code,Código
+Configure,Configurar
+Current password,Contraseña actual
+Dates and numbers look like this: {0} · {1},Las fechas y los números se ven así: {0} · {1}
+Dismiss,Cerrar
+Edge nodes,Nodos de borde
+Edge nodes: connections and tags that collect machine data,Nodos de borde: conexiones y etiquetas que recogen datos de las máquinas
+English,Inglés
+Enter your user name and password.,Escriba su nombre de usuario y contraseña.
+Equipment,Equipos
+Every term is translated.,Todos los términos están traducidos.
+Export CSV,Exportar CSV
+Floor,Piso
+Floor: run jobs and report production,Piso: ejecutar trabajos y reportar producción
+Forgotten your password?,¿Olvidó su contraseña?
+Forgotten your password? Ask an administrator to reset it.,¿Olvidó su contraseña? Pida a un administrador que la restablezca.
+Give the language's code and name.,Indique el código y el nombre del idioma.
+Go to the start,Ir al inicio
+Handover,Entrega de turno
+Import,Importar
+Inbox,Pendientes
+Inbox: what waits for you to decide,Pendientes: lo que espera su decisión
+Integrations,Integraciones
+Integrations: events sent to the ERP and failed deliveries,Integraciones: eventos enviados al ERP y envíos fallidos
+Inventory,Inventario
+"Keep the placeholders {0}, {1}… of the English where they are: they stand for the values shown.","Conserve los marcadores {0}, {1}… del inglés: representan los valores que se muestran."
+Labor,Mano de obra
+"Labor: who is on, shift review and reports","Mano de obra: quién está, revisión de turno y reportes"
+Language,Idioma
+Language and region,Idioma y región
+Languages,Idiomas
+Languages and their translations,Idiomas y sus traducciones
+Loading…,Cargando…
+Machine profiles,Perfiles de máquina
+Machine profiles: state values and stop codes,Perfiles de máquina: valores de estado y códigos de paro
+Machines,Máquinas
+Machines: live state and stops to code,Máquinas: estado en vivo y paros por codificar
+Main,Principal
+Material specifications and quality characteristics,Especificaciones de material y características de calidad
+Materials,Materiales
+Materials and classes,Materiales y clases
+My alerts,Mis alertas
+My alerts: e-mails when something needs you,Mis alertas: correos cuando algo lo necesita
+Name,Nombre
+New password,Contraseña nueva
+New password again,Repita la contraseña nueva
+No term matches.,Ningún término coincide.
+Not found,No encontrado
+Nothing to change.,Nada que cambiar.
+Nothing to see here yet,Aún no hay nada que ver aquí
+Offered,Disponible
+Only English so far; add a language below.,Por ahora solo inglés; agregue un idioma abajo.
+Operate,Operar
+Or with a Pulaski password:,O con una contraseña de Pulaski:
+Overview,Resumen
+Page not found,Página no encontrada
+Password,Contraseña
+People,Personas
+People and crews,Personas y cuadrillas
+Planning rates,Tasas de planeación
+Planning rates from run history proposed for review,"Tasas de planeación del historial de corridas, propuestas para revisión"
+Pre-alpha,Pre-alfa
+Processes,Procesos
+Pulaski's translation,Traducción de Pulaski
+Quality,Calidad
+Quality results: record and review what was measured or inspected,Resultados de calidad: registrar y revisar lo medido o inspeccionado
+Reason codes,Códigos de motivo
+Reasons,Motivos
+Region,Región
+Reload,Recargar
+Save,Guardar
+Save changes ({0}),Guardar cambios ({0})
+Schedule,Programa
+Search,Buscar
+Search terms,Buscar términos
+Shift handover: notes and open items per line,Entrega de turno: notas y pendientes por línea
+Shift schedules,Horarios de turno
+Shifts,Turnos
+Shop-floor terminals for badging,Terminales de piso para registrar gafetes
+Show,Mostrar
+Showing {0} of {1}; search to narrow them.,Se muestran {0} de {1}; busque para acotarlos.
+Sign in,Iniciar sesión
+Sign in with {0},Iniciar sesión con {0}
+Sign out,Cerrar sesión
+Site settings,Configuración de planta
+Specifications,Especificaciones
+Switch light or dark theme,Cambiar entre tema claro y oscuro
+Switch off,Desactivar
+Switch on,Activar
+Switch the touch layout on or off,Activar o desactivar el diseño táctil
+Switched off,Desactivado
+Switched off {0}; whoever chose it sees English.,Se desactivó {0}; quien lo eligió verá inglés.
+Switched {0} on again.,Se volvió a activar {0}.
+Terminals,Terminales
+That file is larger than 5 MB.,Ese archivo pesa más de 5 MB.
+"The language Pulaski's screens show you, and how they write dates and numbers.",El idioma en que Pulaski le muestra las pantallas y cómo escribe fechas y números.
+The language's usual,La habitual del idioma
+"The languages Pulaski's screens can show, and their translations. Where a term has none, it shows in English.",Los idiomas en que Pulaski puede mostrar las pantallas y sus traducciones. Un término sin traducción se muestra en inglés.
+The two new passwords don't match.,Las dos contraseñas nuevas no coinciden.
+"There's nothing here, or nothing you can see. Check the address, or use the menu.","Aquí no hay nada, o nada que usted pueda ver. Revise la dirección o use el menú."
+Toggle navigation,Mostrar u ocultar el menú
+Touch layout: larger buttons and fields for a touch screen,Diseño táctil: botones y campos más grandes para pantalla táctil
+Translated,Traducidos
+Translation of: {0},Traducción de: {0}
+Translations,Traducciones
+Translations file,Archivo de traducciones
+Translations imported: {0}.,Traducciones importadas: {0}.
+Translations saved: {0}.,Traducciones guardadas: {0}.
+Units,Unidades
+Units and conversions,Unidades y conversiones
+Untranslated,Sin traducir
+User name,Nombre de usuario
+Users,Usuarios
+"Users, roles and permissions","Usuarios, roles y permisos"
+"Where a screen has no translation yet, it shows in English.","Si una pantalla aún no está traducida, se muestra en inglés."
+Work orders,Órdenes de trabajo
+Would change: {0}. Unchanged: {1}.,Cambiarían: {0}. Sin cambio: {1}.
+Yes,Sí
+You signed in with a temporary password. Choose your own before you carry on.,Inició sesión con una contraseña temporal. Elija la suya antes de continuar.
+"Your roles don't let you see any screens in Pulaski yet. Ask an administrator to give you a role that does, then sign in again.",Sus roles aún no le permiten ver ninguna pantalla de Pulaski. Pida a un administrador un rol que sí lo permita y vuelva a iniciar sesión.
+Your session ended. Sign in again to carry on.,Su sesión terminó. Vuelva a iniciar sesión para continuar.
+{0} of {1},{0} de {1}
+{0} waiting,{0} en espera
+{0}: translations,{0}: traducciones

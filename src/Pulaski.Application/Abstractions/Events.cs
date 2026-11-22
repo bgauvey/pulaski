@@ -224,6 +224,11 @@ public static class EventTypes
     public const string SpcAlertSignalled = "pulaski.spc_alert.signalled.v1";
     public const string SpcAlertClosed = "pulaski.spc_alert.closed.v1";
 
+    /// <summary>Languages (#128): added, changed, and translations set.</summary>
+    public const string LanguageAdded = "pulaski.language.added.v1";
+    public const string LanguageChanged = "pulaski.language.changed.v1";
+    public const string TranslationsSet = "pulaski.language.translations_set.v1";
+
     /// <summary>Shift handover (#124): an entry written, an open item closed.</summary>
     public const string HandoverEntryAdded = "pulaski.handover.entry_added.v1";
     public const string HandoverItemClosed = "pulaski.handover.item_closed.v1";
