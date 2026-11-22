@@ -73,6 +73,10 @@ else
             @if (SelectedExisting is { SiteId: not null } selected)
             {
                 <EquipmentQualifications @key="selected.Id" Equipment="selected" />
+                @if (selected.CanRunJob)
+                {
+                    <EquipmentOutput @key="(selected.Id, selected.Version)" Equipment="selected" Saved="() => RefreshAsync(selected.Id)" />
+                }
             }
         </div>
     </div>

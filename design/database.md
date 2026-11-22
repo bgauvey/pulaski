@@ -110,6 +110,8 @@ One self-referencing table holds enterprise, sites, areas, work centers (lines),
 | `constraint_equipment_id` | uuid → equipment | yes | The constraint machine: set exactly when `state_derivation = 'constraint_machine'` (`equipment_derivation_ck`), and equipment below this one that tracks state. |
 | `micro_stop_threshold` | interval | no | Stops shorter than this are micro-stops (D-050): logged, not queued for coding, not availability loss. 0 to 60 minutes (`equipment_micro_stop_ck`), default 5. |
 | `production_counter_equipment_id` | uuid → equipment | yes | Where a line's output is counted for reports from the machine (#27, D-097): itself or equipment below it. Null: its own active `processed_count` tag, else the only equipment below with one. |
+| `output_location_id` | uuid → equipment | yes | A line's default location for good output, prefilled on its reports (#122, D-111); a location that holds inventory at its site. |
+| `label_printer_id` | uuid → label_printer | yes | The printer a line's lots' labels print on once a lot is closed (#122, D-111); null prints none. |
 | `machine_profile_id` | uuid → machine_profile | yes | The machine profile its state and stop codes are read with (D-050). Only equipment that tracks state takes one, of its own site. |
 | `time_zone` | text | yes | IANA zone, required on sites. Shift times and reports use it. |
 | `is_active` | boolean | no | False when retired. |

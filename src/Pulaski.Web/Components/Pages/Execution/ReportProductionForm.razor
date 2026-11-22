@@ -146,6 +146,10 @@
                 {
                     <div id="rep-lot-hint-@Job.JobId" class="form-text">@lotHint</div>
                 }
+                @if (ReportDefaults.LabelHint(Job) is { } labelHint)
+                {
+                    <div class="form-text">@labelHint</div>
+                }
             </div>
         }
         @if (GoodTotal > 0 && _used.Count > 0)
@@ -257,6 +261,7 @@
         try
         {
             _locations = [.. (await Api.ListInventoryLocationsAsync(Job.SiteId)).Where(l => l.IsActive)];
+            _locationId = ReportDefaults.Location(Job, _locations);
             _reasons = await Api.ListReasonCodesAsync("scrap", Job.SiteId);
             _used = (await Api.GetJobMaterialsAsync(Job.JobId)).Used;
         }

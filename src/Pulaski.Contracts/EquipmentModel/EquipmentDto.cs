@@ -48,6 +48,12 @@ public sealed record EquipmentDto
     /// <summary>Where its output is counted for production reports (#27): itself or a machine below; null = found from its counter tags.</summary>
     public Guid? ProductionCounterEquipmentId { get; init; }
 
+    /// <summary>A line's default location for good output, prefilled on its reports (#122); null asks each time.</summary>
+    public Guid? OutputLocationId { get; init; }
+
+    /// <summary>The printer a line's lots' labels print on once a lot is closed (#122); null prints none.</summary>
+    public Guid? LabelPrinterId { get; init; }
+
     /// <summary>Distance from the enterprise root (0 = enterprise).</summary>
     public int Depth { get; init; }
 

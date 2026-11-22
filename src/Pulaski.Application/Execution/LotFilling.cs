@@ -25,9 +25,18 @@ public interface ILotFillingStore
     /// <summary>The line's shifts, to tell one shift from the next.</summary>
     Task<EquipmentShifts?> GetShiftsAsync(Guid lineId, CancellationToken cancellationToken);
 
-    /// <summary>Closes the lots the job is filling on its line (<c>produced_to</c>), one per location; returns their numbers, in order.</summary>
-    Task<IReadOnlyList<string>> CloseOpenLotsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken);
+    /// <summary>Closes the lots the job is filling on its line (<c>produced_to</c>), one per location; returns them, in lot number order.</summary>
+    Task<IReadOnlyList<ClosedLot>> CloseOpenLotsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken);
 }
+
+/// <summary>A lot closed so no report fills it any more (D-104).</summary>
+public sealed record ClosedLot(Guid LotId, string LotNumber);
+
+/// <summary>
+/// How a report's good output goes into lots on a line that fills them (D-104): its parts, notes on lots closed or started, the open lot when the
+/// report found it closed by age or shift (<see cref="CutLotId"/>), and the lot size, if any, so the reporter can tell which lots it filled up.
+/// </summary>
+internal sealed record FillPlan(IReadOnlyList<LotPart> Parts, IReadOnlyList<InventoryWarningDto> Notes, Guid? CutLotId, decimal? Size);
 
 /// <summary>How a report's good output goes into lots on a line that fills them (D-104).</summary>
 internal static class LotFilling
@@ -36,7 +45,7 @@ internal static class LotFilling
     /// The parts of the good output (in the base unit), each into the open lot or a new one, and a note for each lot closed or started on the
     /// way; null when the line doesn't fill lots for the material, so the report makes one lot as before.
     /// </summary>
-    public static async Task<(IReadOnlyList<LotPart> Parts, IReadOnlyList<InventoryWarningDto> Notes)?> PlanAsync(
+    public static async Task<FillPlan?> PlanAsync(
         ILotFillingStore store, IInventoryRepository inventory, InventoryJob job, InventoryMaterial material, Guid lineId, Guid locationId,
         decimal quantity, DateTimeOffset at, CancellationToken cancellationToken)
     {
@@ -54,9 +63,11 @@ internal static class LotFilling
 
         var notes = new List<InventoryWarningDto>();
         var started = parts.Count(p => p.LotNumber is null);
+        Guid? cut = null;
         if (open is not null && LotCutting.WhyCut(rule, open, at, lotShift, shiftNow) is { } why)
         {
             notes.Add(new("lot_cut", $"A new lot was started: {why}."));
+            cut = open.LotId;
         }
         else if (open is not null && started > 0)
         {
@@ -67,7 +78,7 @@ internal static class LotFilling
             notes.Add(new("lot_cut", $"It filled {Lots(started)} of {Qty(rule.Size!.Value)} {material.BaseUomCode}."));
         }
 
-        return (parts, notes);
+        return new FillPlan(parts, notes, cut, rule.Size);
     }
 
     /// <summary>One shift's key: its production day and code, else (between shifts, or with no schedule) the site-local day.</summary>
@@ -96,7 +107,8 @@ internal static class LotFilling
 public sealed record StartNewLotCommand(Guid JobId, string? Comment = null) : ICommand<StartNewLotResponse>;
 
 internal sealed class StartNewLotHandler(
-    IUnitOfWork unitOfWork, IInventoryRepository inventory, ILotFillingStore store, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+    IUnitOfWork unitOfWork, IInventoryRepository inventory, ILotFillingStore store, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider,
+    ILineLabels labels)
     : ICommandHandler<StartNewLotCommand, StartNewLotResponse>
 {
     public async Task<StartNewLotResponse> HandleAsync(StartNewLotCommand command, CancellationToken cancellationToken)
@@ -110,10 +122,14 @@ internal sealed class StartNewLotHandler(
             throw new DomainRuleException($"{job.JobNumber} has no lot being filled; its next report starts a new one anyway.");
         }
 
+        var numbers = closed.Select(l => l.LotNumber).ToList();
         await eventLog.AppendAsync(
-            events.Create(EventTypes.JobLotsClosed, "job", job.Id, new { job.JobNumber, LotNumbers = closed, Comment = InventoryRules.Text(command.Comment) }),
+            events.Create(EventTypes.JobLotsClosed, "job", job.Id, new { job.JobNumber, LotNumbers = numbers, Comment = InventoryRules.Text(command.Comment) }),
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new StartNewLotResponse(job.Id, closed);
+
+        // Their labels (#122), once they are closed.
+        var printed = await labels.PrintClosedLotsAsync(job.EquipmentId, [.. closed.Select(l => l.LotId)], cancellationToken);
+        return new StartNewLotResponse(job.Id, numbers) { Notes = [.. printed.Select(n => n.Message)] };
     }
 }

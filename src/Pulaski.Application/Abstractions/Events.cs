@@ -224,6 +224,9 @@ public static class EventTypes
     public const string SpcAlertSignalled = "pulaski.spc_alert.signalled.v1";
     public const string SpcAlertClosed = "pulaski.spc_alert.closed.v1";
 
+    /// <summary>A line's report defaults (#122): its default output location and label printer.</summary>
+    public const string LineOutputSet = "pulaski.equipment.output_set.v1";
+
     /// <summary>Andon (#125, D-108): call types kept per site, and calls raised, acknowledged and resolved.</summary>
     public const string AndonTypeCreated = "pulaski.andon_type.created.v1";
     public const string AndonTypeChanged = "pulaski.andon_type.changed.v1";

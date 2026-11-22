@@ -238,6 +238,19 @@ internal sealed class LabelQueries(NpgsqlDataSource dataSource) : ILabelReadStor
         };
     }
 
+    public async Task<(string LineCode, LabelPrinterDto? Printer)?> GetLinePrinterAsync(Guid lineId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var line = await connection.QuerySingleOrDefaultAsync<(string Code, Guid? PrinterId)>(new CommandDefinition(
+            "SELECT code, label_printer_id FROM core.equipment WHERE id = @Id", new { Id = lineId }, cancellationToken: cancellationToken));
+        if (line.Code is null)
+        {
+            return null;
+        }
+
+        return (line.Code, line.PrinterId is { } id ? await GetPrinterAsync(id, cancellationToken) : null);
+    }
+
     public async Task<LabelPrinterDto?> GetPrinterAsync(Guid id, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

@@ -73,6 +73,9 @@ public sealed class InMemoryLabels : ILabelRepository, ILabelReadStore
         }
     }
 
+    public Task<(string LineCode, LabelPrinterDto? Printer)?> GetLinePrinterAsync(Guid lineId, CancellationToken cancellationToken) =>
+        Task.FromResult<(string LineCode, LabelPrinterDto? Printer)?>(null);
+
     public Task<LabelPrinterDto?> GetPrinterAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Find(_printers, id) is { } p ? Dto(p) : null);
 

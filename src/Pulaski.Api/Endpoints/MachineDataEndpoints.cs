@@ -88,6 +88,13 @@ internal static class MachineDataEndpoints
         .WithTags("Machine data")
         .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.Equipment));
 
+        // A line's report defaults (#122): its default output location and the printer its closed lots' labels print on.
+        routes.MapPut("/equipment/{id:guid}/output", async Task<Ok<VersionResponse>> (
+            Guid id, Contracts.Execution.SetLineOutputRequest request, ICommandHandler<Application.Execution.SetLineOutputCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new Application.Execution.SetLineOutputCommand(id, request.Version, request.OutputLocationId, request.LabelPrinterId), ct)))
+        .WithTags("Equipment")
+        .RequirePermission(Permissions.Equipment, Site.Of(SiteOf.Equipment));
+
         routes.MapPut("/equipment/{id:guid}/stop-reason-overrides/{rawValue:int}", async Task<Ok<VersionResponse>> (
             Guid id, int rawValue, SetStopReasonOverrideRequest request, ICommandHandler<SetStopReasonOverrideCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new SetStopReasonOverrideCommand(id, request.Version, rawValue, request.ReasonCodeId, request.IsActive), ct)))

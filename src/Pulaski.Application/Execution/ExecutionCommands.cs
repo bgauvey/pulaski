@@ -125,13 +125,14 @@ internal sealed class ExecutionWrites(
     }
 
     /// <summary>Reports the partial batch of a run that is being ended (D-036); returns the notes for the operator.</summary>
-    public static async Task<IReadOnlyList<string>> ReportPartialAsync(
+    /// <returns>Its notes, and the lot it made, whose label prints once the stop commits (#122).</returns>
+    public static async Task<(IReadOnlyList<string> Notes, IReadOnlyList<Guid> ClosedLotIds)> ReportPartialAsync(
         ProductionReporter reporter, Job job, JobRun run, PartialBatchInput partial, string? comment, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var result = await reporter.ReportAsync(
             new ReportProductionCommand(job.Id, run.Id, 0m, 0m, null, null, partial.LocationId, partial.LotNumber, Comment: comment) { PartialQty = partial.Quantity },
             onStop: true, now, cancellationToken);
-        return [.. result.Warnings.Select(w => w.Message)];
+        return ([.. result.Warnings.Select(w => w.Message)], result.ClosedLotIds);
     }
 
     /// <summary>Notes on the jobs that wait for this one: which can start now, and which in how long.</summary>
@@ -350,7 +351,8 @@ internal sealed class PauseJobHandler(
     TimeProvider timeProvider,
     ILineBatchSizes? lineBatches = null,
     Inventory.IFeedRepository? feeds = null,
-    Inventory.IAllocationRepository? allocations = null) : ICommandHandler<PauseJobCommand, ExecutionResponse>
+    Inventory.IAllocationRepository? allocations = null,
+    ILineLabels? labels = null) : ICommandHandler<PauseJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(PauseJobCommand command, CancellationToken cancellationToken)
     {
@@ -374,10 +376,12 @@ internal sealed class PauseJobHandler(
         var run = await execution.GetOpenRunForUpdateAsync(job.Id, cancellationToken)
             ?? throw new DomainRuleException($"Job {job.JobNumber} has no open run.");
         var notes = new List<string>();
+        IReadOnlyList<Guid> closed = [];
         if (command.PartialBatch is { } partial)
         {
-            notes.AddRange(await ExecutionWrites.ReportPartialAsync(
-                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations), job, run, partial, comment, now, cancellationToken));
+            (var reported, closed) = await ExecutionWrites.ReportPartialAsync(
+                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations), job, run, partial, comment, now, cancellationToken);
+            notes.AddRange(reported);
             run = (await execution.GetRunForUpdateAsync(run.Id, cancellationToken))!;
         }
 
@@ -390,6 +394,11 @@ internal sealed class PauseJobHandler(
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         notes.Insert(0, $"Run {run.RunNo} of {job.JobNumber} ended after {RateCap.Duration(ended.Elapsed(now))}. Start the job again to resume it.");
+        if (labels is not null && closed.Count > 0)
+        {
+            notes.AddRange((await labels.PrintClosedLotsAsync(job.EquipmentId, closed, cancellationToken)).Select(n => n.Message));
+        }
+
         return new ExecutionResponse(job.Id, version, run.Id, notes);
     }
 }
@@ -407,7 +416,9 @@ internal sealed class CompleteJobHandler(
     TimeProvider timeProvider,
     ILineBatchSizes? lineBatches = null,
     Inventory.IFeedRepository? feeds = null,
-    Inventory.IAllocationRepository? allocations = null) : ICommandHandler<CompleteJobCommand, ExecutionResponse>
+    Inventory.IAllocationRepository? allocations = null,
+    ILotFillingStore? lotFilling = null,
+    ILineLabels? labels = null) : ICommandHandler<CompleteJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(CompleteJobCommand command, CancellationToken cancellationToken)
     {
@@ -429,6 +440,7 @@ internal sealed class CompleteJobHandler(
         }
 
         var notes = new List<string>();
+        var closed = new List<Guid>();
         var run = await execution.GetOpenRunForUpdateAsync(job.Id, cancellationToken);
         if (command.PartialBatch is { } partial)
         {
@@ -437,9 +449,17 @@ internal sealed class CompleteJobHandler(
                 throw new DomainRuleException($"{job.JobNumber} is paused, so its last run has ended; report the partial batch into that run from the job's page.");
             }
 
-            notes.AddRange(await ExecutionWrites.ReportPartialAsync(
-                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations), job, run, partial, comment, now, cancellationToken));
+            var (reported, partialLots) = await ExecutionWrites.ReportPartialAsync(
+                new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations), job, run, partial, comment, now, cancellationToken);
+            notes.AddRange(reported);
+            closed.AddRange(partialLots);
             run = await execution.GetRunForUpdateAsync(run.Id, cancellationToken);
+        }
+
+        // A completed job fills no more lots (D-104, #122): the ones it was filling are closed, and their labels print.
+        if (lotFilling is not null)
+        {
+            closed.AddRange((await lotFilling.CloseOpenLotsAsync(job.Id, now, cancellationToken)).Select(l => l.LotId));
         }
 
         if (run is not null)
@@ -466,6 +486,11 @@ internal sealed class CompleteJobHandler(
 
         notes.AddRange(await writes.DownstreamNotesAsync(job.Id, now, cancellationToken));
         await transaction.CommitAsync(cancellationToken);
+        if (labels is not null && closed.Count > 0)
+        {
+            notes.AddRange((await labels.PrintClosedLotsAsync(job.EquipmentId, closed, cancellationToken)).Select(n => n.Message));
+        }
+
         return new ExecutionResponse(job.Id, version, run?.Id, notes);
     }
 }

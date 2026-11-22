@@ -79,7 +79,7 @@ internal sealed class LotFillingStore(DbSession session) : ILotFillingStore
     private const string Close = $"""
         UPDATE core.lot SET produced_to = @At, updated_at = @At
         WHERE id IN (SELECT c.id FROM ({LotFillingSql.LatestPerLocation}) c WHERE {LotFillingSql.Fillable})
-        RETURNING lot_number
+        RETURNING id AS lot_id, lot_number
         """;
 
     private const string LineOfJob = "SELECT equipment_id FROM core.job WHERE id = @JobId";
@@ -106,10 +106,11 @@ internal sealed class LotFillingStore(DbSession session) : ILotFillingStore
             ? LaborSql.ToShifts(row)
             : null;
 
-    public async Task<IReadOnlyList<string>> CloseOpenLotsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ClosedLot>> CloseOpenLotsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken)
     {
         var lineId = await session.ExecuteScalarAsync<Guid>(LineOfJob, new { JobId = jobId }, cancellationToken);
-        return [.. (await session.QueryAsync<string>(Close, new { JobId = jobId, LineId = lineId, At = at }, cancellationToken)).Order(StringComparer.Ordinal)];
+        return [.. (await session.QueryAsync<ClosedLot>(Close, new { JobId = jobId, LineId = lineId, At = at }, cancellationToken))
+            .OrderBy(l => l.LotNumber, StringComparer.Ordinal)];
     }
 
     private sealed class OpenRow

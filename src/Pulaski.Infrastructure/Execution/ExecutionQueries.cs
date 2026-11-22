@@ -251,6 +251,16 @@ internal sealed partial class ExecutionQueries(NpgsqlDataSource dataSource, IUni
                 .ToList()
             : [];
 
+        // The line's report defaults (#122): where good output goes, and the printer closed lots' labels print on (only an active one).
+        var output = await connection.QuerySingleOrDefaultAsync<(Guid? LocationId, string? PrinterCode)>(new CommandDefinition(
+            """
+            SELECT e.output_location_id, p.code
+            FROM core.equipment e
+            LEFT JOIN core.label_printer p ON p.id = e.label_printer_id AND p.is_active
+            WHERE e.id = @LineId
+            """,
+            lotArgs, cancellationToken: cancellationToken));
+
         decimal? idealRate = null;
         if (runRows.Count > 0)
         {
@@ -300,6 +310,8 @@ internal sealed partial class ExecutionQueries(NpgsqlDataSource dataSource, IUni
             LotHours = lotRule?.Hours,
             LotByShift = lotRule?.ByShift ?? false,
             FillingLots = filling,
+            DefaultLocationId = output.LocationId,
+            LabelPrinterCode = output.PrinterCode,
             Runs = [.. runRows.Select(r => new JobRunDto
             {
                 Id = r.Id,

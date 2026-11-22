@@ -333,6 +333,12 @@ public sealed class ExecutionTests(DatabaseFixture db)
         Assert.Equal((100m, 15m), (await QuantityAsync(first.Lot.LotId), await QuantityAsync(third.Lots[1].LotId)));
         Assert.Contains(third.Warnings, w => w.Code == "lot_cut" && w.Message.Contains("is full", StringComparison.Ordinal));
 
+        // Only a lot filled to its size is finished, so only its label would print (#122).
+        Assert.Empty(first.ClosedLotIds);
+        Assert.Empty(second.ClosedLotIds);
+        Assert.Equal([first.Lot.LotId], third.ClosedLotIds);
+        Assert.Equal(plant.Extruder, third.LineId);
+
         // The job page shows the rule and the lot being filled: the second, at staging.
         var page = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Extrude));
         Assert.Equal((100m, (decimal?)null, false), (page.LotSize!.Value, page.LotHours, page.LotByShift));
@@ -355,11 +361,18 @@ public sealed class ExecutionTests(DatabaseFixture db)
         var typed = await Report(5m, "HAND-" + _s);
         Assert.Equal("HAND-" + _s, typed.Lot!.LotNumber);
         Assert.Equal(5m, await QuantityAsync(fifth.Lot.LotId));
+        Assert.Equal([typed.Lot.LotId], typed.ClosedLotIds);
+        Assert.Empty(fifth.ClosedLotIds);
         await Assert.ThrowsAsync<DomainRuleException>(async () =>
         {
             await db.SendAsync(new StartNewLotCommand(plant.Extrude));
             await db.SendAsync(new StartNewLotCommand(plant.Extrude));
         });
+
+        // Completing the job closes the lot it was filling, so it fills no more and its label prints (#122).
+        var sixth = await Report(5m);
+        await db.SendAsync(new CompleteJobCommand(plant.Extrude, await VersionAsync(plant.Extrude), null, null));
+        Assert.NotNull(await ScalarAsync<DateTimeOffset?>("SELECT produced_to FROM core.lot WHERE id = @Id", new { Id = sixth.Lot!.LotId }));
 
         // A material that isn't lot-tracked can't have lots cut.
         var bulk = await db.SendAsync(new CreateMaterialCommand("BULK-" + _s, "Regrind", null, "raw", null, db.UomId, false, null));
@@ -665,6 +678,30 @@ public sealed class ExecutionTests(DatabaseFixture db)
         // Resolved, it leaves the station.
         await db.SendAsync(new Pulaski.Application.Andon.ResolveAndonCallCommand(raised.Id, "Tensioned"));
         Assert.Empty((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, sam.Id, null))).AndonCalls);
+    }
+
+    [Fact]
+    public async Task A_line_keeps_a_default_output_location_and_a_label_printer_that_its_jobs_show()
+    {
+        var plant = await PlantAsync();
+        CreatedResponse printer = await db.SendAsync(new Pulaski.Application.Inventory.SaveLabelPrinterCommand(
+            plant.Site, null, 0, "P" + _s, "Line printer", Pulaski.Application.Inventory.PrintMethods.RawTcp, "10.0.0.9", 9100, null, "zpl", true));
+        long LineVersion() => ScalarAsync<long>("SELECT xmin::text::bigint FROM core.equipment WHERE id = @Id", new { Id = plant.Extruder }).GetAwaiter().GetResult();
+
+        await db.SendAsync(new SetLineOutputCommand(plant.Extruder, LineVersion(), plant.Staging, printer.Id));
+        var page = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Extrude));
+        Assert.Equal((plant.Staging, "P" + _s), (page.DefaultLocationId!.Value, page.LabelPrinterCode));
+
+        // Only a location that holds inventory, a printer of the site, a line, and the current version.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new SetLineOutputCommand(plant.Extruder, LineVersion(), plant.Packer, null)));
+        var siteVersion = await ScalarAsync<long>("SELECT xmin::text::bigint FROM core.equipment WHERE id = @Id", new { Id = plant.Site });
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new SetLineOutputCommand(plant.Site, siteVersion, null, null)));
+        await Assert.ThrowsAsync<Application.Errors.ConflictException>(() => db.SendAsync(new SetLineOutputCommand(plant.Extruder, 1, null, null)));
+
+        // Cleared, the report asks again and nothing prints.
+        await db.SendAsync(new SetLineOutputCommand(plant.Extruder, LineVersion(), null, null));
+        page = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Extrude));
+        Assert.Equal((null, null), (page.DefaultLocationId, page.LabelPrinterCode));
     }
 
     [Fact]

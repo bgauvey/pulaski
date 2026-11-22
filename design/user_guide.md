@@ -325,6 +325,18 @@ Each saves as soon as you change it. The profile reads the machine's data as it 
 
 Equipment with **Can run jobs** set also shows **Production counted at**: whose counters a [report from the machine](#report-production-from-the-machine) takes, usually the line's last machine (the saw, the packer). Choose the line itself or any equipment below it. Left at *Found from the counter tags*, Pulaski uses the line's own processed counter, or else the only machine below it that has one. If several machines below it count, choose one here.
 
+### Production report defaults
+
+For a line that runs jobs, the equipment's panel has a **Production reports** part (changing it needs *equipment: manage*):
+
+1. Choose where **Good output goes to**: prefilled on the line's reports, at the Floor and at its stations. **Ask on each report** leaves it empty.
+2. Choose a printer under **Print lot labels on** to print each lot's label by itself once the lot is closed (see
+   [Report production](#report-production)); **Don't print them** turns it off.
+3. Click **Save**.
+
+In detail: the location must hold inventory at the line's site and the printer be one of the site's active printers (set up under
+**Site settings → Labels**). On a line that fills lots, the lot being filled's location is offered first. A report can always choose another place.
+
 ### Deactivate equipment
 
 Set **Active** to *false*. Inactive equipment stays in the tree and in history, greyed out, but can no longer be used for new work. Pulaski never deletes equipment.
@@ -964,12 +976,24 @@ If the material changes on a line in automatic changeover mode, Pulaski starts a
 
 1. On the running line's card, click **Report**.
 2. The **Run** is the open run. Enter the **Good** quantity and the **Scrap** quantity (either can be zero), in the job's unit.
-3. For good output, choose where it **goes to** and, optionally, a **Lot number**; left blank, Pulaski numbers it after the job (*WO-5001-10-01*, *-02*…).
+3. For good output, check where it **goes to** (already filled in when the line has a default, or with the location of the lot being
+   filled) and, optionally, a **Lot number**; left blank, Pulaski numbers it after the job (*WO-5001-10-01*, *-02*…).
    If the job has used lots, you can also tick under **Made from** the ones this output came from. Leave them blank and Pulaski pairs them by time (see [Trace a lot](#trace-a-lot)).
 4. For scrap, choose a **Scrap reason**.
 5. Click **Report**. The card updates with the new totals.
 
 If the report is more than the run can hold, Pulaski refuses it and says how much more fits.
+
+**Labels printed by themselves.** When the line has a label printer (see [Production report defaults](#production-report-defaults)), each lot's
+label prints there once the lot is closed, and the report says so (*Lot WO-5001-10-01's label printed on BT-1.*). A lot is closed:
+
+- at once, on a line that makes a lot per report (or per batch);
+- on a line that fills lots, when a report fills it to its size, when a report finds it past its age or from an earlier shift, when someone
+  clicks **Start a new lot**, or when the job is completed (which now also ends the lot it was filling);
+- for a partial batch reported as the line pauses or completes, when it is reported.
+
+If the label can't print (the printer is off or unreachable, BarTender refuses it), the report is kept and its note says why; print the label
+from the lot. Through BarTender the document is the printer's *Lot labels: produced* one, else its lot or default document.
 
 **Lots filled by reports.** A line can fill one lot over many reports instead of making a lot per report, until the lot is full: at a size,
 a number of hours after its first output, or at a change of shift.
@@ -3087,6 +3111,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
 - **Alerts** come by e-mail only. Each person keeps their own; nobody can subscribe others. A lot made on hold (rather than put on hold
   later) doesn't alert, and a shortage that clears and comes back for the same job isn't e-mailed again.
+- **Report defaults** are kept per line, not per line and material, and the capability CSV doesn't set them. A lot filled past its age or
+  into a new shift is closed (and its label printed) only by the next report, **Start a new lot** or completing the job, not by the clock.
 - **BarTender** printing sends one script per label and stops at the first one BarTender refuses; it doesn't use BarTender's print queue or
   report when the printer itself has finished. Documents are named per kind of label only, until printing from other places (#122) adds more.
 - **Andon** calls are raised only at an operator station. Response times cover at most 90 days on screen and can't be exported. Escalated calls are e-mailed only to those who added that alert under **My alerts**.
