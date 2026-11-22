@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Web.Services.Labor;
 
 namespace Pulaski.Web.Tests;
@@ -25,10 +26,10 @@ public class TerminalViewTests
     [Fact]
     public void The_terminal_says_what_it_did()
     {
-        Assert.Equal("Ann, you're on EXT-01.", new TerminalAction(TerminalAction.ClockOn, Guid.CreateVersion7()).Confirmation("Ann", "EXT-01"));
-        Assert.Equal("Ann, you're clocked off.", new TerminalAction(TerminalAction.ClockOff, Guid.CreateVersion7()).Confirmation("Ann", null));
-        Assert.Equal("Welcome back, Ann.", new TerminalAction(TerminalAction.EndBreak, null).Confirmation("Ann", null));
-        Assert.Equal("since 01:12", TerminalAction.Since(new DateTimeOffset(2026, 10, 23, 6, 12, 0, TimeSpan.Zero), "America/Chicago"));
+        Assert.Equal("Ann, you're on EXT-01.", new TerminalAction(TerminalAction.ClockOn, Guid.CreateVersion7()).Confirmation(Text.English, "Ann", "EXT-01"));
+        Assert.Equal("Ann, you're clocked off.", new TerminalAction(TerminalAction.ClockOff, Guid.CreateVersion7()).Confirmation(Text.English, "Ann", null));
+        Assert.Equal("Welcome back, Ann.", new TerminalAction(TerminalAction.EndBreak, null).Confirmation(Text.English, "Ann", null));
+        Assert.Equal("since 01:12", TerminalAction.Since(Text.English, new DateTimeOffset(2026, 10, 23, 6, 12, 0, TimeSpan.Zero), "America/Chicago"));
     }
 
     [Fact]
@@ -43,7 +44,7 @@ public class TerminalViewTests
         Assert.Null(TerminalAction.Parse("reason"));
 
         var on = new TerminalAction(TerminalAction.ClockOn, Guid.CreateVersion7());
-        Assert.Equal("Ann, you're on EXT-01 for setup.", on.Confirmation("Ann", "EXT-01", "setup"));
-        Assert.Equal("Ann, you're on EXT-01.", on.Confirmation("Ann", "EXT-01"));
+        Assert.Equal("Ann, you're on EXT-01 for setup.", on.Confirmation(Text.English, "Ann", "EXT-01", "setup"));
+        Assert.Equal("Ann, you're on EXT-01.", on.Confirmation(Text.English, "Ann", "EXT-01"));
     }
 }

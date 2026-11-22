@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Handover;
 using Pulaski.Web.Services.Execution;
 
@@ -31,8 +32,8 @@ public class HandoverViewTests
             WrittenBy = "lee",
             WrittenByName = "Lee Ong",
         };
-        Assert.Equal("Lee Ong at 19:00", HandoverView.Who(entry, "UTC", now));
-        Assert.Equal("lee, Wed 18 Nov 19:00", HandoverView.Who(entry with { WrittenByName = null, WrittenAt = now.AddDays(-2).AddHours(-1) }, "UTC", now));
-        Assert.Equal(("1 open item", "3 open items"), (HandoverView.OpenItems(1), HandoverView.OpenItems(3)));
+        Assert.Equal("Lee Ong at 19:00", HandoverView.Who(Text.English, entry, "UTC", now));
+        Assert.Equal("lee, Wed 18 Nov 19:00", HandoverView.Who(Text.English, entry with { WrittenByName = null, WrittenAt = now.AddDays(-2).AddHours(-1) }, "UTC", now));
+        Assert.Equal(("1 open item", "Open items: 3"), (HandoverView.OpenItems(Text.English, 1), HandoverView.OpenItems(Text.English, 3)));
     }
 }

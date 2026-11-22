@@ -9,7 +9,7 @@
 @* An operator station (#146) on an enrolled terminal (D-049): one line's job and what comes next, at the line. Someone badges to sign on and
    stays signed on until they sign off or leave it alone for a while (StationIdle); their ticket sits in a short-lived cookie on this device.
    ?line=CODE chooses the line when the terminal offers several. *@
-<PageTitle>@(_station?.Line?.Code ?? _station?.TerminalName ?? "Station") · Pulaski</PageTitle>
+<PageTitle>@(_station?.Line?.Code ?? _station?.TerminalName ?? L["Station"]) · Pulaski</PageTitle>
 @* Always the touch layout (D-105): a station is worked by finger, whatever the screen says about its pointer. One HeadContent: a page keeps
    only its last. It reloads to stay current, except while a PIN is being typed. *@
 <HeadContent>
@@ -23,11 +23,11 @@
 @if (_station is null)
 {
     <div class="station-panel">
-        <h1 class="h3">@(_enrolled ? "The station can't be shown" : "This station isn't enrolled")</h1>
-        <p>@(_error ?? "Enrol it as a terminal, then open this page again.")</p>
+        <h1 class="h3">@(_enrolled ? L["The station can't be shown"] : L["This station isn't enrolled"])</h1>
+        <p>@(_error ?? L["Enrol it as a terminal, then open this page again."])</p>
         @if (!_enrolled)
         {
-            <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">Enrol it</a>
+            <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">@L["Enrol it"]</a>
         }
     </div>
 }
@@ -37,13 +37,13 @@ else if (_station.Line is null)
         <h1 class="h3">@_station.TerminalName: which line is this station for?</h1>
         @if (_station.Lines.Count == 0)
         {
-            <p>No lines that run jobs are in this terminal's area. Ask a supervisor to change what it offers on Labor → Terminals.</p>
+            <p>@L["No lines that run jobs are in this terminal's area. Ask a supervisor to change what it offers on Labor → Terminals."]</p>
         }
         else
         {
             @if (Line is not null)
             {
-                <p class="text-warning-strong">There is no line @Line here.</p>
+                <p class="text-warning-strong">@L["There is no line {0} here.", Line]</p>
             }
             <div class="station-actions">
                 @foreach (var l in _station.Lines)
@@ -53,7 +53,7 @@ else if (_station.Line is null)
                     </a>
                 }
             </div>
-            <p class="text-muted mt-3 mb-0">To skip this choice, set the terminal's first line offered on Labor → Terminals.</p>
+            <p class="text-muted mt-3 mb-0">@L["To skip this choice, set the terminal's first line offered on Labor → Terminals."]</p>
         }
     </div>
 }
@@ -67,10 +67,10 @@ else
             <span class="text-muted ms-2">@line.Name</span>
         </div>
         <div class="text-end">
-            <span class="station-status @LineDisplayView.StatusClass(line.Status)">@LineDisplayView.StatusLabel(line.Status)</span>
+            <span class="station-status @LineDisplayView.StatusClass(line.Status)">@L[LineDisplayView.StatusLabel(line.Status)]</span>
             @if (since is not null && line.Status != "idle")
             {
-                <div class="small text-muted">for @since</div>
+                <div class="small text-muted">@L["for {0}", since]</div>
             }
         </div>
     </header>
@@ -93,24 +93,24 @@ else
             {
                 @* Stops waiting for a reason (#149): asked for here, at the line, while it is fresh. *@
                 <section class="station-panel station-stops" aria-labelledby="station-stops">
-                    <h2 id="station-stops" class="h5">@StationView.StopsTitle(_station.StopsToCode.Count)</h2>
+                    <h2 id="station-stops" class="h5">@StationView.StopsTitle(L, _station.StopsToCode.Count)</h2>
                     @if (_station.PersonName is null)
                     {
-                        <p class="mb-0">Badge in to give @(_station.StopsToCode.Count == 1 ? "its reason" : "their reasons").</p>
+                        <p class="mb-0">@(_station.StopsToCode.Count == 1 ? L["Badge in to give its reason."] : L["Badge in to give their reasons."])</p>
                     }
                     else if (!_station.CanCodeStops)
                     {
-                        <p class="text-muted mb-0">Your role doesn't code stops; ask someone who does.</p>
+                        <p class="text-muted mb-0">@L["Your role doesn't code stops; ask someone who does."]</p>
                     }
                     <ul class="station-next">
                         @foreach (var s in _station.StopsToCode.Take(5))
                         {
                             <li @key="s.Id">
                                 <div class="d-flex justify-content-between gap-2">
-                                    <span><span class="fw-semibold">@s.EquipmentCode</span> · @StationView.StopWhen(s, DateTimeOffset.UtcNow)</span>
+                                    <span><span class="fw-semibold">@s.EquipmentCode</span> · @StationView.StopWhen(L, s, DateTimeOffset.UtcNow)</span>
                                     @if (s.MappedReasonName is { } mapped)
                                     {
-                                        <span class="text-muted">the machine says @mapped</span>
+                                        <span class="text-muted">@L["the machine says {0}", mapped]</span>
                                     }
                                     else if (s.StopCodeText is { } text)
                                     {
@@ -123,14 +123,14 @@ else
                                         <input type="hidden" name="Input.StopId" value="@s.Id" />
                                         @if (_codingStop == s.Id)
                                         {
-                                            <label class="form-label" for="station-stop-comment">Comment <span class="text-muted">(reasons marked * need one)</span></label>
+                                            <label class="form-label" for="station-stop-comment">@L["Comment"] <span class="text-muted">@L["(reasons marked * need one)"]</span></label>
                                             <InputText id="station-stop-comment" class="form-control mb-2" maxlength="1000" @bind-Value="Input.Comment" />
                                             <div class="station-actions mb-2">
                                                 @if (s.MappedReasonId is { } mappedId && choices.Any(r => r.Id == mappedId))
                                                 {
-                                                    <button type="submit" name="Input.Reason" value="@($"code:{mappedId}")" class="btn btn-primary">Confirm @s.MappedReasonName</button>
+                                                    <button type="submit" name="Input.Reason" value="@($"code:{mappedId}")" class="btn btn-primary">@L["Confirm {0}", s.MappedReasonName]</button>
                                                 }
-                                                <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                                <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">@L["Back"]</button>
                                             </div>
                                             @foreach (var group in ReasonPickerView.Groups(choices))
                                             {
@@ -153,7 +153,7 @@ else
                                         else
                                         {
                                             <div class="station-actions">
-                                                <button type="submit" name="Input.Action" value="choose-stop" class="btn btn-primary">Give the reason</button>
+                                                <button type="submit" name="Input.Action" value="choose-stop" class="btn btn-primary">@L["Give the reason"]</button>
                                             </div>
                                         }
                                     </EditForm>
@@ -167,12 +167,12 @@ else
             {
                 @* Andon (#157): the line's calls waiting or being answered, escalated ones marked; whoever may calls for help or answers. *@
                 <section class="station-panel station-andon" aria-labelledby="station-andon">
-                    <h2 id="station-andon" class="h5">@(_station.AndonCalls.Count == 0 ? "Need help?" : AndonCallView.Title(_station.AndonCalls.Count))</h2>
+                    <h2 id="station-andon" class="h5">@(_station.AndonCalls.Count == 0 ? L["Need help?"] : AndonCallView.Title(L, _station.AndonCalls.Count))</h2>
                     @if (_station.AndonCalls.Count > 0)
                     {
                         @if (_station.PersonName is null)
                         {
-                            <p class="mb-2">Badge in to answer @(_station.AndonCalls.Count == 1 ? "it" : "them").</p>
+                            <p class="mb-2">@(_station.AndonCalls.Count == 1 ? L["Badge in to answer it."] : L["Badge in to answer them."])</p>
                         }
                         <ul class="station-next">
                             @foreach (var c in _station.AndonCalls)
@@ -180,7 +180,7 @@ else
                                 <li @key="c.Id" class="@(c.IsEscalated ? "is-escalated" : "")">
                                     <div class="d-flex justify-content-between gap-2">
                                         <span class="fw-semibold">@c.TypeName</span>
-                                        <span class="@(c.IsEscalated ? "station-escalated" : "text-muted")">@AndonCallView.State(c, DateTimeOffset.UtcNow)</span>
+                                        <span class="@(c.IsEscalated ? "station-escalated" : "text-muted")">@AndonCallView.State(L, c, DateTimeOffset.UtcNow)</span>
                                     </div>
                                     @if (c.Note is { } note)
                                     {
@@ -192,11 +192,11 @@ else
                                             <input type="hidden" name="Input.CallId" value="@c.Id" />
                                             @if (_resolvingCall == c.Id)
                                             {
-                                                <label class="form-label" for="station-resolution">What was done</label>
+                                                <label class="form-label" for="station-resolution">@L["What was done"]</label>
                                                 <InputText id="station-resolution" class="form-control mb-2" maxlength="1000" @bind-Value="Input.Comment" />
                                                 <div class="station-actions">
-                                                    <button type="submit" name="Input.Action" value="resolve" class="btn btn-primary">Resolved</button>
-                                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                                    <button type="submit" name="Input.Action" value="resolve" class="btn btn-primary">@L["Resolved"]</button>
+                                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">@L["Back"]</button>
                                                 </div>
                                             }
                                             else
@@ -204,9 +204,9 @@ else
                                                 <div class="station-actions">
                                                     @if (c.AcknowledgedAt is null)
                                                     {
-                                                        <button type="submit" name="Input.Action" value="acknowledge" class="btn btn-primary">I'm here</button>
+                                                        <button type="submit" name="Input.Action" value="acknowledge" class="btn btn-primary">@L["I'm here"]</button>
                                                     }
-                                                    <button type="submit" name="Input.Action" value="choose-resolve" class="btn @(c.AcknowledgedAt is null ? "btn-outline-primary" : "btn-primary")">Resolve</button>
+                                                    <button type="submit" name="Input.Action" value="choose-resolve" class="btn @(c.AcknowledgedAt is null ? "btn-outline-primary" : "btn-primary")">@L["Resolve"]</button>
                                                 </div>
                                             }
                                         </EditForm>
@@ -220,7 +220,7 @@ else
                         <EditForm Model="Input" FormName="station-andon" OnSubmit="ActAsync" method="post" class="mt-2">
                             @if (_calling)
                             {
-                                <label class="form-label" for="station-andon-note">Note <span class="text-muted">(optional)</span></label>
+                                <label class="form-label" for="station-andon-note">@L["Note"] <span class="text-muted">@L["(optional)"]</span></label>
                                 <InputText id="station-andon-note" class="form-control mb-2" maxlength="1000" @bind-Value="Input.Comment" />
                                 <div class="reason-grid mb-2">
                                     @foreach (var t in _station.AndonTypes)
@@ -229,13 +229,13 @@ else
                                     }
                                 </div>
                                 <div class="station-actions">
-                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">@L["Back"]</button>
                                 </div>
                             }
                             else
                             {
                                 <div class="station-actions">
-                                    <button type="submit" name="Input.Action" value="choose-call" class="btn btn-outline-danger">Call for help</button>
+                                    <button type="submit" name="Input.Action" value="choose-call" class="btn btn-outline-danger">@L["Call for help"]</button>
                                 </div>
                             }
                         </EditForm>
@@ -251,12 +251,12 @@ else
                         <span class="station-big">@LineDisplayView.Qty(job.GoodQty)</span>
                         @if (job.PlannedQty is { } planned)
                         {
-                            <span class="text-muted"> of @LineDisplayView.Qty(planned) @job.UomCode good</span>
+                            <span class="text-muted"> @L["of {0} {1} good", LineDisplayView.Qty(planned), job.UomCode]</span>
                         }
                     </div>
                     @if (progress is { } pct)
                     {
-                        <div class="floor-bar mt-2" role="img" aria-label="@pct% of the planned quantity"><span style="width: @pct%"></span></div>
+                        <div class="floor-bar mt-2" role="img" aria-label="@L["{0}% of the planned quantity", pct]"><span style="width: @pct%"></span></div>
                     }
                     @if ((_station.CanRunJobs || _station.Report is not null) && _station.RunningJob is { } running)
                     {
@@ -266,12 +266,12 @@ else
                             @if (_stopping is { } stopping)
                             {
                                 @* Why it stops (#147): one tap on a reason pauses or completes it; a reason that asks for a comment needs one typed first. *@
-                                <h3 class="h5">@(stopping == "complete" ? "Complete it: why did it stop, if short?" : "Pause it: why is it stopping?")</h3>
-                                <label class="form-label" for="station-comment">Comment <span class="text-muted">(reasons marked * need one)</span></label>
+                                <h3 class="h5">@(stopping == "complete" ? L["Complete it: why did it stop, if short?"] : L["Pause it: why is it stopping?"])</h3>
+                                <label class="form-label" for="station-comment">@L["Comment"] <span class="text-muted">@L["(reasons marked * need one)"]</span></label>
                                 <InputText id="station-comment" class="form-control mb-3" maxlength="1000" @bind-Value="Input.Comment" />
                                 <div class="station-actions mb-3">
-                                    <button type="submit" name="Input.Action" value="@stopping" class="btn btn-primary">@(stopping == "complete" ? "Complete" : "Pause") with no reason</button>
-                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                    <button type="submit" name="Input.Action" value="@stopping" class="btn btn-primary">@(stopping == "complete" ? L["Complete with no reason"] : L["Pause with no reason"])</button>
+                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">@L["Back"]</button>
                                 </div>
                                 @foreach (var group in ReasonPickerView.Groups(_station.RunEndReasons))
                                 {
@@ -295,24 +295,24 @@ else
                             {
                                 var job = form.Job;
                                 var machine = form.Machine;
-                                <h3 class="h5">Report production</h3>
+                                <h3 class="h5">@L["Report production"]</h3>
                                 @if (machine is not null)
                                 {
-                                    <p class="mb-2">@MachineCountView.Since(machine, job.SiteTimeZone)</p>
+                                    <p class="mb-2">@MachineCountView.Since(L, machine, job.SiteTimeZone)</p>
                                 }
                                 <div class="row g-3 mb-3">
                                     <div class="col-6">
-                                        <label class="form-label" for="station-good">Good, @job.UomCode</label>
+                                        <label class="form-label" for="station-good">@L["Good, {0}", job.UomCode]</label>
                                         <InputNumber id="station-good" class="form-control" inputmode="decimal" @bind-Value="Input.Good" />
                                     </div>
                                     <div class="col-6">
-                                        <label class="form-label" for="station-scrap">Scrap, @job.UomCode</label>
+                                        <label class="form-label" for="station-scrap">@L["Scrap, {0}", job.UomCode]</label>
                                         <InputNumber id="station-scrap" class="form-control" inputmode="decimal" @bind-Value="Input.Scrap" />
                                     </div>
                                     <div class="col-12 col-md-6">
-                                        <label class="form-label" for="station-scrap-reason">Scrap reason <span class="text-muted">(when there is scrap)</span></label>
+                                        <label class="form-label" for="station-scrap-reason">@L["Scrap reason"] <span class="text-muted">@L["(when there is scrap)"]</span></label>
                                         <InputSelect id="station-scrap-reason" class="form-select" @bind-Value="Input.ScrapReasonId">
-                                            <option value="">Choose…</option>
+                                            <option value="">@L["Choose…"]</option>
                                             @foreach (var reason in form.ScrapReasons)
                                             {
                                                 <option value="@reason.Id">@Display.ReasonLabel(reason)</option>
@@ -320,15 +320,15 @@ else
                                         </InputSelect>
                                     </div>
                                     <div class="col-12 col-md-6">
-                                        <label class="form-label" for="station-location">Good output goes to</label>
+                                        <label class="form-label" for="station-location">@L["Good output goes to"]</label>
                                         <InputSelect id="station-location" class="form-select" @bind-Value="Input.LocationId">
-                                            <option value="">Choose…</option>
+                                            <option value="">@L["Choose…"]</option>
                                             @foreach (var place in form.Locations)
                                             {
                                                 <option value="@place.Id">@place.Code · @place.Name</option>
                                             }
                                         </InputSelect>
-                                        @if (StationView.LotHint(job, form.Locations.FirstOrDefault(l => l.Id == Input.LocationId)?.Code) is { } hint)
+                                        @if (StationView.LotHint(L, job, form.Locations.FirstOrDefault(l => l.Id == Input.LocationId)?.Code) is { } hint)
                                         {
                                             <div class="form-text">@hint</div>
                                         }
@@ -338,7 +338,7 @@ else
                                         }
                                     </div>
                                     <div class="col-12">
-                                        <label class="form-label" for="station-report-comment">Comment</label>
+                                        <label class="form-label" for="station-report-comment">@L["Comment"]</label>
                                         <InputText id="station-report-comment" class="form-control" maxlength="1000" @bind-Value="Input.Comment" />
                                     </div>
                                 </div>
@@ -350,11 +350,11 @@ else
                                         <input type="hidden" name="Input.MachineUomId" value="@machine.UomId" />
                                         <input type="hidden" name="Input.MachineThrough" value="@machine.Through!.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture)" />
                                         <button type="submit" name="Input.Action" value="report-machine" class="btn btn-primary">
-                                            Report the machine's count<span class="d-block small fw-normal">@StationView.MachineFigures(machine)</span>
+                                            @L["Report the machine's count"]<span class="d-block small fw-normal">@StationView.MachineFigures(L, machine)</span>
                                         </button>
                                     }
-                                    <button type="submit" name="Input.Action" value="report" class="btn @(machine is not null && MachineCountView.CanUse(machine) ? "btn-outline-primary" : "btn-primary")">Report these figures</button>
-                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">Back</button>
+                                    <button type="submit" name="Input.Action" value="report" class="btn @(machine is not null && MachineCountView.CanUse(machine) ? "btn-outline-primary" : "btn-primary")">@L["Report these figures"]</button>
+                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">@L["Back"]</button>
                                 </div>
                             }
                             else
@@ -362,12 +362,12 @@ else
                                 <div class="station-actions">
                                     @if (_station.Report is { Job.BatchSize: null })
                                     {
-                                        <button type="submit" name="Input.Action" value="choose-report" class="btn btn-primary">Report</button>
+                                        <button type="submit" name="Input.Action" value="choose-report" class="btn btn-primary">@L["Report"]</button>
                                     }
                                     @if (_station.CanRunJobs)
                                     {
-                                        <button type="submit" name="Input.Action" value="choose-pause" class="btn btn-outline-primary">Pause</button>
-                                        <button type="submit" name="Input.Action" value="choose-complete" class="btn btn-outline-primary">Complete</button>
+                                        <button type="submit" name="Input.Action" value="choose-pause" class="btn btn-outline-primary">@L["Pause"]</button>
+                                        <button type="submit" name="Input.Action" value="choose-complete" class="btn btn-outline-primary">@L["Complete"]</button>
                                     }
                                 </div>
                             }
@@ -376,15 +376,15 @@ else
                 }
                 else
                 {
-                    <h2 id="station-job" class="h4 mb-0">No job running</h2>
+                    <h2 id="station-job" class="h4 mb-0">@L["No job running"]</h2>
                 }
             </section>
 
             <section class="station-panel" aria-labelledby="station-next">
-                <h2 id="station-next" class="h5">Next</h2>
+                <h2 id="station-next" class="h5">@L["Next"]</h2>
                 @if (_station.Next.Count == 0)
                 {
-                    <p class="text-muted mb-0">Nothing planned on @line.Code.</p>
+                    <p class="text-muted mb-0">@L["Nothing planned on {0}.", line.Code]</p>
                 }
                 else
                 {
@@ -405,7 +405,7 @@ else
                                         <input type="hidden" name="Input.JobId" value="@next.JobId" />
                                         <input type="hidden" name="Input.Version" value="@next.Version" />
                                         <div class="station-actions">
-                                            <button type="submit" name="Input.Action" value="start" class="btn btn-primary">@(next.Status == "paused" ? "Resume" : "Start") @next.JobNumber</button>
+                                            <button type="submit" name="Input.Action" value="start" class="btn btn-primary">@(next.Status == "paused" ? L["Resume"] : L["Start"]) @next.JobNumber</button>
                                         </div>
                                     </EditForm>
                                 }
@@ -424,20 +424,20 @@ else
             @if (_station.PersonName is { } name)
             {
                 <h2 id="station-who" class="h3 mb-1">@name</h2>
-                <p class="text-muted">Signed on at @_station.TerminalName. Badge again to switch person; after @_station.IdleMinutes minutes without anything done here, the station signs you off.</p>
-                @if (StationView.Limits(_station) is { } limits)
+                <p class="text-muted">@L["Signed on at {0}. Badge again to switch person; after {1} minutes without anything done here, the station signs you off.", _station.TerminalName, _station.IdleMinutes]</p>
+                @if (StationView.Limits(L, _station) is { } limits)
                 {
                     <div class="drawer-alert mb-3" role="status"><Icon Name="info" Size="20" /><span>@limits</span></div>
                 }
                 <EditForm Model="Input" FormName="station-sign-off" OnSubmit="ActAsync" method="post">
                     <div class="station-actions">
-                        <button type="submit" name="Input.Action" value="sign-off" class="btn btn-outline-secondary">Sign off</button>
+                        <button type="submit" name="Input.Action" value="sign-off" class="btn btn-outline-secondary">@L["Sign off"]</button>
                     </div>
                 </EditForm>
             }
             else
             {
-                <h2 id="station-who" class="h4">@(_needsPin ? "Your PIN" : "Badge in")</h2>
+                <h2 id="station-who" class="h4">@(_needsPin ? L["Your PIN"] : L["Badge in"])</h2>
             }
 
             @* A badge signs on, or switches person when someone is already signed on. *@
@@ -446,14 +446,14 @@ else
                 {
                     <input type="hidden" name="Input.Badge" value="@Input.Badge" />
                     <InputText id="station-pin" type="password" inputmode="numeric" class="form-control form-control-lg station-badge mb-3" autocomplete="off" autofocus
-                               aria-label="Your PIN" @bind-Value="Input.Pin" />
-                    <button type="submit" class="btn btn-primary btn-lg w-100">Sign on</button>
+                               aria-label="@L["Your PIN"]" @bind-Value="Input.Pin" />
+                    <button type="submit" class="btn btn-primary btn-lg w-100">@L["Sign on"]</button>
                 }
                 else
                 {
                     <InputText id="station-badge" type="password" class="form-control form-control-lg station-badge" autocomplete="off" autofocus="@(_station.PersonName is null)"
-                               aria-label="@(_station.PersonName is null ? "Badge" : "Badge to switch person")" @bind-Value="Input.Badge" />
-                    <p class="text-muted small mt-2 mb-0">Hold your badge to the reader, or type its number and press Enter.</p>
+                               aria-label="@(_station.PersonName is null ? L["Badge"] : L["Badge to switch person"])" @bind-Value="Input.Badge" />
+                    <p class="text-muted small mt-2 mb-0">@L["Hold your badge to the reader, or type its number and press Enter."]</p>
                 }
             </EditForm>
         </section>
@@ -518,7 +518,7 @@ else
         catch (ApiException ex)
         {
             _enrolled = ex.Status != 401;
-            _error = ex.Detail ?? ex.Title;
+            _error = L.Problem(ex);
         }
     }
 
@@ -543,7 +543,7 @@ else
         }
         catch (ApiException ex)
         {
-            _error = ex.Detail ?? ex.Title;
+            _error = L.Problem(ex);
             Input.Pin = null;
             _needsPin = false;
         }
@@ -579,7 +579,7 @@ else
                 }
                 catch (ApiException ex)
                 {
-                    _actionError = StationView.Problem(ex.Detail ?? ex.Title, ex.Errors);
+                    _actionError = StationView.Problem(L.Problem(ex), ex.Errors);
                     (_calling, _resolvingCall) = ex.Status == 401 ? (false, null) : (action == "call", action == "resolve" ? Input.CallId : null);
                     if (ex.Status == 401)
                     {
@@ -609,7 +609,7 @@ else
                 }
                 catch (ApiException ex)
                 {
-                    _actionError = StationView.Problem(ex.Detail ?? ex.Title, ex.Errors);
+                    _actionError = StationView.Problem(L.Problem(ex), ex.Errors);
                     _codingStop = ex.Status == 401 ? null : stopId;
                     if (ex.Status == 401)
                     {
@@ -657,7 +657,7 @@ else
                 }
                 catch (ApiException ex)
                 {
-                    _actionError = StationView.Problem(ex.Detail ?? ex.Title, ex.Errors);
+                    _actionError = StationView.Problem(L.Problem(ex), ex.Errors);
                     _reporting = ex.Status != 401;
                     if (ex.Status == 401)
                     {
@@ -681,11 +681,11 @@ else
                     });
                     TerminalCookie.SetStation(HttpContext, result.Ticket, result.TicketExpiresAt);
                     _station = result.Station;
-                    _notes = [StationView.Done(action, _station), .. result.Notes];
+                    _notes = [StationView.Done(L, action, _station), .. result.Notes];
                 }
                 catch (ApiException ex)
                 {
-                    _actionError = StationView.Problem(ex.Detail ?? ex.Title, ex.Errors);
+                    _actionError = StationView.Problem(L.Problem(ex), ex.Errors);
                     _stopping = action is "pause" or "complete" ? action : null;
                     if (ex.Status == 401)
                     {

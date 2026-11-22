@@ -8,8 +8,18 @@ namespace Pulaski.Web.Services.Localization;
 /// in the reader's region. The English text is the key; a term with no translation shows in English. The language is the current UI culture's
 /// unless a page (a terminal's) sets it with <see cref="Use"/>.
 /// </summary>
-public sealed class Text(TranslationCache cache)
+public sealed class Text(TranslationCache? cache)
 {
+    /// <summary>English only, as the terms are written: for helpers outside a page, and tests.</summary>
+    public static Text English { get; } = new(null);
+
+    /// <summary>The API's problem titles (<c>ApplicationExceptionHandler</c>), so the catalog holds them.</summary>
+    public static readonly IReadOnlyList<string> ProblemTitles =
+    [
+        Term.Mark("Not found"), Term.Mark("Not signed in"), Term.Mark("Not allowed"), Term.Mark("Conflict"), Term.Mark("Rule violated"),
+        Term.Mark("One or more fields are invalid."),
+    ];
+
     private string? _language;
 
     /// <summary>The language shown: a code such as <c>es</c>, or <c>en</c>.</summary>
@@ -19,9 +29,40 @@ public sealed class Text(TranslationCache cache)
     public void Use(string? language) => _language = string.IsNullOrWhiteSpace(language) ? null : language;
 
     /// <summary>Loads the language's translations if they aren't, or are stale; call before the first render.</summary>
-    public Task EnsureAsync() => cache.EnsureAsync(Language);
+    public Task EnsureAsync() => cache?.EnsureAsync(Language) ?? Task.CompletedTask;
 
-    public string this[string term] => cache.Find(Language, term) ?? term;
+    public string this[string term] => cache?.Find(Language, term) ?? term;
+
+    /// <summary>
+    /// A refusal from the API in the reader's language (#128): its template translated and filled in their region, else the English as sent.
+    /// </summary>
+    public string? Message(ApiException? error)
+    {
+        if (error is null)
+        {
+            return null;
+        }
+
+        if (error.Template is { } template)
+        {
+            try
+            {
+                return string.Format(CultureInfo.CurrentCulture, this[template], [.. error.Values]);
+            }
+            catch (FormatException)
+            {
+                // A translation or values that don't fit: the English as sent.
+            }
+        }
+
+        return error.Detail;
+    }
+
+    /// <summary>A refusal in one line: its message, else its title, in the reader's language.</summary>
+    public string Problem(ApiException error) => Message(error) ?? Title(error);
+
+    /// <summary>A problem's title in the reader's language: the API's titles are terms.</summary>
+    public string Title(ApiException error) => this[error.Title];
 
     public string this[string term, params object?[] values]
     {

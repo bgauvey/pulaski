@@ -225,7 +225,8 @@ internal sealed class ErpOrderWriter(
 
         if (change.UomId != order.UomId)
         {
-            throw new DomainRuleException($"{order.OrderNumber} is in {await workOrders.GetUomCodeAsync(order.UomId, cancellationToken)}; the ERP must keep sending that unit.");
+            var unit = await workOrders.GetUomCodeAsync(order.UomId, cancellationToken);
+            throw new DomainRuleException($"{order.OrderNumber} is in {unit}; the ERP must keep sending that unit.");
         }
 
         var (planned, taken) = await QuantityAsync(order.SiteId, order.MaterialId, change.Quantity, change.UomId, $"Work order {order.OrderNumber}", cancellationToken);

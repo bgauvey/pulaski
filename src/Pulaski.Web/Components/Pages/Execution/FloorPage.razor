@@ -7,36 +7,36 @@
 @inject TimeProvider Clock
 @inject CurrentUser User
 
-<PageTitle>Floor · Pulaski</PageTitle>
+<PageTitle>@L["Floor"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Floor</h1>
-        <p class="text-muted mb-0">What runs on each line and what comes next. Start, pause and complete jobs, and report what they make.</p>
+        <h1 class="mb-1">@L["Floor"]</h1>
+        <p class="text-muted mb-0">@L["What runs on each line and what comes next. Start, pause and complete jobs, and report what they make."]</p>
     </div>
     <div class="inv-head-tools">
         @if (Sites.Sites.Count > 1)
         {
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
                 }
             </select>
         }
-        <a class="btn btn-outline-secondary" href="floor/production">Production by shift</a>
-        <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="LoadAsync" title="Refresh now"><Icon Name="refresh" Size="16" /></button>
+        <a class="btn btn-outline-secondary" href="floor/production">@L["Production by shift"]</a>
+        <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="LoadAsync" title="@L["Refresh now"]"><Icon Name="refresh" Size="16" /></button>
     </div>
 </div>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.JobExecute" What="start, pause and complete jobs" SiteId="Sites.SiteId" />
+<ViewOnlyNote Permission="@PermissionCodes.JobExecute" What="@L["start, pause and complete jobs"]" SiteId="Sites.SiteId" />
 @if (_notes.Count > 0)
 {
     <div class="drawer-alert mb-3" role="status">
         <Icon Name="info" Size="18" />
         <span>@string.Join(" ", _notes)</span>
-        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _notes = []">Dismiss</button>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _notes = []">@L["Dismiss"]</button>
     </div>
 }
 
@@ -45,11 +45,11 @@
     <div class="drawer-alert is-warning mb-3" role="status">
         <Icon Name="alert" Size="18" />
         <span>
-            @(_pending.Count == 1 ? "A partial batch waits" : $"{_pending.Count} partial batches wait") for approval:
+            @(_pending.Count == 1 ? L["A partial batch waits for approval:"] : L["Partial batches waiting for approval: {0}.", _pending.Count])
             @for (var i = 0; i < _pending.Count; i++)
             {
                 var p = _pending[i];
-                <a href="jobs/@p.JobId">@p.JobNumber</a>@($" ({FloorView.Qty(p.Quantity)} {p.UomCode} of {p.MaterialCode})")@(i < _pending.Count - 1 ? ", " : ".")
+                <a href="jobs/@p.JobId">@p.JobNumber</a>@($" ({L["{0} {1} of {2}", FloorView.Qty(p.Quantity), p.UomCode, p.MaterialCode]})")@(i < _pending.Count - 1 ? ", " : ".")
             }
         </span>
     </div>
@@ -59,14 +59,14 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_board.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No lines</h2>
-        <p class="text-muted mb-0">Add lines that run jobs on the <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> page.</p>
+        <h2>@L["No lines"]</h2>
+        <p class="text-muted mb-0">@L["Add lines that run jobs on the"] <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">@L["Equipment"]</ScreenLink> @L["page."]</p>
     </div>
 }
 else
@@ -86,9 +86,9 @@ else
                         <div class="d-flex gap-1 align-items-center">
                             @if (_labor.TryGetValue(row.LineId, out var onLine))
                             {
-                                <span class="chip" title="@string.Join(", ", onLine.Sessions.Select(x => x.PersonName))">@onLine.Sessions.Count on</span>
+                                <span class="chip" title="@string.Join(", ", onLine.Sessions.Select(x => x.PersonName))">@L["{0} on", onLine.Sessions.Count]</span>
                             }
-                            <span class="@(row.Running is null ? "chip" : "chip chip-strong chip-live")">@(row.Running is null ? "Idle" : "Running")</span>
+                            <span class="@(row.Running is null ? "chip" : "chip chip-strong chip-live")">@(row.Running is null ? L["Idle"] : L["Running"])</span>
                         </div>
                     }
                 </header>
@@ -100,20 +100,20 @@ else
                     <div class="d-flex justify-content-end mt-1">
                         @if (mine is null)
                         {
-                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => ClockOnAsync(row.LineId)">Clock on</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => ClockOnAsync(row.LineId)">@L["Clock on"]</button>
                         }
                         else
                         {
                             @* A break is taken from all of one's lines at once (D-047). *@
                             @if (_me.OpenBreak is { } onBreak)
                             {
-                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" disabled="@_busy" @onclick="() => EndMyBreakAsync(onBreak)">End break (since @Display.SiteTime(onBreak.StartedAt, Sites.Site?.TimeZone)[11..])</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" disabled="@_busy" @onclick="() => EndMyBreakAsync(onBreak)">@L["End break (since {0})", Display.SiteTime(onBreak.StartedAt, Sites.Site?.TimeZone)[11..]]</button>
                             }
                             else
                             {
-                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" disabled="@_busy" @onclick="StartMyBreakAsync">Start break</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" disabled="@_busy" @onclick="StartMyBreakAsync">@L["Start break"]</button>
                             }
-                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => ClockOffAsync(mine)">Clock off (since @Display.SiteTime(mine.StartedAt, Sites.Site?.TimeZone)[11..])</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => ClockOffAsync(mine)">@L["Clock off (since {0})", Display.SiteTime(mine.StartedAt, Sites.Site?.TimeZone)[11..]]</button>
                         }
                     </div>
                 }
@@ -125,39 +125,39 @@ else
                     <div class="floor-running">
                         <div class="d-flex justify-content-between align-items-baseline">
                             <a class="fw-semibold" href="jobs/@r.JobId">@r.JobNumber</a>
-                            <span class="small text-muted">run @r.RunNo · @FloorView.Elapsed(r.StartedAt, Clock.GetUtcNow())</span>
+                            <span class="small text-muted">@L["run {0}", r.RunNo] · @FloorView.Elapsed(r.StartedAt, Clock.GetUtcNow())</span>
                         </div>
                         <div class="small">@(r.MaterialCode ?? Display.Label(r.JobType))@(r.WorkOrderNumber is { } o ? $" · {o}" : "")</div>
                         @if (r.PlannedQty is { } planned)
                         {
                             <div class="small mt-1">
-                                <span class="fw-semibold">@FloorView.Qty(r.GoodQty)</span> of @FloorView.Qty(planned) @r.UomCode good
+                                <span class="fw-semibold">@FloorView.Qty(r.GoodQty)</span> @L["of {0} {1} good", FloorView.Qty(planned), r.UomCode]
                                 @if (r.ScrapQty > 0)
                                 {
-                                    <span class="text-muted"> · @FloorView.Qty(r.ScrapQty) scrap</span>
+                                    <span class="text-muted"> · @L["{0} scrap", FloorView.Qty(r.ScrapQty)]</span>
                                 }
                             </div>
-                            <div class="floor-bar" role="img" aria-label="@FloorView.Progress(planned, r.GoodQty)% of the planned quantity">
+                            <div class="floor-bar" role="img" aria-label="@L["{0}% of the planned quantity", FloorView.Progress(planned, r.GoodQty)]">
                                 <span style="width: @FloorView.Progress(planned, r.GoodQty)%"></span>
                             </div>
                             <div class="small text-muted mt-1">
-                                This run: @FloorView.Qty(r.RunGoodQty + r.RunScrapQty) @r.UomCode@(room is { } left ? $" · room for {FloorView.Qty(left)} more at the line's rate" : " · rate not checked")
+                                @L["This run: {0} {1}", FloorView.Qty(r.RunGoodQty + r.RunScrapQty), r.UomCode]@(room is { } left ? $" · {L["room for {0} more at the line's rate", FloorView.Qty(left)]}" : $" · {L["rate not checked"]}")
                                 @if (pct >= 90)
                                 {
-                                    <span class="text-warning-strong"> · near the rate cap</span>
+                                    <span class="text-warning-strong"> @L["· near the rate cap"]</span>
                                 }
                             </div>
                         }
                         <div class="d-flex flex-wrap gap-2 mt-2 floor-actions">
                             @if (r.JobType == "production" && CanReport)
                             {
-                                <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => OpenReportAsync(r.JobId)">Report</button>
+                                <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => OpenReportAsync(r.JobId)">@L["Report"]</button>
                             }
                             @if (CanRun)
                             {
-                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => Stop(r.JobId, complete: false)">Pause</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => Stop(r.JobId, complete: false)">@L["Pause"]</button>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy"
-                                        @onclick="() => CompleteOrStopAsync(r)">Complete</button>
+                                        @onclick="() => CompleteOrStopAsync(r)">@L["Complete"]</button>
                             }
                         </div>
 
@@ -179,7 +179,7 @@ else
 
                 @if (row.Next.Count > 0)
                 {
-                    <h3 class="floor-next-title">@(row.IsGroup ? "Waiting for a line" : "Next")</h3>
+                    <h3 class="floor-next-title">@(row.IsGroup ? L["Waiting for a line"] : L["Next"])</h3>
                     <ul class="floor-next">
                         @foreach (var job in row.Next)
                         {
@@ -193,7 +193,7 @@ else
                                         </div>
                                         @if (!job.IsReady)
                                         {
-                                            <div class="small text-muted">@job.Waiting@(job.ReadyAt is { } at ? $" Ready at {Display.SiteTime(at, Sites.Site?.TimeZone)}." : "")</div>
+                                            <div class="small text-muted">@job.Waiting@(job.ReadyAt is { } at ? $" {L["Ready at {0}.", Display.SiteTime(at, Sites.Site?.TimeZone)]}" : "")</div>
                                         }
                                     </div>
                                     @if (!CanRun)
@@ -202,24 +202,24 @@ else
                                     else if (row.IsGroup)
                                     {
                                         <div class="d-flex gap-1">
-                                            <select class="form-select form-select-sm" aria-label="Line for @job.JobNumber" @bind="_groupLine">
-                                                <option value="@Guid.Empty">Line…</option>
+                                            <select class="form-select form-select-sm" aria-label="@L["Line for {0}", job.JobNumber]" @bind="_groupLine">
+                                                <option value="@Guid.Empty">@L["Line…"]</option>
                                                 @foreach (var l in lines.Where(l => l.Running is null))
                                                 {
                                                     <option value="@l.LineId">@l.LineCode</option>
                                                 }
                                             </select>
                                             <ActionButton Class="btn btn-sm btn-primary" Busy="_busy"
-                                                          Reason="@(!job.IsReady ? job.Waiting ?? "The job isn't ready to start yet." : _groupLine == Guid.Empty ? "Choose the line it runs on first." : null)"
-                                                          OnClick="() => StartAsync(job, _groupLine)">Start</ActionButton>
+                                                          Reason="@(!job.IsReady ? job.Waiting ?? L["The job isn't ready to start yet."] : _groupLine == Guid.Empty ? L["Choose the line it runs on first."] : null)"
+                                                          OnClick="() => StartAsync(job, _groupLine)">@L["Start"]</ActionButton>
                                         </div>
                                     }
                                     else
                                     {
                                         <ActionButton Class="@($"btn btn-sm {(FloorView.CanStart(job, row) ? "btn-primary" : "btn-outline-secondary")}")" Busy="_busy"
-                                                      Reason="@(FloorView.CanStart(job, row) ? null : row.Running is not null ? $"Pause or complete {row.Running.JobNumber} first." : job.Waiting ?? "The job isn't ready to start yet.")"
+                                                      Reason="@(FloorView.CanStart(job, row) ? null : row.Running is not null ? L["Pause or complete {0} first.", row.Running.JobNumber] : job.Waiting ?? L["The job isn't ready to start yet."])"
                                                       OnClick="() => StartAsync(job, null)">
-                                            @(job.Status == "paused" ? "Resume" : "Start")
+                                            @(job.Status == "paused" ? L["Resume"] : L["Start"])
                                         </ActionButton>
                                     }
                                 </div>
@@ -229,12 +229,12 @@ else
                 }
                 else if (row.Running is null)
                 {
-                    <p class="small text-muted mb-0">Nothing planned here.</p>
+                    <p class="small text-muted mb-0">@L["Nothing planned here."]</p>
                 }
             </section>
         }
     </div>
-    <p class="small text-muted mt-2">Refreshes every @((int)FloorView.RefreshInterval.TotalSeconds) seconds while no form is open.</p>
+    <p class="small text-muted mt-2">@L["Refreshes every {0} seconds while no form is open.", (int)FloorView.RefreshInterval.TotalSeconds]</p>
 }
 
 @code {
@@ -424,7 +424,7 @@ else
     {
         var job = _reportJob!;
         _reportJob = null;
-        _notes = [$"{job.JobNumber}: this run now has {FloorView.Qty(result.RunGoodQty)} good and {FloorView.Qty(result.RunScrapQty)} scrap.",
+        _notes = [L["{0}: this run now has {1} good and {2} scrap.", job.JobNumber, FloorView.Qty(result.RunGoodQty), FloorView.Qty(result.RunScrapQty)],
             .. result.Warnings.Select(w => w.Message)];
         await LoadAsync();
     }

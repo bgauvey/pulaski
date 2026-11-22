@@ -9,18 +9,20 @@ namespace Pulaski.Web.Tests;
 /// </summary>
 public class TermCatalogTests
 {
+    private static readonly string[] ServerProjects = ["Pulaski.Domain", "Pulaski.Application", "Pulaski.Api", "Pulaski.Infrastructure"];
+
     [Fact]
     public void The_catalog_is_every_term_the_web_translates()
     {
         var root = Root();
         var web = Path.Combine(root, "src", "Pulaski.Web");
-        var found = Directory.EnumerateFiles(web, "*.*", SearchOption.AllDirectories)
-            .Where(f => (f.EndsWith(".razor", StringComparison.Ordinal) || f.EndsWith(".cs", StringComparison.Ordinal))
-                && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                && !f.EndsWith("TermExtractor.cs", StringComparison.Ordinal))
+        var found = SourceFiles(web, ".razor", ".cs")
+            .Where(f => !f.EndsWith("TermExtractor.cs", StringComparison.Ordinal))
             .SelectMany(f => TermExtractor.Terms(File.ReadAllText(f)));
-        var catalog = TermExtractor.Catalog(found);
+        var messages = ServerProjects
+            .SelectMany(project => SourceFiles(Path.Combine(root, "src", project), ".cs"))
+            .SelectMany(f => TermExtractor.Messages(File.ReadAllText(f)));
+        var catalog = TermExtractor.Catalog(found.Concat(messages));
 
         var path = Path.Combine(root, "src", "Pulaski.Contracts", "Localization", "terms.txt");
         if (Environment.GetEnvironmentVariable("PULASKI_UPDATE_TERMS") == "1")
@@ -40,6 +42,34 @@ public class TermCatalogTests
             """;
         Assert.Equal(["Sign in", "Run {0} ended", "Work orders", "Say \"hello\""], TermExtractor.Terms(Source));
     }
+
+    [Fact]
+    public void Server_messages_are_read_as_their_builder_makes_them()
+    {
+        const string Source = """
+            throw new DomainRuleException($"{line.Code} can't run {material.Code}.");
+            throw new NotFoundException("No such job.");
+            throw new ConflictException($"{n:N0} left, {Name(a, b)} at {when.ToString("HH:mm")}; {{braces}} {(x ? "a" : "b"),5}");
+            throw new DomainRuleException(IsExact ? "One" : "Other");
+            throw new DomainRuleException($"Part " + rest);
+            throw new ForbiddenException(
+                $"Not at {site}.");
+            throw new DomainRuleException(
+                $"{a} is more " +
+                $"than {b}.");
+            throw new DomainRuleException("Plain " + "parts.");
+            throw new DomainRuleException("Mixed " + $"{parts}.");
+            """;
+        Assert.Equal(
+            ["{0} can't run {1}.", "No such job.", "{0:N0} left, {1} at {2}; {{braces}} {3,5}", "Not at {0}.", "{0} is more than {1}.", "Plain parts."],
+            TermExtractor.Messages(Source));
+    }
+
+    private static IEnumerable<string> SourceFiles(string directory, params string[] extensions) =>
+        Directory.EnumerateFiles(directory, "*.*", SearchOption.AllDirectories)
+            .Where(f => extensions.Any(e => f.EndsWith(e, StringComparison.Ordinal))
+                && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
 
     private static string Root()
     {

@@ -152,7 +152,7 @@ public static partial class LanguageRules
     [GeneratedRegex("^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")]
     private static partial Regex CodePattern();
 
-    [GeneratedRegex(@"\{\d+(:[^{}]*)?\}")]
+    [GeneratedRegex(@"\{\d+(,-?\d+)?(:[^{}]*)?\}")]
     private static partial Regex PlaceholderPattern();
 
     [GeneratedRegex(@"[{}]")]

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Contracts.Execution;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Execution;
 
@@ -11,11 +12,11 @@ public static class LineDisplayView
 
     public static string StatusLabel(string status) => status switch
     {
-        "running" => "Running",
-        "down" => "Down",
-        "waiting" => "Waiting",
-        "no_signal" => "No signal",
-        _ => "Idle",
+        "running" => Term.Mark("Running"),
+        "down" => Term.Mark("Down"),
+        "waiting" => Term.Mark("Waiting"),
+        "no_signal" => Term.Mark("No signal"),
+        _ => Term.Mark("Idle"),
     };
 
     /// <summary>Running is quiet; down and no signal stand out; waiting is a caution (ISA-101: colour for the abnormal).</summary>

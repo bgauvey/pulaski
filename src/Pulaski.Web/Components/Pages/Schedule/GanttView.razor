@@ -411,7 +411,7 @@
         }
         catch (ApiException ex)
         {
-            result = PlacementGhost.Refused(slot.Line, slot.Before, ex.Detail ?? ex.Title);
+            result = PlacementGhost.Refused(slot.Line, slot.Before, L.Problem(ex));
             if (ex.Status != 0)
             {
                 _ghosts[slot] = result;

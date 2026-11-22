@@ -116,7 +116,7 @@
         <ReportProductionForm Job="job" OnReported="OnReportedAsync" OnCancel="() => _reporting = false" />
     }
 
-    @if (LotFillingView.Rule(job) is { } lotRule)
+    @if (LotFillingView.Rule(L, job) is { } lotRule)
     {
         <section class="inv-section" aria-labelledby="filling-title">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -143,7 +143,7 @@
                                 <tr @key="lot.LotId">
                                     <td><ScreenLink Href="@($"inventory/lots/{lot.LotId}")" Permission="@PermissionCodes.InventoryView">@lot.LotNumber</ScreenLink></td>
                                     <td>@lot.LocationCode</td>
-                                    <td class="inv-num">@LotFillingView.Holds(job, lot)</td>
+                                    <td class="inv-num">@LotFillingView.Holds(L, job, lot)</td>
                                     <td class="small">@Display.SiteTime(lot.StartedAt, job.SiteTimeZone)</td>
                                 </tr>
                             }

@@ -1,12 +1,12 @@
-@* Shows an API problem: title, detail and any field errors. Renders nothing when Error is null. *@
+@* Shows an API problem: title, detail and any field errors, in the reader's language (#128). Renders nothing when Error is null. *@
 
 @if (Error is not null)
 {
     <div class="alert @(Error.IsConflict ? "alert-warning" : "alert-danger")" role="alert">
-        <strong>@Error.Title</strong>
-        @if (!string.IsNullOrEmpty(Error.Detail))
+        <strong>@L.Title(Error)</strong>
+        @if (L.Message(Error) is { Length: > 0 } detail)
         {
-            <div>@Error.Detail</div>
+            <div>@detail</div>
         }
         @if (Error.Errors.Count > 0)
         {

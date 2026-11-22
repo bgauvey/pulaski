@@ -234,7 +234,7 @@
                         {
                             @* What the shifts have handed on and nobody has closed (#124). *@
                             <a class="ov-handover small" href="@($"handover#line-{line.Code}")" title="@string.Join("\n", handed.HandoverItems)">
-                                @Pulaski.Web.Services.Execution.HandoverView.OpenItems(handed.HandoverItems.Count)
+                                @Pulaski.Web.Services.Execution.HandoverView.OpenItems(L, handed.HandoverItems.Count)
                             </a>
                         }
                     </span>

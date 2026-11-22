@@ -6,16 +6,15 @@
 @inject CurrentUser User
 @inject TimeProvider Clock
 
-<PageTitle>Andon · Pulaski</PageTitle>
+<PageTitle>@L["Andon"] · Pulaski</PageTitle>
 
 @* Andon (#158, D-108): every call for help at the site not yet resolved, the longest waiting first, to answer from a desk or a tablet as at the
    line's station; and those resolved in the last day. Refreshes itself; escalation is worked out when read. *@
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Andon</h1>
+        <h1 class="mb-1">@L["Andon"]</h1>
         <p class="text-muted mb-0">
-            Calls for help from the lines. Say you're on a call when you go to it, and resolve it with what was done. A call nobody has answered within
-            its time is escalated.
+            @L["Calls for help from the lines. Say you're on a call when you go to it, and resolve it with what was done. A call nobody has answered within its time is escalated."]
         </p>
     </div>
     <div class="inv-head-tools">
@@ -25,7 +24,7 @@
         }
         @if (Sites.Sites.Count > 1)
         {
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -36,7 +35,7 @@
 </div>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.AndonRespond" What="answer calls" SiteId="Sites.SiteId" />
+<ViewOnlyNote Permission="@PermissionCodes.AndonRespond" What="@L["answer calls"]" SiteId="Sites.SiteId" />
 @if (_message is { } message)
 {
     <div class="alert alert-success small" role="status">@message</div>
@@ -44,47 +43,47 @@
 
 @if (Sites.SiteId is null)
 {
-    <p class="text-muted">There is no site yet.</p>
+    <p class="text-muted">@L["There is no site yet."]</p>
 }
 else if (_open is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
 {
     var now = Clock.GetUtcNow();
-    <h2 class="h6">@(_open.Count == 0 ? "No calls waiting" : AndonCallView.Title(_open.Count))</h2>
+    <h2 class="h6">@(_open.Count == 0 ? L["No calls waiting"] : AndonCallView.Title(L, _open.Count))</h2>
     <div class="table-panel mb-3">
         <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Line</th><th>Call</th><th>Called</th><th>Now</th><th></th></tr></thead>
+            <thead><tr><th>@L["Line"]</th><th>@L["Call"]</th><th>@L["Called"]</th><th>@L["Now"]</th><th></th></tr></thead>
             <tbody>
                 @foreach (var c in _open)
                 {
                     <tr @key="c.Id">
                         <td class="fw-semibold">@c.LineCode<div class="small text-muted fw-normal">@c.LineName</div></td>
                         <td>@c.TypeName@if (c.Note is { } note) {<div class="small text-muted">@note</div>}</td>
-                        <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(c)</div></td>
+                        <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(L, c)</div></td>
                         <td>
-                            <span class="chip @(c.IsEscalated ? "chip-danger" : c.AcknowledgedAt is null ? "chip-warn" : "chip-ok")">@AndonCallView.State(c, now)</span>
+                            <span class="chip @(c.IsEscalated ? "chip-danger" : c.AcknowledgedAt is null ? "chip-warn" : "chip-ok")">@AndonCallView.State(L, c, now)</span>
                         </td>
                         <td class="text-end text-nowrap">
                             @if (CanAnswer)
                             {
                                 @if (c.AcknowledgedAt is null)
                                 {
-                                    <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => AcknowledgeAsync(c)">I'm on it</button>
+                                    <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => AcknowledgeAsync(c)">@L["I'm on it"]</button>
                                 }
-                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => ChooseResolve(c)">Resolve</button>
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => ChooseResolve(c)">@L["Resolve"]</button>
                             }
                         </td>
                     </tr>
                 }
                 @if (_open.Count == 0)
                 {
-                    <tr><td colspan="5" class="text-muted small">Nothing is waiting. Lines call for help from their operator stations.</td></tr>
+                    <tr><td colspan="5" class="text-muted small">@L["Nothing is waiting. Lines call for help from their operator stations."]</td></tr>
                 }
             </tbody>
         </table>
@@ -93,38 +92,38 @@ else
     @if (_resolving is { } call && CanAnswer)
     {
         <section class="inv-facts mb-3" aria-labelledby="resolve-heading">
-            <h2 class="h6" id="resolve-heading">Resolve @call.TypeName on @call.LineCode</h2>
+            <h2 class="h6" id="resolve-heading">@L["Resolve {0} on {1}", call.TypeName, call.LineCode]</h2>
             <form class="row g-2 align-items-end" @onsubmit="ResolveAsync" @onsubmit:preventDefault>
                 <div class="col-md-9">
-                    <label class="form-label small fw-semibold" for="andon-resolution">What was done</label>
+                    <label class="form-label small fw-semibold" for="andon-resolution">@L["What was done"]</label>
                     <input id="andon-resolution" class="form-control form-control-sm" maxlength="1000" @bind="_resolution" @bind:event="oninput" />
                 </div>
                 <div class="col-md-3 form-actions">
-                    <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy">Resolved</ActionButton>
-                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _resolving = null">Cancel</button>
+                    <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy">@L["Resolved"]</ActionButton>
+                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _resolving = null">@L["Cancel"]</button>
                 </div>
             </form>
         </section>
     }
 
-    <h2 class="h6">Resolved in the last day</h2>
+    <h2 class="h6">@L["Resolved in the last day"]</h2>
     <div class="table-panel mb-3">
         <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Line</th><th>Call</th><th>Called</th><th>Resolved</th><th>What was done</th></tr></thead>
+            <thead><tr><th>@L["Line"]</th><th>@L["Call"]</th><th>@L["Called"]</th><th>@L["Resolved"]</th><th>@L["What was done"]</th></tr></thead>
             <tbody>
                 @foreach (var c in _resolved)
                 {
                     <tr @key="c.Id">
                         <td class="fw-semibold">@c.LineCode</td>
                         <td>@c.TypeName@if (c.Note is { } note) {<div class="small text-muted">@note</div>}</td>
-                        <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(c)</div></td>
-                        <td class="small">@(c.ResolvedByName ?? c.ResolvedBy)<div class="text-muted">@AndonCallView.Took(c)</div></td>
+                        <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(L, c)</div></td>
+                        <td class="small">@(c.ResolvedByName ?? c.ResolvedBy)<div class="text-muted">@AndonCallView.Took(L, c)</div></td>
                         <td class="small">@(c.Resolution ?? "—")</td>
                     </tr>
                 }
                 @if (_resolved.Count == 0)
                 {
-                    <tr><td colspan="5" class="text-muted small">None in the last 24 hours.</td></tr>
+                    <tr><td colspan="5" class="text-muted small">@L["None in the last 24 hours."]</td></tr>
                 }
             </tbody>
         </table>
@@ -133,22 +132,22 @@ else
     @* Response times (#159): how fast calls were answered and resolved, by line and kind of help, over the calls raised in the period. *@
     <section class="mb-3" aria-labelledby="andon-times">
         <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-            <h2 class="h6 mb-0" id="andon-times">Response times</h2>
-            <div class="btn-group btn-group-sm" role="group" aria-label="Period">
+            <h2 class="h6 mb-0" id="andon-times">@L["Response times"]</h2>
+            <div class="btn-group btn-group-sm" role="group" aria-label="@L["Period"]">
                 @foreach (var days in AndonCallView.Periods)
                 {
                     <button type="button" class="btn @(_days == days ? "btn-secondary" : "btn-outline-secondary")" aria-pressed="@(_days == days)"
-                            @onclick="() => ChoosePeriodAsync(days)">Last @days days</button>
+                            @onclick="() => ChoosePeriodAsync(days)">@L["Last {0} days", days]</button>
                 }
             </div>
         </div>
         @if (_times is null)
         {
-            <p class="text-muted small">Loading…</p>
+            <p class="text-muted small">@L["Loading…"]</p>
         }
         else if (_times.Total is not { } total)
         {
-            <p class="text-muted small">No calls in the last @_days days.</p>
+            <p class="text-muted small">@L["No calls in the last {0} days.", _days]</p>
         }
         else
         {
@@ -156,8 +155,8 @@ else
                 <table class="table table-sm align-middle mb-0">
                     <thead>
                         <tr>
-                            <th>Line</th><th>Call</th><th class="inv-num">Calls</th><th class="inv-num">Escalated</th><th class="inv-num">Answered in, on average</th>
-                            <th class="inv-num">Longest</th><th class="inv-num">Resolved in, on average</th><th class="inv-num">Not resolved</th>
+                            <th>@L["Line"]</th><th>@L["Call"]</th><th class="inv-num">@L["Calls"]</th><th class="inv-num">@L["Escalated"]</th><th class="inv-num">@L["Answered in, on average"]</th>
+                            <th class="inv-num">@L["Longest"]</th><th class="inv-num">@L["Resolved in, on average"]</th><th class="inv-num">@L["Not resolved"]</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -171,21 +170,21 @@ else
                         }
                     </tbody>
                     <tfoot>
-                        <tr class="fw-semibold"><td colspan="2">All calls</td>@TimesCells(total)</tr>
+                        <tr class="fw-semibold"><td colspan="2">@L["All calls"]</td>@TimesCells(total)</tr>
                     </tfoot>
                 </table>
             </div>
-            <h3 class="h6 small text-muted">Longest waits</h3>
+            <h3 class="h6 small text-muted">@L["Longest waits"]</h3>
             <div class="table-panel">
                 <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Line</th><th>Call</th><th>Called</th><th class="inv-num">Waited</th><th>Answered by</th><th>What was done</th></tr></thead>
+                    <thead><tr><th>@L["Line"]</th><th>@L["Call"]</th><th>@L["Called"]</th><th class="inv-num">@L["Waited"]</th><th>@L["Answered by"]</th><th>@L["What was done"]</th></tr></thead>
                     <tbody>
                         @foreach (var c in _times.Slowest)
                         {
                             <tr @key="c.Id">
                                 <td class="fw-semibold">@c.LineCode</td>
                                 <td>@c.TypeName@if (c.Note is { } note) {<div class="small text-muted">@note</div>}</td>
-                                <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(c)</div></td>
+                                <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(L, c)</div></td>
                                 <td class="inv-num @(c.WaitedSeconds >= c.EscalateAfterMinutes * 60 ? "text-danger fw-semibold" : "")">@AndonCallView.Time(c.WaitedSeconds)@(c.AcknowledgedAt is null ? ", still waiting" : "")</td>
                                 <td class="small">@(c.AcknowledgedByName ?? c.AcknowledgedBy ?? "—")</td>
                                 <td class="small">@(c.Resolution ?? (c.ResolvedAt is null ? "not resolved" : "—"))</td>
@@ -336,14 +335,14 @@ else
     private Task AcknowledgeAsync(AndonCallDto call) => ActAsync(async () =>
     {
         await Api.AcknowledgeAndonCallAsync(call.Id);
-        return $"You're on the {call.TypeName} call on {call.LineCode}.";
+        return L["You're on the {0} call on {1}.", call.TypeName, call.LineCode];
     });
 
     private Task ResolveAsync() => _resolving is not { } call ? Task.CompletedTask : ActAsync(async () =>
     {
         await Api.ResolveAndonCallAsync(call.Id, new ResolveAndonCallRequest { Resolution = _resolution });
         _resolving = null;
-        return $"The {call.TypeName} call on {call.LineCode} is resolved.";
+        return L["The {0} call on {1} is resolved.", call.TypeName, call.LineCode];
     });
 
     private async Task ActAsync(Func<Task<string>> action)

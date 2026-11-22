@@ -7,30 +7,30 @@
     <ProblemAlert Error="_error" />
     <div class="row g-2">
         <div class="col-12">
-            <label class="form-label small" for="stop-reason-@JobId">@(Complete ? "Why did it stop short? (optional)" : "Why is it stopping?") @(NeedsReason ? "(required)" : "")</label>
+            <label class="form-label small" for="stop-reason-@JobId">@(Complete ? L["Why did it stop short? (optional)"] : L["Why is it stopping?"]) @(NeedsReason ? L["(required)"] : "")</label>
             <ReasonPicker Id="@($"stop-reason-{JobId}")" Reasons="_reasons" SelectClass="form-select-sm"
                           Value="@(_reasonId == Guid.Empty ? null : _reasonId)" ValueChanged="v => _reasonId = v ?? Guid.Empty"
-                          Placeholder="@(NeedsReason ? "Choose a reason…" : "No reason")" NoneLabel="@(NeedsReason ? null : "No reason")"
-                          AriaLabel="@(Complete ? "Why did it stop short?" : "Why is it stopping?")" />
+                          Placeholder="@(NeedsReason ? L["Choose a reason…"] : L["No reason"])" NoneLabel="@(NeedsReason ? null : L["No reason"])"
+                          AriaLabel="@(Complete ? L["Why did it stop short?"] : L["Why is it stopping?"])" />
         </div>
         @if (BatchSize is not null)
         {
             <div class="col-12">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" id="stop-partial-@JobId" @bind="_hasPartial" />
-                    <label class="form-check-label small" for="stop-partial-@JobId">A batch was in progress: report it as a partial batch</label>
+                    <label class="form-check-label small" for="stop-partial-@JobId">@L["A batch was in progress: report it as a partial batch"]</label>
                 </div>
             </div>
             @if (_hasPartial)
             {
                 <div class="col-4">
-                    <label class="form-label small" for="stop-qty-@JobId">Quantity, @BaseUomCode</label>
+                    <label class="form-label small" for="stop-qty-@JobId">@L["Quantity, {0}", BaseUomCode]</label>
                     <input id="stop-qty-@JobId" type="number" inputmode="decimal" min="0" step="any" class="form-control form-control-sm" @bind="_quantity" @bind:event="oninput" />
                 </div>
                 <div class="col-8">
-                    <label class="form-label small" for="stop-loc-@JobId">Goes to</label>
+                    <label class="form-label small" for="stop-loc-@JobId">@L["Goes to"]</label>
                     <select id="stop-loc-@JobId" class="form-select form-select-sm" @bind="_locationId">
-                        <option value="@Guid.Empty">Choose a location…</option>
+                        <option value="@Guid.Empty">@L["Choose a location…"]</option>
                         @foreach (var l in _locations)
                         {
                             <option value="@l.Id">@l.Code · @l.Name</option>
@@ -38,19 +38,19 @@
                     </select>
                 </div>
                 <div class="col-12 small text-muted">
-                    Less than a batch of @FloorView.Qty(BatchSize) @BaseUomCode.
-                    @(BatchRule == "exact" ? "It goes into a lot of its own, on hold until someone approves it: it can't be sold as a partial." : "It is accepted: it will be used.")
+                    @L["Less than a batch of {0} {1}.", FloorView.Qty(BatchSize), BaseUomCode]
+                    @(BatchRule == "exact" ? L["It goes into a lot of its own, on hold until someone approves it: it can't be sold as a partial."] : L["It is accepted: it will be used."])
                 </div>
             }
         }
         <div class="col-12">
-            <label class="form-label small" for="stop-comment-@JobId">Comment</label>
+            <label class="form-label small" for="stop-comment-@JobId">@L["Comment"]</label>
             <input id="stop-comment-@JobId" class="form-control form-control-sm" maxlength="1000" @bind="_comment" />
         </div>
     </div>
     <div class="d-flex gap-2 mt-2 form-actions">
-        <button type="button" class="btn btn-sm btn-primary" disabled="@(!CanSubmit)" @onclick="SubmitAsync">@(Complete ? "Complete" : "Pause")</button>
-        <button type="button" class="btn btn-sm btn-link" @onclick="OnCancel">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" disabled="@(!CanSubmit)" @onclick="SubmitAsync">@(Complete ? L["Complete"] : L["Pause"])</button>
+        <button type="button" class="btn btn-sm btn-link" @onclick="OnCancel">@L["Cancel"]</button>
     </div>
 </div>
 

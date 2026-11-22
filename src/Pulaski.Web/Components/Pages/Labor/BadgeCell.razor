@@ -34,7 +34,7 @@ else
 }
 @if (_error is not null)
 {
-    <div class="small text-danger">@(_error.Detail ?? _error.Title)</div>
+    <div class="small text-danger">@L.Problem(_error)</div>
 }
 
 @code {
