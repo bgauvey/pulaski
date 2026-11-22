@@ -96,6 +96,7 @@ CREATE TABLE core.equipment (
     micro_stop_threshold    interval NOT NULL DEFAULT interval '5 minutes',
     production_counter_equipment_id uuid REFERENCES core.equipment(id), -- where a line's output is counted (#27): itself or a machine below; null = found
     time_zone               text,                                   -- IANA zone, required on sites
+    output_location_id      uuid REFERENCES core.equipment(id),     -- a line's default location for good output, prefilled on reports (#122)
     is_active               boolean NOT NULL DEFAULT true,
     created_at              timestamptz NOT NULL DEFAULT now(),
     updated_at              timestamptz NOT NULL DEFAULT now(),
@@ -1346,6 +1347,9 @@ CREATE TABLE core.label_printer (
         WHEN 'drop_folder' THEN drop_folder IS NOT NULL AND host IS NULL AND port IS NULL AND endpoint_url IS NULL AND template_set IS NOT NULL
         ELSE endpoint_url IS NOT NULL AND btxml_template IS NOT NULL AND host IS NULL AND port IS NULL AND drop_folder IS NULL END)
 );
+
+-- The printer a line's lots' labels print on once a lot is closed (#122); after core.label_printer, which comes later than core.equipment.
+ALTER TABLE core.equipment ADD COLUMN label_printer_id uuid REFERENCES core.label_printer(id);
 
 -- A site's labels (#75): the format, its GS1 company prefix and the next SSCC serial (locked to give one out), and its default printer.
 CREATE TABLE core.label_settings (
@@ -2705,7 +2709,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0069_lot_cutting'),
     ('0070_andon'),
     ('0071_alert_subscriptions'),
-    ('0072_bartender_printers');
+    ('0072_bartender_printers'),
+    ('0073_line_output');
 
 -- =====================================================================
 -- 17. SEED DATA

@@ -299,6 +299,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     // Machine data (D-050)
 
+    /// <summary>A line's report defaults (#122): its default output location and lot label printer.</summary>
+    public Task<VersionResponse> SetLineOutputAsync(Guid equipmentId, SetLineOutputRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/output", request, ct);
+
     public Task<VersionResponse> SetEquipmentMachineDataAsync(Guid equipmentId, SetEquipmentMachineDataRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/equipment/{equipmentId}/machine-data", request, ct);
 

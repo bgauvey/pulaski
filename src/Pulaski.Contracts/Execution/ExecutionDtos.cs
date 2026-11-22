@@ -131,6 +131,12 @@ public sealed record JobExecutionDto
 
     /// <summary>The lots its reports are filling on the line, one per location, when the line fills lots (D-104).</summary>
     public IReadOnlyList<FillingLotDto> FillingLots { get; init; } = [];
+
+    /// <summary>The line's default location for good output (#122), prefilled on its reports; null asks each time.</summary>
+    public Guid? DefaultLocationId { get; init; }
+
+    /// <summary>The line's label printer (#122): closed lots' labels print there by themselves; null when it has none.</summary>
+    public string? LabelPrinterCode { get; init; }
 }
 
 /// <summary>A lot a job's reports are filling (D-104): how much it holds, in the base unit, and since when.</summary>
@@ -359,7 +365,11 @@ public sealed record ReportProductionRequest
 }
 
 /// <summary>The lots closed by starting a new lot (D-104).</summary>
-public sealed record StartNewLotResponse(Guid JobId, IReadOnlyList<string> ClosedLots);
+public sealed record StartNewLotResponse(Guid JobId, IReadOnlyList<string> ClosedLots)
+{
+    /// <summary>What printing their labels on the line's printer did (#122).</summary>
+    public IReadOnlyList<string> Notes { get; init; } = [];
+}
 
 /// <summary>Start a new lot (D-104): closes the one the job is filling.</summary>
 public sealed record StartNewLotRequest
@@ -437,6 +447,15 @@ public sealed record ReportProductionResponse
     /// <summary>Every lot the report made: one per good batch for a batch material.</summary>
     public IReadOnlyList<LotTransactionResponse> Lots { get; init; } = [];
     public IReadOnlyList<InventoryWarningDto> Warnings { get; init; } = [];
+
+    /// <summary>The line it was reported on.</summary>
+    public Guid LineId { get; init; }
+
+    /// <summary>
+    /// The lots the report finished (#122): every lot it made, on a line that makes a lot per report; on one that fills lots (D-104), those it
+    /// filled to their size and the one it found closed by age or shift. Their labels print on the line's printer.
+    /// </summary>
+    public IReadOnlyList<Guid> ClosedLotIds { get; init; } = [];
 }
 
 /// <summary>A site's tolerances for production reporting (D-035).</summary>
@@ -520,4 +539,12 @@ public sealed record ShiftProductionJobDto
     public decimal RunGoodQty { get; init; }
     public decimal RunScrapQty { get; init; }
     public bool MatchesRuns { get; init; }
+}
+
+/// <summary>A line's report defaults (#122): where its good output goes unless a report says otherwise, and its lots' label printer.</summary>
+public sealed record SetLineOutputRequest
+{
+    public long Version { get; init; }
+    public Guid? OutputLocationId { get; init; }
+    public Guid? LabelPrinterId { get; init; }
 }

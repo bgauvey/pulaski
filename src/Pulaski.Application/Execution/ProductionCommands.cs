@@ -130,7 +130,8 @@ internal sealed class ReportProductionHandler(
     ILineBatchSizes? lineBatches = null,
     IFeedRepository? feeds = null,
     IAllocationRepository? allocations = null,
-    ILotFillingStore? lotFilling = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
+    ILotFillingStore? lotFilling = null,
+    ILineLabels? labels = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
 {
     public async Task<ReportProductionResponse> HandleAsync(ReportProductionCommand command, CancellationToken cancellationToken)
     {
@@ -138,7 +139,7 @@ internal sealed class ReportProductionHandler(
         var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations, lotFilling)
             .ReportAsync(command, onStop: false, timeProvider.GetUtcNow(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return result;
+        return await LineLabelNotes.AddAsync(labels, result, cancellationToken);
     }
 }
 
@@ -304,6 +305,7 @@ internal sealed class ProductionReporter(
             ? await LotFilling.PlanAsync(lotFilling, inventory, job, material, run.EquipmentId, command.LocationId!.Value,
                 converter.Convert(goodEntered, unit, material.BaseUomId), occurredAt, cancellationToken)
             : null;
+        var closed = new List<Guid>();
         if (filled is { } plan)
         {
             foreach (var part in plan.Parts)
@@ -312,6 +314,10 @@ internal sealed class ProductionReporter(
             }
 
             warnings.AddRange(plan.Notes);
+
+            // Finished (#122): the lot it found closed by age or shift, and those it filled to their size.
+            closed.AddRange(plan.CutLotId is { } cut ? [cut] : []);
+            closed.AddRange(plan.Size is { } size ? lots.Where(l => l.Quantity >= size).Select(l => l.LotId) : []);
         }
 
         var outputs = filled is not null ? [] : lineBatching is null
@@ -330,6 +336,11 @@ internal sealed class ProductionReporter(
         }
 
         warnings.AddRange(lots.SelectMany(l => l.Warnings));
+        if (filled is null)
+        {
+            // A lot per report, or per batch: each is finished as it is made (#122); a balance (D-031) never is.
+            closed.AddRange(lots.Where(l => l.LotNumber is not null).Select(l => l.LotId));
+        }
 
         // Components taken automatically (#33): backflushed, or shared among the lots loaded at the line's feed points while it was made.
         if (feeds is not null)
@@ -347,6 +358,8 @@ internal sealed class ProductionReporter(
             Lot = lots.FirstOrDefault(),
             Lots = lots,
             Warnings = warnings,
+            LineId = run.EquipmentId,
+            ClosedLotIds = [.. closed.Distinct()],
         };
     }
 
@@ -429,5 +442,20 @@ internal sealed class ProductionReporter(
             holdEvent.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(holdEvent, cancellationToken);
         return new("partial_batch_pending", $"Partial batch on hold for approval: {label}, in lot {held.LotNumber}. {material.Code} is sold in whole batches only.");
+    }
+}
+
+/// <summary>Prints the labels of the lots a report finished (#122), after it committed, adding what happened to its warnings.</summary>
+internal static class LineLabelNotes
+{
+    public static async Task<ReportProductionResponse> AddAsync(ILineLabels? labels, ReportProductionResponse result, CancellationToken cancellationToken)
+    {
+        if (labels is null || result.ClosedLotIds.Count == 0)
+        {
+            return result;
+        }
+
+        var printed = await labels.PrintClosedLotsAsync(result.LineId, result.ClosedLotIds, cancellationToken);
+        return printed.Count == 0 ? result : result with { Warnings = [.. result.Warnings, .. printed] };
     }
 }

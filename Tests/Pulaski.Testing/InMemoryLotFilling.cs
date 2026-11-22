@@ -21,15 +21,15 @@ public sealed class InMemoryLotFilling : ILotFillingStore
 
     public Task<EquipmentShifts?> GetShiftsAsync(Guid lineId, CancellationToken cancellationToken) => Task.FromResult<EquipmentShifts?>(null);
 
-    public Task<IReadOnlyList<string>> CloseOpenLotsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<ClosedLot>> CloseOpenLotsAsync(Guid jobId, DateTimeOffset at, CancellationToken cancellationToken)
     {
-        var closed = OpenLots.Where(o => o.Key.Job == jobId).Select(o => o.Value.LotNumber).Order(StringComparer.Ordinal).ToList();
+        var closed = OpenLots.Where(o => o.Key.Job == jobId).Select(o => new ClosedLot(o.Value.LotId, o.Value.LotNumber)).OrderBy(l => l.LotNumber, StringComparer.Ordinal).ToList();
         foreach (var key in OpenLots.Keys.Where(k => k.Job == jobId).ToList())
         {
             OpenLots.Remove(key);
         }
 
-        Closed.AddRange(closed);
-        return Task.FromResult<IReadOnlyList<string>>(closed);
+        Closed.AddRange(closed.Select(l => l.LotNumber));
+        return Task.FromResult<IReadOnlyList<ClosedLot>>(closed);
     }
 }

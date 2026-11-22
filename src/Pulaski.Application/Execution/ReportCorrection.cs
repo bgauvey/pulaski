@@ -41,7 +41,8 @@ internal sealed class CorrectProductionReportHandler(
     ILineBatchSizes? lineBatches = null,
     IFeedRepository? feeds = null,
     IAllocationRepository? allocations = null,
-    ILotFillingStore? lotFilling = null) : ICommandHandler<CorrectProductionReportCommand, CorrectProductionResponse>
+    ILotFillingStore? lotFilling = null,
+    ILineLabels? labels = null) : ICommandHandler<CorrectProductionReportCommand, CorrectProductionResponse>
 {
     public async Task<CorrectProductionResponse> HandleAsync(CorrectProductionReportCommand command, CancellationToken cancellationToken)
     {
@@ -107,6 +108,7 @@ internal sealed class CorrectProductionReportHandler(
                 }),
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        reported = await LineLabelNotes.AddAsync(labels, reported, cancellationToken);
 
         return new CorrectProductionResponse
         {

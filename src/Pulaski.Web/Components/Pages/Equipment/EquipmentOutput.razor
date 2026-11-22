@@ -1,0 +1,105 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* A line's report defaults (#122, D-111): where its good output goes unless a report says otherwise, and the printer its lots' labels print
+   on once a lot is closed. *@
+<section class="equipment-quals mt-3" aria-labelledby="output-@Equipment.Id">
+    <h2 class="h6 mb-1" id="output-@Equipment.Id">Production reports</h2>
+    <ProblemAlert Error="_error" />
+    @if (_message is { } message)
+    {
+        <div class="small text-success mb-1" role="status">@message</div>
+    }
+    <div class="row g-2 align-items-end">
+        <div class="col-12">
+            <label class="form-label small mb-0" for="out-loc-@Equipment.Id">Good output goes to</label>
+            <select id="out-loc-@Equipment.Id" class="form-select form-select-sm" disabled="@(!CanChange || _busy)" @bind="_locationId">
+                <option value="@Guid.Empty">Ask on each report</option>
+                @foreach (var l in _locations)
+                {
+                    <option value="@l.Id">@l.Code · @l.Name</option>
+                }
+            </select>
+            <div class="form-text">Prefilled on @Equipment.Code's reports; the lot being filled's location comes first.</div>
+        </div>
+        <div class="col-12">
+            <label class="form-label small mb-0" for="out-prn-@Equipment.Id">Print lot labels on</label>
+            <select id="out-prn-@Equipment.Id" class="form-select form-select-sm" disabled="@(!CanChange || _busy)" @bind="_printerId">
+                <option value="@Guid.Empty">Don't print them</option>
+                @foreach (var p in _printers)
+                {
+                    <option value="@p.Id">@p.Code · @p.Name</option>
+                }
+            </select>
+            <div class="form-text">Each lot's label prints once the lot is closed: at once for a lot per report, when it is full or its age or shift ends, at Start a new lot, or when the job completes.</div>
+        </div>
+        @if (CanChange)
+        {
+            <div class="col-12">
+                <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || !Changed)" @onclick="SaveAsync">Save</button>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public EquipmentDto Equipment { get; set; } = default!;
+
+    /// <summary>Tells the page the equipment changed, so it reloads it (its version moved on).</summary>
+    [Parameter] public EventCallback Saved { get; set; }
+
+    private IReadOnlyList<InventoryLocationDto> _locations = [];
+    private IReadOnlyList<LabelPrinterDto> _printers = [];
+    private Guid _locationId;
+    private Guid _printerId;
+    private bool _busy;
+    private string? _message;
+    private ApiException? _error;
+
+    private bool CanChange => User.Can(PermissionCodes.Equipment, Equipment.SiteId);
+
+    private bool Changed => _locationId != (Equipment.OutputLocationId ?? Guid.Empty) || _printerId != (Equipment.LabelPrinterId ?? Guid.Empty);
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_locationId, _printerId) = (Equipment.OutputLocationId ?? Guid.Empty, Equipment.LabelPrinterId ?? Guid.Empty);
+        if (Equipment.SiteId is not { } site)
+        {
+            return;
+        }
+
+        try
+        {
+            _locations = [.. (await Api.ListInventoryLocationsAsync(site)).Where(l => l.IsActive || l.Id == Equipment.OutputLocationId)];
+            _printers = [.. (await Api.GetLabelSetupAsync(site)).Printers.Where(p => p.IsActive || p.Id == Equipment.LabelPrinterId)];
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        (_busy, _error, _message) = (true, null, null);
+        try
+        {
+            await Api.SetLineOutputAsync(Equipment.Id, new SetLineOutputRequest
+            {
+                Version = Equipment.Version,
+                OutputLocationId = _locationId == Guid.Empty ? null : _locationId,
+                LabelPrinterId = _printerId == Guid.Empty ? null : _printerId,
+            });
+            _message = "Saved.";
+            await Saved.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

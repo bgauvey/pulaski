@@ -109,7 +109,8 @@ internal sealed class GetStationHandler(
             Machine = job.BatchSize is null ? await machine.HandleAsync(new GetMachineCountsQuery(jobId, null), cancellationToken) : null,
             Locations = places,
             ScrapReasons = await reasons.HandleAsync(new ListReasonCodesQuery("scrap", siteId), cancellationToken),
-            DefaultLocationId = places.FirstOrDefault(l => l.Code == filling)?.Id,
+            // The lot being filled's location, else the line's default output location (#122).
+            DefaultLocationId = (places.FirstOrDefault(l => l.Code == filling) ?? places.FirstOrDefault(l => l.Id == job.DefaultLocationId))?.Id,
         };
     }
 }

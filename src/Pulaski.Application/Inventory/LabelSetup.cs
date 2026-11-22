@@ -47,6 +47,9 @@ public interface ILabelReadStore
 
     Task<LabelPrinterDto?> GetPrinterAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>The label printer a line's lots print on (#122), and the line's code; a null printer when it has none.</summary>
+    Task<(string LineCode, LabelPrinterDto? Printer)?> GetLinePrinterAsync(Guid lineId, CancellationToken cancellationToken);
+
     /// <summary>The site's active supplier formats, in the order they are tried.</summary>
     Task<IReadOnlyList<SupplierFormat>> ListActiveFormatsAsync(Guid siteId, CancellationToken cancellationToken);
 }

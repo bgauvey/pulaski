@@ -3002,6 +3002,26 @@ being printed. A drop folder (D-080) works but gives no answer back.
   user and password, extra headers such as an API key) are in `Labels:BarTender:<printer code>`, never in the database.
 
 
+### D-111 · Report defaults and labels printed when a lot closes (#122) · *Proposed*
+
+**Context.** Every report asked where good output goes, and labels were printed as a separate step.
+
+**Decision.**
+- **A line keeps defaults** (`core.equipment.output_location_id`, `label_printer_id`; `SetLineOutputCommand`, `PUT /api/equipment/{id}/output`,
+  `equipment.manage`; the equipment page's *Production reports* part). The job read carries them (`JobExecutionDto.DefaultLocationId`,
+  `LabelPrinterCode`); forms prefill the location of the lot being filled, else the line's (`ReportDefaults.Location`, the station alike).
+  Per line only; a per-material override on the capability is left for later.
+- **A lot's label prints once the lot is closed** (chosen over printing when it starts or after every report, so the label carries the final
+  quantity). The reporter lists the lots a report closed (`ReportProductionResponse.ClosedLotIds`, `LineId`): every numbered lot it made where
+  lots aren't filled; where they are (D-104), those filled to their size and the open lot it found cut by age or shift (`FillPlan.CutLotId`).
+  `StartNewLotCommand` closes as before; **completing a job now also closes the lots it was filling** (`CloseOpenLotsAsync`, returning
+  `ClosedLot`s). A partial batch reported at pause or complete is closed when made.
+- **Printing happens after the command commits**, in the handlers (report, correction, pause, complete, start new lot), through the port
+  `ILineLabels` (`NoLineLabels` outside the API; `LineLabels` in the API): the line's active printer, the lot labels as for printing by hand, the
+  BarTender operation `lot.produced` (D-110). It never fails the command: what happened is a note (`label_printed`, `label_not_printed`).
+
+## Application architecture
+
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
 
 ```

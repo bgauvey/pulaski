@@ -26,6 +26,7 @@ builder.Services.AddSingleton<LabelTemplates>();
 builder.Services.AddSingleton<LabelPrinting>();
 builder.Services.AddHttpClient(LabelPrinting.BarTenderClient, client => client.Timeout = TimeSpan.FromSeconds(120));
 builder.Services.AddScoped<LabelBuilder>();
+builder.Services.AddScoped<Pulaski.Application.Execution.ILineLabels, LineLabels>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IRequestContext, HttpRequestContext>();

@@ -332,6 +332,10 @@ else
                                         {
                                             <div class="form-text">@hint</div>
                                         }
+                                        @if (ReportDefaults.LabelHint(job) is { } labelHint)
+                                        {
+                                            <div class="form-text">@labelHint</div>
+                                        }
                                     </div>
                                     <div class="col-12">
                                         <label class="form-label" for="station-report-comment">Comment</label>
