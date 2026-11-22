@@ -1,0 +1,141 @@
+Add a language
+Added {0}. Translate its terms, or import them from a file.
+Administrators and service accounts:
+All
+An unhandled error has occurred.
+Andon
+Andon: calls for help from the lines
+At least 10 characters, with two of: lower case, upper case, digits, symbols. Not your user name.
+BOMs
+Back to Pulaski
+Bills of materials
+Change a translation first.
+Change password
+Change your password
+Changeover mode, reporting tolerances, OEE targets, planning rates, holidays and shutdowns
+Changeover rules: how long each change of material takes
+Changeovers
+Code
+Configure
+Current password
+Dates and numbers look like this: {0} · {1}
+Dismiss
+Edge nodes
+Edge nodes: connections and tags that collect machine data
+English
+Enter your user name and password.
+Equipment
+Every term is translated.
+Export CSV
+Floor
+Floor: run jobs and report production
+Forgotten your password?
+Forgotten your password? Ask an administrator to reset it.
+Give the language's code and name.
+Go to the start
+Handover
+Import
+Inbox
+Inbox: what waits for you to decide
+Integrations
+Integrations: events sent to the ERP and failed deliveries
+Inventory
+Keep the placeholders {0}, {1}… of the English where they are: they stand for the values shown.
+Labor
+Labor: who is on, shift review and reports
+Language
+Language and region
+Languages
+Languages and their translations
+Loading…
+Machine profiles
+Machine profiles: state values and stop codes
+Machines
+Machines: live state and stops to code
+Main
+Material specifications and quality characteristics
+Materials
+Materials and classes
+My alerts
+My alerts: e-mails when something needs you
+Name
+New password
+New password again
+No term matches.
+Not found
+Nothing to change.
+Nothing to see here yet
+Offered
+Only English so far; add a language below.
+Operate
+Or with a Pulaski password:
+Overview
+Page not found
+Password
+People
+People and crews
+Planning rates
+Planning rates from run history proposed for review
+Pre-alpha
+Processes
+Pulaski's translation
+Quality
+Quality results: record and review what was measured or inspected
+Reason codes
+Reasons
+Region
+Reload
+Save
+Save changes ({0})
+Schedule
+Search
+Search terms
+Shift handover: notes and open items per line
+Shift schedules
+Shifts
+Shop-floor terminals for badging
+Show
+Showing {0} of {1}; search to narrow them.
+Sign in
+Sign in with {0}
+Sign out
+Site settings
+Specifications
+Switch light or dark theme
+Switch off
+Switch on
+Switch the touch layout on or off
+Switched off
+Switched off {0}; whoever chose it sees English.
+Switched {0} on again.
+Terminals
+That file is larger than 5 MB.
+The language Pulaski's screens show you, and how they write dates and numbers.
+The language's usual
+The languages Pulaski's screens can show, and their translations. Where a term has none, it shows in English.
+The two new passwords don't match.
+There's nothing here, or nothing you can see. Check the address, or use the menu.
+Toggle navigation
+Touch layout: larger buttons and fields for a touch screen
+Translated
+Translation of: {0}
+Translations
+Translations file
+Translations imported: {0}.
+Translations saved: {0}.
+Units
+Units and conversions
+Untranslated
+User name
+Users
+Users, roles and permissions
+Where a screen has no translation yet, it shows in English.
+Work orders
+Would change: {0}. Unchanged: {1}.
+Yes
+You signed in with a temporary password. Choose your own before you carry on.
+Your roles don't let you see any screens in Pulaski yet. Ask an administrator to give you a role that does, then sign in again.
+Your session ended. Sign in again to carry on.
+{0} of {1}
+{0} waiting
+{0}: translations

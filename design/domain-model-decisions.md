@@ -3047,6 +3047,30 @@ minute and on navigation. Deciding stays on the pages that own it.
 - **Permission** `handover.write` (Operator, Supervisor, Quality; implies `floor.view`) to write and close: `POST /api/handover/entries`,
   `/entries/{id}/close`.
 
+### D-114 · Languages (#128) · *Proposed, in pieces*
+
+**Context.** The screens were English, written in the markup. Plants with operators in other languages couldn't use them. The process was to
+be one a plant runs itself (add a language, translate, import), not a release per change; it is built from general localization practice.
+
+**Decision.**
+- **The English text is the key.** The web wraps text in `L["…"]` (the scoped `Text` service, injected into every component; values with
+  `L[term, …]`, formatted in the reader's region) or marks text kept in code with `Term.Mark("…")`. `TermExtractor` finds them; the catalog
+  (`Pulaski.Contracts/Localization/terms.txt`, embedded, `TermCatalog`) is exactly those, kept so by a test (`PULASKI_UPDATE_TERMS=1` rewrites it).
+- **Translations are data** (`core.language`, `core.translation`, never deleted; cleared = null): kept on Configure → Languages
+  (`languages.manage`, administrators until a role is given it): add a language, edit, export/import CSV (`term,translation`, all or nothing,
+  dry run), untranslated terms. Only catalog terms, and a translation must keep its term's placeholders (`LanguageRules.KeepsPlaceholders`).
+- **Shipped starter translations** (`Localization/Shipped/{code}.csv` in Application, `ShippedTranslations`): added at API start; a shipped
+  text is updated by a later release only while `is_shipped` (never edited here). Spanish ships, for review by a native speaker; a test keeps
+  it complete for the catalog.
+- **Who sees what:** each user's `language` and `region` (Preferences page, `PUT /api/me/preferences`, on `MeDto`); the web keeps them in
+  ASP.NET Core's culture cookie (set at sign-in and on change through `/account/culture`), UI culture = language, culture = region. Without a
+  choice the culture is invariant, so formats stay as before; the sign-in page follows the browser. Each terminal has its own (`sec.terminal`),
+  applied on its pages whoever badges in. `GET /api/translations/{code}` is open (no secret in translations); the web caches each language
+  for a minute (`TranslationCache`, its own HTTP client).
+- **Regional formats** follow the culture in the shared helpers (`Display.SiteTime`, quantities and percentages) and, screen by screen, as
+  they are translated.
+- **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens and API message codes; #175 office screens.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

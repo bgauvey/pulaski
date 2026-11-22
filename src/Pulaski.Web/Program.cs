@@ -32,6 +32,13 @@ builder.Services.AddScoped<Downloads>();
 builder.Services.AddScoped<Pulaski.Web.Services.Inventory.LabelPrinters>();
 builder.Services.AddScoped<ApiSession>();
 builder.Services.AddScoped<CurrentUser>();
+builder.Services.AddSingleton<Pulaski.Web.Services.Localization.TranslationCache>();
+builder.Services.AddHttpClient(Pulaski.Web.Services.Localization.TranslationCache.Client, client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddScoped<Pulaski.Web.Services.Localization.Text>();
 builder.Services.AddHttpClient<PulaskiApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
 
 var app = builder.Build();
@@ -43,6 +50,9 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+
+// The reader's language and region (#128): the culture cookie, else the browser's languages.
+app.UseRequestLocalization(Pulaski.Web.Services.Localization.Cultures.Options());
 app.UseHttpsRedirection();
 
 app.UseAuthentication();

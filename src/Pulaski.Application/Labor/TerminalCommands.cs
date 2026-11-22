@@ -11,7 +11,8 @@ namespace Pulaski.Application.Labor;
 
 /// <summary>A shop-floor terminal as the commands see it (D-049).</summary>
 public sealed record TerminalRecord(
-    Guid Id, Guid SiteId, string Code, string Name, Guid ScopeEquipmentId, Guid? DefaultEquipmentId, string AuthMode, bool IsActive, DateTimeOffset? EnrolledAt)
+    Guid Id, Guid SiteId, string Code, string Name, Guid ScopeEquipmentId, Guid? DefaultEquipmentId, string AuthMode, bool IsActive, DateTimeOffset? EnrolledAt,
+    string? Language = null, string? Region = null)
 {
     /// <summary>The actor its labor is recorded by, as on events and <c>recorded_by</c>.</summary>
     public string ActorId => $"terminal:{Code}";
@@ -75,11 +76,21 @@ public interface ITerminalReadStore
 }
 
 /// <summary>Registers a terminal for a site, area or line (D-049); it works once enrolled.</summary>
-public sealed record CreateTerminalCommand(string Code, string Name, Guid ScopeEquipmentId, Guid? DefaultEquipmentId, string AuthMode) : ICommand<CreatedResponse>;
+public sealed record CreateTerminalCommand(string Code, string Name, Guid ScopeEquipmentId, Guid? DefaultEquipmentId, string AuthMode) : ICommand<CreatedResponse>
+{
+    /// <summary>Its screens' language and region (#128); null: English and the site's usual formats.</summary>
+    public string? Language { get; init; }
+    public string? Region { get; init; }
+}
 
 /// <summary>Changes a terminal; switched off, its secret stops working at once.</summary>
 public sealed record UpdateTerminalCommand(Guid Id, long ExpectedVersion, string Name, Guid ScopeEquipmentId, Guid? DefaultEquipmentId, string AuthMode, bool IsActive)
-    : ICommand<VersionResponse>;
+    : ICommand<VersionResponse>
+{
+    /// <summary>Its screens' language and region (#128); null: English and the site's usual formats.</summary>
+    public string? Language { get; init; }
+    public string? Region { get; init; }
+}
 
 /// <summary>Issues a one-time enrolment code for a terminal, replacing any earlier one; enrolling with it replaces its secret.</summary>
 public sealed record IssueEnrolmentCodeCommand(Guid Id) : ICommand<EnrolmentCodeResponse>;
@@ -179,7 +190,8 @@ internal sealed class CreateTerminalHandler(
             throw new ConflictException($"The site already has a terminal {code}.");
         }
 
-        var terminal = new TerminalRecord(ids.NewId(), siteId, code, name, command.ScopeEquipmentId, command.DefaultEquipmentId, command.AuthMode, IsActive: true, null);
+        var terminal = new TerminalRecord(ids.NewId(), siteId, code, name, command.ScopeEquipmentId, command.DefaultEquipmentId, command.AuthMode, IsActive: true, null,
+            TerminalCulture.Language(command.Language), Localization.LanguageRules.Region(command.Region));
         var envelope = events.Create(EventTypes.TerminalCreated, "terminal", terminal.Id, new { After = terminal });
         var version = await terminals.InsertAsync(terminal, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -217,6 +229,8 @@ internal sealed class UpdateTerminalHandler(IUnitOfWork unitOfWork, ITerminalRep
             DefaultEquipmentId = command.DefaultEquipmentId,
             AuthMode = command.AuthMode,
             IsActive = command.IsActive,
+            Language = TerminalCulture.Language(command.Language),
+            Region = Localization.LanguageRules.Region(command.Region),
         };
         if (updated == current.Value)
         {
@@ -505,6 +519,8 @@ internal sealed class GetTerminalStatusHandler(ITerminalReadStore terminals, ILa
             TerminalCode = terminal.Code,
             TerminalName = terminal.Name,
             AuthMode = terminal.AuthMode,
+            Language = terminal.Language,
+            Region = terminal.Region,
             TimeZone = await labor.GetSiteTimeZoneAsync(terminal.SiteId, cancellationToken),
             DefaultEquipmentId = terminal.DefaultEquipmentId,
             Lines = await terminals.ListLinesAsync(terminal.Id, cancellationToken),
@@ -554,4 +570,11 @@ internal sealed class ListTerminalsHandler(ITerminalReadStore store) : IQueryHan
 internal sealed class ListBadgesHandler(ITerminalReadStore store) : IQueryHandler<ListBadgesQuery, IReadOnlyList<BadgeDto>>
 {
     public Task<IReadOnlyList<BadgeDto>> HandleAsync(ListBadgesQuery query, CancellationToken cancellationToken) => store.ListBadgesAsync(query.SiteId, cancellationToken);
+}
+
+/// <summary>A terminal's language (#128): a language code, null for English.</summary>
+internal static class TerminalCulture
+{
+    public static string? Language(string? language) =>
+        string.IsNullOrWhiteSpace(language) ? null : Localization.LanguageRules.Code(language) is var code && code == Localization.LanguageRules.English ? null : code;
 }

@@ -68,7 +68,7 @@ public static class FloorView
     }
 
     public static string Qty(decimal? value) =>
-        value is { } v ? Math.Round(v, 3).ToString("#,0.###", CultureInfo.InvariantCulture) : "—";
+        value is { } v ? Math.Round(v, 3).ToString("#,0.###", CultureInfo.CurrentCulture) : "—";
 }
 
 /// <summary>What can be done with a job right now.</summary>

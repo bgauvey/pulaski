@@ -179,6 +179,11 @@ else
         try
         {
             _board = await Api.GetLineDisplayAsync(secret, string.IsNullOrWhiteSpace(Line) ? null : Line.Trim());
+
+            // The board terminal's own language and region (#128).
+            Cultures.Apply(_board.Language, _board.Region);
+            L.Use(_board.Language);
+            await L.EnsureAsync();
         }
         catch (ApiException ex)
         {

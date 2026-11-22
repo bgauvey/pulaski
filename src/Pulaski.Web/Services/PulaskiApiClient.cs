@@ -1502,6 +1502,38 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> CloseHandoverItemAsync(Guid id, Pulaski.Contracts.Handover.CloseHandoverItemRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Post, $"api/handover/entries/{id}/close", request, ct);
 
+    public Task<IReadOnlyList<Pulaski.Contracts.Localization.LanguageDto>> ListLanguagesAsync(CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<Pulaski.Contracts.Localization.LanguageDto>>("api/languages", ct);
+
+    public Task<VersionResponse> AddLanguageAsync(Pulaski.Contracts.Localization.CreateLanguageRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, "api/languages", request, ct);
+
+    public Task<VersionResponse> UpdateLanguageAsync(string code, Pulaski.Contracts.Localization.UpdateLanguageRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/languages/{Uri.EscapeDataString(code)}", request, ct);
+
+    public Task<IReadOnlyList<Pulaski.Contracts.Localization.TranslationTermDto>> GetLanguageTermsAsync(string code, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<Pulaski.Contracts.Localization.TranslationTermDto>>($"api/languages/{Uri.EscapeDataString(code)}/terms", ct);
+
+    public Task<VersionResponse> SetTranslationsAsync(string code, Pulaski.Contracts.Localization.SetTranslationsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/languages/{Uri.EscapeDataString(code)}/translations", request, ct);
+
+    public Task<(byte[] Content, string ContentType, string FileName)> ExportTranslationsAsync(string code, CancellationToken ct = default) =>
+        GetFileAsync($"api/languages/{Uri.EscapeDataString(code)}/translations.csv", ct);
+
+    /// <summary>Checks (<paramref name="dryRun"/>) or imports a language's translations from CSV, all or nothing (#128).</summary>
+    public async Task<Pulaski.Contracts.Localization.ImportTranslationsResponse> ImportTranslationsAsync(string code, string csv, bool dryRun, CancellationToken ct = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"api/languages/{Uri.EscapeDataString(code)}/import?dryRun={(dryRun ? "true" : "false")}")
+        {
+            Content = new StringContent(csv, System.Text.Encoding.UTF8, "text/csv"),
+        };
+        using var response = await SendCoreAsync(request, ct);
+        return await ReadAsync<Pulaski.Contracts.Localization.ImportTranslationsResponse>(response, ct);
+    }
+
+    public Task<VersionResponse> SetPreferencesAsync(Pulaski.Contracts.Localization.PreferencesRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, "api/me/preferences", request, ct);
+
     /// <summary>What waits for the signed-in user to decide (#123).</summary>
     public Task<Pulaski.Contracts.Inbox.InboxDto> GetInboxAsync(CancellationToken ct = default) => GetAsync<Pulaski.Contracts.Inbox.InboxDto>("api/me/inbox", ct);
 

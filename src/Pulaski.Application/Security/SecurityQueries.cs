@@ -17,14 +17,17 @@ public sealed record ListRolesQuery : IQuery<IReadOnlyList<RoleDto>>;
 /// <summary>Every permission the code checks (D-037).</summary>
 public sealed record ListPermissionsQuery : IQuery<IReadOnlyList<PermissionDto>>;
 
-internal sealed class GetMeHandler(ISecurityReadStore store) : IQueryHandler<GetMeQuery, MeDto>
+internal sealed class GetMeHandler(ISecurityReadStore store, Localization.ILanguageReadStore languages) : IQueryHandler<GetMeQuery, MeDto>
 {
     public async Task<MeDto> HandleAsync(GetMeQuery query, CancellationToken cancellationToken)
     {
         var access = query.Access;
         var sites = await store.GetSiteCodesAsync([.. access.Grants.Where(g => g.SiteId is not null).Select(g => g.SiteId!.Value).Distinct()], cancellationToken);
+        var (language, region) = await languages.GetUserPreferencesAsync(access.UserId, cancellationToken);
         return new MeDto
         {
+            Language = language,
+            Region = region,
             Id = access.UserId,
             Username = access.Username,
             DisplayName = access.DisplayName,

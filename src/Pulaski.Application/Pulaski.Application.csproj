@@ -14,4 +14,9 @@
     <InternalsVisibleTo Include="Pulaski.Application.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Pulaski's starter translations (#128, D-114), added to the database at API start. -->
+    <EmbeddedResource Include="Localization\Shipped\*.csv" LogicalName="Pulaski.Localization.Shipped.%(Filename).csv" />
+  </ItemGroup>
+
 </Project>

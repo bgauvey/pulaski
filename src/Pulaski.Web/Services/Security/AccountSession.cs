@@ -17,8 +17,12 @@ public static class AccountSession
     public const string LoginPath = "/account/login";
     public const string PasswordPath = "/account/password";
 
-    public static Task SignInAsync(HttpContext http, SignInResponse session) =>
-        SignInAsync(http, session.Token, session.ExpiresAt, session.User.Id, session.User.Username, session.User.DisplayName, session.User.MustChangePassword);
+    public static Task SignInAsync(HttpContext http, SignInResponse session)
+    {
+        // Their screens in their language and region from the next page on (#128).
+        Localization.Cultures.Set(http, session.User.Language, session.User.Region);
+        return SignInAsync(http, session.Token, session.ExpiresAt, session.User.Id, session.User.Username, session.User.DisplayName, session.User.MustChangePassword);
+    }
 
     /// <summary>The same session, now that its temporary password has been replaced.</summary>
     public static async Task PasswordChangedAsync(HttpContext http)

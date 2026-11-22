@@ -58,9 +58,10 @@ public static class LineDisplayView
     public static int? Progress(LineDisplayJobDto job) =>
         job.PlannedQty is { } planned and > 0 ? (int)Math.Clamp(Math.Round(job.GoodQty / planned * 100), 0, 100) : null;
 
-    public static string Qty(decimal value) => Math.Round(value, 1).ToString("#,0.#", CultureInfo.InvariantCulture);
+    // In the reader's region (#128): the same as before unless they chose one.
+    public static string Qty(decimal value) => Math.Round(value, 1).ToString("#,0.#", CultureInfo.CurrentCulture);
 
-    public static string Pct(decimal? value) => value is { } v ? $"{Math.Round(v, 0).ToString(CultureInfo.InvariantCulture)}%" : "—";
+    public static string Pct(decimal? value) => value is { } v ? $"{Math.Round(v, 0).ToString(CultureInfo.CurrentCulture)}%" : "—";
 
     /// <summary>Below its target, OEE shows as a caution; without a target or a figure, as normal.</summary>
     public static bool BelowTarget(LineDisplayLineDto line) => line is { OeePct: { } oee, OeeTargetPct: { } target } && oee < target;

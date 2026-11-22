@@ -27,6 +27,13 @@ internal sealed partial class BootstrapAdministrator(IServiceScopeFactory scopes
             await transaction.CommitAsync(cancellationToken);
         }
 
+        // Pulaski's starter translations (#128): added, never over a plant's own.
+        var translations = await scope.ServiceProvider.GetRequiredService<Pulaski.Application.Localization.ShippedTranslations>().ApplyAsync(cancellationToken);
+        if (translations > 0)
+        {
+            LogTranslations(logger, translations);
+        }
+
         if (users > 0)
         {
             return;
@@ -54,6 +61,9 @@ internal sealed partial class BootstrapAdministrator(IServiceScopeFactory scopes
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "No users exist and Security:BootstrapAdmin:Password isn't set, so no one can sign in. Set it and restart.")]
     private static partial void LogNoAdministrator(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Added or updated {Count} shipped translations.")]
+    private static partial void LogTranslations(ILogger logger, int count);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Created the first administrator, '{Username}', with a temporary password from Security:BootstrapAdmin.")]
     private static partial void LogCreated(ILogger logger, string username);

@@ -32,14 +32,22 @@ internal static class TerminalEndpoints
 
         terminals.MapPost("/", async Task<Created<CreatedResponse>> (CreateTerminalRequest request, ICommandHandler<CreateTerminalCommand, CreatedResponse> handler, CancellationToken ct) =>
         {
-            var created = await handler.HandleAsync(new CreateTerminalCommand(request.Code, request.Name, request.ScopeEquipmentId, request.DefaultEquipmentId, request.AuthMode), ct);
+            var created = await handler.HandleAsync(new CreateTerminalCommand(request.Code, request.Name, request.ScopeEquipmentId, request.DefaultEquipmentId, request.AuthMode)
+            {
+                Language = request.Language,
+                Region = request.Region,
+            }, ct);
             return TypedResults.Created($"/api/terminals/{created.Id}", created);
         })
         .RequirePermission(Permissions.Terminals, Site.FromBody<CreateTerminalRequest>(SiteOf.Equipment, r => r.ScopeEquipmentId));
 
         terminals.MapPut("/{id:guid}", async Task<Ok<VersionResponse>> (Guid id, UpdateTerminalRequest request, ICommandHandler<UpdateTerminalCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new UpdateTerminalCommand(id, request.Version, request.Name, request.ScopeEquipmentId, request.DefaultEquipmentId,
-                request.AuthMode, request.IsActive), ct)))
+                request.AuthMode, request.IsActive)
+            {
+                Language = request.Language,
+                Region = request.Region,
+            }, ct)))
         .RequirePermission(Permissions.Terminals, Site.Of(SiteOf.Terminal));
 
         terminals.MapPost("/{id:guid}/enrolment-code", async Task<Ok<EnrolmentCodeResponse>> (Guid id, ICommandHandler<IssueEnrolmentCodeCommand, EnrolmentCodeResponse> handler, CancellationToken ct) =>
@@ -85,7 +93,8 @@ internal static class TerminalEndpoints
         terminal.MapGet("/board", async Task<Ok<LineDisplayDto>> (string? line, HttpContext http, IQueryHandler<GetLineDisplayQuery, LineDisplayDto> handler, CancellationToken ct) =>
         {
             var current = TerminalFilter.Current(http);
-            return TypedResults.Ok(await handler.HandleAsync(new GetLineDisplayQuery(current.SiteId, current.ScopeEquipmentId, current.Name, line), ct));
+            var board = await handler.HandleAsync(new GetLineDisplayQuery(current.SiteId, current.ScopeEquipmentId, current.Name, line), ct);
+            return TypedResults.Ok(board with { Language = current.Language, Region = current.Region });
         });
 
         // An operator station (#146): sign on by badge for StationIdle, then read the station by that ticket. An expired or foreign ticket

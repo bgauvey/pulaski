@@ -13,3 +13,8 @@
         @Body
     </main>
 </div>
+
+@code {
+    // The reader's language (#128): the culture cookie after a sign-in, else the browser's.
+    protected override Task OnInitializedAsync() => L.EnsureAsync();
+}

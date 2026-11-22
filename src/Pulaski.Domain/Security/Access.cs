@@ -63,6 +63,7 @@ public static class Permissions
     public const string AndonCall = "andon.call";
     public const string AndonRespond = "andon.respond";
     public const string Handover = "handover.write";
+    public const string Languages = "languages.manage";
     public const string People = "people.manage";
     public const string Terminals = "terminals.manage";
     public const string LotAttributes = "lot_attributes.manage";
@@ -137,6 +138,7 @@ public static class Permissions
         new(LotAttributes, "Configuration", "Maintain lot attribute definitions"),
         new(Specs, "Configuration", "Maintain quality characteristics and material specifications"),
         new(Security, "Administration", "Maintain users, roles and what each role may do"),
+        new(Languages, "Administration", "Add languages and keep their translations"),
         new(SecurityGrantEverywhere, "Administration", "Give or take away a role held at every site, rather than at one"),
         new(Integrations, "Administration", "Retry or skip failed deliveries to the ERP"),
         new(EdgeIngest, "Machine data", "Send machine data as a Pulaski Edge node: read its configuration and forward what it collects"),

@@ -12,7 +12,7 @@ internal static class TerminalSql
 {
     public const string Columns = """
         t.id, t.site_id, t.code, t.name, t.scope_equipment_id, t.default_equipment_id, t.auth_mode, t.is_active, t.enrolled_at,
-        t.xmin::text::bigint AS version
+        t.language, t.region, t.xmin::text::bigint AS version
         """;
 
     public const string BadgeColumns = """
@@ -30,9 +30,11 @@ internal static class TerminalSql
         public string AuthMode { get; init; } = "";
         public bool IsActive { get; init; }
         public DateTimeOffset? EnrolledAt { get; init; }
+        public string? Language { get; init; }
+        public string? Region { get; init; }
         public long Version { get; init; }
 
-        public TerminalRecord ToRecord() => new(Id, SiteId, Code, Name, ScopeEquipmentId, DefaultEquipmentId, AuthMode, IsActive, EnrolledAt);
+        public TerminalRecord ToRecord() => new(Id, SiteId, Code, Name, ScopeEquipmentId, DefaultEquipmentId, AuthMode, IsActive, EnrolledAt, Language, Region);
     }
 
     internal sealed class BadgeRow
@@ -61,14 +63,15 @@ internal sealed class TerminalRepository(DbSession session) : ITerminalRepositor
     private const string CodeExists = "SELECT EXISTS (SELECT 1 FROM sec.terminal WHERE site_id = @SiteId AND code = @Code)";
 
     private const string Insert = """
-        INSERT INTO sec.terminal (id, site_id, code, name, scope_equipment_id, default_equipment_id, auth_mode, is_active, created_at, updated_at)
-        VALUES (@Id, @SiteId, @Code, @Name, @ScopeEquipmentId, @DefaultEquipmentId, @AuthMode, @IsActive, @At, @At)
+        INSERT INTO sec.terminal (id, site_id, code, name, scope_equipment_id, default_equipment_id, auth_mode, is_active, language, region, created_at, updated_at)
+        VALUES (@Id, @SiteId, @Code, @Name, @ScopeEquipmentId, @DefaultEquipmentId, @AuthMode, @IsActive, @Language, @Region, @At, @At)
         RETURNING xmin::text::bigint
         """;
 
     private const string Update = """
         UPDATE sec.terminal
-        SET name = @Name, scope_equipment_id = @ScopeEquipmentId, default_equipment_id = @DefaultEquipmentId, auth_mode = @AuthMode, is_active = @IsActive, updated_at = @At
+        SET name = @Name, scope_equipment_id = @ScopeEquipmentId, default_equipment_id = @DefaultEquipmentId, auth_mode = @AuthMode, is_active = @IsActive,
+            language = @Language, region = @Region, updated_at = @At
         WHERE id = @Id
         RETURNING xmin::text::bigint
         """;
@@ -138,7 +141,7 @@ internal sealed class TerminalRepository(DbSession session) : ITerminalRepositor
     public Task UpdateBadgeAsync(BadgeRecord badge, CancellationToken cancellationToken) => session.ExecuteAsync(UpdateBadge, badge, cancellationToken);
 
     private static object Args(TerminalRecord t, DateTimeOffset at) =>
-        new { t.Id, t.SiteId, t.Code, t.Name, t.ScopeEquipmentId, t.DefaultEquipmentId, t.AuthMode, t.IsActive, At = at };
+        new { t.Id, t.SiteId, t.Code, t.Name, t.ScopeEquipmentId, t.DefaultEquipmentId, t.AuthMode, t.IsActive, t.Language, t.Region, At = at };
 }
 
 /// <summary>Read side for terminals and badges (D-049).</summary>
@@ -146,7 +149,7 @@ internal sealed class TerminalQueries(NpgsqlDataSource dataSource) : ITerminalRe
 {
     private const string List = """
         SELECT t.id, t.site_id, t.code, t.name, t.scope_equipment_id, s.code AS scope_code, t.default_equipment_id, d.code AS default_code,
-               t.auth_mode, t.is_active, t.enrolled_at,
+               t.auth_mode, t.is_active, t.enrolled_at, t.language, t.region,
                CASE WHEN t.enrolment_expires_at > now() THEN t.enrolment_expires_at END AS enrolment_expires_at,
                t.last_seen_at, t.xmin::text::bigint AS version
         FROM sec.terminal t

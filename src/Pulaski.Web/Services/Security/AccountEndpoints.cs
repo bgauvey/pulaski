@@ -13,6 +13,14 @@ public static class AccountEndpoints
             return Results.LocalRedirect(AccountSession.LoginPath);
         });
 
+        // The reader's language and region changed (#128): the culture cookie follows, then back to where they were. The API keeps the choice;
+        // this only sets what this browser shows.
+        routes.MapGet("/account/culture", (string? language, string? region, string? returnUrl, HttpContext http) =>
+        {
+            Localization.Cultures.Set(http, language, region);
+            return Results.LocalRedirect(AccountSession.SafeReturnUrl(returnUrl));
+        });
+
         // The API stopped accepting the session: it ran out, or the user was switched off.
         routes.MapGet("/account/expired", async (HttpContext http) =>
         {

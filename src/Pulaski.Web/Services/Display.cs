@@ -39,7 +39,10 @@ public static class Display
         return char.ToUpperInvariant(text[0]) + text[1..];
     }
 
-    /// <summary>A UTC instant shown in the site's time zone (falls back to UTC).</summary>
+    /// <summary>
+    /// A UTC instant shown in the site's time zone (falls back to UTC): as 2026-11-22 15:04, or in the reader's region's short date and time
+    /// when they chose one (#128).
+    /// </summary>
     public static string SiteTime(DateTimeOffset? value, string? timeZone)
     {
         if (value is null)
@@ -48,7 +51,7 @@ public static class Display
         }
 
         var local = ToSite(value.Value, timeZone);
-        return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        return Localization.Formats.IsRegional ? local.ToString("g", CultureInfo.CurrentCulture) : local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
     }
 
     public static DateTimeOffset ToSite(DateTimeOffset value, string? timeZone) =>

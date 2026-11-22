@@ -133,6 +133,7 @@ api.MapOverviewEndpoints();
 api.MapAndonEndpoints();
 api.MapAlertEndpoints();
 api.MapHandoverEndpoints();
+api.MapLanguageEndpoints();
 api.MapQualityEndpoints();
 api.MapTerminalAdminEndpoints();
 

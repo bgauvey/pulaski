@@ -42,7 +42,7 @@ Orders & scheduling                       Execution & inventory
       └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ material_spec(_version, _item), control_limit,
  scheduling_policy, run_standard,             spc_rule, spc_alert, andon_type ─ andon_call,
- alert_subscription ─ alert_sent, handover_entry,
+ alert_subscription ─ alert_sent, handover_entry, language ─ translation,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
 People & access                            History & events
@@ -733,6 +733,7 @@ Users, their passwords while Pulaski signs them in itself, and roles held at sit
 | `created_at` | timestamptz | no | Insert time. |
 | `updated_at` | timestamptz | no | Last change to the user. |
 | `is_service_account` | boolean | no | A machine's local account, such as the edge's (D-091): it keeps its password when `Security:LocalSignIn` is `administrators`. Only for `pulaski-local` users. |
+| `language`, `region` | text | yes | The screens' language (a code such as `es`; null: English) and region for dates and numbers (a culture name such as `es-MX`), #128. |
 
 A user from an identity provider is added at their first sign-in with no role (D-091); until an administrator gives them one they can't sign in.
 
@@ -823,6 +824,7 @@ A shared tablet or panel PC where people badge to clock on and off and take brea
 | `scope_equipment_id` | uuid → equipment | no | A site, area or line: the terminal offers the active lines that run jobs at or below it. |
 | `default_equipment_id` | uuid → equipment | yes | The line it offers first; one of those it offers. |
 | `auth_mode` | text | no | `badge` or `badge_plus_pin`. |
+| `language`, `region` | text | yes | Its screens' language and region (#128), whoever badges in; null: English and the usual formats. |
 | `is_active` | boolean | no | False when switched off. |
 | `secret_hash` | bytea | yes | SHA-256 of the device secret; null until enrolled. Unique. Enrolling again replaces it. |
 | `enrolled_at` | timestamptz | yes | When last enrolled. |
@@ -1741,6 +1743,27 @@ Never deleted; only an open item changes, when it is closed.
 | `closed_at`, `closed_by` | timestamptz, text | yes | When an open item was closed and by whom; both or neither, only for `open_item` (`handover_entry_closed_ck`). |
 | `closing_note` | text | yes | What was done, at most 1000 characters. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.language — languages the screens can show (#128, D-114) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `code` | text | no | Primary key: a language code such as `es` or `pt-BR` (`language_code_ck`). English is the source and has no row. |
+| `name` | text | no | As its speakers write it, such as *Español*. |
+| `is_active` | boolean | no | Offered; switched off, its readers see English and its translations are kept. |
+| `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.translation — translations of the screens' terms (#128, D-114) · *In use*
+
+Keyed by the English text (the term). Never deleted: a cleared translation keeps its row with a null `text`, and the English shows.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `language_code` | text → language | no | The language. With `term`, the primary key. |
+| `term` | text | no | The English text, as in the term catalog (`Pulaski.Contracts/Localization/terms.txt`). |
+| `text` | text | yes | The translation, keeping the term's placeholders; null when cleared. |
+| `is_shipped` | boolean | no | Pulaski's starter text not changed here: updated by a later release, never once edited. |
+| `updated_at`, `updated_by` | timestamptz, text | no / yes | When and by whom (`pulaski` for shipped text). |
 
 ## 12. Time-partitioned history (`ts`)
 

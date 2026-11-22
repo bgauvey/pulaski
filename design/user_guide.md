@@ -94,6 +94,23 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
 - **Theme (top right).** The sun/moon button switches between light and dark.
 - **Main area.** The page you picked.
 
+### Your language and region
+
+Pulaski's screens can show another language than English, and write dates and numbers the way your region does.
+
+1. Click the button with the list icon at the top right (**Language and region**).
+2. Choose your **Language** and, if you like, your **Region** (such as *Español (México)*); the page shows how dates and numbers will look.
+3. Click **Save**. The page reloads in your language.
+
+In detail:
+
+- The choice is kept on your user, so it follows you to any computer when you sign in.
+- Where a screen hasn't been translated yet, it shows in English. Pulaski ships Spanish for the menu, the header, signing in and these
+  pages; more screens follow.
+- Without a region, numbers and dates keep Pulaski's usual form (*2026-11-22 15:04*, *1,234.5*); with one, the screens that follow regions
+  use its form (so far the shared ones: times, quantities and percentages).
+- Before you sign in, the sign-in page follows your browser's language.
+
 ### Your inbox
 
 **Inbox** gathers what waits for you to decide, at every site where your role decides it:
@@ -2402,6 +2419,29 @@ Their name and e-mail come from your organisation's sign-in and are kept up to d
 3. **Roles:** choose a role (and site) under **Add a role…** and click **Add**; click **Take away** to end one. For a role allowed at every site, the site list also offers **Every site** (if you may grant roles everywhere).
 4. **Password:** type a **Temporary password** and click **Reset password**. They must change it when they next sign in; this also unlocks them.
 
+### Languages and translations (administrators)
+
+**Configure → Languages** holds the languages the screens can show and their translations. English is what the screens are written in;
+every other language is a translation of its terms (each piece of English text).
+
+1. To add a language, type its **Code** (such as *fr*, or *pt-BR*) and its **Name** as its speakers write it (*Français*), and click
+   **Add a language**.
+2. Click **Translations** on a language. **Untranslated** lists the terms it doesn't have yet; **All** lists every term. **Search** finds a
+   term in either language.
+3. Type translations and click **Save changes**. A term without one shows in English.
+4. To work in a spreadsheet, click **Export CSV**, fill in the *translation* column, and choose the file under **Translations file**: Pulaski
+   checks it and says how many would change, then **Import** applies it, all or nothing.
+5. **Switch off** stops offering a language; whoever chose it sees English. Its translations are kept.
+
+In detail:
+
+- Keep a term's placeholders, `{0}`, `{1}` and so on, in the translation: they stand for the values the screen fills in. A translation that
+  loses or adds one is refused.
+- Pulaski ships Spanish. At each start it adds the terms Spanish doesn't have yet and updates its own texts, but never one you changed or
+  cleared here; *Pulaski's translation* marks those still as shipped. Clearing a translation brings back the English.
+- Changing translations needs *languages: manage*, which only administrators have until a role is given it. Changes reach the screens
+  within a minute.
+
 ### Add or change a role (administrators)
 
 1. Open **Configure → Users** and the **Roles** tab.
@@ -2587,7 +2627,7 @@ Running it needs permission to maintain people at the site. Credentials go in th
 
 ### Set up a terminal (managers)
 
-1. Open **Configure → Terminals**. Type a **Code** (it can't change later) and a **Name** such as where it hangs. Under **Offers the lines of**, choose the site, an area or a line, then the **First line offered**, and whether people identify with **Badge** or **Badge and PIN**. Click **Register terminal**.
+1. Open **Configure → Terminals**. Type a **Code** (it can't change later) and a **Name** such as where it hangs. Under **Offers the lines of**, choose the site, an area or a line, then the **First line offered**, and whether people identify with **Badge** or **Badge and PIN**. Choose its **Language** and, if you like, its **Region** (such as *es-MX*) for the people at that line: its screens follow them, not whoever badges in. Click **Register terminal**.
 2. Click **Enrolment code** on its row. A ten-character code shows, once, with the time it runs out (15 minutes).
 3. On the device, open the address the page shows (ending `/terminal/enrol`), type the code and press **Enrol**. The device now shows the badge screen; leave it there.
 4. To stop a terminal working (lost, stolen, moved), click **Change**, untick **Active** and save. To move it to another device, issue a new code and enrol the new device: the old one stops working.
@@ -3143,6 +3183,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
+- **Languages:** only the menu, the header, signing in and the language pages are translated so far; the floor screens and terminals
+  follow next (#174), then the office screens (#175). Messages from the server (refusals, notes) are still in English. Dates and numbers follow
+  the region on the shared formats only; most screens still write them Pulaski's usual way. Choosing *Choose File* is the browser's own text.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).
 - **The inbox** gathers five kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It

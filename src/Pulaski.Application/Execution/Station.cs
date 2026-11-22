@@ -73,6 +73,8 @@ internal sealed class GetStationHandler(
             TerminalName = terminal.Name,
             TerminalCode = terminal.Code,
             AuthMode = terminal.AuthMode,
+            Language = terminal.Language,
+            Region = terminal.Region,
             Lines = [.. lines.Select(l => new StationLineDto(l.LineId, l.Code, l.Name))],
             Line = line,
             RunningJob = row?.Running,

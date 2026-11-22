@@ -31,5 +31,5 @@ public static class ProductionByShiftView
         return $"{day} · {row.ShiftName ?? code} ({code}{(row.ScheduleCode is { } s ? $", {s}" : "")}){times}{(row.Crew is { } crew ? $" · {crew}" : "")}";
     }
 
-    public static string Qty(decimal value) => value.ToString("#,0.###", CultureInfo.InvariantCulture);
+    public static string Qty(decimal value) => value.ToString("#,0.###", CultureInfo.CurrentCulture);
 }
