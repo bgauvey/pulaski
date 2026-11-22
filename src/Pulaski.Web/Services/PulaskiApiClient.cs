@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Alerts;
 using Pulaski.Contracts.Andon;
 using Pulaski.Contracts.Boms;
@@ -1714,7 +1715,7 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
             }
             catch (HttpRequestException ex)
             {
-                throw new ApiException(0, "The Pulaski API is not reachable.", ex.Message, null);
+                throw new ApiException(0, Term.Mark("The Pulaski API is not reachable."), ex.Message, null);
             }
 
             if (signedIn && response.StatusCode == HttpStatusCode.Unauthorized)
@@ -1734,7 +1735,7 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         }
 
         return await response.Content.ReadFromJsonAsync<T>(ct)
-            ?? throw new ApiException((int)response.StatusCode, "Empty response from the API.", null, null);
+            ?? throw new ApiException((int)response.StatusCode, Term.Mark("Empty response from the API."), null, null);
     }
 }
 
@@ -1755,6 +1756,12 @@ public sealed class ApiException(
 
     public bool IsConflict => Status == (int)HttpStatusCode.Conflict;
 
+    /// <summary>The detail's English template with {0}, {1}… (#128): the key a screen translates it by. Null when the API sent none.</summary>
+    public string? Template { get; init; }
+
+    /// <summary>The values that fill <see cref="Template"/>.</summary>
+    public IReadOnlyList<object?> Values { get; init; } = [];
+
     internal static async Task<ApiException> FromResponseAsync(HttpResponseMessage response, CancellationToken ct)
     {
         var status = (int)response.StatusCode;
@@ -1763,7 +1770,11 @@ public sealed class ApiException(
             var problem = await response.Content.ReadFromJsonAsync<Problem>(ct);
             if (problem is not null)
             {
-                return new ApiException(status, problem.Title ?? response.ReasonPhrase ?? "Error", problem.Detail, problem.Errors);
+                return new ApiException(status, problem.Title ?? response.ReasonPhrase ?? "Error", problem.Detail, problem.Errors)
+                {
+                    Template = problem.Template,
+                    Values = ValuesOf(problem.Values),
+                };
             }
         }
         catch (JsonException)
@@ -1774,5 +1785,17 @@ public sealed class ApiException(
         return new ApiException(status, response.ReasonPhrase ?? "Error", null, null);
     }
 
-    private sealed record Problem(string? Title, string? Detail, Dictionary<string, string[]>? Errors);
+    private sealed record Problem(
+        string? Title, string? Detail, Dictionary<string, string[]>? Errors, string? Template = null, JsonElement[]? Values = null);
+
+    /// <summary>A message's values as sent (#128): numbers as numbers, for the reader's region; the rest as text.</summary>
+    private static object?[] ValuesOf(JsonElement[]? values) =>
+        values is null ? [] : [.. values.Select(v => v.ValueKind switch
+        {
+            JsonValueKind.Number when v.TryGetDecimal(out var number) => number,
+            JsonValueKind.Number => v.GetDouble(),
+            JsonValueKind.String => v.GetString(),
+            JsonValueKind.Null => null,
+            _ => (object?)v.ToString(),
+        })];
 }

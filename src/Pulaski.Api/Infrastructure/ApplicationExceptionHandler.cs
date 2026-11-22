@@ -32,6 +32,13 @@ internal sealed class ApplicationExceptionHandler(IProblemDetailsService problem
             return false;
         }
 
+        // The message's template and values (#128): the screens show it in their reader's language.
+        if (exception is IHasUserMessage { UserMessage: var message })
+        {
+            problem.Extensions["template"] = message.Template;
+            problem.Extensions["values"] = message.Values;
+        }
+
         httpContext.Response.StatusCode = problem.Status!.Value;
         return await problemDetails.TryWriteAsync(new ProblemDetailsContext
         {

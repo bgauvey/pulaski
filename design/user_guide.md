@@ -105,8 +105,10 @@ Pulaski's screens can show another language than English, and write dates and nu
 In detail:
 
 - The choice is kept on your user, so it follows you to any computer when you sign in.
-- Where a screen hasn't been translated yet, it shows in English. Pulaski ships Spanish for the menu, the header, signing in and these
-  pages; more screens follow.
+- Where a screen hasn't been translated yet, it shows in English. Pulaski ships Spanish for the menu, the header, signing in, these
+  pages, the floor screens (Floor, reporting production, pausing and completing, Andon, Handover) and the terminals (badge kiosk, operator
+  station, line boards); the office screens follow.
+- When Pulaski refuses something (*EXT-01 can't make that much in 5 minutes…*), the message is in your language too.
 - Without a region, numbers and dates keep Pulaski's usual form (*2026-11-22 15:04*, *1,234.5*); with one, the screens that follow regions
   use its form (so far the shared ones: times, quantities and percentages).
 - Before you sign in, the sign-in page follows your browser's language.
@@ -2441,6 +2443,8 @@ In detail:
   cleared here; *Pulaski's translation* marks those still as shipped. Clearing a translation brings back the English.
 - Changing translations needs *languages: manage*, which only administrators have until a role is given it. Changes reach the screens
   within a minute.
+- The terms are the screens' text and the server's messages. A message such as *Job {0} not found.* is one term; the screen fills in the
+  values. Refusals the server words in parts aren't terms and stay in English.
 
 ### Add or change a role (administrators)
 
@@ -3183,9 +3187,12 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Planning rates from run history:** the scheduled recalculation looks at every line of a site at once, on whole days; it can't be limited to some lines or materials, or run at a set time of day. Stops can be taken out only on lines that record machine state, and a proposal accepted without review is worked out once, not again when it is accepted.
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
-- **Languages:** only the menu, the header, signing in and the language pages are translated so far; the floor screens and terminals
-  follow next (#174), then the office screens (#175). Messages from the server (refusals, notes) are still in English. Dates and numbers follow
-  the region on the shared formats only; most screens still write them Pulaski's usual way. Choosing *Choose File* is the browser's own text.
+- **Languages:** the menu, header, sign-in, language pages, floor screens and terminals are translated; the office screens follow (#175).
+  Refusals from the server are translated, but not yet the field checks of a form (*Reason Other needs a comment.*), the notes and warnings
+  that come back after an action (such as a missing qualification), a few refusals worded in parts (they stay English), or words the server
+  puts into a message (*tracked by lot*). Quantities inside a refusal keep Pulaski's usual form (*1,234.5*). Your plant's own names (reasons,
+  lines, call types) are shown as entered. Dates and numbers follow the region on the translated screens; the rest still write them Pulaski's
+  usual way. *Choose File* is the browser's own text.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).
 - **The inbox** gathers five kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It

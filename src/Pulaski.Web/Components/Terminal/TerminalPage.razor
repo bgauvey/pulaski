@@ -8,7 +8,7 @@
 @* A shop-floor terminal (D-049). Someone badges (a reader types the badge and Enter), with a PIN if the terminal asks; the
    screen shows their time and big buttons to clock on, off or take a break; then it goes back to waiting. No one signs
    in: the terminal's secret, in this device's cookie, and the badge's short ticket identify who records what. *@
-<PageTitle>@(_status?.TerminalName ?? "Terminal") · Pulaski</PageTitle>
+<PageTitle>@(_status?.TerminalName ?? L["Terminal"]) · Pulaski</PageTitle>
 
 @if (_reset is { } seconds)
 {
@@ -17,9 +17,9 @@
 
 @if (_status is null)
 {
-    <h1 class="h3">This terminal isn't enrolled</h1>
-    <p>@(_error ?? "Ask a supervisor to enrol it.")</p>
-    <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">Enrol it</a>
+    <h1 class="h3">@L["This terminal isn't enrolled"]</h1>
+    <p>@(_error ?? L["Ask a supervisor to enrol it."])</p>
+    <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">@L["Enrol it"]</a>
 
     @* A post is matched to a form of its name in this render; without one, a terminal whose status can't be read would fail outright. *@
     <EditForm Model="Input" FormName="terminal" OnSubmit="SubmitAsync" method="post" />
@@ -43,7 +43,7 @@ else
         {
             <div class="alert alert-warning" role="status">@note</div>
         }
-        <a class="btn btn-outline-secondary btn-lg w-100" href="@TerminalCookie.HomePath">Next person</a>
+        <a class="btn btn-outline-secondary btn-lg w-100" href="@TerminalCookie.HomePath">@L["Next person"]</a>
     }
     else if (_status.PersonId is null)
     {
@@ -51,34 +51,34 @@ else
             @if (_needsPin)
             {
                 <input type="hidden" name="Input.Badge" value="@Input.Badge" />
-                <label class="form-label fs-5" for="pin">Your PIN</label>
+                <label class="form-label fs-5" for="pin">@L["Your PIN"]</label>
                 <InputText id="pin" type="password" inputmode="numeric" class="form-control form-control-lg terminal-badge mb-3" autocomplete="off" autofocus @bind-Value="Input.Pin" />
-                <button type="submit" class="btn btn-primary btn-lg w-100">Go</button>
+                <button type="submit" class="btn btn-primary btn-lg w-100">@L["Go"]</button>
             }
             else
             {
-                <label class="form-label fs-5" for="badge">Badge in</label>
+                <label class="form-label fs-5" for="badge">@L["Badge in"]</label>
                 <InputText id="badge" type="password" class="form-control form-control-lg terminal-badge mb-2" autocomplete="off" autofocus @bind-Value="Input.Badge" />
-                <p class="text-muted small mb-0">Hold your badge to the reader, or type its number and press Enter.</p>
+                <p class="text-muted small mb-0">@L["Hold your badge to the reader, or type its number and press Enter."]</p>
             }
         </EditForm>
     }
     else
     {
         var tz = _status.TimeZone;
-        <h2 class="h3 mb-1">Hello, @_status.PersonName</h2>
+        <h2 class="h3 mb-1">@L["Hello, {0}", _status.PersonName]</h2>
         <p class="text-muted mb-3">
             @if (_status.Sessions.Count == 0)
             {
-                <span>You aren't on a line.</span>
+                <span>@L["You aren't on a line."]</span>
             }
             else
             {
-                <span>On @string.Join(", ", _status.Sessions.Select(s => $"{s.EquipmentCode} {TerminalAction.Since(s.StartedAt, tz)}")).</span>
+                <span>@L["On {0}.", string.Join(", ", _status.Sessions.Select(s => $"{s.EquipmentCode} {TerminalAction.Since(L, s.StartedAt, tz)}"))]</span>
             }
             @if (_status.OpenBreak is { } onBreak)
             {
-                <span> On a break @TerminalAction.Since(onBreak.StartedAt, tz).</span>
+                <span> @L["On a break {0}.", TerminalAction.Since(L, onBreak.StartedAt, tz)]</span>
             }
         </p>
 
@@ -91,7 +91,7 @@ else
             <div class="terminal-actions mb-3">
                 @if (_status.OpenBreak is not null)
                 {
-                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.EndBreak, null).Value)" class="btn btn-primary">End break</button>
+                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.EndBreak, null).Value)" class="btn btn-primary">@L["End break"]</button>
                 }
                 else if (_status.Sessions.Count > 0)
                 {
@@ -99,24 +99,24 @@ else
                     {
                         @* The break planned now in their shift (#84), offered first; it is recorded only when they press it. *@
                         <button type="submit" name="Input.Action" value="@(new TerminalAction(planned.IsPaid ? TerminalAction.PaidBreak : TerminalAction.Break, null).Value)" class="btn btn-primary">
-                            Start @planned.Name<span class="d-block small fw-normal">@planned.Start.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)–@planned.End.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)@(planned.IsPaid ? " · paid" : "")</span>
+                            @L["Start {0}", planned.Name]<span class="d-block small fw-normal">@planned.Start.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)–@planned.End.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)@(planned.IsPaid ? $" · {L["paid"]}" : "")</span>
                         </button>
                     }
-                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.Break, null).Value)" class="btn btn-outline-primary">Start break</button>
-                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.PaidBreak, null).Value)" class="btn btn-outline-primary">Start paid break</button>
+                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.Break, null).Value)" class="btn btn-outline-primary">@L["Start break"]</button>
+                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.PaidBreak, null).Value)" class="btn btn-outline-primary">@L["Start paid break"]</button>
                 }
                 @foreach (var s in _status.Sessions)
                 {
-                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.ClockOff, s.Id).Value)" class="btn btn-outline-danger">Clock off @s.EquipmentCode</button>
+                    <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.ClockOff, s.Id).Value)" class="btn btn-outline-danger">@L["Clock off {0}", s.EquipmentCode]</button>
                 }
             </div>
 
             @* What the time is for (#84): production unless chosen; setup is for the line's job, indirect needs a reason. *@
-            <div class="terminal-kinds mb-3" role="group" aria-label="What the time is for">
+            <div class="terminal-kinds mb-3" role="group" aria-label="@L["What the time is for"]">
                 @foreach (var (code, label) in TerminalAction.Kinds)
                 {
                     <button type="submit" name="Input.Action" value="@TerminalAction.KindValue(code)" aria-pressed="@(Kind == code ? "true" : "false")"
-                            class="btn @(Kind == code ? "btn-secondary" : "btn-outline-secondary")">@label</button>
+                            class="btn @(Kind == code ? "btn-secondary" : "btn-outline-secondary")">@L[label]</button>
                 }
             </div>
             <div class="terminal-actions mb-3">
@@ -128,7 +128,7 @@ else
                     }
                     @if (_status.IndirectReasons.Count == 0)
                     {
-                        <p class="text-muted">There are no indirect reasons at this site yet; ask a supervisor.</p>
+                        <p class="text-muted">@L["There are no indirect reasons at this site yet; ask a supervisor."]</p>
                     }
                 }
                 else
@@ -137,12 +137,12 @@ else
                 {
                     <button type="submit" name="Input.Action" value="@(new TerminalAction(TerminalAction.ClockOn, line.Id).Value)"
                             class="btn @(line.Id == _status.DefaultEquipmentId ? "btn-primary" : "btn-outline-primary")">
-                        Clock on @line.Code<span class="d-block small fw-normal">@line.Name@(line.RunningJobNumber is { } job ? $" · {job}" : "")</span>
+                        @L["Clock on {0}", line.Code]<span class="d-block small fw-normal">@line.Name@(line.RunningJobNumber is { } job ? $" · {job}" : "")</span>
                     </button>
                 }
                 }
             </div>
-            <button type="submit" name="Input.Action" value="@TerminalAction.Done" class="btn btn-link btn-lg w-100">Not me / cancel</button>
+            <button type="submit" name="Input.Action" value="@TerminalAction.Done" class="btn btn-link btn-lg w-100">@L["Not me / cancel"]</button>
         </EditForm>
     }
 }
@@ -183,11 +183,12 @@ else
         try
         {
             _status = await Api.GetTerminalStatusAsync(Secret!);
+            await UseLanguageAsync();
         }
         catch (ApiException ex)
         {
             _status = null;
-            _error = ex.Detail ?? ex.Title;
+            _error = L.Problem(ex);
         }
     }
 
@@ -232,7 +233,7 @@ else
         }
         catch (ApiException ex)
         {
-            _error = ex.Detail ?? ex.Title;
+            _error = L.Problem(ex);
             _reset = DoneSeconds * 2;
         }
     }
@@ -248,6 +249,7 @@ else
         }
 
         _status = identity.Status;
+        await UseLanguageAsync();
         Input.Ticket = identity.Ticket;
         _reset = IdleSeconds;
     }
@@ -265,9 +267,17 @@ else
         };
         var result = await Api.TerminalActAsync(Secret!, action.ApiAction!, request);
 
-        _done = action.Confirmation(string.IsNullOrWhiteSpace(Input.Name) ? "Done" : Input.Name, _status!.Lines.FirstOrDefault(l => l.Id == action.Id)?.Code, Kind);
+        _done = action.Confirmation(L, string.IsNullOrWhiteSpace(Input.Name) ? L["Done"] : Input.Name, _status!.Lines.FirstOrDefault(l => l.Id == action.Id)?.Code, Kind);
         _notes = result.Notes;
         _reset = DoneSeconds + (result.Notes.Count > 0 ? 6 : 0);
+    }
+
+    /// <summary>The terminal's own language and region (#128), whoever badges in.</summary>
+    private async Task UseLanguageAsync()
+    {
+        Cultures.Apply(_status?.Language, _status?.Region);
+        L.Use(_status?.Language);
+        await L.EnsureAsync();
     }
 
     private string Kind => Input.LaborKind is { Length: > 0 } k ? k : "direct";
@@ -277,11 +287,12 @@ else
         try
         {
             _status = await Api.GetTerminalPersonAsync(Secret!, Input.Ticket!);
+            await UseLanguageAsync();
             _reset = IdleSeconds;
         }
         catch (ApiException ex)
         {
-            _error = ex.Detail ?? ex.Title;
+            _error = L.Problem(ex);
             _reset = DoneSeconds * 2;
         }
     }

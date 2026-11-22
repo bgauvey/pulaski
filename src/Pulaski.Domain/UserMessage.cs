@@ -1,0 +1,81 @@
+using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Text;
+
+namespace Pulaski.Domain;
+
+/// <summary>
+/// A message for a person (#128, D-114): its English template with placeholders (<c>"{0} isn't a line"</c>), the values that fill them, and
+/// the English text. The template is the key the screens translate by, as their own text is. Numbers stay numbers, so a screen writes them in
+/// its reader's region; anything else is its text.
+/// </summary>
+public sealed record UserMessage(string Template, IReadOnlyList<object?> Values, string Text)
+{
+    /// <summary>A message without values: its text, braces doubled so it reads as a template.</summary>
+    public static UserMessage Of(string text) =>
+        new(text.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal), [], text);
+}
+
+/// <summary>An exception whose message is for a person, with its template and values (#128).</summary>
+public interface IHasUserMessage
+{
+    UserMessage UserMessage { get; }
+}
+
+/// <summary>
+/// Builds a <see cref="UserMessage"/> from an interpolated string, as the compiler hands its parts over: <c>$"{line.Code} isn't a line"</c>
+/// becomes the template <c>"{0} isn't a line"</c> with the value <c>"EXT-01"</c>. A message written as a plain string is its own template.
+/// </summary>
+[InterpolatedStringHandler]
+public ref struct MessageBuilder
+{
+    private readonly StringBuilder _template;
+    private readonly StringBuilder _text;
+    private readonly List<object?> _values;
+
+    public MessageBuilder(int literalLength, int formattedCount)
+    {
+        _template = new StringBuilder(literalLength + formattedCount * 4);
+        _text = new StringBuilder(literalLength + formattedCount * 8);
+        _values = new List<object?>(formattedCount);
+    }
+
+    public readonly void AppendLiteral(string value)
+    {
+        _template.Append(value.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal));
+        _text.Append(value);
+    }
+
+    public readonly void AppendFormatted<T>(T value) => Append(value, alignment: null, format: null);
+
+    public readonly void AppendFormatted<T>(T value, string? format) => Append(value, alignment: null, format);
+
+    public readonly void AppendFormatted<T>(T value, int alignment) => Append(value, alignment, format: null);
+
+    public readonly void AppendFormatted<T>(T value, int alignment, string? format) => Append(value, alignment, format);
+
+    public readonly UserMessage Build() => new(_template.ToString(), [.. _values], _text.ToString());
+
+    private readonly void Append<T>(T value, int? alignment, string? format)
+    {
+        var index = _values.Count;
+        _template.Append('{').Append(index.ToString(CultureInfo.InvariantCulture));
+        if (alignment is { } a)
+        {
+            _template.Append(',').Append(a.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (format is not null)
+        {
+            _template.Append(':').Append(format);
+        }
+
+        _template.Append('}');
+
+        var text = value is IFormattable formattable ? formattable.ToString(format, CultureInfo.InvariantCulture) : value?.ToString() ?? "";
+        _text.Append(alignment is { } width ? (width < 0 ? text.PadRight(-width) : text.PadLeft(width)) : text);
+
+        // Numbers stay numbers, for the reader's region; the rest is its text.
+        _values.Add(value is byte or short or int or long or decimal or double or float ? value : text);
+    }
+}

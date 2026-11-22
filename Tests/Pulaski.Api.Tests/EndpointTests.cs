@@ -28,6 +28,18 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
     }
 
     [Fact]
+    public async Task A_problem_carries_its_message_template_and_values_for_the_screens_to_translate()
+    {
+        var id = Guid.CreateVersion7();
+        var response = await _client.GetAsync(new Uri($"/api/work-orders/{id}", UriKind.Relative));
+
+        using var problem = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Work order {0} not found.", problem.RootElement.GetProperty("template").GetString());
+        Assert.Equal(id.ToString(), problem.RootElement.GetProperty("values")[0].GetString());
+        Assert.Equal($"Work order {id} not found.", problem.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
     public async Task Invalid_equipment_returns_400_with_camel_case_field_errors()
     {
         var response = await _client.PostAsJsonAsync(

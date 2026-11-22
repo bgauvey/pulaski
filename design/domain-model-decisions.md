@@ -3069,7 +3069,14 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   for a minute (`TranslationCache`, its own HTTP client).
 - **Regional formats** follow the culture in the shared helpers (`Display.SiteTime`, quantities and percentages) and, screen by screen, as
   they are translated.
-- **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens and API message codes; #175 office screens.
+- **Server messages (#174):** refusals keep their English template and values: `DomainRuleException`, `NotFoundException`, `ConflictException` and
+  `ForbiddenException` take a `MessageBuilder` (an interpolated string handler) as well as a string, so `$"Job {job.JobNumber} not found."` becomes
+  template `Job {0} not found.` with its values; numbers stay numbers. `ApplicationExceptionHandler` adds `template` and `values` to the problem
+  document; the web shows `L.Message(error)` (`ProblemAlert`, `L.Problem`). The catalog takes the templates from the source
+  (`TermExtractor.Messages`: one literal argument, or literals joined with `+`); a message chosen by a conditional, or built elsewhere, falls back
+  to the English as sent. Helpers that word sentences take the `Text` (`l[…]`; `Text.English` in tests); each combination is its own term rather
+  than joined lists.
+- **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens, terminals and server messages; #175 office screens.
 
 ## Application architecture
 

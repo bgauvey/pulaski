@@ -289,6 +289,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `Contracts/Localization/terms.txt` = `TermExtractor` over the web (test; `PULASKI_UPDATE_TERMS=1` regenerates). `core.language` /
   `core.translation` on Configure → Languages (`languages.manage`; CSV, placeholders kept); shipped `Application/Localization/Shipped/es.csv`
   applied at start. User/terminal `language` + `region` → culture cookie (invariant without a choice); `/api/translations/{code}` open.
+  Refusals carry `UserMessage` (`MessageBuilder` interpolated handler on the exceptions) → problem `template`/`values` → `L.Message`/`L.Problem`;
+  the catalog includes them (`TermExtractor.Messages`). Helpers take `Text l` and use `l["…"]` (tests: `Text.English`).
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

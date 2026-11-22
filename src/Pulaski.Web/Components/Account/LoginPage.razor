@@ -108,7 +108,7 @@ else
         }
         catch (ApiException ex)
         {
-            _error = ex.Detail ?? ex.Title;
+            _error = L.Problem(ex);
             Input.Password = "";
             return;
         }

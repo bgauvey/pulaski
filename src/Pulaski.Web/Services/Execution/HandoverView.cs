@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Contracts.Handover;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Execution;
 
@@ -9,7 +10,7 @@ public static class HandoverView
     /// <summary>"Day shift, Fri 20 Nov (06:00–14:00)", or "Fri 20 Nov" without shifts; times in the site's zone.</summary>
     public static string Shift(HandoverShiftDto shift, string? timeZone)
     {
-        var day = shift.ProductionDate.ToString("ddd d MMM", CultureInfo.InvariantCulture);
+        var day = shift.ProductionDate.ToString("ddd d MMM", CultureInfo.CurrentCulture);
         if (shift.ShiftCode is null)
         {
             return day;
@@ -22,14 +23,16 @@ public static class HandoverView
     }
 
     /// <summary>"Lee Ong at 14:05", or "Lee Ong, Thu 19 Nov 22:10" for another day.</summary>
-    public static string Who(HandoverEntryDto entry, string? timeZone, DateTimeOffset now)
+    public static string Who(Text l, HandoverEntryDto entry, string? timeZone, DateTimeOffset now)
     {
         var at = Local(entry.WrittenAt, timeZone);
-        var today = Local(now, timeZone).Date == at.Date;
-        return $"{entry.WrittenByName ?? entry.WrittenBy}{(today ? " at " : ", ")}{at.ToString(today ? "HH:mm" : "ddd d MMM HH:mm", CultureInfo.InvariantCulture)}";
+        var who = entry.WrittenByName ?? entry.WrittenBy;
+        return Local(now, timeZone).Date == at.Date
+            ? l["{0} at {1}", who, at.ToString("HH:mm", CultureInfo.InvariantCulture)]
+            : $"{who}, {at.ToString("ddd d MMM HH:mm", CultureInfo.CurrentCulture)}";
     }
 
-    public static string OpenItems(int count) => count == 1 ? "1 open item" : $"{count} open items";
+    public static string OpenItems(Text l, int count) => count == 1 ? l["1 open item"] : l["Open items: {0}", count];
 
     private static string Clock(DateTimeOffset at, string? timeZone) => Local(at, timeZone).ToString("HH:mm", CultureInfo.InvariantCulture);
 

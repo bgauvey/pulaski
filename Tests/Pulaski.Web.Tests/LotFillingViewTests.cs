@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Execution;
 using Pulaski.Web.Services.Execution;
 
@@ -24,20 +25,20 @@ public class LotFillingViewTests
     [Fact]
     public void The_rule_is_said_in_one_sentence_and_absent_when_each_report_makes_its_own_lot()
     {
-        Assert.Null(LotFillingView.Rule(Job()));
+        Assert.Null(LotFillingView.Rule(Text.English, Job()));
         Assert.False(LotFillingView.FillsLots(Job()));
-        Assert.Equal("On EXT-01 reports fill a lot until it holds 1,000 m, then start the next.", LotFillingView.Rule(Job(1000m)));
+        Assert.Equal("On EXT-01 reports fill a lot until it holds 1,000 m, then start the next.", LotFillingView.Rule(Text.English, Job(1000m)));
         Assert.Equal("On EXT-01 reports fill a lot until it holds 1,000 m, it is 8 h old or the shift changes, then start the next.",
-            LotFillingView.Rule(Job(1000m, 8m, true)));
-        Assert.Equal("On EXT-01 reports fill a lot until the shift changes, then start the next.", LotFillingView.Rule(Job(shift: true)));
+            LotFillingView.Rule(Text.English, Job(1000m, 8m, true)));
+        Assert.Equal("On EXT-01 reports fill a lot until the shift changes, then start the next.", LotFillingView.Rule(Text.English, Job(shift: true)));
     }
 
     [Fact]
     public void A_lot_says_how_full_it_is()
     {
         var lot = new FillingLotDto { LotId = Guid.NewGuid(), LotNumber = "WO-1-10-01", Quantity = 700m };
-        Assert.Equal("700 of 1,000 m", LotFillingView.Holds(Job(1000m), lot));
-        Assert.Equal("700 m", LotFillingView.Holds(Job(hours: 8m), lot));
+        Assert.Equal("700 of 1,000 m", LotFillingView.Holds(Text.English, Job(1000m), lot));
+        Assert.Equal("700 m", LotFillingView.Holds(Text.English, Job(hours: 8m), lot));
     }
 
     [Fact]
@@ -46,9 +47,9 @@ public class LotFillingViewTests
         var lot = new FillingLotDto { LotId = Guid.NewGuid(), LotNumber = "WO-1-10-02", LocationCode = "FG", Quantity = 30m };
         var job = Job(100m) with { FillingLots = [lot] };
 
-        Assert.Equal("Left blank, it goes into lot WO-1-10-02 (30 of 100 m); what doesn't fit starts the next lot.", LotFillingView.Hint(job, "FG"));
-        Assert.Equal("Left blank, it starts a new lot, which later reports fill.", LotFillingView.Hint(job, "RM"));
-        Assert.Null(LotFillingView.Hint(job, null));
-        Assert.Null(LotFillingView.Hint(Job(), "FG"));
+        Assert.Equal("Left blank, it goes into lot WO-1-10-02 (30 of 100 m); what doesn't fit starts the next lot.", LotFillingView.Hint(Text.English, job, "FG"));
+        Assert.Equal("Left blank, it starts a new lot, which later reports fill.", LotFillingView.Hint(Text.English, job, "RM"));
+        Assert.Null(LotFillingView.Hint(Text.English, job, null));
+        Assert.Null(LotFillingView.Hint(Text.English, Job(), "FG"));
     }
 }

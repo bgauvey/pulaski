@@ -1,4 +1,5 @@
 using Pulaski.Contracts.Execution;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Execution;
 
@@ -9,7 +10,7 @@ public static class LotFillingView
     public static bool FillsLots(JobExecutionDto job) => job.LotSize is not null || job.LotHours is not null || job.LotByShift;
 
     /// <summary>"On EXT-01 reports fill a lot until it holds 1000 m, is 8 h old or the shift changes."; null when it doesn't fill lots.</summary>
-    public static string? Rule(JobExecutionDto job)
+    public static string? Rule(Text l, JobExecutionDto job)
     {
         if (!FillsLots(job))
         {
@@ -19,28 +20,33 @@ public static class LotFillingView
         var ends = new List<string>();
         if (job.LotSize is { } size)
         {
-            ends.Add($"it holds {FloorView.Qty(size)} {job.BaseUomCode}");
+            ends.Add(l["it holds {0} {1}", FloorView.Qty(size), job.BaseUomCode]);
         }
 
         if (job.LotHours is { } hours)
         {
-            ends.Add($"it is {FloorView.Qty(hours)} h old");
+            ends.Add(l["it is {0} h old", FloorView.Qty(hours)]);
         }
 
         if (job.LotByShift)
         {
-            ends.Add("the shift changes");
+            ends.Add(l["the shift changes"]);
         }
 
-        var until = ends.Count == 1 ? ends[0] : string.Join(", ", ends.Take(ends.Count - 1)) + " or " + ends[^1];
-        return $"On {job.LineCode} reports fill a lot until {until}, then start the next.";
+        var until = ends.Count switch
+        {
+            1 => ends[0],
+            2 => l["{0} or {1}", ends[0], ends[1]],
+            _ => l["{0}, {1} or {2}", ends[0], ends[1], ends[2]],
+        };
+        return l["On {0} reports fill a lot until {1}, then start the next.", job.LineCode, until];
     }
 
     /// <summary>
     /// What a report with no lot number does on a line that fills lots, at the location chosen: "Goes into lot X (30 of 100 m); a full lot
     /// starts the next."; null when the line doesn't fill lots or no location is chosen yet.
     /// </summary>
-    public static string? Hint(JobExecutionDto job, string? locationCode)
+    public static string? Hint(Text l, JobExecutionDto job, string? locationCode)
     {
         if (!FillsLots(job) || locationCode is null)
         {
@@ -48,11 +54,13 @@ public static class LotFillingView
         }
 
         return job.FillingLots.FirstOrDefault(l => string.Equals(l.LocationCode, locationCode, StringComparison.Ordinal)) is { } lot
-            ? $"Left blank, it goes into lot {lot.LotNumber} ({Holds(job, lot)}){(job.LotSize is null ? "" : "; what doesn't fit starts the next lot")}."
-            : "Left blank, it starts a new lot, which later reports fill.";
+            ? job.LotSize is null
+                ? l["Left blank, it goes into lot {0} ({1}).", lot.LotNumber, Holds(l, job, lot)]
+                : l["Left blank, it goes into lot {0} ({1}); what doesn't fit starts the next lot.", lot.LotNumber, Holds(l, job, lot)]
+            : l["Left blank, it starts a new lot, which later reports fill."];
     }
 
     /// <summary>How full a lot is: "700 of 1000 m", or "700 m" when lots have no size.</summary>
-    public static string Holds(JobExecutionDto job, FillingLotDto lot) =>
-        job.LotSize is { } size ? $"{FloorView.Qty(lot.Quantity)} of {FloorView.Qty(size)} {job.BaseUomCode}" : $"{FloorView.Qty(lot.Quantity)} {job.BaseUomCode}";
+    public static string Holds(Text l, JobExecutionDto job, FillingLotDto lot) =>
+        job.LotSize is { } size ? l["{0} of {1} {2}", FloorView.Qty(lot.Quantity), FloorView.Qty(size), job.BaseUomCode] : $"{FloorView.Qty(lot.Quantity)} {job.BaseUomCode}";
 }

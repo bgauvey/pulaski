@@ -5,7 +5,9 @@
 {
     <div class="view-only-note small" role="note">
         <Icon Name="lock" Size="16" />
-        <span>You can view this, but changing it needs permission to @What@(SiteId is null ? "" : " at this site"). Ask an administrator if you should have it.</span>
+        <span>@(SiteId is null
+                    ? L["You can view this, but changing it needs permission to {0}. Ask an administrator if you should have it.", What]
+                    : L["You can view this, but changing it needs permission to {0} at this site. Ask an administrator if you should have it.", What])</span>
     </div>
 }
 

@@ -695,7 +695,7 @@
             }
             catch (ApiException ex)
             {
-                failures.Add($"{order.Order.OrderNumber}: {ex.Detail ?? ex.Title}");
+                failures.Add($"{order.Order.OrderNumber}: {L.Problem(ex)}");
             }
         }
 
@@ -735,7 +735,7 @@
         }
         catch (ApiException ex)
         {
-            _result = $"{order.OrderNumber}: {ex.Detail ?? ex.Title}";
+            _result = $"{order.OrderNumber}: {L.Problem(ex)}";
             _resultFailed = true;
         }
         finally
@@ -758,7 +758,7 @@
         }
         catch (ApiException ex)
         {
-            _result = $"{progress.Order.OrderNumber}: {ex.Detail ?? ex.Title}";
+            _result = $"{progress.Order.OrderNumber}: {L.Problem(ex)}";
             _resultFailed = true;
         }
         finally
@@ -784,7 +784,7 @@
         }
         catch (ApiException ex)
         {
-            _result = ex.Detail ?? ex.Title;
+            _result = L.Problem(ex);
             _resultFailed = true;
         }
         finally

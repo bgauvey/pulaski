@@ -4,17 +4,17 @@
 
 @* Reports good and scrap into one of a job's runs (D-035): its open run, or an earlier one for production found later. *@
 <form class="inv-facts mb-3" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
-    <h3 class="h6">Report production for @Job.JobNumber</h3>
+    <h3 class="h6">@L["Report production for {0}", Job.JobNumber]</h3>
     <ProblemAlert Error="_error" />
 
     <div class="row g-2">
         <div class="col-12">
-            <label class="form-label" for="rep-run-@Job.JobId">Run</label>
+            <label class="form-label" for="rep-run-@Job.JobId">@L["Run"]</label>
             <select id="rep-run-@Job.JobId" class="form-select" @bind="_runId" @bind:after="ClearMachine">
                 @foreach (var r in Job.Runs.Reverse())
                 {
                     <option value="@r.Id">
-                        Run @r.RunNo on @r.LineCode · @Display.SiteTime(r.StartedAt, Job.SiteTimeZone)@(r.EndedAt is { } end ? $" to {Display.SiteTime(end, Job.SiteTimeZone)}" : " · running now")
+                        @L["Run {0} on {1}", r.RunNo, r.LineCode] · @(r.EndedAt is { } end ? L["{0} to {1}", Display.SiteTime(r.StartedAt, Job.SiteTimeZone), Display.SiteTime(end, Job.SiteTimeZone)] : L["{0} · running now", Display.SiteTime(r.StartedAt, Job.SiteTimeZone)])
                     </option>
                 }
             </select>
@@ -23,15 +23,15 @@
                 <div class="form-text">
                     @if (run.EndedAt is not null)
                     {
-                        <span>Recorded late, into a run that has ended. </span>
+                        <span>@L["Recorded late, into a run that has ended."] </span>
                     }
                     @if (FloorView.RoomLeft(run.CapQty, run.GoodQty, run.ScrapQty) is { } room)
                     {
-                        <span>Up to @FloorView.Qty(room) @Job.UomCode more fits this run at the line's rate.</span>
+                        <span>@L["Up to {0} {1} more fits this run at the line's rate.", FloorView.Qty(room), Job.UomCode]</span>
                     }
                     else
                     {
-                        <span>The line has no ideal rate for this material, so the rate isn't checked.</span>
+                        <span>@L["The line has no ideal rate for this material, so the rate isn't checked."]</span>
                     }
                 </div>
             }
@@ -39,44 +39,44 @@
         @if (IsBatch)
         {
             <div class="col-12">
-                <div class="form-label">Good batches, @Job.BaseUomCode each <span class="text-muted">(batch size @FloorView.Qty(Job.BatchSize) @Job.BaseUomCode@(Job.BatchRule == "exact" ? ", exact" : $", ± {FloorView.Qty(Job.BatchTolerancePct)}%"))</span></div>
+                <div class="form-label">@L["Good batches, {0} each", Job.BaseUomCode] <span class="text-muted">(@(Job.BatchRule == "exact" ? L["batch size {0} {1}, exact", FloorView.Qty(Job.BatchSize), Job.BaseUomCode] : L["batch size {0} {1}, ± {2}%", FloorView.Qty(Job.BatchSize), Job.BaseUomCode, FloorView.Qty(Job.BatchTolerancePct)]))</span></div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                     @for (var i = 0; i < _goodBatches.Count; i++)
                     {
                         var index = i;
-                        <input type="number" inputmode="decimal" min="0" step="any" class="form-control" style="width: 7rem" aria-label="Good batch @(index + 1)"
+                        <input type="number" inputmode="decimal" min="0" step="any" class="form-control" style="width: 7rem" aria-label="@L["Good batch {0}", index + 1]"
                                value="@_goodBatches[index]" @oninput="e => SetBatch(_goodBatches, index, e)" />
                     }
-                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _goodBatches.Add(BatchSize)">Add batch</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _goodBatches.Add(BatchSize)">@L["Add batch"]</button>
                     @if (_goodBatches.Count > 0)
                     {
-                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _goodBatches.RemoveAt(_goodBatches.Count - 1)">Remove last</button>
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _goodBatches.RemoveAt(_goodBatches.Count - 1)">@L["Remove last"]</button>
                     }
                 </div>
             </div>
             <div class="col-12">
-                <div class="form-label">Rejected batches <span class="text-muted">(scrap)</span></div>
+                <div class="form-label">@L["Rejected batches"] <span class="text-muted">@L["(scrap)"]</span></div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                     @for (var i = 0; i < _scrapBatches.Count; i++)
                     {
                         var index = i;
-                        <input type="number" inputmode="decimal" min="0" step="any" class="form-control" style="width: 7rem" aria-label="Rejected batch @(index + 1)"
+                        <input type="number" inputmode="decimal" min="0" step="any" class="form-control" style="width: 7rem" aria-label="@L["Rejected batch {0}", index + 1]"
                                value="@_scrapBatches[index]" @oninput="e => SetBatch(_scrapBatches, index, e)" />
                     }
-                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _scrapBatches.Add(BatchSize)">Add rejected batch</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _scrapBatches.Add(BatchSize)">@L["Add rejected batch"]</button>
                     @if (_scrapBatches.Count > 0)
                     {
-                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _scrapBatches.RemoveAt(_scrapBatches.Count - 1)">Remove last</button>
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _scrapBatches.RemoveAt(_scrapBatches.Count - 1)">@L["Remove last"]</button>
                     }
                 </div>
             </div>
             @if (SelectedRun is { HasPartialBatch: false } selectedRun && (selectedRun.EndedWithReason || Job.PartialBatchPlanned))
             {
                 <div class="col-6">
-                    <label class="form-label" for="rep-partial-@Job.JobId">Partial batch, @Job.BaseUomCode</label>
-                    <input id="rep-partial-@Job.JobId" type="number" inputmode="decimal" min="0" step="any" class="form-control" placeholder="None" @bind="_partial" @bind:event="oninput" />
+                    <label class="form-label" for="rep-partial-@Job.JobId">@L["Partial batch, {0}", Job.BaseUomCode]</label>
+                    <input id="rep-partial-@Job.JobId" type="number" inputmode="decimal" min="0" step="any" class="form-control" placeholder="@L["None"]" @bind="_partial" @bind:event="oninput" />
                     <div class="form-text">
-                        @(Job.PartialBatchPlanned ? "This job was planned with a partial last batch; report it here when it is made." : "This run stopped with a reason, so the batch it was making can be added.")
+                        @(Job.PartialBatchPlanned ? L["This job was planned with a partial last batch; report it here when it is made."] : L["This run stopped with a reason, so the batch it was making can be added."])
                         @(Job.BatchRule == "exact" ? " It waits on hold for approval." : "")
                     </div>
                 </div>
@@ -88,13 +88,13 @@
             <div class="col-12">
                 @if (_machine is null)
                 {
-                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(SelectedRun is null || _loadingMachine)" @onclick="LoadMachineAsync">From the machine</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(SelectedRun is null || _loadingMachine)" @onclick="LoadMachineAsync">@L["From the machine"]</button>
                 }
                 else
                 {
                     <div class="small" role="status">
-                        <div>@MachineCountView.Since(_machine, Job.SiteTimeZone)</div>
-                        @if (MachineCountView.Run(_machine) is { } runLine)
+                        <div>@MachineCountView.Since(L, _machine, Job.SiteTimeZone)</div>
+                        @if (MachineCountView.Run(L, _machine) is { } runLine)
                         {
                             <div class="text-muted">@runLine</div>
                         }
@@ -102,35 +102,35 @@
                     <div class="d-flex gap-2 mt-1">
                         @if (MachineCountView.CanUse(_machine) && _machineThrough is null)
                         {
-                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="UseMachine">Use these figures</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="UseMachine">@L["Use these figures"]</button>
                         }
                         @if (_machineThrough is not null)
                         {
-                            <span class="chip chip-muted">From the machine</span>
-                            <button type="button" class="btn btn-sm btn-link" @onclick="ClearMachine">Enter by hand instead</button>
+                            <span class="chip chip-muted">@L["From the machine"]</span>
+                            <button type="button" class="btn btn-sm btn-link" @onclick="ClearMachine">@L["Enter by hand instead"]</button>
                         }
                         else
                         {
-                            <button type="button" class="btn btn-sm btn-link" disabled="@_loadingMachine" @onclick="LoadMachineAsync">Count again</button>
+                            <button type="button" class="btn btn-sm btn-link" disabled="@_loadingMachine" @onclick="LoadMachineAsync">@L["Count again"]</button>
                         }
                     </div>
                 }
             </div>
             <div class="col-6">
-                <label class="form-label" for="rep-good-@Job.JobId">Good, @UnitCode</label>
+                <label class="form-label" for="rep-good-@Job.JobId">@L["Good, {0}", UnitCode]</label>
                 <input id="rep-good-@Job.JobId" type="number" inputmode="decimal" min="0" step="any" class="form-control" @bind="_good" @bind:event="oninput" />
             </div>
             <div class="col-6">
-                <label class="form-label" for="rep-scrap-@Job.JobId">Scrap, @UnitCode</label>
+                <label class="form-label" for="rep-scrap-@Job.JobId">@L["Scrap, {0}", UnitCode]</label>
                 <input id="rep-scrap-@Job.JobId" type="number" inputmode="decimal" min="0" step="any" class="form-control" @bind="_scrap" @bind:event="oninput" />
             </div>
         }
         @if (GoodTotal > 0)
         {
             <div class="col-sm-6">
-                <label class="form-label" for="rep-loc-@Job.JobId">Good output goes to</label>
+                <label class="form-label" for="rep-loc-@Job.JobId">@L["Good output goes to"]</label>
                 <select id="rep-loc-@Job.JobId" class="form-select" @bind="_locationId">
-                    <option value="@Guid.Empty">Choose a location…</option>
+                    <option value="@Guid.Empty">@L["Choose a location…"]</option>
                     @foreach (var l in _locations)
                     {
                         <option value="@l.Id">@l.Code · @l.Name</option>
@@ -138,11 +138,11 @@
                 </select>
             </div>
             <div class="col-sm-6">
-                <label class="form-label" for="rep-lot-@Job.JobId">Lot number</label>
-                <input id="rep-lot-@Job.JobId" class="form-control" maxlength="100" placeholder="Blank: @Job.JobNumber-01, -02…" @bind="_lotNumber"
-                       disabled="@(IsBatch && _goodBatches.Count + (_partial > 0 ? 1 : 0) > 1)" title="@(IsBatch ? "Each batch is numbered after the job" : null)"
+                <label class="form-label" for="rep-lot-@Job.JobId">@L["Lot number"]</label>
+                <input id="rep-lot-@Job.JobId" class="form-control" maxlength="100" placeholder="@L["Blank: {0}-01, -02…", Job.JobNumber]" @bind="_lotNumber"
+                       disabled="@(IsBatch && _goodBatches.Count + (_partial > 0 ? 1 : 0) > 1)" title="@(IsBatch ? L["Each batch is numbered after the job"] : null)"
                        aria-describedby="rep-lot-hint-@Job.JobId" />
-                @if (string.IsNullOrWhiteSpace(_lotNumber) && LotFillingView.Hint(Job, _locations.FirstOrDefault(l => l.Id == _locationId)?.Code) is { } lotHint)
+                @if (string.IsNullOrWhiteSpace(_lotNumber) && LotFillingView.Hint(L, Job, _locations.FirstOrDefault(l => l.Id == _locationId)?.Code) is { } lotHint)
                 {
                     <div id="rep-lot-hint-@Job.JobId" class="form-text">@lotHint</div>
                 }
@@ -155,7 +155,7 @@
         @if (GoodTotal > 0 && _used.Count > 0)
         {
             <div class="col-12">
-                <div class="form-label">Made from <span class="text-muted">(optional)</span></div>
+                <div class="form-label">@L["Made from"] <span class="text-muted">@L["(optional)"]</span></div>
                 <div class="d-flex flex-wrap gap-3">
                     @foreach (var u in _used)
                     {
@@ -166,26 +166,26 @@
                         </div>
                     }
                 </div>
-                <div class="form-text">Tick the lots this output was made from. Left blank, its lots are paired with what was in use by time.</div>
+                <div class="form-text">@L["Tick the lots this output was made from. Left blank, its lots are paired with what was in use by time."]</div>
             </div>
         }
         @if (ScrapTotal > 0)
         {
             <div class="col-sm-6 touch-full">
-                <label class="form-label" for="rep-reason-@Job.JobId">Scrap reason</label>
-                <ReasonPicker Id="@($"rep-reason-{Job.JobId}")" Reasons="_reasons" Placeholder="Choose a reason…" AriaLabel="Scrap reason"
+                <label class="form-label" for="rep-reason-@Job.JobId">@L["Scrap reason"]</label>
+                <ReasonPicker Id="@($"rep-reason-{Job.JobId}")" Reasons="_reasons" Placeholder="@L["Choose a reason…"]" AriaLabel="@L["Scrap reason"]"
                               Value="@(_reasonId == Guid.Empty ? null : _reasonId)" ValueChanged="v => _reasonId = v ?? Guid.Empty" />
             </div>
         }
         <div class="col-12">
-            <label class="form-label" for="rep-comment-@Job.JobId">Comment @(NeedsComment ? "(required)" : "")</label>
+            <label class="form-label" for="rep-comment-@Job.JobId">@L["Comment"] @(NeedsComment ? L["(required)"] : "")</label>
             <input id="rep-comment-@Job.JobId" class="form-control" maxlength="1000" @bind="_comment" @bind:event="oninput" />
         </div>
     </div>
 
     <div class="d-flex gap-2 mt-3 form-actions">
-        <button type="submit" class="btn btn-primary" disabled="@(!CanSubmit)">Report</button>
-        <button type="button" class="btn btn-outline-secondary" @onclick="OnCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" disabled="@(!CanSubmit)">@L["Report"]</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="OnCancel">@L["Cancel"]</button>
     </div>
 </form>
 

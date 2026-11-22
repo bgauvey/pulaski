@@ -613,7 +613,7 @@ else if (_error is null)
             var selected = (_selectedOp, _selectedLink);
             await LoadAsync(_version!.Id);
             (_selectedOp, _selectedLink) = selected;
-            _saveMessage = ex.IsConflict ? "Someone else changed this draft; showing their version." : $"Not saved: {ex.Detail ?? ex.Title}";
+            _saveMessage = ex.IsConflict ? "Someone else changed this draft; showing their version." : $"Not saved: {L.Problem(ex)}";
         }
         finally
         {

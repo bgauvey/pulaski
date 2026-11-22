@@ -1,4 +1,5 @@
 using System.Globalization;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Labor;
 
@@ -20,7 +21,7 @@ public sealed record TerminalAction(string Kind, Guid? Id)
 
     /// <summary>The kinds of time a terminal offers, with their button words.</summary>
     public static IReadOnlyList<(string Code, string Label)> Kinds { get; } =
-        [("direct", "Production"), ("setup", "Setup"), ("indirect", "Indirect"), ("training", "Training")];
+        [("direct", Term.Mark("Production")), ("setup", Term.Mark("Setup")), ("indirect", Term.Mark("Indirect")), ("training", Term.Mark("Training"))];
 
     /// <summary>The API action it is, or null for <see cref="Done"/>.</summary>
     public string? ApiAction => Kind switch
@@ -60,18 +61,18 @@ public sealed record TerminalAction(string Kind, Guid? Id)
     public static string? ParseKind(string? value) =>
         value?.Split(':', 2) is [ChooseKind, var kind] && Kinds.Any(k => k.Code == kind) ? kind : null;
 
-    /// <summary>What the terminal says once it is done, with the person's name.</summary>
-    public string Confirmation(string person, string? lineCode, string laborKind = "direct") => Kind switch
+    /// <summary>What the terminal says once it is done, with the person's name, in the terminal's language.</summary>
+    public string Confirmation(Text l, string person, string? lineCode, string laborKind = "direct") => Kind switch
     {
-        ClockOn when laborKind != "direct" => $"{person}, you're on {lineCode} for {Kinds.First(k => k.Code == laborKind).Label.ToLowerInvariant()}.",
-        ClockOn => $"{person}, you're on {lineCode}.",
-        ClockOff => $"{person}, you're clocked off.",
-        Break => $"{person}, enjoy your break.",
-        PaidBreak => $"{person}, enjoy your break (paid).",
-        EndBreak => $"Welcome back, {person}.",
+        ClockOn when laborKind != "direct" => l["{0}, you're on {1} for {2}.", person, lineCode, l[Kinds.First(k => k.Code == laborKind).Label].ToLower(CultureInfo.CurrentCulture)],
+        ClockOn => l["{0}, you're on {1}.", person, lineCode],
+        ClockOff => l["{0}, you're clocked off.", person],
+        Break => l["{0}, enjoy your break.", person],
+        PaidBreak => l["{0}, enjoy your break (paid).", person],
+        EndBreak => l["Welcome back, {0}.", person],
         _ => "",
     };
 
     /// <summary>"since 06:12" in the site's time zone.</summary>
-    public static string Since(DateTimeOffset at, string? timeZone) => "since " + Display.ToSite(at, timeZone).ToString("HH:mm", CultureInfo.InvariantCulture);
+    public static string Since(Text l, DateTimeOffset at, string? timeZone) => l["since {0}", Display.ToSite(at, timeZone).ToString("HH:mm", CultureInfo.InvariantCulture)];
 }

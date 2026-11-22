@@ -2,13 +2,13 @@
 
 @* A reason (D-062): a dropdown with a mouse, large buttons by reason group in the touch layout (#119). One value, so both stay in step. *@
 <select id="@Id" class="form-select @SelectClass mouse-only" value="@(Value?.ToString() ?? "")" @onchange="OnSelectAsync" aria-label="@AriaLabel">
-    <option value="">@Placeholder</option>
+    <option value="">@(Placeholder ?? L["Reason…"])</option>
     @foreach (var reason in Reasons)
     {
         <option value="@reason.Id">@((OptionLabel ?? Display.ReasonLabel)(reason))</option>
     }
 </select>
-<div class="touch-only" role="group" aria-label="@(AriaLabel ?? Placeholder)">
+<div class="touch-only" role="group" aria-label="@(AriaLabel ?? Placeholder ?? L["Reason…"])">
     @if (NoneLabel is { } none)
     {
         <div class="reason-grid mb-2">
@@ -48,7 +48,7 @@
     public string? Id { get; set; }
 
     [Parameter]
-    public string Placeholder { get; set; } = "Reason…";
+    public string? Placeholder { get; set; }
 
     /// <summary>A button for choosing no reason, where none is allowed; null when a reason is required.</summary>
     [Parameter]
