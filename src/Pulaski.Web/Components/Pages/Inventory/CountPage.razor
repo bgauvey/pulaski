@@ -11,7 +11,7 @@
     <Description>
         @if (_count?.Count is { } c)
         {
-            <span>@c.LocationCode · @Display.Label(c.Status)@(c.Note is { } n ? $" · {n}" : "")</span>
+            <span>@c.LocationCode · @L.Label(c.Status)@(c.Note is { } n ? $" · {n}" : "")</span>
         }
     </Description>
     <Actions>

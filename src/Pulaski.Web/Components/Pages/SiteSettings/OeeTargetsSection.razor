@@ -34,7 +34,7 @@
                         {
                             <tr @key="t.Id">
                                 <td class="fw-semibold">@(t.EquipmentId is null ? "Site (default)" : $"{t.EquipmentCode} · {t.EquipmentName}")</td>
-                                <td class="small">@OeeTargetsView.Period(t)</td>
+                                <td class="small">@OeeTargetsView.Period(L, t)</td>
                                 <td class="text-end">@OeeTargetsView.Pct(t.Targets.AvailabilityPct)</td>
                                 <td class="text-end">@OeeTargetsView.Pct(t.Targets.PerformancePct)</td>
                                 <td class="text-end">@OeeTargetsView.Pct(t.Targets.QualityPct)</td>
@@ -79,11 +79,11 @@
                 @Figure("target-q", "Quality %", () => _quality, v => _quality = v)
                 @Figure("target-oee", "OEE %", () => _oee, v => _oee = v)
                 <div class="col-12">
-                    @if (OeeTargetsView.Problem(_availability, _performance, _quality, _oee) is { } problem)
+                    @if (OeeTargetsView.Problem(L, _availability, _performance, _quality, _oee) is { } problem)
                     {
                         <p class="small text-muted mb-1">@problem</p>
                     }
-                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || OeeTargetsView.Problem(_availability, _performance, _quality, _oee) is not null)">Save targets</button>
+                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || OeeTargetsView.Problem(L, _availability, _performance, _quality, _oee) is not null)">Save targets</button>
                 </div>
             </form>
         }

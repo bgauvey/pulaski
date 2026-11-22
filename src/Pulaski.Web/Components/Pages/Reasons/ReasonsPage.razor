@@ -23,7 +23,7 @@
     @foreach (var kind in Kinds)
     {
         <button type="button" class="inv-tab btn btn-link @(kind == _kind ? "active" : "")" @onclick="() => _kind = kind">
-            @Display.Label(kind) <span class="small text-muted">@(_reasons?.Count(r => r.Kind == kind) ?? 0)</span>
+            @L.Label(kind) <span class="small text-muted">@(_reasons?.Count(r => r.Kind == kind) ?? 0)</span>
         </button>
     }
 </nav>
@@ -68,7 +68,7 @@
         </div>
     }
     <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_newCode) || string.IsNullOrWhiteSpace(_newName))">
-        Add @Display.Label(_kind).ToLowerInvariant() @(_newIsGroup ? "group" : "reason")
+        Add @L.Label(_kind).ToLowerInvariant() @(_newIsGroup ? "group" : "reason")
     </button>
 </form>
 }
@@ -93,7 +93,7 @@ else
     }
     @if (shown.Count == 0)
     {
-        <div class="empty-panel"><p class="text-muted mb-0">No @Display.Label(_kind).ToLowerInvariant() reasons yet. Add one above.</p></div>
+        <div class="empty-panel"><p class="text-muted mb-0">No @L.Label(_kind).ToLowerInvariant() reasons yet. Add one above.</p></div>
     }
     else
     {

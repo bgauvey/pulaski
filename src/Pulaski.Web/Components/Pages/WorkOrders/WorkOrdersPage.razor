@@ -69,7 +69,7 @@
             <option value="">Open orders</option>
             @foreach (var status in Display.WorkOrderStatuses)
             {
-                <option value="@status">@Display.Label(status)</option>
+                <option value="@status">@L.Label(status)</option>
             }
             <option value="*">All statuses</option>
         </select>
@@ -142,7 +142,7 @@
                                     <button type="button" role="menuitem" class="wo-menu-item @(next == "cancelled" ? "is-danger" : "")"
                                             disabled="@(_busyId == selected.Order.Id)"
                                             @onclick="() => StartSelectedStatus(next)">
-                                        @Display.StatusAction(selected.Order.Status, next)
+                                        @(L[Display.StatusAction(selected.Order.Status, next)])
                                     </button>
                                 </li>
                             }
@@ -158,7 +158,7 @@
                                 var eligible = selectedOrders.Count(o => o.Order.NextStatuses.Contains(status) && MayMove(o.Order, status));
                                 <li role="none">
                                     <ActionButton role="menuitem" Class="@($"wo-menu-item {(status == "cancelled" ? "is-danger" : "")}")"
-                                                  Reason="@(eligible == 0 ? $"None of the selected orders can move to {Display.Label(status).ToLowerInvariant()}, or you may not do it." : null)"
+                                                  Reason="@(eligible == 0 ? $"None of the selected orders can move to {L.Label(status).ToLowerInvariant()}, or you may not do it." : null)"
                                                   OnClick="() => StartSelectedStatus(status)">
                                         @label <span class="text-muted">@eligible of @selectedOrders.Count</span>
                                     </ActionButton>
@@ -231,7 +231,7 @@
                     </td>
                     <td><ScreenLink Href="@($"schedule?workOrder={wo.Id}")" Permission="@PermissionCodes.ScheduleView" class="fw-semibold">@wo.OrderNumber</ScreenLink></td>
                     <td class="text-nowrap">
-                        <span class="@Display.StatusChip(wo.Status)">@Display.Label(wo.Status)</span>
+                        <span class="@Display.StatusChip(wo.Status)">@L.Label(wo.Status)</span>
                         @if (wo.QuantityHeld)
                         {
                             <span class="chip chip-warning ms-1" title="The ERP's quantity isn't whole batches; set one before dispatching">held</span>
@@ -300,7 +300,7 @@
                                     <dd>@(wo.BomVersionNumber is { } bomVersion ? $"Version {bomVersion}" : "None: no components planned")</dd>
                                     <dt>Origin</dt>
                                     <dd>
-                                        @(wo.Origin == "erp" ? "ERP" : Display.Label(wo.Origin)) · @wo.SiteCode
+                                        @(wo.Origin == "erp" ? "ERP" : L.Label(wo.Origin)) · @wo.SiteCode
                                         @if (wo.ExternalKey is { } key)
                                         {
                                             <div class="small text-muted">@wo.ExternalSystem @key@(wo.ExternalVersion is { } v ? $" · version {v}" : "")@(wo.ImportedAt is { } imported ? $" · last from the ERP {Display.SiteTime(imported, tz)}" : "")</div>
@@ -362,7 +362,7 @@
                                                     <tr @key="job.JobId">
                                                         <td>@job.JobNumber</td>
                                                         <td>@job.EquipmentCode@(job.Kind == "window" ? " · waiting for a line" : "")</td>
-                                                        <td><span class="@Display.JobStatusChip(job.Status)">@Display.Label(job.Status)</span></td>
+                                                        <td><span class="@Display.JobStatusChip(job.Status)">@L.Label(job.Status)</span></td>
                                                         <td class="text-nowrap">@Display.SiteTime(job.Start, tz) – @Display.SiteTime(job.End, tz)</td>
                                                         <td class="text-end">@Number(job.RemainingQty ?? job.PlannedQty ?? 0m)</td>
                                                     </tr>
@@ -390,7 +390,7 @@
                                                     <tr>
                                                         <td>@c.MaterialCode <span class="small text-muted">@c.MaterialName</span></td>
                                                         <td>@c.JobNumber · @c.EquipmentCode</td>
-                                                        <td>@Display.Label(c.ConsumptionMethod)</td>
+                                                        <td>@L.Label(c.ConsumptionMethod)</td>
                                                         <td class="text-end text-nowrap">@Number(c.PlannedQty) @c.UomCode</td>
                                                     </tr>
                                                 }
@@ -753,7 +753,7 @@
         try
         {
             await Api.MoveWorkOrderAsync(progress.Order, status);
-            _result = $"{progress.Order.OrderNumber} is now {Display.Label(status).ToLowerInvariant()}.";
+            _result = $"{progress.Order.OrderNumber} is now {L.Label(status).ToLowerInvariant()}.";
             _resultFailed = false;
         }
         catch (ApiException ex)

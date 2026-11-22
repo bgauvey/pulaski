@@ -4,14 +4,14 @@
 @* A lot's quality (#65): the material's released specification, the results recorded for the lot, and, while it is held, rejecting it. *@
 <section class="inv-section" aria-labelledby="quality-title">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <h2 id="quality-title" class="mb-0 me-auto">Quality</h2>
+        <h2 id="quality-title" class="mb-0 me-auto">@L["Quality"]</h2>
         @if (User.Can(PermissionCodes.QualityRecord, Lot.SiteId))
         {
-            <a class="btn btn-sm btn-outline-secondary" href="@($"quality/results?lotId={Lot.Id}")">Record a result</a>
+            <a class="btn btn-sm btn-outline-secondary" href="@($"quality/results?lotId={Lot.Id}")">@L["Record a result"]</a>
         }
         @if (Held && Lot.Quantity > 0 && User.Can(PermissionCodes.QualityDecide, Lot.SiteId))
         {
-            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="StartRejectAsync">Reject…</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="StartRejectAsync">@L["Reject…"]</button>
         }
     </div>
     <ProblemAlert Error="_error" />
@@ -19,27 +19,26 @@
     @if (_spec is { } spec)
     {
         <p class="small text-muted">
-            Specification version @spec.VersionNumber:
+            @L["Specification version {0}:", spec.VersionNumber]
             @string.Join("; ", spec.Items.Select(i => $"{i.Code} {i.Limits}{(i.UomCode is { } u && i.DataKind != "attribute" ? " " + u : "")}"))
         </p>
     }
     else if (_loaded)
     {
-        <p class="small text-muted">@Lot.MaterialCode has no released specification, so results aren't checked.</p>
+        <p class="small text-muted">@L["{0} has no released specification, so results aren't checked.", Lot.MaterialCode]</p>
     }
 
     @if (_rejecting)
     {
         <form class="inv-facts mb-2" @onsubmit="RejectAsync" @onsubmit:preventDefault>
             <p class="small mb-2">
-                Rejecting writes off all @InventoryView.Qty(Lot.Quantity) @Lot.UomCode as scrap. If the lot was made in a run, that quantity moves from good to
-                scrap there, at the time it was made, so it shows in OEE quality.
+                @L["Rejecting writes off all {0} {1} as scrap. If the lot was made in a run, that quantity moves from good to scrap there, at the time it was made, so it shows in OEE quality.", InventoryView.Qty(Lot.Quantity), Lot.UomCode]
             </p>
             <div class="d-flex flex-wrap gap-2 align-items-end">
                 <div>
-                    <label class="form-label small fw-semibold" for="reject-reason">Scrap reason</label>
+                    <label class="form-label small fw-semibold" for="reject-reason">@L["Scrap reason"]</label>
                     <select id="reject-reason" class="form-select form-select-sm" @bind="_reasonId">
-                        <option value="@Guid.Empty">Choose…</option>
+                        <option value="@Guid.Empty">@L["Choose…"]</option>
                         @foreach (var reason in _reasons)
                         {
                             <option value="@reason.Id">@reason.Name</option>
@@ -47,18 +46,18 @@
                     </select>
                 </div>
                 <div class="flex-grow-1">
-                    <label class="form-label small fw-semibold" for="reject-comment">Comment</label>
+                    <label class="form-label small fw-semibold" for="reject-comment">@L["Comment"]</label>
                     <input id="reject-comment" class="form-control form-control-sm" maxlength="500" @bind="_comment" />
                 </div>
-                <button type="submit" class="btn btn-sm btn-danger" disabled="@(_busy || _reasonId == Guid.Empty)">Reject the lot</button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _rejecting = false">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-danger" disabled="@(_busy || _reasonId == Guid.Empty)">@L["Reject the lot"]</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _rejecting = false">@L["Cancel"]</button>
             </div>
         </form>
     }
 
     @if (_results is not null)
     {
-        <QualityResultsTable Results="_results" TimeZone="@TimeZone" ShowTarget="false" Changed="LoadAsync" Empty="No results recorded for this lot." />
+        <QualityResultsTable Results="_results" TimeZone="@TimeZone" ShowTarget="false" Changed="LoadAsync" Empty="@L["No results recorded for this lot."]" />
     }
 </section>
 

@@ -84,7 +84,7 @@ public static class OeeTrend
         };
     }
 
-    private static string DayLabel(DateOnly day) => day.ToString("ddd d MMM", CultureInfo.InvariantCulture);
+    private static string DayLabel(DateOnly day) => day.ToString("ddd d MMM", CultureInfo.CurrentCulture);
 
     private static string ShiftLabel(OeeShiftRowDto s, bool byDay) =>
         byDay || s.ShiftCode is null ? DayLabel(s.ProductionDate) : $"{DayLabel(s.ProductionDate)} {s.ShiftCode}";

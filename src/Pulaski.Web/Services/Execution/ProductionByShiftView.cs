@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Contracts.Execution;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Execution;
 
@@ -11,18 +12,18 @@ public static class ProductionByShiftView
         DateOnly ProductionDate, string? ScheduleCode, string? ShiftCode, string Label, IReadOnlyList<ShiftProductionRowDto> Rows,
         IReadOnlyList<(string UomCode, decimal GoodQty, decimal ScrapQty)> Totals);
 
-    public static IReadOnlyList<ShiftGroup> Groups(IReadOnlyList<ShiftProductionRowDto> rows) =>
+    public static IReadOnlyList<ShiftGroup> Groups(Text l, IReadOnlyList<ShiftProductionRowDto> rows) =>
         [.. rows.GroupBy(r => (r.ProductionDate, r.ScheduleCode, r.ShiftCode, r.ShiftStart))
-            .Select(g => new ShiftGroup(g.Key.ProductionDate, g.Key.ScheduleCode, g.Key.ShiftCode, Label(g.First()), [.. g],
+            .Select(g => new ShiftGroup(g.Key.ProductionDate, g.Key.ScheduleCode, g.Key.ShiftCode, Label(l, g.First()), [.. g],
                 [.. g.GroupBy(r => r.UomCode).OrderBy(u => u.Key, StringComparer.Ordinal).Select(u => (u.Key, u.Sum(r => r.GoodQty), u.Sum(r => r.ScrapQty)))]))];
 
     /// <summary>"Mon 19 Oct · Nights (N, 2X12) 18:00–06:00 · RED", or "Mon 19 Oct · outside shifts".</summary>
-    public static string Label(ShiftProductionRowDto row)
+    public static string Label(Text l, ShiftProductionRowDto row)
     {
-        var day = row.ProductionDate.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture);
+        var day = row.ProductionDate.ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture);
         if (row.ShiftCode is not { } code)
         {
-            return $"{day} · outside shifts";
+            return $"{day} · {l["outside shifts"]}";
         }
 
         var times = row.ShiftStart is { } start && row.ShiftEnd is { } end

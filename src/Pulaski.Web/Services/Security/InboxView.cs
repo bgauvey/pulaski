@@ -1,5 +1,6 @@
 using Pulaski.Contracts.Inbox;
 using Pulaski.Contracts.Security;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Security;
 
@@ -22,11 +23,11 @@ public static class InboxView
     /// <summary>A kind's heading on the page: "Partial batches to approve", "SPC alerts to close"…</summary>
     public static string Heading(string kind) => kind switch
     {
-        "partial_batch" => "Partial batches to approve or reject",
-        "spc_alert" => "SPC alerts to close",
-        "labor" => "Labor to approve",
-        "erp_change" => "ERP changes to work orders",
-        "rate_proposal" => "Planning rates to review",
+        "partial_batch" => Term.Mark("Partial batches to approve or reject"),
+        "spc_alert" => Term.Mark("SPC alerts to close"),
+        "labor" => Term.Mark("Labor to approve"),
+        "erp_change" => Term.Mark("ERP changes to work orders"),
+        "rate_proposal" => Term.Mark("Planning rates to review"),
         _ => kind,
     };
 

@@ -4,11 +4,11 @@
 @* A measured characteristic sampled automatically from process-value tags (D-099): per line, a result every interval from the value held at
    consecutive minutes, for the job running then. Switched off, never deleted. *@
 <section class="inv-facts mb-3" aria-labelledby="tags-heading">
-    <h2 class="h6" id="tags-heading">Sampled from process values</h2>
+    <h2 class="h6" id="tags-heading">@L["Sampled from process values"]</h2>
     <p class="small text-muted">
-        Pulaski can make @Code's results itself from a process-value tag on a line: at the end of each interval, the value at the last
-        @(SubgroupSize > 1 ? $"{SubgroupSize} minutes" : "minute"), for the job running on the line. Intervals with no job running, or a bad or
-        missing signal, are skipped.
+        @(SubgroupSize > 1
+            ? L["Pulaski can make {0}'s results itself from a process-value tag on a line: at the end of each interval, the value at the last {1} minutes, for the job running on the line. Intervals with no job running, or a bad or missing signal, are skipped.", Code, SubgroupSize]
+            : L["Pulaski can make {0}'s results itself from a process-value tag on a line: at the end of each interval, the value at the last minute, for the job running on the line. Intervals with no job running, or a bad or missing signal, are skipped.", Code])
     </p>
     <ProblemAlert Error="_error" />
 
@@ -16,41 +16,41 @@
     {
         <div class="table-panel mb-2">
             <table class="table table-sm align-middle small mb-0">
-                <thead><tr><th>Line</th><th>Tag</th><th>Interval</th><th>Sampled up to</th><th></th></tr></thead>
+                <thead><tr><th>@L["Line"]</th><th>@L["Tag"]</th><th>@L["Interval"]</th><th>@L["Sampled up to"]</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var b in bindings)
                     {
                         <tr @key="b.Id" class="@(b.IsActive ? "" : "text-muted")">
                             <td>@b.SiteCode · @b.LineCode</td>
-                            <td>@(b.TagAddress is { } address ? $"{b.EquipmentCode} · {address}" : "Tag deleted")</td>
+                            <td>@(b.TagAddress is { } address ? $"{b.EquipmentCode} · {address}" : L["Tag deleted"])</td>
                             <td>
                                 @if (_editing == b.Id)
                                 {
-                                    <input type="number" min="1" max="1440" class="form-control form-control-sm d-inline-block" style="width: 6rem" aria-label="Minutes" @bind="_editMinutes" />
-                                    <span>min</span>
+                                    <input type="number" min="1" max="1440" class="form-control form-control-sm d-inline-block" style="width: 6rem" aria-label="@L["Minutes"]" @bind="_editMinutes" />
+                                    <span>@L["min"]</span>
                                 }
                                 else
                                 {
-                                    @ControlChartView.Interval(b.IntervalMinutes)
+                                    @ControlChartView.Interval(L, b.IntervalMinutes)
                                 }
                             </td>
-                            <td>@(b.IsActive ? Display.SiteTime(b.SampledThrough, TimeZone) : "Switched off")</td>
+                            <td>@(b.IsActive ? Display.SiteTime(b.SampledThrough, TimeZone) : L["Switched off"])</td>
                             <td class="text-end text-nowrap">
                                 @if (CanManage)
                                 {
                                     @if (_editing == b.Id)
                                     {
-                                        <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => SaveAsync(b, b.IsActive)">Save</button>
-                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _editing = null">Cancel</button>
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => SaveAsync(b, b.IsActive)">@L["Save"]</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _editing = null">@L["Cancel"]</button>
                                     }
                                     else if (b.IsActive)
                                     {
-                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => (_editing, _editMinutes) = (b.Id, b.IntervalMinutes)">Change</button>
-                                        <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => SaveAsync(b, false)">Switch off</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => (_editing, _editMinutes) = (b.Id, b.IntervalMinutes)">@L["Change"]</button>
+                                        <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => SaveAsync(b, false)">@L["Switch off"]</button>
                                     }
                                     else if (b.EquipmentTagId is not null)
                                     {
-                                        <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => SaveAsync(b, true)">Switch on</button>
+                                        <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => SaveAsync(b, true)">@L["Switch on"]</button>
                                     }
                                 }
                             </td>
@@ -62,16 +62,16 @@
     }
     else if (_bindings is not null)
     {
-        <p class="small text-muted">Not sampled from any tag.</p>
+        <p class="small text-muted">@L["Not sampled from any tag."]</p>
     }
 
     @if (CanManage)
     {
         <div class="row g-2 align-items-end">
             <div class="col-md-7">
-                <label class="form-label small fw-semibold" for="bind-tag">Process-value tag</label>
+                <label class="form-label small fw-semibold" for="bind-tag">@L["Process-value tag"]</label>
                 <select id="bind-tag" class="form-select form-select-sm" @bind="_tagId">
-                    <option value="@Guid.Empty">Choose…</option>
+                    <option value="@Guid.Empty">@L["Choose…"]</option>
                     @foreach (var t in _tags)
                     {
                         <option value="@t.Id" disabled="@(t.LineCode is null)">
@@ -81,15 +81,15 @@
                 </select>
                 @if (_tags.Count == 0)
                 {
-                    <div class="small text-muted">No process-value tags yet: bind one to a machine on Configure → Edge nodes.</div>
+                    <div class="small text-muted">@L["No process-value tags yet: bind one to a machine on Configure → Edge nodes."]</div>
                 }
             </div>
             <div class="col-md-2">
-                <label class="form-label small fw-semibold" for="bind-interval">Every, minutes</label>
+                <label class="form-label small fw-semibold" for="bind-interval">@L["Every, minutes"]</label>
                 <input id="bind-interval" type="number" min="1" max="1440" class="form-control form-control-sm" @bind="_minutes" />
             </div>
             <div class="col-md-3">
-                <ActionButton Class="btn btn-sm btn-outline-primary" Busy="_busy" Reason="@(_tagId == Guid.Empty ? "Choose a tag." : null)" OnClick="AddAsync">Sample from it</ActionButton>
+                <ActionButton Class="btn btn-sm btn-outline-primary" Busy="_busy" Reason="@(_tagId == Guid.Empty ? L["Choose a tag."] : null)" OnClick="AddAsync">@L["Sample from it"]</ActionButton>
             </div>
         </div>
     }
@@ -139,7 +139,7 @@
         await Api.AddTagBindingAsync(CharacteristicId, new AddTagBindingRequest { EquipmentTagId = _tagId, IntervalMinutes = _minutes });
         var tag = _tags.FirstOrDefault(t => t.Id == _tagId);
         _tagId = Guid.Empty;
-        await Saved.InvokeAsync($"{Code} is sampled from {tag?.SourceAddress ?? "the tag"} {ControlChartView.Interval(_minutes).ToLowerInvariant()}, from now on.");
+        await Saved.InvokeAsync(L["{0} is sampled from {1} {2}, from now on.", Code, tag?.SourceAddress ?? "the tag", ControlChartView.Interval(L, _minutes).ToLowerInvariant()]);
     });
 
     private Task SaveAsync(TagBindingDto b, bool on) => RunAsync(async () =>
@@ -147,8 +147,8 @@
         var minutes = _editing == b.Id ? _editMinutes : b.IntervalMinutes;
         await Api.UpdateTagBindingAsync(b.Id, new UpdateTagBindingRequest { Version = b.Version, IntervalMinutes = minutes, IsActive = on });
         _editing = null;
-        await Saved.InvokeAsync(on == b.IsActive ? $"{Code} on {b.LineCode} is now sampled {ControlChartView.Interval(minutes).ToLowerInvariant()}."
-            : on ? $"{Code} on {b.LineCode} is sampled again from now on." : $"{Code} on {b.LineCode} is no longer sampled.");
+        await Saved.InvokeAsync(on == b.IsActive ? L["{0} on {1} is now sampled {2}.", Code, b.LineCode, ControlChartView.Interval(L, minutes).ToLowerInvariant()]
+            : on ? L["{0} on {1} is sampled again from now on.", Code, b.LineCode] : L["{0} on {1} is no longer sampled.", Code, b.LineCode]);
     });
 
     private async Task RunAsync(Func<Task> action)

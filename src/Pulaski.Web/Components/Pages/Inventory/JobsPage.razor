@@ -59,7 +59,7 @@ else
                         </td>
                         <td>@j.MaterialCode <div class="small text-muted">@j.MaterialName</div></td>
                         <td>@j.LineCode</td>
-                        <td><span class="@Display.JobStatusChip(j.Status)">@Display.Label(j.Status)</span></td>
+                        <td><span class="@Display.JobStatusChip(j.Status)">@L.Label(j.Status)</span></td>
                         <td class="inv-num">@InventoryView.Qty(j.PlannedQty) <span class="small text-muted">@j.UomCode</span></td>
                     </tr>
                 }

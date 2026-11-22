@@ -127,7 +127,7 @@ else
                             <a class="fw-semibold" href="jobs/@r.JobId">@r.JobNumber</a>
                             <span class="small text-muted">@L["run {0}", r.RunNo] · @FloorView.Elapsed(r.StartedAt, Clock.GetUtcNow())</span>
                         </div>
-                        <div class="small">@(r.MaterialCode ?? Display.Label(r.JobType))@(r.WorkOrderNumber is { } o ? $" · {o}" : "")</div>
+                        <div class="small">@(r.MaterialCode ?? L.Label(r.JobType))@(r.WorkOrderNumber is { } o ? $" · {o}" : "")</div>
                         @if (r.PlannedQty is { } planned)
                         {
                             <div class="small mt-1">
@@ -187,9 +187,9 @@ else
                                 <div class="d-flex justify-content-between gap-2 align-items-start">
                                     <div>
                                         <a class="fw-semibold" href="jobs/@job.JobId">@job.JobNumber</a>
-                                        <span class="@Display.JobStatusChip(job.Status) ms-1">@Display.Label(job.Status)</span>
+                                        <span class="@Display.JobStatusChip(job.Status) ms-1">@L.Label(job.Status)</span>
                                         <div class="small">
-                                            @(job.MaterialCode ?? Display.Label(job.JobType))@(job.PlannedQty is { } q ? $" · {FloorView.Qty(q)} {job.UomCode}" : "")@(job.WorkOrderNumber is { } o ? $" · {o}" : "")
+                                            @(job.MaterialCode ?? L.Label(job.JobType))@(job.PlannedQty is { } q ? $" · {FloorView.Qty(q)} {job.UomCode}" : "")@(job.WorkOrderNumber is { } o ? $" · {o}" : "")
                                         </div>
                                         @if (!job.IsReady)
                                         {

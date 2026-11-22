@@ -6,23 +6,23 @@
 @inject CurrentUser User
 @inject TimeProvider Clock
 
-<PageTitle>Quality results · Pulaski</PageTitle>
+<PageTitle>@L["Quality results"] · Pulaski</PageTitle>
 
 @* Quality results (#65): record what was measured or inspected against a lot or a job, checked against the material's released specification. *@
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Quality results</h1>
+        <h1 class="mb-1">@L["Quality results"]</h1>
         <p class="text-muted mb-0">
-            What was measured or inspected, against a lot or a job's run, checked against the material's released
-            <a href="quality/specs">specification</a>. A failure of a characteristic that holds the lot puts the lot on hold.
+            @L["What was measured or inspected, against a lot or a job's run, checked against the material's released"]
+            <a href="quality/specs">@L["specification"]</a>@L[". A failure of a characteristic that holds the lot puts the lot on hold."]
         </p>
     </div>
     <div class="inv-head-tools">
-        <a class="btn btn-outline-secondary btn-sm" href="quality/charts">Control charts</a>
-        <a class="btn btn-outline-secondary btn-sm" href="quality/alerts">SPC alerts</a>
+        <a class="btn btn-outline-secondary btn-sm" href="quality/charts">@L["Control charts"]</a>
+        <a class="btn btn-outline-secondary btn-sm" href="quality/alerts">@L["SPC alerts"]</a>
         @if (Sites.Sites.Count > 1)
         {
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -36,7 +36,7 @@
 @if (_response is { } response)
 {
     <div class="alert @(response.Conforms == false ? "alert-warning" : "alert-success") small" role="status">
-        <strong>@(response.Conforms switch { true => "In specification.", false => "Out of specification.", _ => "Recorded." })</strong>
+        <strong>@(response.Conforms switch { true => L["In specification."], false => L["Out of specification."], _ => L["Recorded."] })</strong>
         @foreach (var note in response.Notes)
         {
             <div>@note</div>
@@ -47,23 +47,23 @@
 @if (Sites.SiteId is { } siteId && User.Can(PermissionCodes.QualityRecord, siteId))
 {
     <section class="inv-facts mb-3" aria-labelledby="record-heading">
-        <h2 class="h6" id="record-heading">Record a result</h2>
+        <h2 class="h6" id="record-heading">@L["Record a result"]</h2>
         <form class="row g-2 align-items-end" @onsubmit="RecordAsync" @onsubmit:preventDefault>
             <div class="col-12 col-md-4">
-                <label class="form-label small fw-semibold" for="q-lot">Lot</label>
+                <label class="form-label small fw-semibold" for="q-lot">@L["Lot"]</label>
                 @if (_lot is { } lot)
                 {
                     <div class="input-group input-group-sm">
                         <span class="form-control">@lot.Label</span>
-                        <button type="button" class="btn btn-outline-secondary" @onclick="ClearLot">Change</button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="ClearLot">@L["Change"]</button>
                     </div>
                     <div class="small text-muted">@lot.Detail</div>
                 }
                 else
                 {
                     <div class="input-group input-group-sm">
-                        <input id="q-lot" class="form-control" placeholder="Scan or type a lot number" @bind="_lotCode" />
-                        <button type="button" class="btn btn-outline-secondary" disabled="@string.IsNullOrWhiteSpace(_lotCode)" @onclick="FindLotAsync">Find</button>
+                        <input id="q-lot" class="form-control" placeholder="@L["Scan or type a lot number"]" @bind="_lotCode" />
+                        <button type="button" class="btn btn-outline-secondary" disabled="@string.IsNullOrWhiteSpace(_lotCode)" @onclick="FindLotAsync">@L["Find"]</button>
                     </div>
                     @foreach (var match in _lotMatches)
                     {
@@ -72,23 +72,23 @@
                 }
             </div>
             <div class="col-12 col-md-3">
-                <label class="form-label small fw-semibold">Job</label>
-                <div class="form-control form-control-sm">@(JobNumber ?? "None (open from a job's page to record against it)")</div>
+                <label class="form-label small fw-semibold">@L["Job"]</label>
+                <div class="form-control form-control-sm">@(JobNumber ?? L["None (open from a job's page to record against it)"])</div>
             </div>
             <div class="col-12 col-md-5">
-                <label class="form-label small fw-semibold" for="q-characteristic">Characteristic</label>
+                <label class="form-label small fw-semibold" for="q-characteristic">@L["Characteristic"]</label>
                 <select id="q-characteristic" class="form-select form-select-sm" @bind="_characteristicId">
-                    <option value="@Guid.Empty">Choose…</option>
+                    <option value="@Guid.Empty">@L["Choose…"]</option>
                     @if (_spec is { } spec)
                     {
-                        <optgroup label="@($"In {spec.MaterialCode}'s specification (version {spec.VersionNumber})")">
+                        <optgroup label="@L["In {0}'s specification (version {1})", spec.MaterialCode, spec.VersionNumber]">
                             @foreach (var item in spec.Items)
                             {
                                 <option value="@item.CharacteristicId">@item.Code · @item.Name · @item.Limits@(item.UomCode is { } u && item.DataKind != "attribute" ? " " + u : "")</option>
                             }
                         </optgroup>
                     }
-                    <optgroup label="@(_spec is null ? "Characteristics" : "Others (no limits for this material)")">
+                    <optgroup label="@(_spec is null ? L["Characteristics"] : L["Others (no limits for this material)"])">
                         @foreach (var c in _characteristics.Where(c => c.IsActive && (_spec?.Items.All(i => i.CharacteristicId != c.Id) ?? true)))
                         {
                             <option value="@c.Id">@c.Code · @c.Name</option>
@@ -101,48 +101,48 @@
                 @if (chosen.DataKind == "attribute")
                 {
                     <div class="col-6 col-md-2">
-                        <label class="form-label small fw-semibold" for="q-inspected">Inspected</label>
+                        <label class="form-label small fw-semibold" for="q-inspected">@L["Inspected"]</label>
                         <input id="q-inspected" type="number" min="1" class="form-control form-control-sm" @bind="_inspected" />
                     </div>
                     <div class="col-6 col-md-2">
-                        <label class="form-label small fw-semibold" for="q-defects">Defective</label>
+                        <label class="form-label small fw-semibold" for="q-defects">@L["Defective"]</label>
                         <input id="q-defects" type="number" min="0" class="form-control form-control-sm" @bind="_defects" />
                     </div>
                 }
                 else
                 {
                     <div class="col-12 col-md-4">
-                        <label class="form-label small fw-semibold" for="q-values">Values@(chosen.UomCode is { } u ? $" ({u})" : "")</label>
+                        <label class="form-label small fw-semibold" for="q-values">@L["Values{0}", chosen.UomCode is { } u ? $" ({u})" : ""]</label>
                         <input id="q-values" class="form-control form-control-sm" placeholder="3.31 3.29 3.34" @bind="_values" />
-                        <div class="small text-muted">One value, or several from one sample, separated by spaces.</div>
+                        <div class="small text-muted">@L["One value, or several from one sample, separated by spaces."]</div>
                     </div>
                 }
             }
             <div class="col-6 col-md-2">
-                <label class="form-label small fw-semibold" for="q-source">Source</label>
+                <label class="form-label small fw-semibold" for="q-source">@L["Source"]</label>
                 <select id="q-source" class="form-select form-select-sm" @bind="_source">
-                    <option value="manual">At the line</option>
-                    <option value="lab">Laboratory</option>
+                    <option value="manual">@L["At the line"]</option>
+                    <option value="lab">@L["Laboratory"]</option>
                 </select>
             </div>
             <div class="col-6 col-md-3">
-                <label class="form-label small fw-semibold" for="q-when">Sampled at</label>
+                <label class="form-label small fw-semibold" for="q-when">@L["Sampled at"]</label>
                 <input id="q-when" type="datetime-local" class="form-control form-control-sm" @bind="_when" />
             </div>
             <div class="col-12 col-md-5">
-                <label class="form-label small fw-semibold" for="q-comment">Comment</label>
+                <label class="form-label small fw-semibold" for="q-comment">@L["Comment"]</label>
                 <input id="q-comment" class="form-control form-control-sm" maxlength="1000" @bind="_comment" />
             </div>
             <div class="col-12">
-                <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busy || Chosen is null || (_lot is null && JobId is null))">Record</button>
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busy || Chosen is null || (_lot is null && JobId is null))">@L["Record"]</button>
             </div>
         </form>
     </section>
 }
 
 <div class="inv-toolbar">
-    <select class="form-select" aria-label="Characteristic" value="@(_filterCharacteristic?.ToString() ?? "")" @onchange="OnFilterChangedAsync">
-        <option value="">Every characteristic</option>
+    <select class="form-select" aria-label="@L["Characteristic"]" value="@(_filterCharacteristic?.ToString() ?? "")" @onchange="OnFilterChangedAsync">
+        <option value="">@L["Every characteristic"]</option>
         @foreach (var c in _characteristics)
         {
             <option value="@c.Id">@c.Code · @c.Name</option>
@@ -150,7 +150,7 @@
     </select>
     <div class="form-check">
         <input id="q-failing" type="checkbox" class="form-check-input" checked="@_failingOnly" @onchange="OnFailingChangedAsync" />
-        <label class="form-check-label" for="q-failing">Out of specification only</label>
+        <label class="form-check-label" for="q-failing">@L["Out of specification only"]</label>
     </div>
 </div>
 
@@ -158,13 +158,13 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
 {
     <QualityResultsTable Results="_results" TimeZone="@Sites.Site?.TimeZone" Changed="LoadResultsAsync"
-                         Empty="@(_failingOnly ? "Nothing out of specification." : "No results yet.")" />
+                         Empty="@(_failingOnly ? L["Nothing out of specification."] : L["No results yet."])" />
 }
 
 @code {
@@ -277,7 +277,7 @@ else
             }
             else if (_lotMatches.Count == 0)
             {
-                _error = new ApiException(404, "No lot found", $"No lot at this site matches {_lotCode}.", null);
+                _error = new ApiException(404, L["No lot found"], L["No lot at this site matches {0}.", _lotCode], null);
             }
         }
         catch (ApiException ex)
@@ -332,7 +332,7 @@ else
         }
         catch (FormatException ex)
         {
-            _error = new ApiException(400, "Not a number", $"{ex.Message} isn't a number; use a decimal point.", null);
+            _error = new ApiException(400, L["Not a number"], L["{0} isn't a number; use a decimal point.", ex.Message], null);
         }
         catch (ApiException ex)
         {

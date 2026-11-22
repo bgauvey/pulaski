@@ -4,33 +4,33 @@
 @inject NavigationManager Navigation
 @inject CurrentUser User
 
-<PageTitle>Specifications · Pulaski</PageTitle>
+<PageTitle>@L["Specifications"] · Pulaski</PageTitle>
 
 @* Material specifications (#65): what each material must meet, versioned like BOMs. *@
 <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
     <div>
-        <h1 class="mb-1">Specifications</h1>
-        <p class="text-muted mb-0">What each material must meet: its characteristics and their limits. Quality results are checked against the released version.</p>
+        <h1 class="mb-1">@L["Specifications"]</h1>
+        <p class="text-muted mb-0">@L["What each material must meet: its characteristics and their limits. Quality results are checked against the released version."]</p>
     </div>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-secondary" href="quality/characteristics">Characteristics</a>
+        <a class="btn btn-outline-secondary" href="quality/characteristics">@L["Characteristics"]</a>
         @if (User.Can(PermissionCodes.Specs))
         {
-            <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New specification</button>
+            <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">@L["New specification"]</button>
         }
     </div>
 </div>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.Specs" What="maintain specifications" />
+<ViewOnlyNote Permission="@PermissionCodes.Specs" What="@L["maintain specifications"]" />
 
 @if (_adding)
 {
     <form class="process-new" @onsubmit="CreateAsync" @onsubmit:preventDefault>
         <div class="flex-grow-1">
-            <label class="form-label" for="new-material">Material</label>
+            <label class="form-label" for="new-material">@L["Material"]</label>
             <select id="new-material" class="form-select" @bind="_materialId">
-                <option value="@Guid.Empty">Choose a material…</option>
+                <option value="@Guid.Empty">@L["Choose a material…"]</option>
                 @foreach (var m in _materials.Where(m => _specs?.All(s => s.MaterialId != m.Id) ?? true))
                 {
                     <option value="@m.Id">@m.Code · @m.Name</option>
@@ -38,8 +38,8 @@
             </select>
         </div>
         <div class="d-flex gap-2 align-self-end">
-            <button type="submit" class="btn btn-primary" disabled="@(_saving || _materialId == Guid.Empty)">Create and edit</button>
-            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || _materialId == Guid.Empty)">@L["Create and edit"]</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">@L["Cancel"]</button>
         </div>
     </form>
 }
@@ -48,15 +48,15 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_specs.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No specifications yet</h2>
+        <h2>@L["No specifications yet"]</h2>
         <p class="text-muted mb-0">
-            Add the <a href="quality/characteristics">characteristics</a> you measure or inspect first, then a specification for a material with their limits,
+            @L["Add the"] <a href="quality/characteristics">@L["characteristics"]</a> @L["you measure or inspect first, then a specification for a material with their limits,"]
             for example a profile's wall thickness of 3.2 – 3.4 mm.
         </p>
     </div>
@@ -65,7 +65,7 @@ else
 {
     <div class="table-panel">
         <table class="table align-middle">
-            <thead><tr><th>Material</th><th>Released</th><th>Draft</th><th>Updated</th></tr></thead>
+            <thead><tr><th>@L["Material"]</th><th>@L["Released"]</th><th>@L["Draft"]</th><th>@L["Updated"]</th></tr></thead>
             <tbody>
                 @foreach (var s in _specs)
                 {
@@ -74,11 +74,11 @@ else
                             <a class="fw-semibold" href="quality/specs/@s.Id">@s.MaterialCode</a>
                             <div class="small text-muted">@s.MaterialName</div>
                         </td>
-                        <td>@(s.ReleasedVersion is { } r ? $"Version {r} · {s.ReleasedItems} characteristics" : "—")</td>
+                        <td>@(s.ReleasedVersion is { } r ? L["Version {0} · {1} characteristics", r, s.ReleasedItems] : "—")</td>
                         <td>
                             @if (s.DraftVersion is { } d)
                             {
-                                <span class="chip">Version @d</span>
+                                <span class="chip">@L["Version {0}", d]</span>
                             }
                         </td>
                         <td class="small text-muted text-nowrap">@s.UpdatedAt.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) UTC</td>

@@ -42,7 +42,7 @@
         @foreach (var m in _choices)
         {
             <button type="button" class="list-group-item list-group-item-action" @onclick="() => ChooseAsync(m)">
-                <span class="chip">@Display.Label(m.Kind)</span> <span class="fw-semibold">@m.Label</span>
+                <span class="chip">@L.Label(m.Kind)</span> <span class="fw-semibold">@m.Label</span>
                 <span class="small text-muted">@m.Detail · by @m.MatchedBy</span>
             </button>
         }
@@ -67,7 +67,7 @@
     <div class="inv-facts mb-3" style="max-width: 36rem">
         <div class="d-flex justify-content-between">
             <div>
-                <span class="chip">@Display.Label(item.Kind)</span>
+                <span class="chip">@L.Label(item.Kind)</span>
                 <span class="fs-5 fw-semibold">@item.Label</span>
                 <div class="small text-muted">@item.Detail</div>
             </div>

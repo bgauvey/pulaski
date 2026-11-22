@@ -86,12 +86,12 @@
                         {
                             <tr @key="l.Id">
                                 <td><a class="fw-semibold" href="inventory/lots/@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode)</a></td>
-                                <td><span class="@InventoryView.StatusChip(l.Status)">@Display.Label(l.Status)</span></td>
+                                <td><span class="@InventoryView.StatusChip(l.Status)">@L.Label(l.Status)</span></td>
                                 <td class="inv-num">@InventoryView.Qty(l.Quantity) <span class="small text-muted">@l.UomCode</span></td>
                                 <td>@l.LocationCode</td>
                                 <td>@l.SupplierLot</td>
                                 <td class="small text-nowrap @(InventoryView.ExpiresSoon(l.ExpiresAt, Time.GetUtcNow()) ? "inv-held" : "")">@Display.SiteTime(l.ExpiresAt, Tz)</td>
-                                <td class="small">@(l.ProducedByJobNumber is { } job ? $"Made by {job}" : Display.Label(l.Origin))</td>
+                                <td class="small">@(l.ProducedByJobNumber is { } job ? $"Made by {job}" : L.Label(l.Origin))</td>
                             </tr>
                         }
                     </tbody>
@@ -188,7 +188,7 @@
                                     <tr @key="j.JobId">
                                         <td>
                                             <a class="fw-semibold" href="inventory/jobs/@j.JobId">@j.JobNumber</a>
-                                            <div class="small text-muted">makes @j.MaterialCode · <span class="@Display.JobStatusChip(j.JobStatus)">@Display.Label(j.JobStatus)</span></div>
+                                            <div class="small text-muted">makes @j.MaterialCode · <span class="@Display.JobStatusChip(j.JobStatus)">@L.Label(j.JobStatus)</span></div>
                                         </td>
                                         <td>@j.LineCode</td>
                                         <td class="inv-num">@InventoryView.Qty(j.PlannedQty) @j.UomCode</td>

@@ -69,7 +69,7 @@ else
                             }
                         </td>
                         <td>@c.LocationCode</td>
-                        <td><span class="@(c.Status == "open" ? "chip chip-strong" : "chip chip-muted")">@Display.Label(c.Status)</span></td>
+                        <td><span class="@(c.Status == "open" ? "chip chip-strong" : "chip chip-muted")">@L.Label(c.Status)</span></td>
                         <td class="inv-num">@c.CountedLines of @c.LineCount</td>
                         <td class="small">@Display.SiteTime(c.CreatedAt, Sites.Site?.TimeZone) <div class="text-muted">@c.CreatedBy</div></td>
                         <td class="small">

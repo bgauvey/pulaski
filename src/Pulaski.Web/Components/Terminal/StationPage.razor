@@ -393,8 +393,8 @@ else
                         {
                             <li @key="next.JobId">
                                 <span class="fw-semibold">@next.JobNumber</span>
-                                <span class="@Display.JobStatusChip(next.Status) ms-1">@Display.Label(next.Status)</span>
-                                <div class="text-muted">@(next.MaterialCode ?? Display.Label(next.JobType))@(next.PlannedQty is { } q ? $" · {FloorView.Qty(q)} {next.UomCode}" : "")</div>
+                                <span class="@Display.JobStatusChip(next.Status) ms-1">@L.Label(next.Status)</span>
+                                <div class="text-muted">@(next.MaterialCode ?? L.Label(next.JobType))@(next.PlannedQty is { } q ? $" · {FloorView.Qty(q)} {next.UomCode}" : "")</div>
                                 @if (!next.IsReady && next.Waiting is { } waiting)
                                 {
                                     <div class="small text-muted">@waiting</div>

@@ -8,17 +8,17 @@
 @inject NavigationManager Navigation
 
 @* Labor (D-040): who is on each line now, a shift's labor to review and approve, and labor reports. *@
-<PageTitle>@Tab · Labor · Pulaski</PageTitle>
+<PageTitle>@L[Tab] · @L["Labor"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Labor</h1>
-        <p class="text-muted mb-0">Who is on each line, the labor of each shift to review and approve, and hours against the standard crew.</p>
+        <h1 class="mb-1">@L["Labor"]</h1>
+        <p class="text-muted mb-0">@L["Who is on each line, the labor of each shift to review and approve, and hours against the standard crew."]</p>
     </div>
     @if (Sites.Sites.Count > 1)
     {
         <div class="inv-head-tools">
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChanged">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChanged">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -28,10 +28,10 @@
     }
 </div>
 
-<nav class="inv-tabs" aria-label="Labor">
-    <NavLink class="inv-tab" href="labor" Match="NavLinkMatch.All">On now</NavLink>
-    <NavLink class="inv-tab" href="labor/review">Shift review</NavLink>
-    <NavLink class="inv-tab" href="labor/reports">Reports</NavLink>
+<nav class="inv-tabs" aria-label="@L["Labor"]">
+    <NavLink class="inv-tab" href="labor" Match="NavLinkMatch.All">@L["On now"]</NavLink>
+    <NavLink class="inv-tab" href="labor/review">@L["Shift review"]</NavLink>
+    <NavLink class="inv-tab" href="labor/reports">@L["Reports"]</NavLink>
 </nav>
 
 @if (_loaded && Sites.SiteId is { } siteId)
@@ -51,7 +51,7 @@
 }
 else if (_loaded)
 {
-    <div class="empty-panel"><p class="text-muted mb-0">No site to show.</p></div>
+    <div class="empty-panel"><p class="text-muted mb-0">@L["No site to show."]</p></div>
 }
 
 @code {
@@ -66,9 +66,9 @@ else if (_loaded)
 
     private string Tab => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/') switch
     {
-        "labor/review" => "Shift review",
-        "labor/reports" => "Reports",
-        _ => "On now",
+        "labor/review" => Term.Mark("Shift review"),
+        "labor/reports" => Term.Mark("Reports"),
+        _ => Term.Mark("On now"),
     };
 
     protected override async Task OnInitializedAsync()

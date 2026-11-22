@@ -32,7 +32,7 @@ else
             {
                 <button type="button" class="btn btn-sm @(v.Id == _version.Id ? "btn-secondary" : "btn-outline-secondary")"
                         @onclick="() => OpenVersionAsync(v.Id)">
-                    Version @v.Number · @Display.Label(v.Status)
+                    Version @v.Number · @L.Label(v.Status)
                 </button>
             }
             @if (CanStartDraft && CanEdit)
@@ -234,7 +234,7 @@ else
     else if (_version.Status != "draft")
     {
         <p class="small text-muted">
-            Version @_version.Number is @Display.Label(_version.Status)@(_version.ReleasedAt is { } at ? $", released {at:yyyy-MM-dd}" : "")@(_version.Note is null ? "" : $": {_version.Note}").
+            Version @_version.Number is @L.Label(_version.Status)@(_version.ReleasedAt is { } at ? $", released {at:yyyy-MM-dd}" : "")@(_version.Note is null ? "" : $": {_version.Note}").
             A released version never changes; start a new draft to change the BOM.
         </p>
     }

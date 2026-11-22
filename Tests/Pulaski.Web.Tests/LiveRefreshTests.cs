@@ -10,10 +10,10 @@ public class LiveRefreshTests
     [Fact]
     public void It_is_live_for_a_minute_after_a_load_then_stale()
     {
-        Assert.Equal("Connecting…", LiveRefresh.Status(null, LoadedAt, null));
-        Assert.Equal("Live, updated 14:03", LiveRefresh.Status(LoadedAt, LoadedAt.AddSeconds(60), null));
+        Assert.Equal("Connecting…", LiveRefresh.Status(Pulaski.Web.Services.Localization.Text.English, null, LoadedAt, null));
+        Assert.Equal("Live, updated 14:03", LiveRefresh.Status(Pulaski.Web.Services.Localization.Text.English, LoadedAt, LoadedAt.AddSeconds(60), null));
         Assert.False(LiveRefresh.IsStale(LoadedAt, LoadedAt.AddSeconds(60)));
-        Assert.Equal("Stale since 14:03", LiveRefresh.Status(LoadedAt, LoadedAt.AddSeconds(61), null));
+        Assert.Equal("Stale since 14:03", LiveRefresh.Status(Pulaski.Web.Services.Localization.Text.English, LoadedAt, LoadedAt.AddSeconds(61), null));
         Assert.True(LiveRefresh.IsStale(LoadedAt, LoadedAt.AddSeconds(61)));
         Assert.False(LiveRefresh.IsStale(null, LoadedAt));
     }
@@ -21,6 +21,6 @@ public class LiveRefreshTests
     [Fact]
     public void Times_are_the_sites()
     {
-        Assert.Equal("Live, updated 09:03", LiveRefresh.Status(LoadedAt, LoadedAt, "America/New_York"));
+        Assert.Equal("Live, updated 09:03", LiveRefresh.Status(Pulaski.Web.Services.Localization.Text.English, LoadedAt, LoadedAt, "America/New_York"));
     }
 }

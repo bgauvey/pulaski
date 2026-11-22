@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Contracts.MachineData;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.MachineData;
 
@@ -9,13 +10,13 @@ public static class MachineView
     /// <summary>The label of an OEE category (D-005).</summary>
     public static string CategoryLabel(string? category) => category switch
     {
-        "producing" => "Producing",
-        "waiting_external" => "Waiting",
-        "held_internal" => "Held",
-        "stopped_faulted" => "Stopped",
-        "ready_transitioning" => "Ready",
-        "no_signal" => "No signal",
-        _ => "Not reporting",
+        "producing" => Term.Mark("Producing"),
+        "waiting_external" => Term.Mark("Waiting"),
+        "held_internal" => Term.Mark("Held"),
+        "stopped_faulted" => Term.Mark("Stopped"),
+        "ready_transitioning" => Term.Mark("Ready"),
+        "no_signal" => Term.Mark("No signal"),
+        _ => Term.Mark("Not reporting"),
     };
 
     /// <summary>The CSS modifier colouring a tile for its category, matching the design system's state tokens.</summary>
@@ -45,9 +46,9 @@ public static class MachineView
 
     public static string UnitModeLabel(int? mode) => mode switch
     {
-        null or 1 => "Production",
-        2 => "Maintenance",
-        3 => "Manual",
+        null or 1 => Term.Mark("Production"),
+        2 => Term.Mark("Maintenance"),
+        3 => Term.Mark("Manual"),
         _ => $"Mode {mode}",
     };
 
@@ -66,9 +67,9 @@ public static class MachineView
     /// <summary>How equipment's state and time are worked out, for a tile or a report row; null for its own tags.</summary>
     public static string? DerivationNote(string derivation) => derivation switch
     {
-        "series" => "Worst of its machines",
-        "parallel" => "Best of its machines",
-        "constraint_machine" => "Its constraint machine",
+        "series" => Term.Mark("Worst of its machines"),
+        "parallel" => Term.Mark("Best of its machines"),
+        "constraint_machine" => Term.Mark("Its constraint machine"),
         _ => null,
     };
 
@@ -78,11 +79,11 @@ public static class MachineView
     /// <summary>The label of a use of time in the utilization report (D-052).</summary>
     public static string UseLabel(string use) => use switch
     {
-        "run" => "Run",
-        "micro_stop" => "Micro-stops",
-        "down" => "Down",
-        "planned" => "Planned stop",
-        "non_production" => "Non-production mode",
+        "run" => Term.Mark("Run"),
+        "micro_stop" => Term.Mark("Micro-stops"),
+        "down" => Term.Mark("Down"),
+        "planned" => Term.Mark("Planned stop"),
+        "non_production" => Term.Mark("Non-production mode"),
         _ => use,
     };
 
@@ -93,7 +94,7 @@ public static class MachineView
         return [.. report.Shifts.Where(s => tops.Contains(s.EquipmentId))];
     }
 
-    public static string Count(decimal value) => value.ToString("#,0.##", CultureInfo.InvariantCulture);
+    public static string Count(decimal value) => value.ToString("#,0.##", CultureInfo.CurrentCulture);
 
     /// <summary>A stop's reason as the list shows it: the operator's, else the mapped one, else none.</summary>
     public static string ReasonText(DowntimeDto stop) =>
@@ -104,12 +105,12 @@ public static class MachineView
     /// <summary>Where a stop came from (D-069), as the list says it; nothing for a machine's own stop.</summary>
     public static string? SourceLabel(string source) => source switch
     {
-        "manual" => "Entered by hand",
-        "split" => "Split",
-        "merge" => "Merged",
-        "retime" => "Times changed",
-        "restore" => "Restored by undo",
-        "trim" => "Trimmed",
+        "manual" => Term.Mark("Entered by hand"),
+        "split" => Term.Mark("Split"),
+        "merge" => Term.Mark("Merged"),
+        "retime" => Term.Mark("Times changed"),
+        "restore" => Term.Mark("Restored by undo"),
+        "trim" => Term.Mark("Trimmed"),
         _ => null,
     };
 
@@ -123,8 +124,8 @@ public static class MachineView
     public static bool CanAdjust(DowntimeDto stop) => stop.EndedAt is not null && stop.SupersededAt is null;
 
     /// <summary>Why the chosen stops can't be merged yet, or null when they can be tried: the API checks they are consecutive.</summary>
-    public static string? MergeProblem(IReadOnlyCollection<DowntimeDto> chosen) =>
-        chosen.Count < 2 ? "Choose at least two stops to merge."
-        : chosen.Select(s => s.EquipmentId).Distinct().Count() > 1 ? "Only stops of one machine can be merged."
+    public static string? MergeProblem(Text l, IReadOnlyCollection<DowntimeDto> chosen) =>
+        chosen.Count < 2 ? l["Choose at least two stops to merge."]
+        : chosen.Select(s => s.EquipmentId).Distinct().Count() > 1 ? l["Only stops of one machine can be merged."]
         : null;
 }

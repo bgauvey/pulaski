@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.MachineData;
 using Pulaski.Web.Services.MachineData;
 
@@ -103,8 +104,8 @@ public class MachineViewTests
         Assert.Equal(("Entered by hand", "Split", "Merged", (string?)null),
             (MachineView.SourceLabel("manual"), MachineView.SourceLabel("split"), MachineView.SourceLabel("merge"), MachineView.SourceLabel("machine")));
 
-        Assert.NotNull(MachineView.MergeProblem([Stop(machine)]));
-        Assert.NotNull(MachineView.MergeProblem([Stop(machine), Stop(Guid.CreateVersion7())]));
-        Assert.Null(MachineView.MergeProblem([Stop(machine), Stop(machine)]));
+        Assert.NotNull(MachineView.MergeProblem(Text.English, [Stop(machine)]));
+        Assert.NotNull(MachineView.MergeProblem(Text.English, [Stop(machine), Stop(Guid.CreateVersion7())]));
+        Assert.Null(MachineView.MergeProblem(Text.English, [Stop(machine), Stop(machine)]));
     }
 }

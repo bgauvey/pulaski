@@ -1,15 +1,16 @@
 using System.Globalization;
 using Pulaski.Contracts.Quality;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Quality;
 
-/// <summary>Words and numbers for control charts and their limits (D-099).</summary>
+/// <summary>Words and numbers for control charts and their limits (D-099). Labels are terms the page translates (<c>L.Of</c>); sentences take the text.</summary>
 public static class ControlChartView
 {
     /// <summary>The charts a characteristic of the kind may use, with their names.</summary>
     public static IReadOnlyList<(string Code, string Name)> ChartsFor(string dataKind) => dataKind == "attribute"
-        ? [("p", "p: proportion defective"), ("np", "np: number defective"), ("c", "c: defects a sample"), ("u", "u: defects per unit")]
-        : [("i_mr", "Individuals and moving range"), ("xbar_r", "X-bar and R"), ("xbar_s", "X-bar and S")];
+        ? [("p", Term.Mark("p: proportion defective")), ("np", Term.Mark("np: number defective")), ("c", Term.Mark("c: defects a sample")), ("u", Term.Mark("u: defects per unit"))]
+        : [("i_mr", Term.Mark("Individuals and moving range")), ("xbar_r", Term.Mark("X-bar and R")), ("xbar_s", Term.Mark("X-bar and S"))];
 
     /// <summary>
     /// Where a refreshed chart's window ends: one that reached the present when it was loaded keeps up with it (a minute ahead, as it
@@ -20,53 +21,55 @@ public static class ControlChartView
 
     public static string ChartName(string chartType) => chartType switch
     {
-        "i_mr" => "Individuals and moving range",
-        "xbar_r" => "X-bar and R",
-        "xbar_s" => "X-bar and S",
-        "p" => "p chart",
-        "np" => "np chart",
-        "c" => "c chart",
-        "u" => "u chart",
+        "i_mr" => Term.Mark("Individuals and moving range"),
+        "xbar_r" => Term.Mark("X-bar and R"),
+        "xbar_s" => Term.Mark("X-bar and S"),
+        "p" => Term.Mark("p chart"),
+        "np" => Term.Mark("np chart"),
+        "c" => Term.Mark("c chart"),
+        "u" => Term.Mark("u chart"),
         _ => chartType,
     };
 
     /// <summary>"X-bar and R, subgroups of 5", "p chart", "np chart, 50 inspected".</summary>
-    public static string Chart(string chartType, int subgroupSize) => chartType switch
+    public static string Chart(Text l, string chartType, int subgroupSize) => chartType switch
     {
-        "xbar_r" or "xbar_s" => $"{ChartName(chartType)}, subgroups of {subgroupSize}",
-        "np" or "c" => $"{ChartName(chartType)}, {subgroupSize} inspected",
-        _ => ChartName(chartType),
+        "xbar_r" or "xbar_s" => l["{0}, subgroups of {1}", l[ChartName(chartType)], subgroupSize],
+        "np" or "c" => l["{0}, {1} inspected", l[ChartName(chartType)], subgroupSize],
+        _ => l[ChartName(chartType)],
     };
 
     /// <summary>What the subgroup size means for the chart, or null when it is fixed at 1.</summary>
     public static string? SizeLabel(string chartType) => chartType switch
     {
-        "xbar_r" or "xbar_s" => "Values a subgroup",
-        "np" or "c" => "Items inspected a sample",
+        "xbar_r" or "xbar_s" => Term.Mark("Values a subgroup"),
+        "np" or "c" => Term.Mark("Items inspected a sample"),
         _ => null,
     };
 
     /// <summary>The name of the dispersion chart's statistic, or null for charts without one.</summary>
     public static string? DispersionName(string chartType) => chartType switch
     {
-        "i_mr" => "Moving range",
-        "xbar_r" => "Range",
-        "xbar_s" => "Std dev",
+        "i_mr" => Term.Mark("Moving range"),
+        "xbar_r" => Term.Mark("Range"),
+        "xbar_s" => Term.Mark("Std dev"),
         _ => null,
     };
 
     /// <summary>A limit with a few more decimals than the characteristic's, so close limits can be told apart.</summary>
     public static string Number(double? value, int decimals) =>
-        value is { } v && double.IsFinite(v) ? v.ToString("N" + Math.Clamp(decimals + 2, 0, 8), CultureInfo.InvariantCulture) : "—";
+        value is { } v && double.IsFinite(v) ? v.ToString("N" + Math.Clamp(decimals + 2, 0, 8), CultureInfo.CurrentCulture) : "—";
 
     /// <summary>"Computed from 25 subgroups, 1 left out" or "Entered by hand".</summary>
-    public static string How(ControlLimitDto l) => l.Method == "manual"
-        ? "Entered by hand"
-        : $"From {l.BaselineSubgroups} subgroups{(l.LeftOutSampleIds.Count > 0 ? $", {l.LeftOutSampleIds.Count} left out" : "")}";
+    public static string How(Text t, ControlLimitDto l) => l.Method == "manual"
+        ? t["Entered by hand"]
+        : l.LeftOutSampleIds.Count > 0
+            ? t["From {0} subgroups, {1} left out", l.BaselineSubgroups, l.LeftOutSampleIds.Count]
+            : t["From {0} subgroups", l.BaselineSubgroups];
 
     /// <summary>"In force", "From 12 Nov", "Ended".</summary>
     public static string State(ControlLimitDto l, DateTimeOffset now) =>
-        l.IsInEffect ? "In force" : l.EffectiveFrom > now ? "Starts later" : "Ended";
+        l.IsInEffect ? Term.Mark("In force") : l.EffectiveFrom > now ? Term.Mark("Starts later") : Term.Mark("Ended");
 
     /// <summary>A capability index to two decimals, or a dash.</summary>
     public static string Index(double? value) => value is { } v && double.IsFinite(v) ? v.ToString("0.00", CultureInfo.InvariantCulture) : "—";
@@ -74,9 +77,9 @@ public static class ControlChartView
     /// <summary>The band in words, for a label next to its colour.</summary>
     public static string? BandName(string? band) => band switch
     {
-        "capable" => "Capable",
-        "marginal" => "Marginal",
-        "not_capable" => "Not capable",
+        "capable" => Term.Mark("Capable"),
+        "marginal" => Term.Mark("Marginal"),
+        "not_capable" => Term.Mark("Not capable"),
         _ => null,
     };
 
@@ -89,112 +92,121 @@ public static class ControlChartView
     };
 
     /// <summary>"LSL 3.2 · target 3.3 · USL 3.4, version 2" or what is missing.</summary>
-    public static string Specification(CapabilityDto c, string? uom)
+    public static string Specification(Text l, CapabilityDto c, string? uom)
     {
         var parts = new List<string>();
-        if (c.Lsl is { } l)
+        if (c.Lsl is { } lsl)
         {
-            parts.Add($"LSL {l.ToString("0.######", CultureInfo.InvariantCulture)}");
+            parts.Add($"LSL {lsl.ToString("0.######", CultureInfo.CurrentCulture)}");
         }
 
         if (c.Target is { } t)
         {
-            parts.Add($"target {t.ToString("0.######", CultureInfo.InvariantCulture)}");
+            parts.Add(l["target {0}", t.ToString("0.######", CultureInfo.CurrentCulture)]);
         }
 
         if (c.Usl is { } u)
         {
-            parts.Add($"USL {u.ToString("0.######", CultureInfo.InvariantCulture)}");
+            parts.Add($"USL {u.ToString("0.######", CultureInfo.CurrentCulture)}");
         }
 
-        return parts.Count == 0 ? "" : $"{string.Join(" · ", parts)}{(uom is null ? "" : $" {uom}")}{(c.SpecVersion is { } v ? $", specification version {v}" : "")}";
+        var text = $"{string.Join(" · ", parts)}{(uom is null ? "" : $" {uom}")}";
+        return parts.Count == 0 ? "" : c.SpecVersion is { } v ? l["{0}, specification version {1}", text, v] : text;
     }
 
     /// <summary>"3.00% defective (30,000 ppm): 6 of 200 inspected."</summary>
-    public static string Rate(CapabilityDto c, string chartType)
+    public static string Rate(Text l, CapabilityDto c, string chartType)
     {
         if (c.DefectRate is not { } rate)
         {
             return c.NotEnough ?? "";
         }
 
-        var what = chartType is "c" or "u" ? "defects a unit" : "defective";
-        return $"{(rate * 100).ToString("0.00", CultureInfo.InvariantCulture)}% {what} ({c.Ppm!.Value.ToString("#,0", CultureInfo.InvariantCulture)} ppm): "
-            + $"{c.Defects} {(chartType is "c" or "u" ? "defects" : "defective")} in {c.Inspected} inspected"
-            + (c.MaxDefects is { } max ? $". The specification allows at most {max} a sample." : ".");
+        var pct = (rate * 100).ToString("0.00", CultureInfo.CurrentCulture);
+        var ppm = c.Ppm!.Value.ToString("#,0", CultureInfo.CurrentCulture);
+        var text = chartType is "c" or "u"
+            ? l["{0}% defects a unit ({1} ppm): {2} defects in {3} inspected", pct, ppm, c.Defects, c.Inspected]
+            : l["{0}% defective ({1} ppm): {2} defective in {3} inspected", pct, ppm, c.Defects, c.Inspected];
+        return c.MaxDefects is { } max ? l["{0}. The specification allows at most {1} a sample.", text, max] : text + ".";
     }
 
     /// <summary>Where a result came from, as people say it.</summary>
     public static string Source(string source) => source switch
     {
-        "manual" => "At the line",
-        "lab" => "Laboratory",
-        "auto" => "From process values",
-        "lot_attribute" => "Lot attribute",
+        "manual" => Term.Mark("At the line"),
+        "lab" => Term.Mark("Laboratory"),
+        "auto" => Term.Mark("From process values"),
+        "lot_attribute" => Term.Mark("Lot attribute"),
         _ => source,
     };
 
     /// <summary>"Every 15 min", "Every 2 h", "Every 1 h 30 min".</summary>
-    public static string Interval(int minutes) => minutes switch
+    public static string Interval(Text l, int minutes) => minutes switch
     {
-        < 60 => $"Every {minutes} min",
-        _ when minutes % 60 == 0 => $"Every {minutes / 60} h",
-        _ => $"Every {minutes / 60} h {minutes % 60} min",
+        < 60 => l["Every {0} min", minutes],
+        _ when minutes % 60 == 0 => l["Every {0} h", minutes / 60],
+        _ => l["Every {0} h {1} min", minutes / 60, minutes % 60],
     };
 
     /// <summary>Nelson's rules, in his numbering, as people say them.</summary>
     public static IReadOnlyList<(int Number, string Name)> Rules { get; } =
     [
-        (1, "Beyond the control limits"),
-        (2, "9 in a row on one side of the centre line"),
-        (3, "6 in a row rising or falling"),
-        (4, "14 in a row alternating up and down"),
-        (5, "2 of 3 beyond 2 sigma on one side"),
-        (6, "4 of 5 beyond 1 sigma on one side"),
-        (7, "15 in a row within 1 sigma"),
-        (8, "8 in a row beyond 1 sigma, either side"),
+        (1, Term.Mark("Beyond the control limits")),
+        (2, Term.Mark("9 in a row on one side of the centre line")),
+        (3, Term.Mark("6 in a row rising or falling")),
+        (4, Term.Mark("14 in a row alternating up and down")),
+        (5, Term.Mark("2 of 3 beyond 2 sigma on one side")),
+        (6, Term.Mark("4 of 5 beyond 1 sigma on one side")),
+        (7, Term.Mark("15 in a row within 1 sigma")),
+        (8, Term.Mark("8 in a row beyond 1 sigma, either side")),
     ];
 
     public static string RuleName(int number) => Rules.FirstOrDefault(r => r.Number == number).Name ?? $"Rule {number}";
 
     /// <summary>"Rules 2, 5" for a point's label, or empty.</summary>
-    public static string RuleList(IReadOnlyList<int> rules) =>
-        rules.Count == 0 ? "" : $"{(rules.Count == 1 ? "Rule" : "Rules")} {string.Join(", ", rules)}";
+    public static string RuleList(Text l, IReadOnlyList<int> rules) =>
+        rules.Count == 0 ? "" : rules.Count == 1 ? l["Rule {0}", rules[0]] : l["Rules {0}", string.Join(", ", rules)];
 
     /// <summary>The run rules a point breaks other than rule 1, which the diamond already shows.</summary>
     public static IReadOnlyList<int> RunsBroken(IReadOnlyList<int> rules) => [.. rules.Where(r => r != 1)];
 
     /// <summary>The points of one of a chart's two plots: the statistic, or (<paramref name="dispersion"/>) its range, standard deviation or moving range.</summary>
-    public static IReadOnlyList<PlotPoint> Plot(ControlChartDto chart, bool dispersion, string? timeZone) =>
+    public static IReadOnlyList<PlotPoint> Plot(Text l, ControlChartDto chart, bool dispersion, string? timeZone) =>
         [.. chart.Points.Select(p => dispersion
-            ? new PlotPoint(p.At, p.Dispersion, p.DispersionCenter, p.DispersionUcl, p.DispersionLcl, p.IsDispersionBeyondLimits, Tip(chart, p, true, timeZone))
-            : new PlotPoint(p.At, p.Value, p.Center, p.Ucl, p.Lcl, p.IsBeyondLimits, Tip(chart, p, false, timeZone)) { Rules = RunsBroken(p.Rules) })];
+            ? new PlotPoint(p.At, p.Dispersion, p.DispersionCenter, p.DispersionUcl, p.DispersionLcl, p.IsDispersionBeyondLimits, Tip(l, chart, p, true, timeZone))
+            : new PlotPoint(p.At, p.Value, p.Center, p.Ucl, p.Lcl, p.IsBeyondLimits, Tip(l, chart, p, false, timeZone)) { Rules = RunsBroken(p.Rules) })];
 
     /// <summary>What hovering a point says: when, the value against its limits, and where it came from.</summary>
-    public static string Tip(ControlChartDto chart, ControlChartPointDto p, bool dispersion, string? timeZone)
+    public static string Tip(Text l, ControlChartDto chart, ControlChartPointDto p, bool dispersion, string? timeZone)
     {
         var value = dispersion ? p.Dispersion : p.Value;
         var (lcl, ucl, beyond) = dispersion ? (p.DispersionLcl, p.DispersionUcl, p.IsDispersionBeyondLimits) : (p.Lcl, p.Ucl, p.IsBeyondLimits);
-        var limits = ucl is null ? "no limits in force" : $"limits {Number(lcl, chart.Decimals)} to {Number(ucl, chart.Decimals)}{(beyond ? ", beyond them" : "")}";
+        var limits = ucl is null
+            ? l["no limits in force"]
+            : beyond
+                ? l["limits {0} to {1}, beyond them", Number(lcl, chart.Decimals), Number(ucl, chart.Decimals)]
+                : l["limits {0} to {1}", Number(lcl, chart.Decimals), Number(ucl, chart.Decimals)];
         var from = string.Join(" · ", new[] { p.LineCode, p.JobNumber, p.LotLabel }.Where(x => x is not null));
         var runs = dispersion ? [] : RunsBroken(p.Rules);
         return $"{Display.SiteTime(p.At, timeZone)}: {Number(value, chart.Decimals)} ({limits}){(from.Length > 0 ? $". {from}" : "")}"
-            + string.Concat(runs.Select(r => $". Rule {r}: {RuleName(r)}"));
+            + string.Concat(runs.Select(r => ". " + l["Rule {0}: {1}", r, l[RuleName(r)]]));
     }
 
     /// <summary>"3 of 40 beyond the limits; 5 with no limits in force."</summary>
-    public static string Summary(ControlChartDto chart)
+    public static string Summary(Text l, ControlChartDto chart)
     {
         var beyond = chart.Points.Count(p => p.IsBeyondLimits || p.IsDispersionBeyondLimits);
         var runs = chart.Points.Count(p => RunsBroken(p.Rules).Count > 0);
         var without = chart.Points.Count(p => p.Ucl is null);
         var text = without == chart.Points.Count
-            ? $"{chart.Points.Count} results; no control limits in force for them."
-            : $"{chart.Points.Count} results; {beyond} beyond the limits{(runs > 0 ? $", {runs} breaking a run rule" : "")}.";
+            ? l["{0} results; no control limits in force for them.", chart.Points.Count]
+            : runs > 0
+                ? l["{0} results; {1} beyond the limits, {2} breaking a run rule.", chart.Points.Count, beyond, runs]
+                : l["{0} results; {1} beyond the limits.", chart.Points.Count, beyond];
         return text
-            + (without > 0 && without < chart.Points.Count ? $" {without} had no limits in force." : "")
-            + (chart.Unusable > 0 ? $" {chart.Unusable} can't go on this chart (their size doesn't fit it)." : "")
-            + (chart.IsTruncated ? $" Only the latest {chart.MaxPoints} are shown." : "");
+            + (without > 0 && without < chart.Points.Count ? " " + l["{0} had no limits in force.", without] : "")
+            + (chart.Unusable > 0 ? " " + l["{0} can't go on this chart (their size doesn't fit it).", chart.Unusable] : "")
+            + (chart.IsTruncated ? " " + l["Only the latest {0} are shown.", chart.MaxPoints] : "");
     }
 }
 

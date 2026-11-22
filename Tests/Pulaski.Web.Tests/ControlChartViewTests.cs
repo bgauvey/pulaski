@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Quality;
 using Pulaski.Web.Services.Quality;
 
@@ -11,9 +12,9 @@ public class ControlChartViewTests
     {
         Assert.Equal(["i_mr", "xbar_r", "xbar_s"], ControlChartView.ChartsFor("variable").Select(c => c.Code));
         Assert.Equal(["p", "np", "c", "u"], ControlChartView.ChartsFor("attribute").Select(c => c.Code));
-        Assert.Equal("X-bar and R, subgroups of 5", ControlChartView.Chart("xbar_r", 5));
-        Assert.Equal("np chart, 50 inspected", ControlChartView.Chart("np", 50));
-        Assert.Equal("Individuals and moving range", ControlChartView.Chart("i_mr", 1));
+        Assert.Equal("X-bar and R, subgroups of 5", ControlChartView.Chart(Text.English, "xbar_r", 5));
+        Assert.Equal("np chart, 50 inspected", ControlChartView.Chart(Text.English, "np", 50));
+        Assert.Equal("Individuals and moving range", ControlChartView.Chart(Text.English, "i_mr", 1));
         Assert.Null(ControlChartView.SizeLabel("p"));
         Assert.Equal("Range", ControlChartView.DispersionName("xbar_r"));
         Assert.Null(ControlChartView.DispersionName("u"));
@@ -27,8 +28,8 @@ public class ControlChartViewTests
         Assert.Equal("—", ControlChartView.Number(null, 2));
 
         var computed = new ControlLimitDto { Method = "computed", BaselineSubgroups = 23, LeftOutSampleIds = [Guid.CreateVersion7()], IsInEffect = true };
-        Assert.Equal("From 23 subgroups, 1 left out", ControlChartView.How(computed));
-        Assert.Equal("Entered by hand", ControlChartView.How(computed with { Method = "manual" }));
+        Assert.Equal("From 23 subgroups, 1 left out", ControlChartView.How(Text.English, computed));
+        Assert.Equal("Entered by hand", ControlChartView.How(Text.English, computed with { Method = "manual" }));
         Assert.Equal("In force", ControlChartView.State(computed, DateTimeOffset.UtcNow));
         Assert.Equal("Starts later", ControlChartView.State(computed with { IsInEffect = false, EffectiveFrom = DateTimeOffset.UtcNow.AddDays(1) }, DateTimeOffset.UtcNow));
     }
@@ -38,9 +39,9 @@ public class ControlChartViewTests
     {
         Assert.Equal("From process values", ControlChartView.Source("auto"));
         Assert.Equal("Laboratory", ControlChartView.Source("lab"));
-        Assert.Equal("Every 15 min", ControlChartView.Interval(15));
-        Assert.Equal("Every 2 h", ControlChartView.Interval(120));
-        Assert.Equal("Every 1 h 30 min", ControlChartView.Interval(90));
+        Assert.Equal("Every 15 min", ControlChartView.Interval(Text.English, 15));
+        Assert.Equal("Every 2 h", ControlChartView.Interval(Text.English, 120));
+        Assert.Equal("Every 1 h 30 min", ControlChartView.Interval(Text.English, 90));
     }
 
     [Fact]
@@ -51,9 +52,9 @@ public class ControlChartViewTests
         Assert.Equal("Not capable", ControlChartView.BandName("not_capable"));
         Assert.Equal("chip chip-ok", ControlChartView.BandChip("capable"));
         Assert.Equal("LSL 3.2 · target 3.3 · USL 3.4 mm, specification version 2",
-            ControlChartView.Specification(new CapabilityDto { Lsl = 3.2m, Target = 3.3m, Usl = 3.4m, SpecVersion = 2 }, "mm"));
+            ControlChartView.Specification(Text.English, new CapabilityDto { Lsl = 3.2m, Target = 3.3m, Usl = 3.4m, SpecVersion = 2 }, "mm"));
         Assert.Equal("3.00% defective (30,000 ppm): 6 defective in 200 inspected. The specification allows at most 1 a sample.",
-            ControlChartView.Rate(new CapabilityDto { DefectRate = 0.03, Ppm = 30_000, Defects = 6, Inspected = 200, MaxDefects = 1 }, "p"));
+            ControlChartView.Rate(Text.English, new CapabilityDto { DefectRate = 0.03, Ppm = 30_000, Defects = 6, Inspected = 200, MaxDefects = 1 }, "p"));
     }
 
     [Fact]

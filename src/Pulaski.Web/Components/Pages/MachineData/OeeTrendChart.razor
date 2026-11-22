@@ -5,12 +5,12 @@
    marked and labelled. Hovering a point shows its value; the table above holds the same figures. *@
 @if (Points.Count == 0)
 {
-    <p class="text-muted small mb-0">Nothing to chart in this period.</p>
+    <p class="text-muted small mb-0">@L["Nothing to chart in this period."]</p>
 }
 else
 {
     <svg class="oee-trend" viewBox="0 0 @Width @Height" role="img" aria-labelledby="@($"{Id}-title {Id}-desc")">
-        <title id="@($"{Id}-title")">@Label by @(ByDay ? "day" : "shift")</title>
+        <title id="@($"{Id}-title")">@(ByDay ? L["{0} by day", Label] : L["{0} by shift", Label])</title>
         <desc id="@($"{Id}-desc")">@Description</desc>
 
         @foreach (var tick in Ticks)
@@ -25,7 +25,7 @@ else
         }
         @if (Points.LastOrDefault(p => p.Target is not null) is { Target: { } lastTarget })
         {
-            @SvgText("target-label", Width - Right + 4, Y(lastTarget) + 4, "start", $"Target {Pct(lastTarget)}")
+            @SvgText("target-label", Width - Right + 4, Y(lastTarget) + 4, "start", L["Target {0}", Pct(lastTarget)])
         }
 
         <path class="series" d="@Path" />
@@ -123,14 +123,14 @@ else
             var measured = Points.Count(p => p.Below is not null);
             var below = Points.Count(p => p.Below == true);
             return measured == 0
-                ? $"{Points.Count} points; no targets."
-                : $"{Points.Count} points; {below} of {measured} with a target below it.";
+                ? L["{0} points; no targets.", Points.Count]
+                : L["{0} points; {1} of {2} with a target below it.", Points.Count, below, measured];
         }
     }
 
-    private static string Tip(OeeTrendPoint p) => p.Value is { } v
+    private string Tip(OeeTrendPoint p) => p.Value is { } v
         ? $"{p.Label}: {Pct(v)}" + (p.Target is { } t ? $" (target {Pct(t)}{(v < t ? ", below" : "")})" : "")
-        : $"{p.Label}: nothing to measure";
+        : L["{0}: nothing to measure", p.Label];
 
     private static string Pct(decimal value) => value.ToString("0.#", CultureInfo.InvariantCulture) + "%";
 

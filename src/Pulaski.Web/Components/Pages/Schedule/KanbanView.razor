@@ -18,11 +18,11 @@
             .ThenBy(w => w.OrderNumber, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var blocked = Controller.DraggingWorkOrder is { } dragged && dragged.Status != status && !dragged.NextStatuses.Contains(status);
-        <section class="kanban-column" @key="status" aria-label="@Display.Label(status)"
+        <section class="kanban-column" @key="status" aria-label="@L.Label(status)"
                  data-drop-zone data-drop-blocked="@(blocked ? "" : null)"
                  @ondragover:preventDefault @ondrop="() => DropAsync(status)">
             <header class="kanban-column-head">
-                <span>@Display.Label(status)</span>
+                <span>@L.Label(status)</span>
                 <span class="chip chip-muted">@cards.Count</span>
             </header>
             <div class="kanban-cards">

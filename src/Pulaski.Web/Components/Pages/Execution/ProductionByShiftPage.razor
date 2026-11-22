@@ -9,38 +9,37 @@
 
 @* Good and scrap by shift (D-044): each report lands in the shift running on its line when it counted, and that shift's
    production day, so a night shift's output after midnight belongs to the day it started. *@
-<PageTitle>Production by shift · Pulaski</PageTitle>
+<PageTitle>@L["Production by shift"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Production by shift</h1>
+        <h1 class="mb-1">@L["Production by shift"]</h1>
         <p class="text-muted mb-0">
-            Good and scrap each shift made, by line, job and material. A report counts in the shift running on its line when it was made
-            (or, for a report after the run, when the run ended).
+            @L["Good and scrap each shift made, by line, job and material. A report counts in the shift running on its line when it was made (or, for a report after the run, when the run ended)."]
         </p>
     </div>
     <div class="inv-head-tools">
         @if (Sites.Sites.Count > 1)
         {
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
                 }
             </select>
         }
-        <a class="btn btn-outline-secondary" href="floor">Back to the Floor</a>
+        <a class="btn btn-outline-secondary" href="floor">@L["Back to the Floor"]</a>
     </div>
 </div>
 
 <div class="inv-toolbar">
-    <label class="small text-muted" for="pbs-from">From</label>
+    <label class="small text-muted" for="pbs-from">@L["From"]</label>
     <input id="pbs-from" type="date" class="form-control w-auto" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, true)" />
-    <label class="small text-muted" for="pbs-to">to</label>
+    <label class="small text-muted" for="pbs-to">@L["to"]</label>
     <input id="pbs-to" type="date" class="form-control w-auto" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, false)" />
-    <button type="button" class="btn btn-primary btn-sm" disabled="@(_busy || Sites.SiteId is null)" @onclick="LoadAsync">Show</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_report is not { Rows.Count: > 0 })" @onclick="ExportAsync">Export CSV</button>
-    <span class="ms-auto small text-muted">Production days; at most 93 days.</span>
+    <button type="button" class="btn btn-primary btn-sm" disabled="@(_busy || Sites.SiteId is null)" @onclick="LoadAsync">@L["Show"]</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_report is not { Rows.Count: > 0 })" @onclick="ExportAsync">@L["Export CSV"]</button>
+    <span class="ms-auto small text-muted">@L["Production days; at most 93 days."]</span>
 </div>
 
 <ProblemAlert Error="_error" />
@@ -49,25 +48,25 @@
 {
     @if (report.Rows.Count == 0)
     {
-        <div class="empty-panel"><p class="text-muted mb-0">No production reported for these days.</p></div>
+        <div class="empty-panel"><p class="text-muted mb-0">@L["No production reported for these days."]</p></div>
     }
     else
     {
-        @foreach (var group in ProductionByShiftView.Groups(report.Rows))
+        @foreach (var group in ProductionByShiftView.Groups(L, report.Rows))
         {
             <section class="inv-section" @key="(group.ProductionDate, group.ScheduleCode, group.ShiftCode, group.Label)">
                 <div class="inv-section-head">
                     <h2 class="h6 mb-0">@group.Label</h2>
                     <span class="small text-muted">
-                        @string.Join(" · ", group.Totals.Select(t => $"{ProductionByShiftView.Qty(t.GoodQty)} {t.UomCode} good, {ProductionByShiftView.Qty(t.ScrapQty)} scrap"))
+                        @string.Join(" · ", group.Totals.Select(t => L["{0} {1} good, {2} scrap", ProductionByShiftView.Qty(t.GoodQty), t.UomCode, ProductionByShiftView.Qty(t.ScrapQty)]))
                     </span>
                 </div>
                 <div class="table-panel">
                     <table class="table table-sm align-middle">
                         <thead>
                             <tr>
-                                <th>Line</th><th>Job</th><th>Work order</th><th>Material</th>
-                                <th class="inv-num">Good</th><th class="inv-num">Scrap</th><th>Unit</th><th class="inv-num">Reports</th>
+                                <th>@L["Line"]</th><th>@L["Job"]</th><th>@L["Work order"]</th><th>@L["Material"]</th>
+                                <th class="inv-num">@L["Good"]</th><th class="inv-num">@L["Scrap"]</th><th>@L["Unit"]</th><th class="inv-num">@L["Reports"]</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -91,14 +90,13 @@
         }
 
         <section class="inv-section" aria-labelledby="pbs-check">
-            <div class="inv-section-head"><h2 id="pbs-check" class="h6 mb-0">Against the jobs' runs</h2></div>
+            <div class="inv-section-head"><h2 id="pbs-check" class="h6 mb-0">@L["Against the jobs' runs"]</h2></div>
             <p class="small text-muted">
-                Each job's good and scrap in these days next to its totals on its job page. They match when all the job's reports fall in these days;
-                otherwise the rest was reported on other days.
+                @L["Each job's good and scrap in these days next to its totals on its job page. They match when all the job's reports fall in these days; otherwise the rest was reported on other days."]
             </p>
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Job</th><th class="inv-num">Good here</th><th class="inv-num">Scrap here</th><th class="inv-num">Good in its runs</th><th class="inv-num">Scrap in its runs</th><th>Unit</th><th></th></tr></thead>
+                    <thead><tr><th>@L["Job"]</th><th class="inv-num">@L["Good here"]</th><th class="inv-num">@L["Scrap here"]</th><th class="inv-num">@L["Good in its runs"]</th><th class="inv-num">@L["Scrap in its runs"]</th><th>@L["Unit"]</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var j in report.Jobs)
                         {
@@ -109,7 +107,7 @@
                                 <td class="inv-num">@ProductionByShiftView.Qty(j.RunGoodQty)</td>
                                 <td class="inv-num">@ProductionByShiftView.Qty(j.RunScrapQty)</td>
                                 <td>@j.UomCode</td>
-                                <td class="small">@(j.MatchesRuns ? "Matches" : "Part reported on other days")</td>
+                                <td class="small">@(j.MatchesRuns ? L["Matches"] : L["Part reported on other days"])</td>
                             </tr>
                         }
                     </tbody>

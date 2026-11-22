@@ -6,16 +6,15 @@
 @inject NavigationManager Navigation
 @inject TimeProvider Clock
 
-<PageTitle>Control charts · Pulaski</PageTitle>
+<PageTitle>@L["Control charts"] · Pulaski</PageTitle>
 
 @* Control charts (D-099): a characteristic's results for a material at the site, optionally one line, each against the control limits in force
    for it at its time. Measured characteristics have a second plot of the range, standard deviation or moving range. *@
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Control charts</h1>
+        <h1 class="mb-1">@L["Control charts"]</h1>
         <p class="text-muted mb-0">
-            How a characteristic's results vary over time against their control limits. A point beyond the limits is a sign something changed;
-            limits are set on the characteristic's <a href="quality/characteristics">Control limits</a>.
+            @L["How a characteristic's results vary over time against their control limits. A point beyond the limits is a sign something changed; limits are set on the characteristic's"] <a href="quality/characteristics">@L["Control limits"]</a>.
         </p>
     </div>
     <div class="inv-head-tools">
@@ -23,10 +22,10 @@
         {
             <LiveStatus OnRefresh="RefreshAsync" LoadedAt="_loadedAt" TimeZone="@Zone" />
         }
-        <a class="btn btn-outline-secondary btn-sm" href="quality/results">Results</a>
+        <a class="btn btn-outline-secondary btn-sm" href="quality/results">@L["Results"]</a>
         @if (Sites.Sites.Count > 1)
         {
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -40,10 +39,10 @@
 
 <form class="row g-2 align-items-end mb-3" @onsubmit="ShowAsync" @onsubmit:preventDefault>
     <div class="col-md-3">
-        <label class="form-label small fw-semibold" for="cc-characteristic">Characteristic</label>
+        <label class="form-label small fw-semibold" for="cc-characteristic">@L["Characteristic"]</label>
         <select id="cc-characteristic" class="form-select form-select-sm" value="@(_characteristicId?.ToString() ?? "")"
                 @onchange="e => _characteristicId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null">
-            <option value="">Choose…</option>
+            <option value="">@L["Choose…"]</option>
             @foreach (var c in _characteristics)
             {
                 <option value="@c.Id">@c.Code · @c.Name</option>
@@ -51,14 +50,14 @@
         </select>
     </div>
     <div class="col-md-3">
-        <label class="form-label small fw-semibold" for="cc-material">Material</label>
+        <label class="form-label small fw-semibold" for="cc-material">@L["Material"]</label>
         <MaterialPicker Id="cc-material" Materials="_materials" @bind-Value="_materialId" />
     </div>
     <div class="col-md-2">
-        <label class="form-label small fw-semibold" for="cc-line">Line</label>
+        <label class="form-label small fw-semibold" for="cc-line">@L["Line"]</label>
         <select id="cc-line" class="form-select form-select-sm" value="@(_lineId?.ToString() ?? "")"
                 @onchange="e => _lineId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null">
-            <option value="">Every line</option>
+            <option value="">@L["Every line"]</option>
             @foreach (var line in _lines)
             {
                 <option value="@line.Id">@line.Code · @line.Name</option>
@@ -66,55 +65,55 @@
         </select>
     </div>
     <div class="col-md-2">
-        <label class="form-label small fw-semibold" for="cc-from">From</label>
+        <label class="form-label small fw-semibold" for="cc-from">@L["From"]</label>
         <input id="cc-from" type="datetime-local" class="form-control form-control-sm" @bind="_from" />
     </div>
     <div class="col-md-2">
-        <label class="form-label small fw-semibold" for="cc-to">To</label>
+        <label class="form-label small fw-semibold" for="cc-to">@L["To"]</label>
         <input id="cc-to" type="datetime-local" class="form-control form-control-sm" @bind="_to" />
     </div>
     <div class="col-12">
         <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
-                      Reason="@(_characteristicId is null || _materialId is null ? "Choose a characteristic and a material." : null)">Show</ActionButton>
+                      Reason="@(_characteristicId is null || _materialId is null ? L["Choose a characteristic and a material."] : null)">@L["Show"]</ActionButton>
     </div>
 </form>
 
 @if (_chart is { } chart)
 {
-    var dispersion = ControlChartView.DispersionName(chart.ChartType);
+    var dispersion = L.Of(ControlChartView.DispersionName(chart.ChartType));
     <section class="inv-facts mb-3" aria-labelledby="chart-heading">
         <h2 class="h6 mb-1" id="chart-heading">
-            @chart.CharacteristicCode · @chart.MaterialCode@(chart.EquipmentCode is { } line ? $" on {line}" : "")
-            <span class="fw-normal text-muted">· @ControlChartView.Chart(chart.ChartType, chart.SubgroupSize)@(chart.UomCode is { } u ? $", {u}" : "")</span>
+            @chart.CharacteristicCode · @chart.MaterialCode@(chart.EquipmentCode is { } line ? L[" on {0}", line] : "")
+            <span class="fw-normal text-muted">· @ControlChartView.Chart(L, chart.ChartType, chart.SubgroupSize)@(chart.UomCode is { } u ? $", {u}" : "")</span>
         </h2>
-        <p class="small text-muted mb-2" role="status">@ControlChartView.Summary(chart)</p>
-        <p class="small text-muted mb-2">Rules checked: @string.Join("; ", chart.RunRules.Select(r => $"{r} {ControlChartView.RuleName(r).ToLowerInvariant()}")).</p>
+        <p class="small text-muted mb-2" role="status">@ControlChartView.Summary(L, chart)</p>
+        <p class="small text-muted mb-2">@L["Rules checked:"] @string.Join("; ", chart.RunRules.Select(r => $"{r} {L[ControlChartView.RuleName(r)].ToLowerInvariant()}")).</p>
         <div class="spc-legend mb-2" aria-hidden="true">
-            <span><svg width="14" height="14"><circle cx="7" cy="7" r="4" fill="var(--accent)" /></svg>Result</span>
-            <span><svg width="14" height="14"><path d="M7 1 L13 7 L7 13 L1 7 Z" fill="var(--danger)" /></svg>Beyond the limits</span>
-            <span><svg width="14" height="14"><rect x="2" y="2" width="10" height="10" fill="var(--warning)" /></svg>Breaks a run rule (numbered)</span>
-            <span><svg width="22" height="14"><line x1="0" x2="22" y1="7" y2="7" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="5 4" /></svg>Control limits</span>
-            <span><svg width="22" height="14"><line x1="0" x2="22" y1="7" y2="7" stroke="var(--text-muted)" stroke-width="1" /></svg>Centre line</span>
+            <span><svg width="14" height="14"><circle cx="7" cy="7" r="4" fill="var(--accent)" /></svg>@L["Result"]</span>
+            <span><svg width="14" height="14"><path d="M7 1 L13 7 L7 13 L1 7 Z" fill="var(--danger)" /></svg>@L["Beyond the limits"]</span>
+            <span><svg width="14" height="14"><rect x="2" y="2" width="10" height="10" fill="var(--warning)" /></svg>@L["Breaks a run rule (numbered)"]</span>
+            <span><svg width="22" height="14"><line x1="0" x2="22" y1="7" y2="7" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="5 4" /></svg>@L["Control limits"]</span>
+            <span><svg width="22" height="14"><line x1="0" x2="22" y1="7" y2="7" stroke="var(--text-muted)" stroke-width="1" /></svg>@L["Centre line"]</span>
         </div>
-        <ControlChartPlot Id="spc-main" Points="ControlChartView.Plot(chart, false, Zone)" Label="@MainLabel(chart.ChartType)" Decimals="chart.Decimals" TimeZone="@Zone" />
+        <ControlChartPlot Id="spc-main" Points="ControlChartView.Plot(L, chart, false, Zone)" Label="@MainLabel(chart.ChartType)" Decimals="chart.Decimals" TimeZone="@Zone" />
         @if (dispersion is not null)
         {
             <div class="small fw-semibold mt-2">@dispersion</div>
-            <ControlChartPlot Id="spc-dispersion" Points="ControlChartView.Plot(chart, true, Zone)" Label="@dispersion" Decimals="chart.Decimals" Height="160" TimeZone="@Zone" />
+            <ControlChartPlot Id="spc-dispersion" Points="ControlChartView.Plot(L, chart, true, Zone)" Label="@dispersion" Decimals="chart.Decimals" Height="160" TimeZone="@Zone" />
         }
 
         @{ var cap = chart.Capability; }
         <div class="border-top mt-3 pt-2" aria-labelledby="capability-heading">
-            <h3 class="h6 mb-1" id="capability-heading">Capability</h3>
+            <h3 class="h6 mb-1" id="capability-heading">@L["Capability"]</h3>
             @if (cap.IsUnstable)
             {
                 <p class="small text-warning-strong mb-1">
-                    The chart signals (beyond the limits or a run rule), so the process isn't stable: capability describes it poorly until the cause is dealt with.
+                    @L["The chart signals (beyond the limits or a run rule), so the process isn't stable: capability describes it poorly until the cause is dealt with."]
                 </p>
             }
             @if (dispersion is null)
             {
-                <p class="small mb-0">@ControlChartView.Rate(cap, chart.ChartType)</p>
+                <p class="small mb-0">@ControlChartView.Rate(L, cap, chart.ChartType)</p>
             }
             else if (cap.NotEnough is { } why)
             {
@@ -123,39 +122,39 @@
             else
             {
                 <p class="small text-muted mb-1">
-                    Against @ControlChartView.Specification(cap, chart.UomCode). @cap.Subgroups subgroups; mean @ControlChartView.Number(cap.Mean, chart.Decimals),
-                    sigma @ControlChartView.Number(cap.SigmaWithin, chart.Decimals) within subgroups and @ControlChartView.Number(cap.SigmaOverall, chart.Decimals) overall.
+                    @L["Against {0}. {1} subgroups; mean {2}, sigma {3} within subgroups and {4} overall.", ControlChartView.Specification(L, cap, chart.UomCode), cap.Subgroups,
+                        ControlChartView.Number(cap.Mean, chart.Decimals), ControlChartView.Number(cap.SigmaWithin, chart.Decimals), ControlChartView.Number(cap.SigmaOverall, chart.Decimals)]
                 </p>
                 <div class="d-flex flex-wrap gap-4 small">
                     <div>
-                        <div class="text-muted">Cp · Cpk (within)</div>
+                        <div class="text-muted">@L["Cp · Cpk (within)"]</div>
                         <span class="fw-semibold">@ControlChartView.Index(cap.Cp) · @ControlChartView.Index(cap.Cpk)</span>
-                        @if (ControlChartView.BandName(cap.Band) is { } band)
+                        @if (L.Of(ControlChartView.BandName(cap.Band)) is { } band)
                         {
                             <span class="@ControlChartView.BandChip(cap.Band) ms-1">@band</span>
                         }
                     </div>
                     <div>
-                        <div class="text-muted">Pp · Ppk (overall)</div>
+                        <div class="text-muted">@L["Pp · Ppk (overall)"]</div>
                         <span class="fw-semibold">@ControlChartView.Index(cap.Pp) · @ControlChartView.Index(cap.Ppk)</span>
-                        @if (ControlChartView.BandName(cap.PerformanceBand) is { } performance)
+                        @if (L.Of(ControlChartView.BandName(cap.PerformanceBand)) is { } performance)
                         {
                             <span class="@ControlChartView.BandChip(cap.PerformanceBand) ms-1">@performance</span>
                         }
                     </div>
                 </div>
-                <p class="small text-muted mt-1 mb-0">Capable at 1.33 or more, marginal from 1.00. Cp and Pp need both limits.</p>
+                <p class="small text-muted mt-1 mb-0">@L["Capable at 1.33 or more, marginal from 1.00. Cp and Pp need both limits."]</p>
             }
         </div>
 
         <details class="mt-2">
-            <summary class="small">Show as a table</summary>
+            <summary class="small">@L["Show as a table"]</summary>
             <div class="table-panel mt-2" style="max-height: 24rem; overflow-y: auto;">
                 <table class="table table-sm align-middle small mb-0">
                     <thead>
                         <tr>
-                            <th>Sampled</th><th class="inv-num">@MainLabel(chart.ChartType)</th>@if (dispersion is not null) { <th class="inv-num">@dispersion</th> }
-                            <th class="inv-num">Size</th><th class="inv-num">Limits</th><th>Line · job · lot</th><th></th>
+                            <th>@L["Sampled"]</th><th class="inv-num">@MainLabel(chart.ChartType)</th>@if (dispersion is not null) { <th class="inv-num">@dispersion</th> }
+                            <th class="inv-num">@L["Size"]</th><th class="inv-num">@L["Limits"]</th><th>@L["Line · job · lot"]</th><th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -169,16 +168,16 @@
                                     <td class="inv-num">@ControlChartView.Number(p.Dispersion, chart.Decimals)</td>
                                 }
                                 <td class="inv-num">@p.Size</td>
-                                <td class="inv-num">@(p.Ucl is null ? "—" : $"{ControlChartView.Number(p.Lcl, chart.Decimals)} to {ControlChartView.Number(p.Ucl, chart.Decimals)}")</td>
+                                <td class="inv-num">@(p.Ucl is null ? "—" : L["{0} to {1}", ControlChartView.Number(p.Lcl, chart.Decimals), ControlChartView.Number(p.Ucl, chart.Decimals)])</td>
                                 <td>@string.Join(" · ", new[] { p.LineCode, p.JobNumber, p.LotLabel }.Where(x => x is not null))</td>
                                 <td>
                                     @if (p.IsBeyondLimits || p.IsDispersionBeyondLimits)
                                     {
-                                        <span class="chip chip-warn">Beyond the limits</span>
+                                        <span class="chip chip-warn">@L["Beyond the limits"]</span>
                                     }
                                     @foreach (var rule in ControlChartView.RunsBroken(p.Rules))
                                     {
-                                        <span class="chip chip-warn ms-1" title="@ControlChartView.RuleName(rule)">Rule @rule</span>
+                                        <span class="chip chip-warn ms-1" title="@(L[ControlChartView.RuleName(rule)])">@L["Rule {0}", rule]</span>
                                     }
                                 </td>
                             </tr>
@@ -310,13 +309,13 @@
     private sealed record Shown(
         Guid SiteId, Guid CharacteristicId, Guid MaterialId, Guid? LineId, DateTimeOffset From, DateTimeOffset To, DateTime? FormTo);
 
-    private static string MainLabel(string chartType) => chartType switch
+    private string MainLabel(string chartType) => chartType switch
     {
-        "i_mr" => "Value",
-        "xbar_r" or "xbar_s" => "Mean",
-        "p" => "Proportion defective",
-        "np" => "Number defective",
-        "c" => "Defects",
-        _ => "Defects per unit",
+        "i_mr" => L["Value"],
+        "xbar_r" or "xbar_s" => L["Mean"],
+        "p" => L["Proportion defective"],
+        "np" => L["Number defective"],
+        "c" => L["Defects"],
+        _ => L["Defects per unit"],
     };
 }

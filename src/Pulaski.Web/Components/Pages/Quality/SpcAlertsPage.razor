@@ -6,15 +6,15 @@
 @inject CurrentUser User
 @inject TimeProvider Clock
 
-<PageTitle>SPC alerts · Pulaski</PageTitle>
+<PageTitle>@L["SPC alerts"] · Pulaski</PageTitle>
 
 @* SPC alerts (D-099): a control chart that signalled, one open per chart; further breaks are added to it. Closed with what caused it and what
    was done; the next break opens a new one. Alerts never hold a lot: that stays with the specification. *@
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">SPC alerts</h1>
+        <h1 class="mb-1">@L["SPC alerts"]</h1>
         <p class="text-muted mb-0">
-            Control charts that signalled: a result beyond its limits, or completing a run rule. Find the cause, then close the alert with it and what was done.
+            @L["Control charts that signalled: a result beyond its limits, or completing a run rule. Find the cause, then close the alert with it and what was done."]
         </p>
     </div>
     <div class="inv-head-tools">
@@ -22,10 +22,10 @@
         {
             <LiveStatus OnRefresh="RefreshAsync" LoadedAt="_loadedAt" TimeZone="@Zone" />
         }
-        <a class="btn btn-outline-secondary btn-sm" href="quality/charts">Control charts</a>
+        <a class="btn btn-outline-secondary btn-sm" href="quality/charts">@L["Control charts"]</a>
         @if (Sites.Sites.Count > 1)
         {
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -36,7 +36,7 @@
 </div>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.QualityRecord" What="close alerts" SiteId="Sites.SiteId" />
+<ViewOnlyNote Permission="@PermissionCodes.QualityRecord" What="@L["close alerts"]" SiteId="Sites.SiteId" />
 @if (_message is { } message)
 {
     <div class="alert alert-success small" role="status">@message</div>
@@ -44,48 +44,48 @@
 
 @if (Sites.SiteId is null)
 {
-    <p class="text-muted">There is no site yet.</p>
+    <p class="text-muted">@L["There is no site yet."]</p>
 }
 else if (_alerts is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
 {
     <div class="table-panel mb-3">
         <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Chart</th><th>Rules</th><th class="inv-num">Results</th><th>Signalled</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>@L["Chart"]</th><th>@L["Rules"]</th><th class="inv-num">@L["Results"]</th><th>@L["Signalled"]</th><th>@L["Status"]</th><th></th></tr></thead>
             <tbody>
                 @foreach (var a in _alerts)
                 {
                     <tr @key="a.Id" class="@(a.Status == "open" ? "" : "text-muted")">
                         <td>
-                            <span class="fw-semibold">@a.CharacteristicCode</span> · @a.MaterialCode@(a.EquipmentCode is { } line ? $" on {line}" : "")
+                            <span class="fw-semibold">@a.CharacteristicCode</span> · @a.MaterialCode@(a.EquipmentCode is { } line ? L[" on {0}", line] : "")
                             <div class="small text-muted">@a.CharacteristicName</div>
                         </td>
-                        <td class="small">@string.Join("; ", a.Rules.Select(r => $"{r} {ControlChartView.RuleName(r).ToLowerInvariant()}"))</td>
+                        <td class="small">@string.Join("; ", a.Rules.Select(r => $"{r} {L[ControlChartView.RuleName(r)].ToLowerInvariant()}"))</td>
                         <td class="inv-num">@a.Breaks</td>
-                        <td class="small">@Display.SiteTime(a.FirstSampleAt, Zone)@(a.LastSampleAt > a.FirstSampleAt ? $" to {Display.SiteTime(a.LastSampleAt, Zone)}" : "")</td>
+                        <td class="small">@Display.SiteTime(a.FirstSampleAt, Zone)@(a.LastSampleAt > a.FirstSampleAt ? L[" to {0}", Display.SiteTime(a.LastSampleAt, Zone)] : "")</td>
                         <td class="small">
                             @if (a.Status == "open")
                             {
-                                <span class="chip chip-warn">Open</span>
+                                <span class="chip chip-warn">@L["Open"]</span>
                             }
                             else
                             {
-                                <span>Closed: @a.Cause</span>
+                                <span>@L["Closed: {0}", a.Cause]</span>
                                 <div class="text-muted">@a.Action</div>
                             }
                         </td>
-                        <td class="text-end"><button type="button" class="btn btn-sm btn-link" @onclick="() => OpenAsync(a)">@(a.Status == "open" ? "Respond" : "Details")</button></td>
+                        <td class="text-end"><button type="button" class="btn btn-sm btn-link" @onclick="() => OpenAsync(a)">@(a.Status == "open" ? L["Respond"] : L["Details"])</button></td>
                     </tr>
                 }
                 @if (_alerts.Count == 0)
                 {
-                    <tr><td colspan="6" class="text-muted small">No alerts open, and none closed in the last 30 days.</td></tr>
+                    <tr><td colspan="6" class="text-muted small">@L["No alerts open, and none closed in the last 30 days."]</td></tr>
                 }
             </tbody>
         </table>
@@ -94,21 +94,21 @@ else
     @if (_selected is { } alert)
     {
         <section class="inv-facts mb-3" aria-labelledby="alert-heading">
-            <h2 class="h6" id="alert-heading">@alert.CharacteristicCode · @alert.MaterialCode@(alert.EquipmentCode is { } on ? $" on {on}" : "")</h2>
+            <h2 class="h6" id="alert-heading">@alert.CharacteristicCode · @alert.MaterialCode@(alert.EquipmentCode is { } on ? L[" on {0}", on] : "")</h2>
             <p class="small mb-2">
-                Raised @Display.SiteTime(alert.RaisedAt, Zone).
-                <a href="@($"quality/charts?characteristic={alert.CharacteristicId}&material={alert.MaterialId}{(alert.EquipmentId is { } l ? $"&line={l}" : "")}")">See the chart</a>
+                @L["Raised {0}.", Display.SiteTime(alert.RaisedAt, Zone)]
+                <a href="@($"quality/charts?characteristic={alert.CharacteristicId}&material={alert.MaterialId}{(alert.EquipmentId is { } l ? $"&line={l}" : "")}")">@L["See the chart"]</a>
             </p>
             <div class="table-panel mb-2">
                 <table class="table table-sm align-middle small mb-0">
-                    <thead><tr><th>Sampled</th><th>Rules broken</th><th class="inv-num">Value</th><th>Job · lot</th></tr></thead>
+                    <thead><tr><th>@L["Sampled"]</th><th>@L["Rules broken"]</th><th class="inv-num">@L["Value"]</th><th>@L["Job · lot"]</th></tr></thead>
                     <tbody>
                         @foreach (var v in alert.Violations)
                         {
                             <tr @key="v.SampleId">
                                 <td>@Display.SiteTime(v.OccurredAt, Zone)</td>
-                                <td>@string.Join(", ", v.Rules.Select(r => $"{r} {ControlChartView.RuleName(r).ToLowerInvariant()}"))</td>
-                                <td class="inv-num">@(v.Mean is { } m ? m.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : v.Defects is { } d ? $"{d} of {v.Inspected}" : "—")</td>
+                                <td>@string.Join(", ", v.Rules.Select(r => $"{r} {L[ControlChartView.RuleName(r)].ToLowerInvariant()}"))</td>
+                                <td class="inv-num">@(v.Mean is { } m ? m.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : v.Defects is { } d ? L["{0} of {1}", d, v.Inspected] : "—")</td>
                                 <td>@string.Join(" · ", new[] { v.JobNumber, v.LotLabel }.Where(x => x is not null))</td>
                             </tr>
                         }
@@ -120,9 +120,9 @@ else
             {
                 <form class="row g-2 align-items-end" @onsubmit="CloseAsync" @onsubmit:preventDefault>
                     <div class="col-md-4">
-                        <label class="form-label small fw-semibold" for="alert-cause">Cause</label>
+                        <label class="form-label small fw-semibold" for="alert-cause">@L["Cause"]</label>
                         <select id="alert-cause" class="form-select form-select-sm" @bind="_causeId">
-                            <option value="@Guid.Empty">Choose…</option>
+                            <option value="@Guid.Empty">@L["Choose…"]</option>
                             @foreach (var c in _causes)
                             {
                                 <option value="@c.Id">@Display.ReasonLabel(c)</option>
@@ -130,18 +130,18 @@ else
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small fw-semibold" for="alert-action">What was done</label>
+                        <label class="form-label small fw-semibold" for="alert-action">@L["What was done"]</label>
                         <input id="alert-action" class="form-control form-control-sm" maxlength="1000" @bind="_action" @bind:event="oninput" />
                     </div>
                     <div class="col-md-2">
                         <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
-                                      Reason="@(_causeId == Guid.Empty ? "Choose the cause." : string.IsNullOrWhiteSpace(_action) ? "Say what was done." : null)">Close alert</ActionButton>
+                                      Reason="@(_causeId == Guid.Empty ? L["Choose the cause."] : string.IsNullOrWhiteSpace(_action) ? L["Say what was done."] : null)">@L["Close alert"]</ActionButton>
                     </div>
                 </form>
             }
             else if (alert.Status == "closed")
             {
-                <p class="small mb-0">Closed @Display.SiteTime(alert.ClosedAt, Zone) by @alert.ClosedBy: @alert.Cause. @alert.Action</p>
+                <p class="small mb-0">@L["Closed {0} by {1}: {2}. {3}", Display.SiteTime(alert.ClosedAt, Zone), alert.ClosedBy, alert.Cause, alert.Action]</p>
             }
         </section>
     }
@@ -260,7 +260,7 @@ else
         try
         {
             _selected = await Api.CloseSpcAlertAsync(alert.SiteId, alert.Id, new CloseSpcAlertRequest { CauseReasonCodeId = _causeId, Action = _action });
-            _message = $"Closed the alert on {alert.CharacteristicCode}. The next signal on its chart opens a new one.";
+            _message = L["Closed the alert on {0}. The next signal on its chart opens a new one.", alert.CharacteristicCode];
             _alerts = await Api.ListSpcAlertsAsync(alert.SiteId);
         }
         catch (ApiException ex)

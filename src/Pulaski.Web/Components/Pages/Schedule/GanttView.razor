@@ -158,7 +158,7 @@
                                     }
                                     @s.JobNumber
                                 </span>
-                                <span class="bar-sub">@(s.MaterialCode ?? Display.Label(s.JobType))</span>
+                                <span class="bar-sub">@(s.MaterialCode ?? L.Label(s.JobType))</span>
                             }
                         </div>
                     }
@@ -597,7 +597,7 @@
         var s = item.Segment;
         var head = item.IsPlaceholder
             ? $"Changeover {s.FromMaterialCode} → {s.MaterialCode}"
-            : $"{s.JobNumber} · {Display.Label(s.Status)}{(s.IsLocked ? " · locked" : "")}";
+            : $"{s.JobNumber} · {L.Label(s.Status)}{(s.IsLocked ? " · locked" : "")}";
         var lines = new List<string>
         {
             head,

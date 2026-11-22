@@ -2,7 +2,7 @@
    type on a tablet as well as a desktop, and needs no script. Text that matches no material leaves
    the value empty. *@
 
-<input id="@Id" class="form-control" list="@ListId" placeholder="@Placeholder" aria-label="@AriaLabel" autocomplete="off"
+<input id="@Id" class="form-control" list="@ListId" placeholder="@(Placeholder ?? L["Type a material code or name"])" aria-label="@AriaLabel" autocomplete="off"
        value="@_text" @onchange="OnChangedAsync" />
 <datalist id="@ListId">
     @foreach (var m in Materials)
@@ -25,7 +25,7 @@
     public string? Id { get; set; }
 
     [Parameter]
-    public string Placeholder { get; set; } = "Type a material code or name";
+    public string? Placeholder { get; set; }
 
     [Parameter]
     public string AriaLabel { get; set; } = "Material";

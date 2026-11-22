@@ -1,3 +1,4 @@
+using Pulaski.Web.Services;
 using Pulaski.Contracts.Localization;
 using Pulaski.Web.Services.Localization;
 
@@ -63,6 +64,17 @@ public class TermCatalogTests
         Assert.Equal(
             ["{0} can't run {1}.", "No such job.", "{0:N0} left, {1} at {2}; {{braces}} {3,5}", "Not at {0}.", "{0} is more than {1}.", "Plain parts."],
             TermExtractor.Messages(Source));
+    }
+
+    [Fact]
+    public void Every_status_and_kind_code_in_the_schema_has_its_label_as_a_term()
+    {
+        var schema = File.ReadAllText(Path.Combine(Root(), "db", "schema-draft.sql"));
+        var codes = System.Text.RegularExpressions.Regex.Matches(schema, @"CHECK\s*\(\s*(\w+)\s+IN\s*\(([^)]*)\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Where(m => m.Groups[1].Value is not ("content_type" or "protocol"))
+            .SelectMany(m => System.Text.RegularExpressions.Regex.Matches(m.Groups[2].Value, "'([^']+)'").Select(v => v.Groups[1].Value))
+            .Where(v => !v.Contains('/', StringComparison.Ordinal));
+        Assert.All(codes, code => Assert.Contains(Display.Label(code), LabelTerms.All));
     }
 
     private static IEnumerable<string> SourceFiles(string directory, params string[] extensions) =>

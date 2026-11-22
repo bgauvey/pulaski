@@ -123,7 +123,7 @@ else
                         <td class="small">@r.Reference @(r.ExternalSystem is null ? "" : $"· {r.ExternalSystem}")</td>
                         <td class="small">@r.Supplier</td>
                         <td class="small">
-                            @(r.Status == "open" && r.ReceivedQty > 0 ? "Partly received" : Display.Label(r.Status))
+                            @(r.Status == "open" && r.ReceivedQty > 0 ? "Partly received" : L.Label(r.Status))
                             @if (r.ReceivedLotId is { } lot)
                             {
                                 <div><a href="inventory/lots/@lot">@r.ReceivedLotNumber</a>@(r.ReceivedLotCount > 1 ? $" and {r.ReceivedLotCount - 1} more" : "")</div>

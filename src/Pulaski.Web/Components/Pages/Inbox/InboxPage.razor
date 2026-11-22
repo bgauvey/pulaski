@@ -4,14 +4,14 @@
 @inject CurrentUser User
 @inject TimeProvider Clock
 
-<PageTitle>Inbox · Pulaski</PageTitle>
+<PageTitle>@L["Inbox"] · Pulaski</PageTitle>
 
 @* One inbox (#123, D-112): everything waiting for this user to decide, at the sites where they may, each linking to where it is decided.
    Deciding it there takes it off; the page refreshes itself. *@
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Inbox</h1>
-        <p class="text-muted mb-0">What waits for you to decide, at your sites. Open an item to decide it where it is kept; it leaves the inbox once decided.</p>
+        <h1 class="mb-1">@L["Inbox"]</h1>
+        <p class="text-muted mb-0">@L["What waits for you to decide, at your sites. Open an item to decide it where it is kept; it leaves the inbox once decided."]</p>
     </div>
     <div class="inv-head-tools">
         @if (_inbox is not null)
@@ -25,18 +25,18 @@
 
 @if (!InboxView.MayDecideAny(User))
 {
-    <p class="text-muted">Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes or planning rates.</p>
+    <p class="text-muted">@L["Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes or planning rates."]</p>
 }
 else if (_inbox is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_inbox.Items.Count == 0)
 {
-    <div class="inv-facts"><p class="mb-0">Nothing waits for you.</p></div>
+    <div class="inv-facts"><p class="mb-0">@L["Nothing waits for you."]</p></div>
 }
 else
 {
@@ -44,7 +44,7 @@ else
     @foreach (var (kind, items) in InboxView.Groups(_inbox.Items))
     {
         <section class="mb-3" aria-labelledby="inbox-@kind">
-            <h2 class="h6" id="inbox-@kind">@InboxView.Heading(kind) <span class="chip">@items.Count</span></h2>
+            <h2 class="h6" id="inbox-@kind">@(L[InboxView.Heading(kind)]) <span class="chip">@items.Count</span></h2>
             <div class="table-panel">
                 <table class="table table-sm align-middle mb-0">
                     <tbody>
@@ -59,7 +59,7 @@ else
                                     }
                                 </td>
                                 <td class="small text-nowrap">@item.SiteCode</td>
-                                <td class="small text-nowrap text-end text-muted">@(item.Since is { } since ? $"waiting {LineDisplayView.Duration(since, now)}" : "")</td>
+                                <td class="small text-nowrap text-end text-muted">@(item.Since is { } since ? L["waiting {0}", LineDisplayView.Duration(since, now)] : "")</td>
                             </tr>
                         }
                     </tbody>

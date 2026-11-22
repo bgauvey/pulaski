@@ -99,7 +99,7 @@ else
                                 @if (s.Status != "open")
                                 {
                                     <div class="text-muted">
-                                        @Display.Label(s.Status)@(s.ResolvedLotNumber is { } used ? $" from {used}" : "")@(s.ResolutionNote is { } note ? $": {note}" : "")
+                                        @L.Label(s.Status)@(s.ResolvedLotNumber is { } used ? $" from {used}" : "")@(s.ResolutionNote is { } note ? $": {note}" : "")
                                     </div>
                                 }
                             </td>

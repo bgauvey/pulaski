@@ -109,7 +109,7 @@ else
                             <tr @key="s.MaterialId" class="@(s.LotCount == 0 ? "inv-empty-row" : "")">
                                 <td>
                                     <a class="fw-semibold" href="inventory/materials/@s.MaterialId">@s.Code</a>
-                                    <div class="small text-muted">@s.Name · @Display.Label(s.MaterialType)@(s.IsLotTracked ? "" : " · not lot-tracked")</div>
+                                    <div class="small text-muted">@s.Name · @L.Label(s.MaterialType)@(s.IsLotTracked ? "" : " · not lot-tracked")</div>
                                 </td>
                                 <td class="inv-num">@InventoryView.Qty(s.OnHand) <span class="small text-muted">@s.BaseUomCode</span></td>
                                 <td class="inv-num">@InventoryView.Qty(s.Available)</td>

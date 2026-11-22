@@ -3,7 +3,7 @@
    Text edits commit on Enter or blur and Esc reverts; choices commit on selection. The owner
    applies each change and passes new Items back; bump Revision to reset editors after a failure. *@
 
-<section class="property-grid" aria-label="Properties">
+<section class="property-grid" aria-label="@L["Properties"]">
     <header class="pg-header">
         <span class="pg-object">@Title</span>
         @if (!string.IsNullOrEmpty(Subtitle))
@@ -12,16 +12,16 @@
         }
     </header>
 
-    <div class="pg-toolbar" role="toolbar" aria-label="Property view">
+    <div class="pg-toolbar" role="toolbar" aria-label="@L["Property view"]">
         <button type="button" class="pg-tool @(_categorized ? "is-on" : "")" aria-pressed="@_categorized"
-                title="Categorized" aria-label="Categorized" @onclick="() => _categorized = true">
+                title="@L["Categorized"]" aria-label="@L["Categorized"]" @onclick="() => _categorized = true">
             <Icon Name="categorized" Size="18" />
         </button>
         <button type="button" class="pg-tool @(!_categorized ? "is-on" : "")" aria-pressed="@(!_categorized)"
-                title="Alphabetical" aria-label="Alphabetical" @onclick="() => _categorized = false">
+                title="@L["Alphabetical"]" aria-label="@L["Alphabetical"]" @onclick="() => _categorized = false">
             <Icon Name="alphabetical" Size="18" />
         </button>
-        <input type="search" class="pg-search" placeholder="Search properties" aria-label="Search properties"
+        <input type="search" class="pg-search" placeholder="@L["Search properties"]" aria-label="@L["Search properties"]"
                @bind="_search" @bind:event="oninput" />
     </div>
 
@@ -30,7 +30,7 @@
     <div class="pg-body">
         @if (Items.Count == 0)
         {
-            <p class="pg-empty">@EmptyText</p>
+            <p class="pg-empty">@(EmptyText ?? L["Nothing selected."])</p>
         }
         else
         {
@@ -95,7 +95,7 @@
     [Parameter, EditorRequired] public IReadOnlyList<PropertyItem> Items { get; set; } = [];
     [Parameter] public string? Title { get; set; }
     [Parameter] public string? Subtitle { get; set; }
-    [Parameter] public string EmptyText { get; set; } = "Nothing selected.";
+    [Parameter] public string? EmptyText { get; set; }
     [Parameter] public bool Disabled { get; set; }
 
     /// <summary>Change it to rebuild every editor from Items (e.g. after a failed save).</summary>
@@ -211,7 +211,7 @@
                 }
                 @if (item.Removable && !Disabled && !item.Locked)
                 {
-                    <button type="button" class="pg-remove" aria-label="Remove @item.Name" title="Remove @item.Name"
+                    <button type="button" class="pg-remove" aria-label="@L["Remove {0}", item.Name]" title="@L["Remove {0}", item.Name]"
                             @onclick="() => OnRemove.InvokeAsync(item.Key)" @onclick:stopPropagation>
                         <Icon Name="close" Size="14" />
                     </button>

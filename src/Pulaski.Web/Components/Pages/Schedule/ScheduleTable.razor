@@ -44,7 +44,7 @@
                     @key="item.Key + item.Signature">
                     <td>
                         <button type="button" class="link-button fw-semibold" @onclick="() => OnSelect.InvokeAsync(item)">@s.JobNumber</button>
-                        <div class="small text-muted">@Display.Label(s.JobType)</div>
+                        <div class="small text-muted">@L.Label(s.JobType)</div>
                     </td>
                     <td>@s.WorkOrderNumber</td>
                     <td>
@@ -84,11 +84,11 @@
                     <td class="text-nowrap small">@ScheduleFormat.When(s.Start, Tz)</td>
                     <td class="text-nowrap small">@ScheduleFormat.When(s.End, Tz)</td>
                     <td class="text-nowrap small">@ScheduleFormat.When(s.DueAt, Tz)</td>
-                    <td><span class="@Display.JobStatusChip(s.Status)">@Display.Label(s.Status)</span></td>
+                    <td><span class="@Display.JobStatusChip(s.Status)">@L.Label(s.Status)</span></td>
                     <td>
                         @foreach (var warning in s.Warnings)
                         {
-                            <span class="chip @(warning.Code == "late" ? "chip-warning" : "chip-muted")" title="@warning.Message">@Display.Label(warning.Code)</span>
+                            <span class="chip @(warning.Code == "late" ? "chip-warning" : "chip-muted")" title="@warning.Message">@L.Label(warning.Code)</span>
                         }
                         @if (overlap)
                         {

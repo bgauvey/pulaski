@@ -4,20 +4,20 @@
 @inject CurrentUser User
 @using Pulaski.Web.Services.Quality
 
-<PageTitle>Characteristics · Pulaski</PageTitle>
+<PageTitle>@L["Characteristics"] · Pulaski</PageTitle>
 
 @* What is measured or inspected (#65): enterprise-wide, so any material's specification can name it. *@
-<p class="small mb-2"><a href="quality/specs">Specifications</a></p>
+<p class="small mb-2"><a href="quality/specs">@L["Specifications"]</a></p>
 <div class="mb-3">
-    <h1 class="mb-1">Characteristics</h1>
+    <h1 class="mb-1">@L["Characteristics"]</h1>
     <p class="text-muted mb-0">
-        What is measured (a wall thickness, a melt flow index) or inspected (surface defects). Specifications give each one its limits per material.
-        Code and kind can't change once created; switch one off instead.
+        @L["What is measured (a wall thickness, a melt flow index) or inspected (surface defects). Specifications give each one its limits per material."]
+        @L["Code and kind can't change once created; switch one off instead."]
     </p>
 </div>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.Specs" What="maintain characteristics" />
+<ViewOnlyNote Permission="@PermissionCodes.Specs" What="@L["maintain characteristics"]" />
 @if (_message is { } message)
 {
     <div class="alert alert-success small" role="status">@message</div>
@@ -27,42 +27,42 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
 {
     <div class="table-panel mb-3">
         <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Code</th><th>Name</th><th>Kind</th><th>Unit</th><th class="text-end">Decimals</th><th>Control chart</th><th></th></tr></thead>
+            <thead><tr><th>@L["Code"]</th><th>@L["Name"]</th><th>@L["Kind"]</th><th>@L["Unit"]</th><th class="text-end">@L["Decimals"]</th><th>@L["Control chart"]</th><th></th></tr></thead>
             <tbody>
                 @foreach (var c in _characteristics)
                 {
                     <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
                         <td class="fw-semibold">@c.Code</td>
                         <td>@c.Name<div class="small text-muted">@c.Description</div></td>
-                        <td>@(c.DataKind == "attribute" ? "Inspected (defects)" : "Measured")</td>
+                        <td>@(c.DataKind == "attribute" ? L["Inspected (defects)"] : L["Measured"])</td>
                         <td>@(c.UomCode ?? "—")</td>
                         <td class="text-end">@c.Decimals</td>
                         <td class="small">
-                            @ControlChartView.Chart(c.ChartType, c.SubgroupSize)
-                            <div><a href="quality/characteristics/@c.Id/control-limits">Control limits</a>@(c.HasLimits ? " · in force" : "")</div>
+                            @ControlChartView.Chart(L, c.ChartType, c.SubgroupSize)
+                            <div><a href="quality/characteristics/@c.Id/control-limits">@L["Control limits"]</a>@(c.HasLimits ? " · in force" : "")</div>
                         </td>
                         <td class="text-end text-nowrap">
                             @if (!c.IsActive)
                             {
-                                <span class="chip me-2">Off</span>
+                                <span class="chip me-2">@L["Off"]</span>
                             }
                             @if (CanManage)
                             {
-                                <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(c)">Change</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(c)">@L["Change"]</button>
                             }
                         </td>
                     </tr>
                 }
                 @if (_characteristics.Count == 0)
                 {
-                    <tr><td colspan="7" class="text-muted small">No characteristics yet.</td></tr>
+                    <tr><td colspan="7" class="text-muted small">@L["No characteristics yet."]</td></tr>
                 }
             </tbody>
         </table>
@@ -71,27 +71,27 @@ else
     @if (CanManage)
     {
         <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
-            <div class="col-12"><h2 class="h6 mb-0">@(_editing is null ? "Add a characteristic" : $"Change {_editing.Code}")</h2></div>
+            <div class="col-12"><h2 class="h6 mb-0">@(_editing is null ? L["Add a characteristic"] : L["Change {0}", _editing.Code])</h2></div>
             <div class="col-6 col-md-2">
-                <label class="form-label small fw-semibold" for="ch-code">Code</label>
+                <label class="form-label small fw-semibold" for="ch-code">@L["Code"]</label>
                 <input id="ch-code" class="form-control form-control-sm" maxlength="30" @bind="_code" disabled="@(_editing is not null)" />
             </div>
             <div class="col-6 col-md-3">
-                <label class="form-label small fw-semibold" for="ch-name">Name</label>
+                <label class="form-label small fw-semibold" for="ch-name">@L["Name"]</label>
                 <input id="ch-name" class="form-control form-control-sm" maxlength="100" @bind="_name" />
             </div>
             <div class="col-6 col-md-2">
-                <label class="form-label small fw-semibold" for="ch-kind">Kind</label>
+                <label class="form-label small fw-semibold" for="ch-kind">@L["Kind"]</label>
                 <select id="ch-kind" class="form-select form-select-sm" @bind="_kind" disabled="@(_editing is not null)">
-                    <option value="variable">Measured</option>
-                    <option value="attribute">Inspected (defects)</option>
+                    <option value="variable">@L["Measured"]</option>
+                    <option value="attribute">@L["Inspected (defects)"]</option>
                 </select>
             </div>
             <div class="col-6 col-md-2">
-                <label class="form-label small fw-semibold" for="ch-unit">Unit</label>
+                <label class="form-label small fw-semibold" for="ch-unit">@L["Unit"]</label>
                 <select id="ch-unit" class="form-select form-select-sm" value="@(_uomId?.ToString() ?? "")" disabled="@(_kind == "attribute")"
                         @onchange="@(e => _uomId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
-                    <option value="">None</option>
+                    <option value="">@L["None"]</option>
                     @foreach (var u in _uoms.Where(u => u.IsActive || u.Id == _uomId))
                     {
                         <option value="@u.Id">@u.Code</option>
@@ -99,26 +99,26 @@ else
                 </select>
             </div>
             <div class="col-6 col-md-1">
-                <label class="form-label small fw-semibold" for="ch-decimals">Decimals</label>
+                <label class="form-label small fw-semibold" for="ch-decimals">@L["Decimals"]</label>
                 <input id="ch-decimals" type="number" min="0" max="6" class="form-control form-control-sm" @bind="_decimals" />
             </div>
             <div class="col-12 col-md-6">
-                <label class="form-label small fw-semibold" for="ch-description">Description</label>
+                <label class="form-label small fw-semibold" for="ch-description">@L["Description"]</label>
                 <input id="ch-description" class="form-control form-control-sm" maxlength="500" @bind="_description" />
             </div>
             @if (_editing is not null)
             {
                 <div class="col-6 col-md-3">
-                    <label class="form-label small fw-semibold" for="ch-chart">Control chart</label>
+                    <label class="form-label small fw-semibold" for="ch-chart">@L["Control chart"]</label>
                     <select id="ch-chart" class="form-select form-select-sm" value="@_chartType" disabled="@_editing.HasLimits" aria-describedby="ch-chart-note"
                             @onchange="e => ChooseChart(e.Value?.ToString())">
                         @foreach (var (chart, chartName) in ControlChartView.ChartsFor(_kind))
                         {
-                            <option value="@chart">@chartName</option>
+                            <option value="@chart">@L[chartName]</option>
                         }
                     </select>
                 </div>
-                @if (ControlChartView.SizeLabel(_chartType) is { } sizeLabel)
+                @if (L.Of(ControlChartView.SizeLabel(_chartType)) is { } sizeLabel)
                 {
                     <div class="col-6 col-md-2">
                         <label class="form-label small fw-semibold" for="ch-size">@sizeLabel</label>
@@ -127,7 +127,7 @@ else
                     </div>
                 }
                 <fieldset class="col-12">
-                    <legend class="form-label small fw-semibold mb-1">Run rules its chart checks</legend>
+                    <legend class="form-label small fw-semibold mb-1">@L["Run rules its chart checks"]</legend>
                     <div class="d-flex flex-wrap gap-3">
                         @foreach (var (number, ruleName) in ControlChartView.Rules)
                         {
@@ -138,22 +138,22 @@ else
                             </div>
                         }
                     </div>
-                    <div class="small text-muted">Rule 1 is always checked. 1, 2, 5 and 6 are the Western Electric set; more rules find more, and more false alarms.</div>
+                    <div class="small text-muted">@L["Rule 1 is always checked. 1, 2, 5 and 6 are the Western Electric set; more rules find more, and more false alarms."]</div>
                 </fieldset>
                 @if (_editing.HasLimits)
                 {
-                    <div class="col-12 small text-muted" id="ch-chart-note">Its control limits were worked out for this chart; end them to change it.</div>
+                    <div class="col-12 small text-muted" id="ch-chart-note">@L["Its control limits were worked out for this chart; end them to change it."]</div>
                 }
                 <div class="col-6 col-md-2 form-check ms-2">
                     <input id="ch-active" type="checkbox" class="form-check-input" @bind="_active" />
-                    <label class="form-check-label small" for="ch-active">On</label>
+                    <label class="form-check-label small" for="ch-active">@L["On"]</label>
                 </div>
             }
             <div class="col-12 d-flex gap-2">
-                <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">@(_editing is null ? "Add" : "Save")</button>
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">@(_editing is null ? L["Add"] : L["Save"])</button>
                 @if (_editing is not null)
                 {
-                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Clear">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Clear">@L["Cancel"]</button>
                 }
             </div>
         </form>
@@ -240,7 +240,7 @@ else
                     UomId = _kind == "attribute" ? null : _uomId,
                     Decimals = _decimals,
                 });
-                _message = $"Added {_code.Trim().ToUpperInvariant()}.";
+                _message = L["Added {0}.", _code.Trim().ToUpperInvariant()];
             }
             else
             {
@@ -256,7 +256,7 @@ else
                     SubgroupSize = _editing.HasLimits ? null : _subgroupSize,
                     RunRules = [.. _rules.Order()],
                 });
-                _message = $"Saved {_editing.Code}.";
+                _message = L["Saved {0}.", _editing.Code];
             }
 
             Clear();

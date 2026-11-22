@@ -5,12 +5,12 @@
 
 @* Labor between two days (D-040): by job against the standard crew, by person and by shift, each exportable as CSV. *@
 <div class="inv-toolbar">
-    <label class="small text-muted" for="rep-from">From</label>
+    <label class="small text-muted" for="rep-from">@L["From"]</label>
     <input id="rep-from" type="date" class="form-control w-auto" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, true)" />
-    <label class="small text-muted" for="rep-to">to</label>
+    <label class="small text-muted" for="rep-to">@L["to"]</label>
     <input id="rep-to" type="date" class="form-control w-auto" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="e => SetDay(e, false)" />
-    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="LoadAsync">Show</button>
-    <span class="ms-auto small text-muted">Production days; at most @MaxDays days.</span>
+    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="LoadAsync">@L["Show"]</button>
+    <span class="ms-auto small text-muted">@L["Production days; at most {0} days.", MaxDays]</span>
 </div>
 
 <ProblemAlert Error="_error" />
@@ -19,18 +19,18 @@
 {
     <section class="inv-section" aria-labelledby="rep-jobs">
         <div class="inv-section-head">
-            <h2 id="rep-jobs">By job</h2>
-            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.Jobs.Count == 0)" @onclick="ExportJobsAsync">Export CSV</button>
+            <h2 id="rep-jobs">@L["By job"]</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.Jobs.Count == 0)" @onclick="ExportJobsAsync">@L["Export CSV"]</button>
         </div>
         @if (report.Jobs.Count == 0)
         {
-            <p class="text-muted small">No labor on jobs.</p>
+            <p class="text-muted small">@L["No labor on jobs."]</p>
         }
         else
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Job</th><th>Material</th><th>Line</th><th class="inv-num">Run hours</th><th class="inv-num">Direct</th><th class="inv-num">Setup</th><th class="inv-num">Standard</th><th class="inv-num">Efficiency</th></tr></thead>
+                    <thead><tr><th>@L["Job"]</th><th>@L["Material"]</th><th>@L["Line"]</th><th class="inv-num">@L["Run hours"]</th><th class="inv-num">@L["Direct"]</th><th class="inv-num">@L["Setup"]</th><th class="inv-num">@L["Standard"]</th><th class="inv-num">@L["Efficiency"]</th></tr></thead>
                     <tbody>
                         @foreach (var j in report.Jobs)
                         {
@@ -48,24 +48,24 @@
                     </tbody>
                 </table>
             </div>
-            <p class="small text-muted">Standard = run hours × the line's standard crew size for the material. Efficiency = standard ÷ direct hours: under 100% took more people than the standard.</p>
+            <p class="small text-muted">@L["Standard = run hours × the line's standard crew size for the material. Efficiency = standard ÷ direct hours: under 100% took more people than the standard."]</p>
         }
     </section>
 
     <section class="inv-section" aria-labelledby="rep-people">
         <div class="inv-section-head">
-            <h2 id="rep-people">By person</h2>
-            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.People.Count == 0)" @onclick="ExportPeopleAsync">Export CSV</button>
+            <h2 id="rep-people">@L["By person"]</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.People.Count == 0)" @onclick="ExportPeopleAsync">@L["Export CSV"]</button>
         </div>
         @if (report.People.Count == 0)
         {
-            <p class="text-muted small">No labor recorded.</p>
+            <p class="text-muted small">@L["No labor recorded."]</p>
         }
         else
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Person</th><th>Employee no.</th><th class="inv-num">Direct</th><th class="inv-num">of which idle</th><th class="inv-num">Setup</th><th class="inv-num">Indirect</th><th class="inv-num">Training</th><th class="inv-num">Total worked</th><th class="inv-num">Paid breaks</th><th class="inv-num">Unpaid breaks</th></tr></thead>
+                    <thead><tr><th>@L["Person"]</th><th>@L["Employee no."]</th><th class="inv-num">@L["Direct"]</th><th class="inv-num">@L["of which idle"]</th><th class="inv-num">@L["Setup"]</th><th class="inv-num">@L["Indirect"]</th><th class="inv-num">@L["Training"]</th><th class="inv-num">@L["Total worked"]</th><th class="inv-num">@L["Paid breaks"]</th><th class="inv-num">@L["Unpaid breaks"]</th></tr></thead>
                     <tbody>
                         @foreach (var p in report.People)
                         {
@@ -85,31 +85,31 @@
                     </tbody>
                 </table>
             </div>
-            <p class="small text-muted">Idle is direct time on a line while nothing ran on it. Every kind of time is worked time: breaks are left out of it and shown on their own, paid and unpaid.</p>
+            <p class="small text-muted">@L["Idle is direct time on a line while nothing ran on it. Every kind of time is worked time: breaks are left out of it and shown on their own, paid and unpaid."]</p>
         }
     </section>
 
     <section class="inv-section" aria-labelledby="rep-shifts">
         <div class="inv-section-head">
-            <h2 id="rep-shifts">By shift</h2>
-            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.Shifts.Count == 0)" @onclick="ExportShiftsAsync">Export CSV</button>
+            <h2 id="rep-shifts">@L["By shift"]</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(report.Shifts.Count == 0)" @onclick="ExportShiftsAsync">@L["Export CSV"]</button>
         </div>
         @if (report.Shifts.Count > 0)
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Day</th><th>Shift</th><th>Crew</th><th class="inv-num">Sessions</th><th class="inv-num">Hours worked</th><th class="inv-num">Breaks</th><th>Approved</th></tr></thead>
+                    <thead><tr><th>@L["Day"]</th><th>@L["Shift"]</th><th>@L["Crew"]</th><th class="inv-num">@L["Sessions"]</th><th class="inv-num">@L["Hours worked"]</th><th class="inv-num">@L["Breaks"]</th><th>@L["Approved"]</th></tr></thead>
                     <tbody>
                         @foreach (var s in report.Shifts)
                         {
                             <tr @key="(s.ProductionDate, s.ShiftScheduleId, s.ShiftCode)">
-                                <td>@s.ProductionDate.ToString("ddd d MMM", CultureInfo.InvariantCulture)</td>
-                                <td>@(s.ShiftCode is null ? "No shift" : $"{s.ShiftCode} {s.ShiftName}")</td>
+                                <td>@s.ProductionDate.ToString("ddd d MMM", CultureInfo.CurrentCulture)</td>
+                                <td>@(s.ShiftCode is null ? L["No shift"] : $"{s.ShiftCode} {s.ShiftName}")</td>
                                 <td>@s.CrewCode</td>
                                 <td class="inv-num">@s.Sessions</td>
                                 <td class="inv-num">@Qty(s.Hours)</td>
                                 <td class="inv-num">@Qty(s.PaidBreakHours + s.UnpaidBreakHours)</td>
-                                <td class="small">@(s.IsApproved ? $"{s.ApprovedBy}, {Display.SiteTime(s.ApprovedAt, TimeZone)}" : "Not yet")</td>
+                                <td class="small">@(s.IsApproved ? $"{s.ApprovedBy}, {Display.SiteTime(s.ApprovedAt, TimeZone)}" : L["Not yet"])</td>
                             </tr>
                         }
                     </tbody>
@@ -120,7 +120,7 @@
 }
 else if (_error is null)
 {
-    <p class="text-muted">Loading…</p>
+    <p class="text-muted">@L["Loading…"]</p>
 }
 
 @code {
