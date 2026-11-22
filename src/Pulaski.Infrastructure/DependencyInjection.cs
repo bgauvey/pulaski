@@ -120,6 +120,7 @@ public static class DependencyInjection
         services.AddScoped<Application.Andon.IAndonRepository, Andon.AndonRepository>();
         services.AddScoped<Application.Alerts.IAlertRepository, Alerts.AlertRepository>();
         services.AddSingleton<Application.Alerts.IAlertReadStore, Alerts.AlertQueries>();
+        services.AddSingleton<Application.Inbox.IInboxReadStore, Inbox.InboxQueries>();
         services.AddSingleton<Application.Andon.IAndonReadStore, Andon.AndonQueries>();
         services.AddScoped<ILotFillingStore, LotFillingStore>();
         services.AddScoped<ISecurityRepository, SecurityRepository>();

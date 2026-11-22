@@ -1,0 +1,92 @@
+@page "/inbox"
+@using Pulaski.Web.Services.Execution
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject TimeProvider Clock
+
+<PageTitle>Inbox · Pulaski</PageTitle>
+
+@* One inbox (#123, D-112): everything waiting for this user to decide, at the sites where they may, each linking to where it is decided.
+   Deciding it there takes it off; the page refreshes itself. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">Inbox</h1>
+        <p class="text-muted mb-0">What waits for you to decide, at your sites. Open an item to decide it where it is kept; it leaves the inbox once decided.</p>
+    </div>
+    <div class="inv-head-tools">
+        @if (_inbox is not null)
+        {
+            <LiveStatus OnRefresh="LoadAsync" LoadedAt="_loadedAt" />
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (!InboxView.MayDecideAny(User))
+{
+    <p class="text-muted">Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes or planning rates.</p>
+}
+else if (_inbox is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+}
+else if (_inbox.Items.Count == 0)
+{
+    <div class="inv-facts"><p class="mb-0">Nothing waits for you.</p></div>
+}
+else
+{
+    var now = Clock.GetUtcNow();
+    @foreach (var (kind, items) in InboxView.Groups(_inbox.Items))
+    {
+        <section class="mb-3" aria-labelledby="inbox-@kind">
+            <h2 class="h6" id="inbox-@kind">@InboxView.Heading(kind) <span class="chip">@items.Count</span></h2>
+            <div class="table-panel">
+                <table class="table table-sm align-middle mb-0">
+                    <tbody>
+                        @foreach (var item in items)
+                        {
+                            <tr @key="item.Key">
+                                <td>
+                                    <a href="@item.Link" class="fw-semibold">@item.Title</a>
+                                    @if (item.Detail is { } detail)
+                                    {
+                                        <div class="small text-muted">@detail</div>
+                                    }
+                                </td>
+                                <td class="small text-nowrap">@item.SiteCode</td>
+                                <td class="small text-nowrap text-end text-muted">@(item.Since is { } since ? $"waiting {LineDisplayView.Duration(since, now)}" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private InboxDto? _inbox;
+    private DateTimeOffset? _loadedAt;
+    private ApiException? _error;
+
+    protected override Task OnInitializedAsync() => InboxView.MayDecideAny(User) ? LoadAsync() : Task.CompletedTask;
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var loadedAt = Clock.GetUtcNow();
+            _inbox = await Api.GetInboxAsync();
+            (_loadedAt, _error) = (loadedAt, null);
+        }
+        catch (ApiException ex)
+        {
+            _error ??= ex;
+        }
+    }
+}

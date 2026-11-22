@@ -112,6 +112,8 @@ public sealed class InMemoryStores
 
     public RecordingLineLabels LineLabels { get; } = new();
 
+    public InMemoryInbox Inbox { get; } = new();
+
     public InMemoryOverview Overview { get; } = new();
 
     public InMemoryMachineHistory MachineHistory { get; } = new();
@@ -204,6 +206,7 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
         services.RemoveAll<Application.Execution.ILineLabels>();
+        services.RemoveAll<Application.Inbox.IInboxReadStore>();
         services.RemoveAll<IOverviewReadStore>();
         services.RemoveAll<IMachineHistoryReadStore>();
         services.RemoveAll<IQualificationRepository>();
@@ -290,6 +293,7 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);
         services.AddSingleton<Application.Execution.ILineLabels>(LineLabels);
+        services.AddSingleton<Application.Inbox.IInboxReadStore>(Inbox);
         services.AddSingleton<IOverviewReadStore>(Overview);
         services.AddSingleton<IMachineHistoryReadStore>(MachineHistory);
         services.AddSingleton<IQualificationRepository>(Labor);

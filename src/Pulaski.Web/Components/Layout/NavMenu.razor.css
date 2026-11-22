@@ -67,3 +67,30 @@
         color: transparent;
     }
 }
+
+/* The inbox's count (#123): a pill at the end of the row, on the icon in the rail. */
+.nav-badge {
+    margin-left: auto;
+    min-width: 1.5rem;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--accent);
+    color: var(--surface);
+    font: var(--type-label);
+    text-align: center;
+}
+
+@media (min-width: 720px) {
+    :root[data-sidebar="rail"] .side-nav ::deep .nav-item {
+        position: relative;
+    }
+
+    :root[data-sidebar="rail"] .nav-badge {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        min-width: 1.1rem;
+        padding: 0 4px;
+        font-size: 0.7rem;
+    }
+}

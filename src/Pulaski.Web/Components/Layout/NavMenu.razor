@@ -1,8 +1,25 @@
 @* Grouped by how plants work. Each link shows only to users who may see its screen, and a group with none
    doesn't show at all, so nothing is advertised that the user can't open (D-039). *@
+@implements IDisposable
 @inject CurrentUser User
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+@inject TimeProvider Clock
 
 <nav class="side-nav" aria-label="Main">
+    @if (InboxView.MayDecideAny(User))
+    {
+        @* What waits for this user to decide (#123), with how many, refreshed as they move around and every minute. *@
+        <div class="nav-group">
+            <NavLink class="nav-item" href="inbox" title="Inbox: what waits for you to decide">
+                <Icon Name="info" /><span class="nav-text">Inbox</span>
+                @if (_inbox is > 0)
+                {
+                    <span class="nav-badge" aria-label="@_inbox waiting">@InboxView.Badge(_inbox.Value)</span>
+                }
+            </NavLink>
+        </div>
+    }
     @foreach (var group in Groups)
     {
         var links = group.Links.Where(l => User.Can(l.Permission) || (l.OrPermission is { } other && User.Can(other))).ToList();
@@ -22,6 +39,49 @@
 </nav>
 
 @code {
+    private int? _inbox;
+    private DateTimeOffset _inboxAt = DateTimeOffset.MinValue;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        _timer = new Timer(_ => InvokeAsync(() => CountInboxAsync(force: true)), null, InboxView.Refresh, InboxView.Refresh);
+        await CountInboxAsync(force: true);
+    }
+
+    // Moving to another page recounts, at most every few seconds, so deciding an item and moving on shows the new count.
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(() => CountInboxAsync(force: false));
+
+    private async Task CountInboxAsync(bool force)
+    {
+        var now = Clock.GetUtcNow();
+        if (!InboxView.MayDecideAny(User) || (!force && now - _inboxAt < InboxView.MinGap))
+        {
+            return;
+        }
+
+        _inboxAt = now;
+        try
+        {
+            _inbox = (await Api.GetInboxAsync()).Items.Count;
+            StateHasChanged();
+        }
+        catch (ApiException)
+        {
+        }
+        catch (HttpRequestException)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        _timer?.Dispose();
+    }
+
     private sealed record Link(string Href, string Icon, string Text, string Title, string Permission, string? OrPermission = null);
 
     private sealed record Group(string Label, IReadOnlyList<Link> Links);
