@@ -4,14 +4,14 @@
 @inject SiteSelection Sites
 @inject CurrentUser User
 
-<PageTitle>@(_job?.Job.JobNumber ?? "Job") · Inventory · Pulaski</PageTitle>
+<PageTitle>@(_job?.Job.JobNumber ?? L["Job"]) · @L["Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="@(_job?.Job.JobNumber ?? "Job")">
-    <Back><a href="inventory/jobs">← Jobs</a></Back>
+<InventoryHeader Title="@(_job?.Job.JobNumber ?? L["Job"])">
+    <Back><a href="inventory/jobs">@L["← Jobs"]</a></Back>
     <Description>
         @if (_job?.Job is { } j)
         {
-            <span>Makes @j.MaterialCode · @j.MaterialName on @j.LineCode@(j.WorkOrderNumber is { } o ? $" · {o}" : "")</span>
+            <span>@L["Makes {0} · {1} on {2}{3}", j.MaterialCode, j.MaterialName, j.LineCode, j.WorkOrderNumber is { } o ? $" · {o}" : ""]</span>
         }
     </Description>
     <Actions>
@@ -20,17 +20,17 @@
             // Declarations go into the job's runs (D-035): from its first start until it is closed.
             var open = job.Job.Status is "running" or "paused" or "completed";
             var whyClosed = open ? null
-                : job.Job.Status is "closed" or "cancelled" ? $"The job is {job.Job.Status}; nothing more is declared on it."
-                : "The job hasn't started yet: declarations go into its runs.";
-            <a class="btn btn-outline-secondary" href="jobs/@JobId">Runs and reports</a>
-            <a class="btn btn-outline-secondary" href="inventory/journal?jobId=@JobId">Movements</a>
+                : job.Job.Status is "closed" or "cancelled" ? L["The job is {0}; nothing more is declared on it.", job.Job.Status]
+                : L["The job hasn't started yet: declarations go into its runs."];
+            <a class="btn btn-outline-secondary" href="jobs/@JobId">@L["Runs and reports"]</a>
+            <a class="btn btn-outline-secondary" href="inventory/journal?jobId=@JobId">@L["Movements"]</a>
             @if (User.Can(LotActions.Permission(LotAction.Consume), Sites.SiteId))
             {
-                <ActionButton Class="btn btn-outline-secondary" Reason="@whyClosed" OnClick="() => _action = LotAction.Consume">Consume a lot</ActionButton>
+                <ActionButton Class="btn btn-outline-secondary" Reason="@whyClosed" OnClick="() => _action = LotAction.Consume">@L["Consume a lot"]</ActionButton>
             }
             @if (User.Can(LotActions.Permission(LotAction.Produce), Sites.SiteId))
             {
-                <ActionButton Class="btn btn-primary" Reason="@whyClosed" OnClick="() => _action = LotAction.Produce">Declare production</ActionButton>
+                <ActionButton Class="btn btn-primary" Reason="@whyClosed" OnClick="() => _action = LotAction.Produce">@L["Declare production"]</ActionButton>
             }
         }
     </Actions>
@@ -43,24 +43,24 @@
 {
     var j = detail.Job;
     <div class="inv-tiles">
-        <div class="inv-tile"><span class="metric">@InventoryView.Qty(j.PlannedQty)</span><span class="inv-tile-label">Planned, @j.UomCode</span></div>
-        <div class="inv-tile"><span class="metric @(detail.ProducedQty == 0 ? "is-zero" : "")">@InventoryView.Qty(detail.ProducedQty)</span><span class="inv-tile-label">Produced, @detail.ProducedUomCode</span></div>
-        <div class="inv-tile"><span class="metric @(detail.Produced.Count == 0 ? "is-zero" : "")">@detail.Produced.Count</span><span class="inv-tile-label">Output lots</span></div>
-        <div class="inv-tile"><span><span class="@Display.JobStatusChip(j.Status)">@L.Label(j.Status)</span></span><span class="inv-tile-label d-block mt-2">Job status</span></div>
+        <div class="inv-tile"><span class="metric">@InventoryView.Qty(j.PlannedQty)</span><span class="inv-tile-label">@L["Planned, {0}", j.UomCode]</span></div>
+        <div class="inv-tile"><span class="metric @(detail.ProducedQty == 0 ? "is-zero" : "")">@InventoryView.Qty(detail.ProducedQty)</span><span class="inv-tile-label">@L["Produced, {0}", detail.ProducedUomCode]</span></div>
+        <div class="inv-tile"><span class="metric @(detail.Produced.Count == 0 ? "is-zero" : "")">@detail.Produced.Count</span><span class="inv-tile-label">@L["Output lots"]</span></div>
+        <div class="inv-tile"><span><span class="@Display.JobStatusChip(j.Status)">@L.Label(j.Status)</span></span><span class="inv-tile-label d-block mt-2">@L["Job status"]</span></div>
     </div>
 
     <div class="inv-layout">
         <section class="inv-section" aria-labelledby="components-title">
-            <h2 id="components-title">Components</h2>
+            <h2 id="components-title">@L["Components"]</h2>
             @if (detail.Components.Count == 0)
             {
-                <p class="text-muted">No components are planned for this job, and nothing has been consumed. Its order had no BOM.</p>
+                <p class="text-muted">@L["No components are planned for this job, and nothing has been consumed. Its order had no BOM."]</p>
             }
             else
             {
                 <div class="table-panel">
                     <table class="table table-sm align-middle">
-                        <thead><tr><th>Material</th><th class="inv-num">Planned</th><th class="inv-num">Consumed</th><th class="inv-num">Still to use</th></tr></thead>
+                        <thead><tr><th>@L["Material"]</th><th class="inv-num">@L["Planned"]</th><th class="inv-num">@L["Consumed"]</th><th class="inv-num">@L["Still to use"]</th></tr></thead>
                         <tbody>
                             @foreach (var c in detail.Components)
                             {
@@ -69,7 +69,7 @@
                                         <a class="fw-semibold" href="inventory/materials/@c.MaterialId">@c.MaterialCode</a>
                                         @if (!c.IsPlanned)
                                         {
-                                            <span class="chip chip-warning ms-1">substitution</span>
+                                            <span class="chip chip-warning ms-1">@L["substitution"]</span>
                                         }
                                         <div class="small text-muted">@c.MaterialName</div>
                                     </td>
@@ -88,21 +88,21 @@
         </section>
 
         <section class="inv-section" aria-labelledby="produced-title">
-            <h2 id="produced-title">Lots it made</h2>
+            <h2 id="produced-title">@L["Lots it made"]</h2>
             @if (detail.Produced.Count == 0)
             {
-                <p class="text-muted">None yet.</p>
+                <p class="text-muted">@L["None yet."]</p>
             }
             else
             {
                 <div class="table-panel">
                     <table class="table table-sm align-middle">
-                        <thead><tr><th>Lot</th><th>Status</th><th class="inv-num">Now</th><th>Location</th></tr></thead>
+                        <thead><tr><th>@L["Lot"]</th><th>@L["Status"]</th><th class="inv-num">@L["Now"]</th><th>@L["Location"]</th></tr></thead>
                         <tbody>
                             @foreach (var l in detail.Produced)
                             {
                                 <tr @key="l.Id">
-                                    <td><a class="fw-semibold" href="inventory/lots/@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode)</a></td>
+                                    <td><a class="fw-semibold" href="inventory/lots/@l.Id">@InventoryView.LotLabel(L, l.LotNumber, l.IsBulk, l.LocationCode)</a></td>
                                     <td><span class="@InventoryView.StatusChip(l.Status)">@L.Label(l.Status)</span></td>
                                     <td class="inv-num">@InventoryView.Qty(l.Quantity) @l.UomCode</td>
                                     <td>@l.LocationCode</td>
@@ -119,7 +119,7 @@
 }
 else if (_error is null)
 {
-    <p class="text-muted">Loading…</p>
+    <p class="text-muted">@L["Loading…"]</p>
 }
 
 <LotActionDrawer Action="_action" Job="_job?.Job" OnDone="OnDoneAsync" OnClose="() => _action = null" />

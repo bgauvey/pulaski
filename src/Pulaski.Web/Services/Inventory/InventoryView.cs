@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Contracts.Inventory;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Inventory;
 
@@ -33,7 +34,7 @@ public static class InventoryView
             .GroupBy(s => s.MaterialClassCode ?? NoClass)
             .Select(g => new StockGroup(
                 g.Key,
-                g.Key == NoClass ? "No class" : g.First().MaterialClassName ?? g.Key,
+                g.Key == NoClass ? Term.Mark("No class") : g.First().MaterialClassName ?? g.Key,
                 [.. g.OrderBy(s => s.Code, StringComparer.Ordinal)]))
             .OrderBy(g => g.Key == NoClass)
             .ThenBy(g => g.Label, StringComparer.CurrentCultureIgnoreCase)];
@@ -78,43 +79,43 @@ public static class InventoryView
     }
 
     /// <summary>A quantity with up to six decimals and thousands separators: 1,234.5.</summary>
-    public static string Qty(decimal value) => value.ToString("#,0.######", CultureInfo.InvariantCulture);
+    public static string Qty(decimal value) => value.ToString("#,0.######", CultureInfo.CurrentCulture);
 
     /// <summary>A signed change: +5, −12.5.</summary>
     public static string Delta(decimal value) => (value > 0 ? "+" : value < 0 ? "−" : "") + Qty(Math.Abs(value));
 
     /// <summary>How a lot is named on screen: its number, or for a balance (which has none, D-031) its location.</summary>
-    public static string LotLabel(string? lotNumber, bool isBulk, string? locationCode) =>
-        isBulk || lotNumber is null ? (locationCode is null ? "Balance" : $"Balance at {locationCode}") : lotNumber;
+    public static string LotLabel(Text l, string? lotNumber, bool isBulk, string? locationCode) =>
+        isBulk || lotNumber is null ? (locationCode is null ? l["Balance"] : l["Balance at {0}", locationCode]) : lotNumber;
 
     /// <summary>What reversing a movement does (D-063), for the drawer that asks for it.</summary>
-    public static string ReversalNote(LotEventDto movement, LotSummaryDto lot) => movement.Kind switch
+    public static string ReversalNote(Text l, LotEventDto movement, LotSummaryDto lot) => movement.Kind switch
     {
-        "consumed" => $"The {Qty(-(movement.QtyDelta ?? 0m))} {movement.UomCode} goes back to the lot, and it stops being a parent of what {movement.JobNumber} made, unless more of it went into that job.",
-        "produced" => "This production was recorded before reports could be reversed whole: the lot gives the quantity back, but the job's reported output stays.",
-        "split" => "The split comes apart: the new lot is cancelled and its quantity goes back to the lot it came from. The new lot must be just as it was split off.",
-        "merged" => "The merge comes apart: the lot that was merged gets its quantity and status back, and the lot it joined goes down by that much.",
-        "moved" when movement.RelatedLotId is not null => "The quantity goes back to the balance it came from; the receiving balance must still hold it.",
-        "moved" => "The lot goes back to where it was. Only while this is its latest move: a later move is reversed first.",
-        "status_changed" => "The lot goes back to the status it had. Only while this is its latest status change.",
-        "packed" => "The lot comes out of the container (back into any it was in before, and back to where it was if packing moved it).",
-        "unpacked" => "The lot goes back into the container, which must still be where the lot is.",
-        "corrected" => "The lot number, supplier lot and expiry go back to what they were, unless corrected again since.",
-        _ when movement.Kind == "received" && lot.Quantity == movement.QtyDelta && !lot.IsBulk => "The lot goes back to how it was before it: empty, so it is cancelled.",
-        _ => "The lot goes back to how it was before it. A reversal counts when the movement did, so stock at every time is as if it never happened.",
+        "consumed" => l["The {0} {1} goes back to the lot, and it stops being a parent of what {2} made, unless more of it went into that job.", Qty(-(movement.QtyDelta ?? 0m)), movement.UomCode, movement.JobNumber],
+        "produced" => l["This production was recorded before reports could be reversed whole: the lot gives the quantity back, but the job's reported output stays."],
+        "split" => l["The split comes apart: the new lot is cancelled and its quantity goes back to the lot it came from. The new lot must be just as it was split off."],
+        "merged" => l["The merge comes apart: the lot that was merged gets its quantity and status back, and the lot it joined goes down by that much."],
+        "moved" when movement.RelatedLotId is not null => l["The quantity goes back to the balance it came from; the receiving balance must still hold it."],
+        "moved" => l["The lot goes back to where it was. Only while this is its latest move: a later move is reversed first."],
+        "status_changed" => l["The lot goes back to the status it had. Only while this is its latest status change."],
+        "packed" => l["The lot comes out of the container (back into any it was in before, and back to where it was if packing moved it)."],
+        "unpacked" => l["The lot goes back into the container, which must still be where the lot is."],
+        "corrected" => l["The lot number, supplier lot and expiry go back to what they were, unless corrected again since."],
+        _ when movement.Kind == "received" && lot.Quantity == movement.QtyDelta && !lot.IsBulk => l["The lot goes back to how it was before it: empty, so it is cancelled."],
+        _ => l["The lot goes back to how it was before it. A reversal counts when the movement did, so stock at every time is as if it never happened."],
     };
 
     /// <summary>What a movement was, in words.</summary>
     public static string EventLabel(string kind) => kind switch
     {
-        "received" => "Received",
-        "produced" => "Produced",
-        "adjusted" => "Written up",
-        "scrapped" => "Written off",
-        "consumed" => "Consumed",
-        "moved" => "Moved",
-        "loaded" => "Loaded",
-        "status_changed" => "Status changed",
+        "received" => Term.Mark("Received"),
+        "produced" => Term.Mark("Produced"),
+        "adjusted" => Term.Mark("Written up"),
+        "scrapped" => Term.Mark("Written off"),
+        "consumed" => Term.Mark("Consumed"),
+        "moved" => Term.Mark("Moved"),
+        "loaded" => Term.Mark("Loaded"),
+        "status_changed" => Term.Mark("Status changed"),
         _ => Display.Label(kind),
     };
 

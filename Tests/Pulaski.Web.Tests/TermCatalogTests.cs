@@ -69,11 +69,31 @@ public class TermCatalogTests
     [Fact]
     public void Every_status_and_kind_code_in_the_schema_has_its_label_as_a_term()
     {
+        // Every CHECK of the form "column IN (...)" or "(a, b) IN ((...), ...)", as LabelTerms was made from.
         var schema = File.ReadAllText(Path.Combine(Root(), "db", "schema-draft.sql"));
-        var codes = System.Text.RegularExpressions.Regex.Matches(schema, @"CHECK\s*\(\s*(\w+)\s+IN\s*\(([^)]*)\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            .Where(m => m.Groups[1].Value is not ("content_type" or "protocol"))
-            .SelectMany(m => System.Text.RegularExpressions.Regex.Matches(m.Groups[2].Value, "'([^']+)'").Select(v => v.Groups[1].Value))
-            .Where(v => !v.Contains('/', StringComparison.Ordinal));
+        var codes = new List<string>();
+        foreach (System.Text.RegularExpressions.Match check in System.Text.RegularExpressions.Regex.Matches(schema, @"CHECK\s*\(", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            var start = check.Index + check.Length - 1;
+            var (depth, end) = (0, start);
+            for (; end < schema.Length; end++)
+            {
+                depth += schema[end] switch { '(' => 1, ')' => -1, _ => 0 };
+                if (depth == 0)
+                {
+                    break;
+                }
+            }
+
+            var body = schema[(start + 1)..end];
+            var head = System.Text.RegularExpressions.Regex.Match(body, @"^\s*(\(?[\w\s,]+\)?)\s+IN\s*\(", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (head.Success && !System.Text.RegularExpressions.Regex.IsMatch(head.Groups[1].Value, @"\b(content_type|protocol)\b"))
+            {
+                codes.AddRange(System.Text.RegularExpressions.Regex.Matches(body, "'([^']+)'").Select(v => v.Groups[1].Value).Where(v => !v.Contains('/', StringComparison.Ordinal)));
+            }
+        }
+
+        Assert.Contains("storage_zone", codes);
         Assert.All(codes, code => Assert.Contains(Display.Label(code), LabelTerms.All));
     }
 

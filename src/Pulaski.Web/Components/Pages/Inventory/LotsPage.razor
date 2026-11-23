@@ -5,45 +5,45 @@
 @inject TimeProvider Time
 @inject Downloads Downloads
 
-<PageTitle>Lots · Inventory · Pulaski</PageTitle>
+<PageTitle>@L["Lots · Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="Find a lot" SiteChanged="SiteChangedAsync">
-    <Description>By lot or supplier lot number, material, location, status, expiry or an attribute's value. Without a status, only lots with stock on hand are found.</Description>
+<InventoryHeader Title="@L["Find a lot"]" SiteChanged="SiteChangedAsync">
+    <Description>@L["By lot or supplier lot number, material, location, status, expiry or an attribute's value. Without a status, only lots with stock on hand are found."]</Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
 
 <form class="inv-toolbar" role="search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
     <div class="inv-search inv-grow">
-        <input type="search" class="form-control" placeholder="Lot, supplier lot or material code" aria-label="Lot number" @bind="_search" />
+        <input type="search" class="form-control" placeholder="@L["Lot, supplier lot or material code"]" aria-label="@L["Lot number"]" @bind="_search" />
         <Icon Name="search" Size="16" />
     </div>
-    <div class="inv-picker"><MaterialPicker Materials="_materials" @bind-Value="_materialId" Placeholder="Any material" /></div>
-    <select class="form-select" aria-label="Location" @bind="_locationId">
-        <option value="">Any location</option>
+    <div class="inv-picker"><MaterialPicker Materials="_materials" @bind-Value="_materialId" Placeholder="@L["Any material"]" /></div>
+    <select class="form-select" aria-label="@L["Location"]" @bind="_locationId">
+        <option value="">@L["Any location"]</option>
         @foreach (var l in _locations)
         {
             <option value="@l.Id">@l.Code · @l.Name</option>
         }
     </select>
-    <select class="form-select" aria-label="Status" @bind="_status">
-        <option value="">On hand</option>
+    <select class="form-select" aria-label="@L["Status"]" @bind="_status">
+        <option value="">@L["On hand"]</option>
         @foreach (var s in InventoryView.Statuses)
         {
             <option value="@s">@L.Label(s)</option>
         }
     </select>
-    <select class="form-select" aria-label="Expiry" @bind="_expiryDays">
-        <option value="">Any expiry</option>
-        <option value="0">Expired</option>
-        <option value="7">Expiring within 7 days</option>
-        <option value="30">Expiring within 30 days</option>
-        <option value="90">Expiring within 90 days</option>
+    <select class="form-select" aria-label="@L["Expiry"]" @bind="_expiryDays">
+        <option value="">@L["Any expiry"]</option>
+        <option value="0">@L["Expired"]</option>
+        <option value="7">@L["Expiring within 7 days"]</option>
+        <option value="30">@L["Expiring within 30 days"]</option>
+        <option value="90">@L["Expiring within 90 days"]</option>
     </select>
     @if (_attributes.Count > 0)
     {
-        <select class="form-select" aria-label="Attribute" @bind="_attributeId" @bind:after="AttributeChanged">
-            <option value="">Any attribute</option>
+        <select class="form-select" aria-label="@L["Attribute"]" @bind="_attributeId" @bind:after="AttributeChanged">
+            <option value="">@L["Any attribute"]</option>
             @foreach (var a in _attributes)
             {
                 <option value="@a.Id">@a.Name</option>
@@ -53,13 +53,13 @@
         {
             @if (chosen.DataType is "number" or "date")
             {
-                <input class="form-control" style="width: 8rem" type="@(chosen.DataType == "date" ? "date" : "text")" placeholder="From" aria-label="@chosen.Name from" @bind="_attributeMin" />
-                <input class="form-control" style="width: 8rem" type="@(chosen.DataType == "date" ? "date" : "text")" placeholder="To" aria-label="@chosen.Name to" @bind="_attributeMax" />
+                <input class="form-control" style="width: 8rem" type="@(chosen.DataType == "date" ? "date" : "text")" placeholder="@L["From"]" aria-label="@chosen.Name from" @bind="_attributeMin" />
+                <input class="form-control" style="width: 8rem" type="@(chosen.DataType == "date" ? "date" : "text")" placeholder="@L["To"]" aria-label="@chosen.Name to" @bind="_attributeMax" />
             }
             else if (chosen.DataType is "choice" or "boolean")
             {
                 <select class="form-select" aria-label="@chosen.Name" @bind="_attributeValue">
-                    <option value="">Any value</option>
+                    <option value="">@L["Any value"]</option>
                     @foreach (var choice in chosen.DataType == "boolean" ? ["yes", "no"] : chosen.Choices)
                     {
                         <option value="@choice">@choice</option>
@@ -68,26 +68,26 @@
             }
             else
             {
-                <input class="form-control" style="width: 10rem" placeholder="Contains" aria-label="@chosen.Name contains" @bind="_attributeValue" />
+                <input class="form-control" style="width: 10rem" placeholder="@L["Contains"]" aria-label="@chosen.Name contains" @bind="_attributeValue" />
             }
         }
     }
-    <button type="submit" class="btn btn-primary">Search</button>
-    <button type="button" class="btn btn-outline-secondary" disabled="@(_lots is not { Count: > 0 })" @onclick="ExportAsync">Export CSV</button>
+    <button type="submit" class="btn btn-primary">@L["Search"]</button>
+    <button type="button" class="btn btn-outline-secondary" disabled="@(_lots is not { Count: > 0 })" @onclick="ExportAsync">@L["Export CSV"]</button>
 </form>
 
 @if (_lots is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_lots.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No lots found</h2>
-        <p class="text-muted mb-0">Try fewer filters. Used-up lots show only when you choose the Consumed or Scrapped status.</p>
+        <h2>@L["No lots found"]</h2>
+        <p class="text-muted mb-0">@L["Try fewer filters. Used-up lots show only when you choose the Consumed or Scrapped status."]</p>
     </div>
 }
 else
@@ -97,21 +97,21 @@ else
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Lot</th>
-                    <th>Material</th>
-                    <th>Status</th>
-                    <th class="inv-num">Quantity</th>
-                    <th>Location</th>
-                    <th>Supplier lot</th>
-                    <th>Expires</th>
-                    <th>Updated</th>
+                    <th>@L["Lot"]</th>
+                    <th>@L["Material"]</th>
+                    <th>@L["Status"]</th>
+                    <th class="inv-num">@L["Quantity"]</th>
+                    <th>@L["Location"]</th>
+                    <th>@L["Supplier lot"]</th>
+                    <th>@L["Expires"]</th>
+                    <th>@L["Updated"]</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var l in _lots)
                 {
                     <tr @key="l.Id">
-                        <td><a class="fw-semibold" href="inventory/lots/@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode)</a></td>
+                        <td><a class="fw-semibold" href="inventory/lots/@l.Id">@InventoryView.LotLabel(L, l.LotNumber, l.IsBulk, l.LocationCode)</a></td>
                         <td><a href="inventory/materials/@l.MaterialId">@l.MaterialCode</a> <div class="small text-muted">@l.MaterialName</div></td>
                         <td><span class="@InventoryView.StatusChip(l.Status)">@L.Label(l.Status)</span></td>
                         <td class="inv-num">@InventoryView.Qty(l.Quantity) <span class="small text-muted">@l.UomCode</span></td>
@@ -126,7 +126,7 @@ else
     </div>
     @if (_hasMore)
     {
-        <button type="button" class="btn btn-outline-secondary mt-3" disabled="@_loading" @onclick="MoreAsync">Show more</button>
+        <button type="button" class="btn btn-outline-secondary mt-3" disabled="@_loading" @onclick="MoreAsync">@L["Show more"]</button>
     }
 }
 
@@ -267,7 +267,7 @@ else
                 Csv.Write(
                     ["Lot", "Material", "Name", "Status", "Quantity", "Unit", "Location", "Supplier lot", "Expires", "Origin", "Made by", "Created", "Updated", .. codes],
                     all.Select(l => (IReadOnlyList<object?>)[
-                        InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode), l.MaterialCode, l.MaterialName, l.Status, l.Quantity, l.UomCode,
+                        InventoryView.LotLabel(L, l.LotNumber, l.IsBulk, l.LocationCode), l.MaterialCode, l.MaterialName, l.Status, l.Quantity, l.UomCode,
                         l.LocationCode, l.SupplierLot, l.ExpiresAt is { } x ? Display.SiteTime(x, tz) : null, l.Origin, l.ProducedByJobNumber,
                         Display.SiteTime(l.CreatedAt, tz), Display.SiteTime(l.UpdatedAt, tz),
                         .. codes.Select(c => (object?)values[l.Id].FirstOrDefault(v => v.AttributeCode == c)?.Value)])));

@@ -17,7 +17,7 @@
     <div class="inv-head-tools">
         @if (Sites.Sites.Count > 1)
         {
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -28,19 +28,19 @@
     </div>
 </div>
 
-<nav class="inv-tabs" aria-label="Inventory">
-    <NavLink class="inv-tab" href="inventory" Match="NavLinkMatch.All">Stock</NavLink>
-    <NavLink class="inv-tab" href="inventory/lots">Lots</NavLink>
-    <NavLink class="inv-tab" href="inventory/locations">Locations</NavLink>
-    <NavLink class="inv-tab" href="inventory/containers">Containers</NavLink>
-    <NavLink class="inv-tab" href="inventory/feed-points">Feed points</NavLink>
-    <NavLink class="inv-tab" href="inventory/scan">Scan</NavLink>
-    <NavLink class="inv-tab" href="inventory/jobs">Jobs</NavLink>
-    <NavLink class="inv-tab" href="inventory/shortages">Shortages</NavLink>
-    <NavLink class="inv-tab" href="inventory/incoming">Incoming</NavLink>
-    <NavLink class="inv-tab" href="inventory/journal">Journal</NavLink>
-    <NavLink class="inv-tab" href="inventory/counts">Counts</NavLink>
-    <NavLink class="inv-tab" href="inventory/reports">Reports</NavLink>
+<nav class="inv-tabs" aria-label="@L["Inventory"]">
+    <NavLink class="inv-tab" href="inventory" Match="NavLinkMatch.All">@L["Stock"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/lots">@L["Lots"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/locations">@L["Locations"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/containers">@L["Containers"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/feed-points">@L["Feed points"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/scan">@L["Scan"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/jobs">@L["Jobs"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/shortages">@L["Shortages"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/incoming">@L["Incoming"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/journal">@L["Journal"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/counts">@L["Counts"]</NavLink>
+    <NavLink class="inv-tab" href="inventory/reports">@L["Reports"]</NavLink>
 </nav>
 
 @code {

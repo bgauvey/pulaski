@@ -5,24 +5,23 @@
 @inject CurrentUser User
 @inject Downloads Downloads
 
-<PageTitle>Shortages · Inventory · Pulaski</PageTitle>
+<PageTitle>@L["Shortages · Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="Material shortages" SiteChanged="OnSiteChangedAsync">
+<InventoryHeader Title="@L["Material shortages"]" SiteChanged="OnSiteChangedAsync">
     <Description>
-        What the open jobs still need of each component, against the stock available now and the
-        <a href="inventory/incoming">deliveries expected</a>. Jobs take stock in the order they are needed, then what is due by then, so a shortfall shows on the first job it reaches.
-        Stock allocated to a job covers that job first and isn't free for the others.
+        @L["What the open jobs still need of each component, against the stock available now and the deliveries expected. Jobs take stock in the order they are needed, then what is due by then, so a shortfall shows on the first job it reaches."]
+        @L["Stock allocated to a job covers that job first and isn't free for the others."]
     </Description>
     <Actions>
         @if (Sites.SiteId is { } site && User.Can(PermissionCodes.LotAllocate, site))
         {
             <button type="button" class="btn btn-outline-secondary" disabled="@_refreshing" @onclick="RefreshAllocationsAsync"
-                    title="For every open job: release allocations that are no longer usable and allocate what is still needed, earliest job first">Refresh allocations</button>
+                    title="@L["For every open job: release allocations that are no longer usable and allocate what is still needed, earliest job first"]">@L["Refresh allocations"]</button>
         }
         @if (Sites.SiteId is not null)
         {
             <button type="button" class="btn btn-outline-secondary" @onclick="PickingListAsync"
-                    title="What to fetch from the stores for open jobs' allocations, by location; the equipment chosen below narrows it">Picking list</button>
+                    title="@L["What to fetch from the stores for open jobs' allocations, by location; the equipment chosen below narrows it"]">@L["Picking list"]</button>
         }
     </Actions>
 </InventoryHeader>
@@ -35,33 +34,33 @@
 
 <div class="inv-toolbar">
     <EquipmentPicker Equipment="_equipment" Value="_equipmentId" ValueChanged="OnEquipmentChangedAsync" />
-    <select class="form-select" aria-label="Horizon" value="@_horizon" @onchange="OnHorizonChangedAsync">
-        <option value="">All open jobs</option>
-        <option value="1">Needed in the next 24 hours</option>
-        <option value="3">Next 3 days</option>
-        <option value="7">Next 7 days</option>
-        <option value="14">Next 14 days</option>
+    <select class="form-select" aria-label="@L["Horizon"]" value="@_horizon" @onchange="OnHorizonChangedAsync">
+        <option value="">@L["All open jobs"]</option>
+        <option value="1">@L["Needed in the next 24 hours"]</option>
+        <option value="3">@L["Next 3 days"]</option>
+        <option value="7">@L["Next 7 days"]</option>
+        <option value="14">@L["Next 14 days"]</option>
     </select>
-    <select class="form-select" aria-label="Timing" value="@(_live ? "live" : "published")" @onchange="OnTimingChangedAsync">
-        <option value="live">Jobs as the schedule has them now</option>
-        <option value="published">Jobs at their published times</option>
+    <select class="form-select" aria-label="@L["Timing"]" value="@(_live ? "live" : "published")" @onchange="OnTimingChangedAsync">
+        <option value="live">@L["Jobs as the schedule has them now"]</option>
+        <option value="published">@L["Jobs at their published times"]</option>
     </select>
     <div class="form-check ms-1">
         <input class="form-check-input" type="checkbox" id="short-only" @bind="_shortOnly" />
-        <label class="form-check-label" for="short-only">Short only</label>
+        <label class="form-check-label" for="short-only">@L["Short only"]</label>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-secondary btn-with-icon ms-auto" @onclick="LoadAsync"><Icon Name="refresh" Size="16" /> Refresh</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary btn-with-icon ms-auto" @onclick="LoadAsync"><Icon Name="refresh" Size="16" /> @L["Refresh"]</button>
 </div>
 
 @if (Sites.Sites.Count == 0 && _error is null)
 {
-    <p class="text-muted">Create a site under <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> first.</p>
+    <p class="text-muted">@L["Create a site under Equipment first."] <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">@L["Equipment"]</ScreenLink></p>
 }
 else if (_report is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
@@ -70,9 +69,9 @@ else
     var shortCount = _report.Materials.Count(m => m.Shortfall > 0);
 
     <p class="small text-muted">
-        @(shortCount == 0 ? "Nothing is short." : $"{shortCount} of {_report.Materials.Count} components short.")
-        Calculated @Display.SiteTime(_report.CalculatedAt, Sites.Site?.TimeZone), with jobs @(_report.LiveTiming ? "where the schedule has them now" : "at their published times").
-        Held stock isn't counted until it is released. Incoming deliveries aren't stock: they count only for jobs that need the material after they are due, and a late one counts as arriving now.
+        @(shortCount == 0 ? L["Nothing is short."] : L["{0} of {1} components short.", shortCount, _report.Materials.Count])
+        @L["Calculated {0}, with jobs {1}.", Display.SiteTime(_report.CalculatedAt, Sites.Site?.TimeZone), _report.LiveTiming ? L["where the schedule has them now"] : L["at their published times"]]
+        @L["Held stock isn't counted until it is released. Incoming deliveries aren't stock: they count only for jobs that need the material after they are due, and a late one counts as arriving now."]
     </p>
 
     @foreach (var problem in _report.Problems)
@@ -83,11 +82,11 @@ else
     @if (shown.Count == 0)
     {
         <div class="empty-panel">
-            <h2>@(_report.Materials.Count == 0 ? "No open job needs components" : "Everything is covered")</h2>
+            <h2>@(_report.Materials.Count == 0 ? L["No open job needs components"] : L["Everything is covered"])</h2>
             <p class="text-muted mb-0">
                 @(_report.Materials.Count == 0
-                    ? "Components are planned when a work order is made from a BOM. Jobs with nothing left to consume don't show."
-                    : "Available stock covers every open job's remaining components. Clear Short only to see them.")
+                    ? L["Components are planned when a work order is made from a BOM. Jobs with nothing left to consume don't show."]
+                    : L["Available stock covers every open job's remaining components. Clear Short only to see them."])
             </p>
         </div>
     }
@@ -97,13 +96,13 @@ else
             <table class="table align-middle">
                 <thead>
                     <tr>
-                        <th>Component</th>
-                        <th class="inv-num">Needed</th>
-                        <th class="inv-num">Available</th>
-                        <th class="inv-num">Held</th>
-                        <th class="inv-num">Incoming</th>
-                        <th class="inv-num">Short</th>
-                        <th>First short</th>
+                        <th>@L["Component"]</th>
+                        <th class="inv-num">@L["Needed"]</th>
+                        <th class="inv-num">@L["Available"]</th>
+                        <th class="inv-num">@L["Held"]</th>
+                        <th class="inv-num">@L["Incoming"]</th>
+                        <th class="inv-num">@L["Short"]</th>
+                        <th>@L["First short"]</th>
                     </tr>
                 </thead>
                 @foreach (var m in shown)
@@ -116,7 +115,7 @@ else
                                     <Icon Name="chevron-right" Size="16" />
                                     <span>@m.MaterialCode</span>
                                 </button>
-                                <div class="small text-muted">@m.MaterialName · @m.Lines.Count @(m.Lines.Count == 1 ? "job" : "jobs") · <a href="inventory/materials/@m.MaterialId">stock</a></div>
+                                <div class="small text-muted">@m.MaterialName · @m.Lines.Count @(m.Lines.Count == 1 ? "job" : "jobs") · <a href="inventory/materials/@m.MaterialId">@L["stock"]</a></div>
                             </td>
                             <td class="inv-num">@InventoryView.Qty(m.Demand) <span class="small text-muted">@m.BaseUomCode</span></td>
                             <td class="inv-num">@InventoryView.Qty(m.Available)</td>
@@ -126,7 +125,7 @@ else
                                 {
                                     @InventoryView.Qty(m.Incoming)
                                     <div class="small @(m.NextIncomingAt < _report.CalculatedAt ? "text-danger" : "text-muted")">
-                                        next @(m.NextIncomingAt is { } next ? Display.SiteTime(next, Sites.Site?.TimeZone) : "")@(m.NextIncomingAt < _report.CalculatedAt ? " (late)" : "")
+                                        @L["next {0}", m.NextIncomingAt is { } next ? Display.SiteTime(next, Sites.Site?.TimeZone) : ""]@(m.NextIncomingAt < _report.CalculatedAt ? $" ({L["late"]})" : "")
                                     </div>
                                 }
                                 else
@@ -140,7 +139,7 @@ else
                                     <span class="chip chip-danger">@InventoryView.Qty(m.Shortfall) @m.BaseUomCode</span>
                                     @if (m.CantArriveInTime)
                                     {
-                                        <div><span class="chip chip-warning" title="Needed sooner than its @m.LeadTimeDays-day lead time from now">Can't arrive in time</span></div>
+                                        <div><span class="chip chip-warning" title="@L["Needed sooner than its {0}-day lead time from now", m.LeadTimeDays]">@L["Can't arrive in time"]</span></div>
                                     }
                                 }
                                 else
@@ -165,15 +164,15 @@ else
                                         <a href="inventory/jobs/@l.JobId">@l.JobNumber</a>
                                         <span class="text-muted">· @l.LineCode · @L.Label(l.JobStatus)</span>
                                     </td>
-                                    <td class="inv-num" title="@($"{InventoryView.Qty(l.Cumulative)} needed by this job and every one before it")">@InventoryView.Qty(l.Remaining)</td>
-                                    <td class="inv-num text-muted">@(l.FromStock > 0 ? $"{InventoryView.Qty(l.FromStock)} from stock" : "")</td>
+                                    <td class="inv-num" title="@L["{0} needed by this job and every one before it", InventoryView.Qty(l.Cumulative)]">@InventoryView.Qty(l.Remaining)</td>
+                                    <td class="inv-num text-muted">@(l.FromStock > 0 ? L["{0} from stock", InventoryView.Qty(l.FromStock)] : "")</td>
                                     <td></td>
-                                    <td class="inv-num text-muted">@(l.FromIncoming > 0 ? $"{InventoryView.Qty(l.FromIncoming)} incoming" : "")</td>
+                                    <td class="inv-num text-muted">@(l.FromIncoming > 0 ? L["{0} incoming", InventoryView.Qty(l.FromIncoming)] : "")</td>
                                     <td class="inv-num @(l.Uncovered > 0 ? "text-danger fw-semibold" : "text-muted")">
                                         @(l.Uncovered > 0 ? InventoryView.Qty(l.Uncovered) : "covered")
                                         @if (l.CantArriveInTime)
                                         {
-                                            <div class="small fw-normal" title="Needed sooner than the material's @m.LeadTimeDays-day lead time from now">within lead time</div>
+                                            <div class="small fw-normal" title="@L["Needed sooner than the material's {0}-day lead time from now", m.LeadTimeDays]">@L["within lead time"]</div>
                                         }
                                     </td>
                                     <td class="text-muted">
@@ -209,7 +208,7 @@ else
     };
 
     private string? TimeHint(ShortageLineDto l) =>
-        l.TimeSource == "live" && l.PublishedStart is { } published ? $"Published start {Display.SiteTime(published, Sites.Site?.TimeZone)}" : null;
+        l.TimeSource == "live" && l.PublishedStart is { } published ? L["Published start {0}", Display.SiteTime(published, Sites.Site?.TimeZone)] : null;
 
     private async Task OnTimingChangedAsync(ChangeEventArgs e)
     {
@@ -261,7 +260,7 @@ else
         try
         {
             var result = await Api.RefreshSiteAllocationsAsync(Sites.SiteId!.Value);
-            _allocationNotes = [AllocationView.Summary(result), .. result.Notes];
+            _allocationNotes = [AllocationView.Summary(L, result), .. result.Notes];
             await LoadAsync();
         }
         catch (ApiException ex)

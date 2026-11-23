@@ -5,18 +5,18 @@
 @* A job's allocations and which lots to use next (D-064). Allocating sets stock aside; consumption is still declared as usual. *@
 <section class="inv-section" aria-labelledby="allocations-title">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <h2 id="allocations-title" class="mb-0 me-auto">Allocations and suggested lots</h2>
+        <h2 id="allocations-title" class="mb-0 me-auto">@L["Allocations and suggested lots"]</h2>
         @if (_view is not null && SiteId is not null && _view.Components.Any(c => c.Allocations.Count > 0))
         {
             <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="PickingListAsync"
-                    title="The lots allocated to this job that aren't at its line yet, by location, to fetch">Picking list</button>
+                    title="@L["The lots allocated to this job that aren't at its line yet, by location, to fetch"]">@L["Picking list"]</button>
         }
         @if (_view is { CanAllocate: true } && CanAllocate)
         {
             <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="RefreshAsync"
-                    title="Release what is no longer usable, trim what a lot can no longer give, and allocate what is still needed">Refresh</button>
+                    title="@L["Release what is no longer usable, trim what a lot can no longer give, and allocate what is still needed"]">@L["Refresh"]</button>
             <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || !_view.Components.Any(c => c.Recommendations.Count > 0))"
-                    @onclick="() => AllocateSuggestedAsync(null)">Allocate all suggested</button>
+                    @onclick="() => AllocateSuggestedAsync(null)">@L["Allocate all suggested"]</button>
         }
     </div>
 
@@ -30,20 +30,17 @@
     {
         @if (_error is null)
         {
-            <p class="text-muted">Loading…</p>
+            <p class="text-muted">@L["Loading…"]</p>
         }
     }
     else if (_view.Components.Count == 0)
     {
-        <p class="text-muted">No components are planned for this job, so there is nothing to allocate.</p>
+        <p class="text-muted">@L["No components are planned for this job, so there is nothing to allocate."]</p>
     }
     else
     {
         <p class="small text-muted">
-            Suggestions use the lot that expires first, then the site's preferences (Configure → Site settings), then the oldest; approved
-            alternates on the BOM line come after the component's own lots. They leave out stock that is held, would expire before
-            @Display.SiteTime(_view.NeededBy, TimeZone) (when the job needs it) or is allocated to other jobs. Allocated stock is kept for this
-            job: other jobs see it as taken.
+            @L["Suggestions use the lot that expires first, then the site's preferences (Configure → Site settings), then the oldest; approved alternates on the BOM line come after the component's own lots. They leave out stock that is held, would expire before {0} (when the job needs it) or is allocated to other jobs. Allocated stock is kept for this job: other jobs see it as taken.", Display.SiteTime(_view.NeededBy, TimeZone)]
         </p>
         @foreach (var c in _view.Components)
         {
@@ -51,7 +48,7 @@
                 <div class="d-flex flex-wrap gap-3 align-items-baseline px-3 pt-2">
                     <a class="fw-semibold" href="inventory/materials/@c.MaterialId">@c.MaterialCode</a>
                     <span class="small text-muted">@c.MaterialName</span>
-                    <span class="small">Need @(c.NeedQty is { } n ? InventoryView.Qty(n) : "—") · consumed @InventoryView.Qty(c.ConsumedQty) · allocated @InventoryView.Qty(c.AllocatedQty) · still to allocate <strong>@InventoryView.Qty(c.RemainingQty)</strong> @c.UomCode</span>
+                    <span class="small">@L["Need {0} · consumed {1} · allocated {2} · still to allocate", c.NeedQty is { } n ? InventoryView.Qty(n) : "—", InventoryView.Qty(c.ConsumedQty), InventoryView.Qty(c.AllocatedQty)] <strong>@InventoryView.Qty(c.RemainingQty)</strong> @c.UomCode</span>
                 </div>
                 @if (c.Problem is { } problem)
                 {
@@ -61,7 +58,7 @@
                 @if (c.Allocations.Count > 0)
                 {
                     <table class="table table-sm align-middle mb-0">
-                        <thead><tr><th>Allocated lot</th><th>Location</th><th class="inv-num">Kept</th><th>How</th><th></th></tr></thead>
+                        <thead><tr><th>@L["Allocated lot"]</th><th>@L["Location"]</th><th class="inv-num">@L["Kept"]</th><th>@L["How"]</th><th></th></tr></thead>
                         <tbody>
                             @foreach (var a in c.Allocations)
                             {
@@ -79,11 +76,11 @@
                                     </td>
                                     <td>@a.LocationCode</td>
                                     <td class="inv-num">@InventoryView.Qty(a.Quantity) @a.UomCode</td>
-                                    <td class="small text-muted">@(a.Basis == "recommended" ? "Suggested" : "Chosen")@(a.CreatedBy is { } by ? $" · {by}" : "")</td>
+                                    <td class="small text-muted">@(a.Basis == "recommended" ? L["Suggested"] : L["Chosen"])@(a.CreatedBy is { } by ? $" · {by}" : "")</td>
                                     <td class="text-end">
                                         @if (CanAllocate)
                                         {
-                                            <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => ReleaseAsync(a)">Release</button>
+                                            <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => ReleaseAsync(a)">@L["Release"]</button>
                                         }
                                     </td>
                                 </tr>
@@ -95,7 +92,7 @@
                 @if (c.Recommendations.Count > 0)
                 {
                     <table class="table table-sm align-middle mb-0">
-                        <thead><tr><th>Suggested lot</th><th>Location</th><th class="inv-num">Use</th><th>Why</th><th></th></tr></thead>
+                        <thead><tr><th>@L["Suggested lot"]</th><th>@L["Location"]</th><th class="inv-num">@L["Use"]</th><th>@L["Why"]</th><th></th></tr></thead>
                         <tbody>
                             @foreach (var r in c.Recommendations)
                             {
@@ -113,7 +110,7 @@
                                     <td class="text-end">
                                         @if (_view.CanAllocate && CanAllocate)
                                         {
-                                            <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_busy" @onclick="() => AllocateAsync(c, r)">Allocate</button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_busy" @onclick="() => AllocateAsync(c, r)">@L["Allocate"]</button>
                                         }
                                     </td>
                                 </tr>
@@ -123,7 +120,7 @@
                 }
                 else if (c.RemainingQty > 0)
                 {
-                    <p class="small text-warning-strong px-3 mb-2">No free stock to suggest for the @InventoryView.Qty(c.RemainingQty) @c.UomCode still needed.</p>
+                    <p class="small text-warning-strong px-3 mb-2">@L["No free stock to suggest for the {0} {1} still needed.", InventoryView.Qty(c.RemainingQty), c.UomCode]</p>
                 }
 
                 @if (c.Excluded.Count > 0)
@@ -204,7 +201,7 @@
         try
         {
             var result = await action();
-            _notes = [AllocationView.Summary(result), .. result.Notes];
+            _notes = [AllocationView.Summary(L, result), .. result.Notes];
             await LoadAsync();
         }
         catch (ApiException ex)

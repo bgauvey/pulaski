@@ -6,19 +6,19 @@
 @inject Downloads Downloads
 @inject CurrentUser User
 
-<PageTitle>Inventory · Pulaski</PageTitle>
+<PageTitle>@L["Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="Inventory" SiteChanged="LoadAsync">
-    <Description>Stock of every material at @(Sites.Site?.Code ?? "the site"), grouped by class. Quantities are in each material's base unit.</Description>
+<InventoryHeader Title="@L["Inventory"]" SiteChanged="LoadAsync">
+    <Description>@L["Stock of every material at {0}, grouped by class. Quantities are in each material's base unit.", Sites.Site?.Code ?? L["the site"]]</Description>
     <Actions>
-        <button type="button" class="btn btn-outline-secondary" disabled="@(_stock is null)" @onclick="ExportAsync">Export CSV</button>
+        <button type="button" class="btn btn-outline-secondary" disabled="@(_stock is null)" @onclick="ExportAsync">@L["Export CSV"]</button>
         @if (User.Can(LotActions.Permission(LotAction.Produce), Sites.SiteId))
         {
-            <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Produce">Declare production</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Produce">@L["Declare production"]</button>
         }
         @if (User.Can(LotActions.Permission(LotAction.Receive), Sites.SiteId))
         {
-            <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive">Receive</button>
+            <button type="button" class="btn btn-primary" @onclick="() => _action = LotAction.Receive">@L["Receive"]</button>
         }
     </Actions>
 </InventoryHeader>
@@ -28,19 +28,19 @@
 
 <div class="inv-toolbar" role="search">
     <div class="inv-search inv-grow">
-        <input type="search" class="form-control" placeholder="Find a material by code or name" aria-label="Find a material"
+        <input type="search" class="form-control" placeholder="@L["Find a material by code or name"]" aria-label="@L["Find a material"]"
                @bind="_search" @bind:event="oninput" />
         <Icon Name="search" Size="16" />
     </div>
-    <select class="form-select" aria-label="Material class" @bind="_classCode">
-        <option value="">All classes</option>
+    <select class="form-select" aria-label="@L["Material class"]" @bind="_classCode">
+        <option value="">@L["All classes"]</option>
         @foreach (var g in _groups)
         {
-            <option value="@g.Key">@g.Label</option>
+            <option value="@g.Key">@L[g.Label]</option>
         }
     </select>
-    <select class="form-select" aria-label="Location" value="@_locationId" @onchange="OnLocationChangedAsync">
-        <option value="">All locations</option>
+    <select class="form-select" aria-label="@L["Location"]" value="@_locationId" @onchange="OnLocationChangedAsync">
+        <option value="">@L["All locations"]</option>
         @foreach (var l in _locations)
         {
             <option value="@l.Id">@l.Code · @l.Name</option>
@@ -48,12 +48,12 @@
     </select>
     <div class="form-check ms-1">
         <input class="form-check-input" type="checkbox" id="inv-in-stock" @bind="_inStockOnly" />
-        <label class="form-check-label" for="inv-in-stock">In stock only</label>
+        <label class="form-check-label" for="inv-in-stock">@L["In stock only"]</label>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-secondary btn-square" title="Expand all" aria-label="Expand all" @onclick="() => _collapsed.Clear()">
+    <button type="button" class="btn btn-sm btn-outline-secondary btn-square" title="@L["Expand all"]" aria-label="@L["Expand all"]" @onclick="() => _collapsed.Clear()">
         <Icon Name="expand-all" Size="18" />
     </button>
-    <button type="button" class="btn btn-sm btn-outline-secondary btn-square" title="Collapse all" aria-label="Collapse all"
+    <button type="button" class="btn btn-sm btn-outline-secondary btn-square" title="@L["Collapse all"]" aria-label="@L["Collapse all"]"
             @onclick="() => _collapsed = [.. _groups.Select(g => g.Key)]">
         <Icon Name="collapse-all" Size="18" />
     </button>
@@ -63,14 +63,14 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (Sites.Sites.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No site yet</h2>
-        <p class="text-muted mb-0">Create a site under <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink>, and mark the stores and staging areas in it as <strong>Holds inventory</strong>.</p>
+        <h2>@L["No site yet"]</h2>
+        <p class="text-muted mb-0">@L["Create a site under Equipment, and mark the stores and staging areas in it as Holds inventory."] <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">@L["Equipment"]</ScreenLink></p>
     </div>
 }
 else
@@ -80,13 +80,13 @@ else
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Material</th>
-                    <th class="inv-num">On hand</th>
-                    <th class="inv-num">Available</th>
-                    <th class="inv-num">Held</th>
-                    <th class="inv-num">Lots</th>
-                    <th class="inv-num">Locations</th>
-                    <th>Next expiry</th>
+                    <th>@L["Material"]</th>
+                    <th class="inv-num">@L["On hand"]</th>
+                    <th class="inv-num">@L["Available"]</th>
+                    <th class="inv-num">@L["Held"]</th>
+                    <th class="inv-num">@L["Lots"]</th>
+                    <th class="inv-num">@L["Locations"]</th>
+                    <th>@L["Next expiry"]</th>
                 </tr>
             </thead>
             @foreach (var group in shown)
@@ -97,8 +97,8 @@ else
                         <th colspan="7">
                             <button type="button" class="inv-group-toggle" aria-expanded="@(open ? "true" : "false")" @onclick="() => Toggle(group.Key)">
                                 <Icon Name="chevron-right" Size="16" />
-                                @group.Label
-                                <span class="text-muted">@group.Items.Count @(group.Items.Count == 1 ? "material" : "materials") · @group.InStock in stock · @group.Lots @(group.Lots == 1 ? "lot" : "lots")</span>
+                                @L[group.Label]
+                                <span class="text-muted">@L["Materials: {0} · in stock: {1} · lots: {2}", group.Items.Count, group.InStock, group.Lots]</span>
                             </button>
                         </th>
                     </tr>
@@ -127,7 +127,7 @@ else
         </table>
         @if (shown.Count == 0)
         {
-            <p class="text-muted p-4 mb-0">Nothing matches. @(_inStockOnly ? "Clear In stock only to see materials with no stock." : "")</p>
+            <p class="text-muted p-4 mb-0">@L["Nothing matches. {0}", _inStockOnly ? L["Clear In stock only to see materials with no stock."] : ""]</p>
         }
     </div>
 }

@@ -1,4 +1,5 @@
 using Pulaski.Contracts.Security;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Inventory;
 
@@ -40,20 +41,20 @@ public static class LotActions
     /// <summary>The drawer's title for an action.</summary>
     public static string Title(LotAction action) => action switch
     {
-        LotAction.Receive => "Receive a lot",
-        LotAction.Produce => "Declare production",
-        LotAction.Consume => "Declare consumption",
-        LotAction.WriteUp => "Write up",
-        LotAction.WriteOff => "Write off",
-        LotAction.Move => "Move",
-        LotAction.Load => "Load at a feed point",
-        LotAction.Hold => "Hold or quarantine",
-        LotAction.Release => "Release",
-        LotAction.Split => "Split",
-        LotAction.Merge => "Merge lots into this one",
-        LotAction.Ship => "Ship",
-        LotAction.Correct => "Correct details",
-        LotAction.Reverse => "Reverse a movement",
+        LotAction.Receive => Term.Mark("Receive a lot"),
+        LotAction.Produce => Term.Mark("Declare production"),
+        LotAction.Consume => Term.Mark("Declare consumption"),
+        LotAction.WriteUp => Term.Mark("Write up"),
+        LotAction.WriteOff => Term.Mark("Write off"),
+        LotAction.Move => Term.Mark("Move"),
+        LotAction.Load => Term.Mark("Load at a feed point"),
+        LotAction.Hold => Term.Mark("Hold or quarantine"),
+        LotAction.Release => Term.Mark("Release"),
+        LotAction.Split => Term.Mark("Split"),
+        LotAction.Merge => Term.Mark("Merge lots into this one"),
+        LotAction.Ship => Term.Mark("Ship"),
+        LotAction.Correct => Term.Mark("Correct details"),
+        LotAction.Reverse => Term.Mark("Reverse a movement"),
         _ => action.ToString(),
     };
 }
@@ -69,27 +70,27 @@ public static class LotActionAvailability
         var gone = status switch
         {
             "available" or "on_hold" or "quarantine" => null,
-            "consumed" => "The lot is used up.",
-            "shipped" => "The lot has been shipped.",
-            "scrapped" => "The lot was written off.",
-            "cancelled" => "The lot's receipt was reversed.",
-            "planned" or "in_production" => "The lot isn't made yet.",
-            _ => "The lot isn't in stock.",
+            "consumed" => Term.Mark("The lot is used up."),
+            "shipped" => Term.Mark("The lot has been shipped."),
+            "scrapped" => Term.Mark("The lot was written off."),
+            "cancelled" => Term.Mark("The lot's receipt was reversed."),
+            "planned" or "in_production" => Term.Mark("The lot isn't made yet."),
+            _ => Term.Mark("The lot isn't in stock."),
         };
-        const string Expired = "The lot has expired; correct its expiry first if quality extended it.";
-        const string Empty = "None of the lot is left.";
+        var expiredWhy = Term.Mark("The lot has expired; correct its expiry first if quality extended it.");
+        var empty = Term.Mark("None of the lot is left.");
         var notUsable = gone
-            ?? (status == "on_hold" ? "The lot is on hold; release it first."
-            : status == "quarantine" ? "The lot is in quarantine; release it first."
-            : quantity <= 0 ? Empty
-            : expired ? Expired
+            ?? (status == "on_hold" ? Term.Mark("The lot is on hold; release it first.")
+            : status == "quarantine" ? Term.Mark("The lot is in quarantine; release it first.")
+            : quantity <= 0 ? empty
+            : expired ? expiredWhy
             : null);
         return action switch
         {
             LotAction.Consume or LotAction.Ship => notUsable,
             LotAction.Move or LotAction.Load or LotAction.Hold => gone,
-            LotAction.Split or LotAction.WriteOff => gone ?? (quantity <= 0 ? Empty : null),
-            LotAction.Merge => gone ?? (expired ? Expired : null),
+            LotAction.Split or LotAction.WriteOff => gone ?? (quantity <= 0 ? empty : null),
+            LotAction.Merge => gone ?? (expired ? expiredWhy : null),
             _ => null,
         };
     }

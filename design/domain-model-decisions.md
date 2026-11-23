@@ -3080,7 +3080,8 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   code in the schema's CHECK lists are terms in `LabelTerms` (a test keeps it in step with `db/schema-draft.sql`). A helper's plain label is a
   `Term.Mark` the page shows with `L[…]` (`L.Of` when it may be null); a helper that words a sentence takes the `Text`. Values a page compares
   stay English and are translated only when shown (the Labor tabs). CSV exports keep English column names, like the import formats. Dates with
-  day or month names use the reader's culture (invariant without a region).
+  day or month names use the reader's culture (invariant without a region). `LabelTerms` covers every `… IN (…)` CHECK, the two-column
+  equipment level/role list too (#179).
 - **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens, terminals and server messages; #175 office screens,
   split by area: #178 Overview, Inbox, Machines, Quality, Labor; #179 inventory and lots; #180 planning; #181 configuration.
 

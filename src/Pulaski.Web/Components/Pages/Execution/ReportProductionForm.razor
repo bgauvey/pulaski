@@ -162,7 +162,7 @@
                         <div class="form-check" @key="u.Id">
                             <input class="form-check-input" type="checkbox" id="rep-mf-@u.Id" checked="@_madeFrom.Contains(u.Id)"
                                    @onchange="e => { if ((bool)e.Value!) _madeFrom.Add(u.Id); else _madeFrom.Remove(u.Id); }" />
-                            <label class="form-check-label small" for="rep-mf-@u.Id">@InventoryView.LotLabel(u.LotNumber, u.IsBulk, u.LocationCode) · @u.MaterialCode</label>
+                            <label class="form-check-label small" for="rep-mf-@u.Id">@InventoryView.LotLabel(L, u.LotNumber, u.IsBulk, u.LocationCode) · @u.MaterialCode</label>
                         </div>
                     }
                 </div>

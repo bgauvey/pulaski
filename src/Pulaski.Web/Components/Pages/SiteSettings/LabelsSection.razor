@@ -69,8 +69,8 @@
                         {
                             <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
                                 <td><span class="fw-semibold">@p.Code</span> <div class="small">@p.Name@(p.IsActive ? "" : " · off")</div></td>
-                                <td class="small">@LabelPrinterView.Sends(p)</td>
-                                <td class="small">@LabelPrinterView.Templates(p)</td>
+                                <td class="small">@LabelPrinterView.Sends(L, p)</td>
+                                <td class="small">@LabelPrinterView.Templates(L, p)</td>
                                 <td class="text-end">
                                     @if (CanManage)
                                     {
@@ -125,7 +125,7 @@
                                 @foreach (var operation in LabelPrinterView.Operations(_options.BtwOperations, _printer.BtwFiles))
                                 {
                                     <div class="col-sm-6" @key="operation">
-                                        <label class="form-label small mb-0" for="@($"prn-btw-{operation}")">@LabelPrinterView.OperationName(operation)</label>
+                                        <label class="form-label small mb-0" for="@($"prn-btw-{operation}")">@LabelPrinterView.OperationName(L, operation)</label>
                                         <input id="@($"prn-btw-{operation}")" class="form-control form-control-sm" maxlength="260" placeholder="@(operation == "default" ? @"C:\Labels\Lot.btw" : "The default document")"
                                                value="@_printer.BtwFiles.GetValueOrDefault(operation)" @onchange="@(e => _printer.BtwFiles[operation] = e.Value?.ToString() ?? "")" />
                                     </div>

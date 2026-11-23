@@ -3,27 +3,27 @@
 @* Where a balance's withdrawals came from (D-060): which arrivals the location's flow model gives each one, and how sure that is.
    Worked out from the declared movements, so it says so. *@
 <section class="inv-section" aria-labelledby="allocation-title">
-    <h2 id="allocation-title">Where what was taken came from</h2>
+    <h2 id="allocation-title">@L["Where what was taken came from"]</h2>
     <ProblemAlert Error="_error" />
     @if (_allocation is { } a)
     {
-        <p class="small text-muted">@a.Basis Change how it flows on the <a href="inventory/locations">Locations</a> tab.</p>
+        <p class="small text-muted">@a.Basis @L["Change how it flows on the Locations tab."] <a href="inventory/locations">@L["Locations"]</a></p>
         @if (a.Withdrawals.Count == 0)
         {
-            <p class="text-muted small">Nothing has been taken from it yet.</p>
+            <p class="text-muted small">@L["Nothing has been taken from it yet."]</p>
         }
         else
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>When</th><th>What</th><th class="inv-num">Taken</th><th>From</th><th>How sure</th></tr></thead>
+                    <thead><tr><th>@L["When"]</th><th>@L["What"]</th><th class="inv-num">@L["Taken"]</th><th>@L["From"]</th><th>@L["How sure"]</th></tr></thead>
                     <tbody>
                         @foreach (var w in a.Withdrawals.Take(_shown))
                         {
                             <tr @key="w.EventId">
                                 <td class="small text-nowrap">@Display.SiteTime(w.At, TimeZone)</td>
                                 <td class="small">
-                                    @InventoryView.EventLabel(w.Kind)
+                                    @(L[InventoryView.EventLabel(w.Kind)])
                                     @if (w.JobId is { } job)
                                     {
                                         <div><a href="inventory/jobs/@job">@w.JobNumber</a></div>
@@ -40,13 +40,13 @@
                                             }
                                             else
                                             {
-                                                <span class="text-muted">no lot of its own</span>
+                                                <span class="text-muted">@L["no lot of its own"]</span>
                                             }
                                             · @InventoryView.Qty(source.Quantity)
                                         </div>
                                     }
                                 </td>
-                                <td class="small" title="@w.Reason"><span class="@PrecisionChip(w.Precision)">@PrecisionLabel(w.Precision)</span></td>
+                                <td class="small" title="@w.Reason"><span class="@PrecisionChip(w.Precision)">@L.Of(PrecisionLabel(w.Precision))</span></td>
                             </tr>
                         }
                     </tbody>
@@ -54,7 +54,7 @@
             </div>
             @if (a.Withdrawals.Count > _shown)
             {
-                <button type="button" class="btn btn-sm btn-link" @onclick="() => _shown += 50">Show more</button>
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => _shown += 50">@L["Show more"]</button>
             }
         }
     }
@@ -85,11 +85,11 @@
 
     public static string PrecisionLabel(string? precision) => precision switch
     {
-        "confirmed" => "Confirmed",
-        "exact" => "Exact",
-        "declared" => "Declared",
-        "estimated" => "Estimated",
-        "possible" => "Possible",
+        "confirmed" => Term.Mark("Confirmed"),
+        "exact" => Term.Mark("Exact"),
+        "declared" => Term.Mark("Declared"),
+        "estimated" => Term.Mark("Estimated"),
+        "possible" => Term.Mark("Possible"),
         _ => "",
     };
 

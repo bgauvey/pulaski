@@ -4,26 +4,26 @@
 
 @* A lot's attributes and certificates (D-056), kept beside the lot: recording them never changes the lot or its history. *@
 <section class="inv-section" aria-labelledby="records-title">
-    <h2 id="records-title">Attributes and certificates</h2>
+    <h2 id="records-title">@L["Attributes and certificates"]</h2>
     <ProblemAlert Error="_error" />
 
     @if (_records is null)
     {
         @if (_error is null)
         {
-            <p class="text-muted">Loading…</p>
+            <p class="text-muted">@L["Loading…"]</p>
         }
     }
     else
     {
         <div class="inv-layout">
             <div class="inv-facts">
-                <h3 class="h6">Attributes</h3>
+                <h3 class="h6">@L["Attributes"]</h3>
                 @if (_records.Attributes.Count == 0)
                 {
                     <p class="text-muted small mb-0">
-                        No attributes are recorded for this material.
-                        <ScreenLink Href="materials/lot-attributes" Permission="@PermissionCodes.LotAttributes">Define lot attributes</ScreenLink>
+                        @L["No attributes are recorded for this material."]
+                        <ScreenLink Href="materials/lot-attributes" Permission="@PermissionCodes.LotAttributes">@L["Define lot attributes"]</ScreenLink>
                     </p>
                 }
                 else
@@ -52,8 +52,8 @@
                                                 <select class="form-select form-select-sm w-auto" aria-label="@a.Name" value="@Draft(a)" disabled="@(!a.CanSet)"
                                                         @onchange="e => _drafts[a.AttributeId] = e.Value?.ToString()">
                                                     <option value="">—</option>
-                                                    <option value="yes">yes</option>
-                                                    <option value="no">no</option>
+                                                    <option value="yes">@L["yes"]</option>
+                                                    <option value="no">@L["no"]</option>
                                                 </select>
                                                 break;
                                             default:
@@ -65,12 +65,12 @@
                                         }
                                         @if (_drafts.TryGetValue(a.AttributeId, out var draft) && (draft ?? "") != (a.Value ?? ""))
                                         {
-                                            <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => SaveAsync(a)">Save</button>
-                                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _drafts.Remove(a.AttributeId)">Undo</button>
+                                            <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => SaveAsync(a)">@L["Save"]</button>
+                                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _drafts.Remove(a.AttributeId)">@L["Undo"]</button>
                                         }
                                         @if (!a.CanSet && a.Value is not null)
                                         {
-                                            <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => ClearAsync(a)" title="No longer offered for this material; it can only be cleared">Clear</button>
+                                            <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => ClearAsync(a)" title="@L["No longer offered for this material; it can only be cleared"]">@L["Clear"]</button>
                                         }
                                     </div>
                                 }
@@ -89,16 +89,16 @@
             </div>
 
             <div>
-                <h3 class="h6">Certificates and documents</h3>
+                <h3 class="h6">@L["Certificates and documents"]</h3>
                 @if (_records.Documents.Count == 0)
                 {
-                    <p class="text-muted small">None yet.</p>
+                    <p class="text-muted small">@L["None yet."]</p>
                 }
                 else
                 {
                     <div class="table-panel mb-2">
                         <table class="table table-sm align-middle mb-0">
-                            <thead><tr><th>Document</th><th>Issued</th><th>Added</th><th></th></tr></thead>
+                            <thead><tr><th>@L["Document"]</th><th>@L["Issued"]</th><th>@L["Added"]</th><th></th></tr></thead>
                             <tbody>
                                 @foreach (var d in _records.Documents)
                                 {
@@ -112,11 +112,11 @@
                                             }
                                             @if (d.Via != "attached")
                                             {
-                                                <div class="small text-muted">Carried from <a href="inventory/lots/@d.FromLotId">@d.FromLotNumber</a> by a @d.Via</div>
+                                                <div class="small text-muted">@L["Carried from"] <a href="inventory/lots/@d.FromLotId">@d.FromLotNumber</a> @L["by a {0}", L.Label(d.Via).ToLowerInvariant()]</div>
                                             }
                                             @if (d.Status == "withdrawn")
                                             {
-                                                <div class="small">Withdrawn by @d.WithdrawnBy: @d.WithdrawReason</div>
+                                                <div class="small">@L["Withdrawn by {0}: {1}", d.WithdrawnBy, d.WithdrawReason]</div>
                                             }
                                         </td>
                                         <td class="small">@d.Issuer @(d.IssuedOn is { } on ? on.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) : "")</td>
@@ -128,11 +128,11 @@
                                             }
                                             @if (d.Url is { } url)
                                             {
-                                                <a class="btn btn-sm btn-link" href="@url" target="_blank" rel="noopener noreferrer">Open link</a>
+                                                <a class="btn btn-sm btn-link" href="@url" target="_blank" rel="noopener noreferrer">@L["Open link"]</a>
                                             }
                                             @if (CanRecord && d.Status == "current")
                                             {
-                                                <button type="button" class="btn btn-sm btn-link" @onclick="() => { _withdrawing = d; _reason = null; }">Withdraw…</button>
+                                                <button type="button" class="btn btn-sm btn-link" @onclick="() => { _withdrawing = d; _reason = null; }">@L["Withdraw…"]</button>
                                             }
                                         </td>
                                     </tr>
@@ -145,9 +145,9 @@
                 @if (_withdrawing is { } w)
                 {
                     <form class="d-flex gap-2 mb-2" @onsubmit="WithdrawAsync" @onsubmit:preventDefault>
-                        <input class="form-control form-control-sm" maxlength="500" placeholder="Why is @w.Title withdrawn?" aria-label="Reason" @bind="_reason" @bind:event="oninput" />
-                        <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_reason))">Withdraw</button>
-                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _withdrawing = null">Cancel</button>
+                        <input class="form-control form-control-sm" maxlength="500" placeholder="@L["Why is {0} withdrawn?", w.Title]" aria-label="@L["Reason"]" @bind="_reason" @bind:event="oninput" />
+                        <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_reason))">@L["Withdraw"]</button>
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _withdrawing = null">@L["Cancel"]</button>
                     </form>
                 }
 
@@ -155,7 +155,7 @@
                 {
                     <form class="row g-2 align-items-end" @onsubmit="AttachAsync" @onsubmit:preventDefault>
                         <div class="col-sm-3">
-                            <label class="form-label small" for="doc-kind">Kind</label>
+                            <label class="form-label small" for="doc-kind">@L["Kind"]</label>
                             <select id="doc-kind" class="form-select form-select-sm" @bind="_new.Kind">
                                 @foreach (var kind in Kinds)
                                 {
@@ -164,33 +164,33 @@
                             </select>
                         </div>
                         <div class="col-sm-5">
-                            <label class="form-label small" for="doc-title">Title</label>
+                            <label class="form-label small" for="doc-title">@L["Title"]</label>
                             <input id="doc-title" class="form-control form-control-sm" maxlength="200" @bind="_new.Title" @bind:event="oninput" />
                         </div>
                         <div class="col-sm-4">
-                            <label class="form-label small" for="doc-number">Document no.</label>
+                            <label class="form-label small" for="doc-number">@L["Document no."]</label>
                             <input id="doc-number" class="form-control form-control-sm" maxlength="100" @bind="_new.Number" />
                         </div>
                         <div class="col-sm-5">
-                            <label class="form-label small" for="doc-issuer">Issued by</label>
-                            <input id="doc-issuer" class="form-control form-control-sm" maxlength="200" placeholder="Supplier or lab" @bind="_new.Issuer" />
+                            <label class="form-label small" for="doc-issuer">@L["Issued by"]</label>
+                            <input id="doc-issuer" class="form-control form-control-sm" maxlength="200" placeholder="@L["Supplier or lab"]" @bind="_new.Issuer" />
                         </div>
                         <div class="col-sm-3">
-                            <label class="form-label small" for="doc-issued">Issued on</label>
+                            <label class="form-label small" for="doc-issued">@L["Issued on"]</label>
                             <input id="doc-issued" type="date" class="form-control form-control-sm" @bind="_new.IssuedOn" />
                         </div>
                         <div class="col-sm-4">
-                            <label class="form-label small" for="doc-url">Link</label>
-                            <input id="doc-url" class="form-control form-control-sm" maxlength="2000" placeholder="https://…" @bind="_new.Url" />
+                            <label class="form-label small" for="doc-url">@L["Link"]</label>
+                            <input id="doc-url" class="form-control form-control-sm" maxlength="2000" placeholder="@L["https://…"]" @bind="_new.Url" />
                         </div>
                         <div class="col-sm-8">
-                            <label class="form-label small" for="doc-file">File (PDF, PNG or JPEG, up to 10 MB)</label>
+                            <label class="form-label small" for="doc-file">@L["File (PDF, PNG or JPEG, up to 10 MB)"]</label>
                             <InputFile id="doc-file" @key="_fileKey" class="form-control form-control-sm" accept="@LotDocumentFormat.Accept" OnChange="PickAsync" />
                         </div>
                         <div class="col-sm-4">
                             <button type="submit" class="btn btn-sm btn-primary"
                                     disabled="@(_busy || string.IsNullOrWhiteSpace(_new.Title) || (_file is null && string.IsNullOrWhiteSpace(_new.Number) && string.IsNullOrWhiteSpace(_new.Url)))">
-                                Attach
+                                @L["Attach"]
                             </button>
                         </div>
                         @if (_readProblem is not null)
@@ -261,7 +261,7 @@
         _file = null;
         if (e.File.Size > LotDocumentFormat.MaxBytes)
         {
-            _readProblem = $"{e.File.Name} is larger than 10 MB.";
+            _readProblem = L["{0} is larger than 10 MB.", e.File.Name];
             return;
         }
 
@@ -277,7 +277,7 @@
         }
         catch (IOException ex)
         {
-            _readProblem = $"{e.File.Name} couldn't be read: {ex.Message}";
+            _readProblem = L["{0} couldn't be read: {1}", e.File.Name, ex.Message];
         }
     }
 
@@ -334,13 +334,13 @@
         }
     }
 
-    private static string KindLabel(string kind) => kind switch
+    private string KindLabel(string kind) => kind switch
     {
         "coa" => "CoA",
         "coc" => "CoC",
-        "test_report" => "Test report",
+        "test_report" => L["Test report"],
         "sds" => "SDS",
-        _ => "Other",
+        _ => L["Other"],
     };
 
     private sealed class NewDocument

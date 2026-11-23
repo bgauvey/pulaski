@@ -5,25 +5,25 @@
 {
     @if (!_open)
     {
-        <button type="button" class="btn btn-sm btn-link p-0 mb-3" @onclick="Open">@(HasPicks ? "Change what it was made from…" : "Pick what it was made from…")</button>
+        <button type="button" class="btn btn-sm btn-link p-0 mb-3" @onclick="Open">@(HasPicks ? L["Change what it was made from…"] : L["Pick what it was made from…"])</button>
     }
     else
     {
         <div class="mb-3">
             <p class="small text-muted mb-1">
-                Tick the lots it was made from. They replace the pairing by time; untick them all to go back to it.
+                @L["Tick the lots it was made from. They replace the pairing by time; untick them all to go back to it."]
             </p>
             @foreach (var c in Candidates)
             {
                 <div class="form-check" @key="c.LotId">
                     <input class="form-check-input" type="checkbox" id="mf-@c.LotId" checked="@_picked.Contains(c.LotId)" @onchange="e => Toggle(c.LotId, (bool)e.Value!)" />
-                    <label class="form-check-label small" for="mf-@c.LotId">@InventoryView.LotLabel(c.LotNumber, c.IsBulk, c.LocationCode) · @c.MaterialCode</label>
+                    <label class="form-check-label small" for="mf-@c.LotId">@InventoryView.LotLabel(L, c.LotNumber, c.IsBulk, c.LocationCode) · @c.MaterialCode</label>
                 </div>
             }
-            <input class="form-control form-control-sm mt-2" maxlength="1000" placeholder="Comment (optional)" aria-label="Comment" @bind="_comment" />
+            <input class="form-control form-control-sm mt-2" maxlength="1000" placeholder="@L["Comment (optional)"]" aria-label="@L["Comment"]" @bind="_comment" />
             <div class="d-flex gap-2 mt-2">
-                <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="SaveAsync">Save</button>
-                <button type="button" class="btn btn-sm btn-link" @onclick="() => _open = false">Cancel</button>
+                <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="SaveAsync">@L["Save"]</button>
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => _open = false">@L["Cancel"]</button>
             </div>
         </div>
     }

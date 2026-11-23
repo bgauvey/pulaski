@@ -5,27 +5,27 @@
 @inject NavigationManager Navigation
 @inject CurrentUser User
 
-<PageTitle>Counts · Inventory · Pulaski</PageTitle>
+<PageTitle>@L["Counts · Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="Stock counts" SiteChanged="LoadAsync">
-    <Description>Count a location, then post the differences as write-ups and write-offs.</Description>
+<InventoryHeader Title="@L["Stock counts"]" SiteChanged="LoadAsync">
+    <Description>@L["Count a location, then post the differences as write-ups and write-offs."]</Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.StockCount" What="count stock" SiteId="Sites.SiteId" />
+<ViewOnlyNote Permission="@PermissionCodes.StockCount" What="@L["count stock"]" SiteId="Sites.SiteId" />
 
 @if (User.Can(PermissionCodes.StockCount, Sites.SiteId))
 {
 <form class="inv-toolbar" @onsubmit="StartAsync" @onsubmit:preventDefault>
-    <select class="form-select" aria-label="Location to count" @bind="_locationId">
-        <option value="@Guid.Empty">Choose a location to count…</option>
+    <select class="form-select" aria-label="@L["Location to count"]" @bind="_locationId">
+        <option value="@Guid.Empty">@L["Choose a location to count…"]</option>
         @foreach (var l in _locations)
         {
             <option value="@l.Id">@l.Code · @l.Name (@l.LotCount @(l.LotCount == 1 ? "lot" : "lots"))</option>
         }
     </select>
-    <input class="form-control inv-grow" maxlength="1000" placeholder="Note (optional), e.g. month end" aria-label="Note" @bind="_note" />
-    <button type="submit" class="btn btn-primary" disabled="@(_saving || _locationId == Guid.Empty)">Start a count</button>
+    <input class="form-control inv-grow" maxlength="1000" placeholder="@L["Note (optional), e.g. month end"]" aria-label="@L["Note"]" @bind="_note" />
+    <button type="submit" class="btn btn-primary" disabled="@(_saving || _locationId == Guid.Empty)">@L["Start a count"]</button>
 </form>
 }
 
@@ -33,14 +33,14 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_counts.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No counts yet</h2>
-        <p class="text-muted mb-0">Starting a count takes a snapshot of every lot at the location. Count them, enter what you find, then post.</p>
+        <h2>@L["No counts yet"]</h2>
+        <p class="text-muted mb-0">@L["Starting a count takes a snapshot of every lot at the location. Count them, enter what you find, then post."]</p>
     </div>
 }
 else
@@ -49,12 +49,12 @@ else
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Count</th>
-                    <th>Location</th>
-                    <th>Status</th>
-                    <th class="inv-num">Counted</th>
-                    <th>Started</th>
-                    <th>Posted</th>
+                    <th>@L["Count"]</th>
+                    <th>@L["Location"]</th>
+                    <th>@L["Status"]</th>
+                    <th class="inv-num">@L["Counted"]</th>
+                    <th>@L["Started"]</th>
+                    <th>@L["Posted"]</th>
                 </tr>
             </thead>
             <tbody>

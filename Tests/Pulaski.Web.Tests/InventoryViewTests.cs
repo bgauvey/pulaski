@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Web.Services.Inventory;
 
@@ -75,7 +76,7 @@ public class InventoryViewTests
     [InlineData(null, true, "RM-STORE", "Balance at RM-STORE")]
     [InlineData(null, true, null, "Balance")]
     public void A_bulk_balance_is_named_by_its_location(string? number, bool bulk, string? location, string expected) =>
-        Assert.Equal(expected, InventoryView.LotLabel(number, bulk, location));
+        Assert.Equal(expected, InventoryView.LotLabel(Text.English, number, bulk, location));
 
     [Fact]
     public void Quantities_format_with_separators_and_signs()
