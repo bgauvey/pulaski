@@ -6,20 +6,20 @@
 {
     @if (!_open)
     {
-        <button type="button" class="@ButtonClass" @onclick="() => { _open = true; _message = null; }">Print to…</button>
+        <button type="button" class="@ButtonClass" @onclick="() => { _open = true; _message = null; }">@L["Print to…"]</button>
     }
     else
     {
         <span class="d-inline-flex flex-wrap gap-1 align-items-center">
-            <select class="form-select form-select-sm w-auto" aria-label="Printer" @bind="_printerId">
+            <select class="form-select form-select-sm w-auto" aria-label="@L["Printer"]" @bind="_printerId">
                 @foreach (var p in _printers)
                 {
                     <option value="@p.Id">@p.Code · @p.Name</option>
                 }
             </select>
-            <input type="number" min="1" max="20" class="form-control form-control-sm" style="width: 4.5rem" aria-label="Copies" title="Copies" @bind="_copies" />
-            <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="PrintAsync">Print</button>
-            <button type="button" class="btn btn-sm btn-link" @onclick="() => _open = false">Cancel</button>
+            <input type="number" min="1" max="20" class="form-control form-control-sm" style="width: 4.5rem" aria-label="@L["Copies"]" title="@L["Copies"]" @bind="_copies" />
+            <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="PrintAsync">@L["Print"]</button>
+            <button type="button" class="btn btn-sm btn-link" @onclick="() => _open = false">@L["Cancel"]</button>
         </span>
     }
 }
@@ -64,7 +64,7 @@
         try
         {
             var result = await Api.PrintLabelsAsync(new PrintLabelsRequest { SiteId = SiteId, PrinterId = _printerId, Kind = Kind, Ids = [Id], Copies = _copies });
-            _message = $"Sent {result.Labels} {(result.Labels == 1 ? "label" : "labels")} to {result.PrinterCode}.";
+            _message = (result.Labels == 1 ? L["Sent 1 label to {0}.", result.PrinterCode] : L["Sent labels to {0}: {1}.", result.PrinterCode, result.Labels]);
             _open = false;
         }
         catch (ApiException ex)

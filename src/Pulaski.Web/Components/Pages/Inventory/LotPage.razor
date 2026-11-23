@@ -6,7 +6,7 @@
 @inject CurrentUser User
 @inject Downloads Downloads
 
-<PageTitle>@(Title) · Inventory · Pulaski</PageTitle>
+<PageTitle>@(Title) · @L["Inventory"] · Pulaski</PageTitle>
 
 <InventoryHeader Title="@Title">
     <Back>
@@ -25,59 +25,59 @@
         @if (_lot?.Lot is { } lot)
         {
             var expired = lot.ExpiresAt is { } ends && ends <= Time.GetUtcNow();
-            string? Why(LotAction action) => LotActionAvailability.Why(action, lot.Status, lot.Quantity, expired);
+            string? Why(LotAction action) => L.Of(LotActionAvailability.Why(action, lot.Status, lot.Quantity, expired));
             <div class="inv-actions">
                 @if (May(LotAction.Consume))
                 {
-                    <ActionButton Class="btn btn-primary" Reason="@Why(LotAction.Consume)" OnClick="() => _action = LotAction.Consume">Consume</ActionButton>
+                    <ActionButton Class="btn btn-primary" Reason="@Why(LotAction.Consume)" OnClick="() => _action = LotAction.Consume">@L["Consume"]</ActionButton>
                 }
                 @if (May(LotAction.Move))
                 {
-                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Move)" OnClick="() => _action = LotAction.Move">Move</ActionButton>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Move)" OnClick="() => _action = LotAction.Move">@L["Move"]</ActionButton>
                 }
                 @if (May(LotAction.Load) && !lot.IsBulk)
                 {
-                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Load)" OnClick="() => _action = LotAction.Load">Load</ActionButton>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Load)" OnClick="() => _action = LotAction.Load">@L["Load"]</ActionButton>
                 }
                 @if (!lot.IsBulk)
                 {
                     @if (May(LotAction.Split))
                     {
-                        <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Split)" OnClick="() => _action = LotAction.Split">Split</ActionButton>
+                        <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Split)" OnClick="() => _action = LotAction.Split">@L["Split"]</ActionButton>
                     }
                     @if (May(LotAction.Merge))
                     {
-                        <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Merge)" OnClick="() => _action = LotAction.Merge">Merge…</ActionButton>
+                        <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Merge)" OnClick="() => _action = LotAction.Merge">@L["Merge…"]</ActionButton>
                     }
                 }
                 @if (May(LotAction.Ship))
                 {
-                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Ship)" OnClick="() => _action = LotAction.Ship">Ship</ActionButton>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Ship)" OnClick="() => _action = LotAction.Ship">@L["Ship"]</ActionButton>
                 }
                 @if (May(LotAction.WriteUp))
                 {
-                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.WriteUp">Write up</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.WriteUp">@L["Write up"]</button>
                 }
                 @if (May(LotAction.WriteOff))
                 {
-                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.WriteOff)" OnClick="() => _action = LotAction.WriteOff">Write off</ActionButton>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.WriteOff)" OnClick="() => _action = LotAction.WriteOff">@L["Write off"]</ActionButton>
                 }
                 @if (lot.Status is "on_hold" or "quarantine")
                 {
                     @if (May(LotAction.Release))
                     {
-                        <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Release">Release</button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Release">@L["Release"]</button>
                     }
                 }
                 @if (May(LotAction.Hold))
                 {
-                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Hold)" OnClick="() => _action = LotAction.Hold">@(lot.Status is "on_hold" or "quarantine" ? "Change hold…" : "Hold…")</ActionButton>
+                    <ActionButton Class="btn btn-outline-secondary" Reason="@Why(LotAction.Hold)" OnClick="() => _action = LotAction.Hold">@(lot.Status is "on_hold" or "quarantine" ? L["Change hold…"] : L["Hold…"])</ActionButton>
                 }
                 @if (May(LotAction.Correct))
                 {
-                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Correct">Correct…</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => _action = LotAction.Correct">@L["Correct…"]</button>
                 }
-                <button type="button" class="btn btn-outline-secondary" @onclick="PrintLabelAsync">Print label</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="PrintLabelAsync">@L["Print label"]</button>
                 <PrintLabelControl Kind="lot" Id="LotId" SiteId="lot.SiteId" />
             </div>
         }
@@ -91,7 +91,7 @@
 {
     <div class="drawer-alert is-warning mb-3" role="status">
         <Icon Name="alert" Size="18" />
-        <span>Expired on @Display.SiteTime(expiredAt, _lot.SiteTimeZone): it can't be consumed, shipped or merged. If quality has extended it, use <strong>Correct…</strong> to set the new expiry.</span>
+        <span>@L["Expired on {0}: it can't be consumed, shipped or merged. If quality has extended it, use Correct… to set the new expiry.", Display.SiteTime(expiredAt, _lot.SiteTimeZone)]</span>
     </div>
 }
 
@@ -102,22 +102,22 @@
     <div class="inv-layout mb-4">
         <div class="inv-facts">
             <dl class="facts">
-                <dt>Status</dt>
+                <dt>@L["Status"]</dt>
                 <dd><span class="@InventoryView.StatusChip(l.Status)">@L.Label(l.Status)</span></dd>
-                <dt>Quantity</dt>
+                <dt>@L["Quantity"]</dt>
                 <dd><strong>@InventoryView.Qty(l.Quantity)</strong> @l.UomCode</dd>
-                <dt>Location</dt>
+                <dt>@L["Location"]</dt>
                 <dd>@(l.LocationCode is null ? "—" : $"{l.LocationCode} · {l.LocationName}")</dd>
                 @if (!l.IsBulk)
                 {
-                    <dt>Container</dt>
+                    <dt>@L["Container"]</dt>
                     <dd><LotContainerField Lot="l" OnChanged="LoadAsync" /></dd>
                 }
-                <dt>From</dt>
+                <dt>@L["From"]</dt>
                 <dd>
                     @if (l.ProducedByJobId is { } jobId)
                     {
-                        <span>Made by <a href="inventory/jobs/@jobId">@l.ProducedByJobNumber</a></span>
+                        <span>@L["Made by"] <a href="inventory/jobs/@jobId">@l.ProducedByJobNumber</a></span>
                     }
                     else
                     {
@@ -126,43 +126,43 @@
                 </dd>
                 @if (l.IsBulk)
                 {
-                    <dt>Kept as</dt>
+                    <dt>@L["Kept as"]</dt>
                     <dd>
-                        The balance of @l.MaterialCode at @l.LocationCode:
-                        @(detail.MaterialIsLotTracked ? "lots mix there, so what arrives joins it." : $"{l.MaterialCode} isn't lot-tracked.")
+                        @L["The balance of {0} at {1}:", l.MaterialCode, l.LocationCode]
+                        @(detail.MaterialIsLotTracked ? L["lots mix there, so what arrives joins it."] : L["{0} isn't lot-tracked.", l.MaterialCode])
                     </dd>
                 }
                 else
                 {
-                    <dt>Supplier lot</dt>
+                    <dt>@L["Supplier lot"]</dt>
                     <dd>@(l.SupplierLot ?? "—")</dd>
                 }
                 @if (!l.IsBulk || l.ExpiresAt is not null)
                 {
-                    <dt>Expires</dt>
+                    <dt>@L["Expires"]</dt>
                     <dd class="@(InventoryView.ExpiresSoon(l.ExpiresAt, Time.GetUtcNow()) ? "inv-held" : "")">@(l.ExpiresAt is null ? "—" : Display.SiteTime(l.ExpiresAt, tz))</dd>
                 }
-                <dt>Created</dt>
+                <dt>@L["Created"]</dt>
                 <dd>@Display.SiteTime(l.CreatedAt, tz)</dd>
-                <dt>Last change</dt>
+                <dt>@L["Last change"]</dt>
                 <dd>@Display.SiteTime(l.UpdatedAt, tz)</dd>
             </dl>
         </div>
 
         <section aria-labelledby="genealogy-title">
             <div class="inv-section-head">
-                <h2 id="genealogy-title">Genealogy</h2>
+                <h2 id="genealogy-title">@L["Genealogy"]</h2>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => TraceAsync(false)">Trace back</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => TraceAsync(true)">Trace forward</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => TraceAsync(false)">@L["Trace back"]</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => TraceAsync(true)">@L["Trace forward"]</button>
                 </div>
             </div>
             @if (_trace is { } trace)
             {
-                <h3 class="h6 mt-2">@(_traceForward ? "Everything made from it" : "Everything it was made from")</h3>
+                <h3 class="h6 mt-2">@(_traceForward ? L["Everything made from it"] : L["Everything it was made from"])</h3>
                 @if (trace.Count <= 1)
                 {
-                    <p class="text-muted">@(_traceForward ? "Nothing has been made from this lot yet." : "This lot wasn't made from other lots.")</p>
+                    <p class="text-muted">@(_traceForward ? L["Nothing has been made from this lot yet."] : L["This lot wasn't made from other lots."])</p>
                 }
                 else
                 {
@@ -174,13 +174,13 @@
                                 {
                                     <span class="inv-trace-step" aria-hidden="true">@(_traceForward ? "↳" : "↰")</span>
                                 }
-                                <a class="fw-semibold" href="inventory/lots/@row.Node.LotId">@InventoryView.LotLabel(row.Node.LotNumber, row.Node.IsBulk, row.Node.LocationCode)</a>
+                                <a class="fw-semibold" href="inventory/lots/@row.Node.LotId">@InventoryView.LotLabel(L, row.Node.LotNumber, row.Node.IsBulk, row.Node.LocationCode)</a>
                                 <span class="small">@row.Node.MaterialCode</span>
                                 <span class="@InventoryView.StatusChip(row.Node.Status)">@L.Label(row.Node.Status)</span>
                                 <span class="small text-muted">@InventoryView.Qty(row.Node.Quantity) @row.Node.UomCode</span>
                                 @if (row.Node.Precision is { } precision)
                                 {
-                                    <span class="@BalanceAllocationPanel.PrecisionChip(precision)" title="@row.Node.PrecisionNote">@BalanceAllocationPanel.PrecisionLabel(precision)</span>
+                                    <span class="@BalanceAllocationPanel.PrecisionChip(precision)" title="@row.Node.PrecisionNote">@L.Of(BalanceAllocationPanel.PrecisionLabel(precision))</span>
                                 }
                             </li>
                         }
@@ -189,12 +189,12 @@
             }
             else
             {
-                @LinkTable("Made from", detail.Parents, "Not made from other lots.", tz)
+                @LinkTable(L["Made from"], detail.Parents, L["Not made from other lots."], tz)
                 @if (l.ProducedByJobId is { } madeBy && User.Can(PermissionCodes.ProductionReport, l.SiteId))
                 {
                     <MadeFromPicker @key="l.Id" LotId="l.Id" JobId="madeBy" Parents="detail.Parents" OnChanged="LoadAsync" />
                 }
-                @LinkTable("Used in", detail.Children, "Nothing made from it yet.", tz)
+                @LinkTable(L["Used in"], detail.Children, L["Nothing made from it yet."], tz)
             }
         </section>
     </div>
@@ -214,7 +214,7 @@
     @if (detail.Allocations.Count > 0)
     {
         <section class="inv-section" aria-labelledby="allocations-title">
-            <h2 id="allocations-title">Allocated to jobs</h2>
+            <h2 id="allocations-title">@L["Allocated to jobs"]</h2>
             <ul class="small mb-0">
                 @foreach (var a in detail.Allocations)
                 {
@@ -224,49 +224,49 @@
                     </li>
                 }
             </ul>
-            <p class="small text-muted mb-0">Other jobs can still consume it, with a warning; consuming it into its job uses the allocation up.</p>
+            <p class="small text-muted mb-0">@L["Other jobs can still consume it, with a warning; consuming it into its job uses the allocation up."]</p>
         </section>
     }
 
     <section class="inv-section" aria-labelledby="asof-title">
-        <h2 id="asof-title">As it was</h2>
+        <h2 id="asof-title">@L["As it was"]</h2>
         <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
-            <label class="small text-muted" for="lot-asof">On</label>
+            <label class="small text-muted" for="lot-asof">@L["On"]</label>
             <input id="lot-asof" type="datetime-local" class="form-control form-control-sm w-auto" @bind="_asOf" />
-            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_asOf is null || _asOfBusy)" @onclick="ShowAsOfAsync">Show</button>
-            <span class="small text-muted">Its quantity, place and status then, in the order its movements count (back-dated ones at their time).</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_asOf is null || _asOfBusy)" @onclick="ShowAsOfAsync">@L["Show"]</button>
+            <span class="small text-muted">@L["Its quantity, place and status then, in the order its movements count (back-dated ones at their time)."]</span>
         </div>
         @if (_asOfState is { } then)
         {
             @if (!then.Existed)
             {
-                <p class="small mb-0">It didn't exist yet on @Display.SiteTime(then.At, tz).</p>
+                <p class="small mb-0">@L["It didn't exist yet on {0}.", Display.SiteTime(then.At, tz)]</p>
             }
             else
             {
                 <dl class="facts small mb-0">
-                    <dt>Quantity</dt><dd>@InventoryView.Qty(then.Quantity) @then.UomCode</dd>
-                    <dt>Where</dt><dd>@(then.LocationCode ?? "—")@(then.ContainerCode is { } container ? $" · in {container}" : "")</dd>
-                    <dt>Status</dt><dd><span class="@InventoryView.StatusChip(then.Status)">@L.Label(then.Status)</span></dd>
+                    <dt>@L["Quantity"]</dt><dd>@InventoryView.Qty(then.Quantity) @then.UomCode</dd>
+                    <dt>@L["Where"]</dt><dd>@(then.LocationCode ?? "—")@(then.ContainerCode is { } container ? L[" · in {0}", container] : "")</dd>
+                    <dt>@L["Status"]</dt><dd><span class="@InventoryView.StatusChip(then.Status)">@L.Label(then.Status)</span></dd>
                 </dl>
             }
         }
     </section>
 
     <section class="inv-section" aria-labelledby="history-title">
-        <h2 id="history-title">History</h2>
+        <h2 id="history-title">@L["History"]</h2>
         <div class="table-panel">
             <table class="table table-sm align-middle">
                 <thead>
                     <tr>
-                        <th>When</th>
-                        <th>What</th>
-                        <th class="inv-num">Change</th>
-                        <th class="inv-num">After</th>
-                        <th>Where</th>
-                        <th>Job</th>
-                        <th>Reason</th>
-                        <th>Who</th>
+                        <th>@L["When"]</th>
+                        <th>@L["What"]</th>
+                        <th class="inv-num">@L["Change"]</th>
+                        <th class="inv-num">@L["After"]</th>
+                        <th>@L["Where"]</th>
+                        <th>@L["Job"]</th>
+                        <th>@L["Reason"]</th>
+                        <th>@L["Who"]</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -278,14 +278,14 @@
                                 @Display.SiteTime(e.IsBackdated ? e.EffectiveAt : e.OccurredAt, tz)
                                 @if (e.IsBackdated)
                                 {
-                                    <div class="text-muted" title="Back-dated: it counts from the time above">recorded @Display.SiteTime(e.OccurredAt, tz)</div>
+                                    <div class="text-muted" title="@L["Back-dated: it counts from the time above"]">@L["recorded {0}", Display.SiteTime(e.OccurredAt, tz)]</div>
                                 }
                             </td>
                             <td>
-                                @InventoryView.EventLabel(e.Kind)
+                                @(L[InventoryView.EventLabel(e.Kind)])
                                 @if (e.AutoSource is { } auto)
                                 {
-                                    <span class="chip ms-1" title="Consumed automatically, not declared by hand">@FeedPointsPage.SourceLabel(auto)</span>
+                                    <span class="chip ms-1" title="@L["Consumed automatically, not declared by hand"]">@L[FeedPointsPage.SourceLabel(auto)]</span>
                                 }
                                 @if (e.ToStatus is { } to)
                                 {
@@ -302,7 +302,7 @@
                                 }
                                 @if (e.RelatedLotId is { } related)
                                 {
-                                    <div><a href="inventory/lots/@related">@InventoryView.LotLabel(e.RelatedLotNumber, e.RelatedLotNumber is null, e.RelatedLotLocationCode)</a></div>
+                                    <div><a href="inventory/lots/@related">@InventoryView.LotLabel(L, e.RelatedLotNumber, e.RelatedLotNumber is null, e.RelatedLotLocationCode)</a></div>
                                 }
                             </td>
                             <td class="small">
@@ -326,7 +326,7 @@
                             <td class="text-end">
                                 @if (CanReverse(detail, e) && May(LotAction.Reverse))
                                 {
-                                    <button type="button" class="btn btn-sm btn-link p-0" title="Undo this movement" @onclick="() => Reverse(e)">Reverse</button>
+                                    <button type="button" class="btn btn-sm btn-link p-0" title="@L["Undo this movement"]" @onclick="() => Reverse(e)">@L["Reverse"]</button>
                                 }
                             </td>
                         </tr>
@@ -338,7 +338,7 @@
 }
 else if (_error is null)
 {
-    <p class="text-muted">Loading…</p>
+    <p class="text-muted">@L["Loading…"]</p>
 }
 
 <LotActionDrawer Action="_action" Lot="_lot?.Lot" Movement="_movement" OnDone="OnDoneAsync" OnClose="() => _action = null" />
@@ -367,7 +367,7 @@ else if (_error is null)
     // Declarations, reversed with every lot they touched; production only when it predates report ids (otherwise with its report).
     private static readonly HashSet<string> Declarations = ["consumed", "split", "merged"];
 
-    private string Title => _lot?.Lot is { } l ? InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode) : "Lot";
+    private string Title => _lot?.Lot is { } l ? InventoryView.LotLabel(L, l.LotNumber, l.IsBulk, l.LocationCode) : L["Lot"];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -483,20 +483,20 @@ else if (_error is null)
                         @foreach (var link in links)
                         {
                             <tr @key="link.LotId">
-                                <td><a class="fw-semibold" href="inventory/lots/@link.LotId">@InventoryView.LotLabel(link.LotNumber, link.IsBulk, link.LocationCode)</a></td>
+                                <td><a class="fw-semibold" href="inventory/lots/@link.LotId">@InventoryView.LotLabel(L, link.LotNumber, link.IsBulk, link.LocationCode)</a></td>
                                 <td>@link.MaterialCode <div class="small text-muted">@link.MaterialName</div></td>
                                 <td><span class="@InventoryView.StatusChip(link.Status)">@L.Label(link.Status)</span></td>
                                 <td class="small">
-                                    @(link.JobNumber is null ? L.Label(link.LinkBasis) : $"via {link.JobNumber}")
+                                    @(link.JobNumber is null ? L.Label(link.LinkBasis) : L["via {0}", link.JobNumber])
                                     @if (link.Precision is { } precision)
                                     {
-                                        <span class="@BalanceAllocationPanel.PrecisionChip(precision) ms-1" title="@link.PrecisionNote">@BalanceAllocationPanel.PrecisionLabel(precision)</span>
+                                        <span class="@BalanceAllocationPanel.PrecisionChip(precision) ms-1" title="@link.PrecisionNote">@L.Of(BalanceAllocationPanel.PrecisionLabel(precision))</span>
                                     }
                                     else if (link.Unpaired)
                                     {
-                                        <span class="chip ms-1 text-muted" title="@link.PrecisionNote">Not paired</span>
+                                        <span class="chip ms-1 text-muted" title="@link.PrecisionNote">@L["Not paired"]</span>
                                     }
-                                    <div class="text-muted" title="@(link.EffectiveAt < link.DerivedAt.AddMinutes(-1) ? $"Back-dated; recorded {Display.SiteTime(link.DerivedAt, tz)}" : null)">
+                                    <div class="text-muted" title="@(link.EffectiveAt < link.DerivedAt.AddMinutes(-1) ? L["Back-dated; recorded {0}", Display.SiteTime(link.DerivedAt, tz)] : null)">
                                         since @Display.SiteTime(link.EffectiveAt, tz)@(link.EffectiveAt < link.DerivedAt.AddMinutes(-1) ? " (back-dated)" : "")
                                     </div>
                                 </td>

@@ -213,7 +213,7 @@ else
                 {
                     Kind = "lot",
                     Id = lot.Id,
-                    Label = InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode),
+                    Label = InventoryView.LotLabel(L, lot.LotNumber, lot.IsBulk, lot.LocationCode),
                     Detail = $"{lot.MaterialCode} · {InventoryView.Qty(lot.Quantity)} {lot.UomCode}",
                     MatchedBy = "label",
                 }, lot.MaterialId);

@@ -5,12 +5,12 @@
 @inject CurrentUser User
 
 @* Feed points (#33): what is loaded where, and what automated consumption couldn't cover, to resolve with a lot or dismiss. *@
-<PageTitle>Feed points · Inventory · Pulaski</PageTitle>
+<PageTitle>@L["Feed points · Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="Feed points" SiteChanged="LoadAsync">
+<InventoryHeader Title="@L["Feed points"]" SiteChanged="LoadAsync">
     <Description>
-        Hoppers, feeders and unwinds where lots enter a line. A lot loaded here feeds the line until the next lot of its material is loaded, it leaves or it runs out.
-        Components marked backflush or time window in a BOM are consumed from here as production is reported, and a feed point's consumed counter takes what it counts.
+        @L["Hoppers, feeders and unwinds where lots enter a line. A lot loaded here feeds the line until the next lot of its material is loaded, it leaves or it runs out."]
+        @L["Components marked backflush or time window in a BOM are consumed from here as production is reported, and a feed point's consumed counter takes what it counts."]
     </Description>
 </InventoryHeader>
 
@@ -18,18 +18,18 @@
 
 @if (_points is null)
 {
-    <p class="text-muted">Loading…</p>
+    <p class="text-muted">@L["Loading…"]</p>
 }
 else if (_points.Count == 0)
 {
-    <p class="text-muted">No feed points at this site. Add equipment with the role <em>Feed point</em> below a line on the Equipment screen.</p>
+    <p class="text-muted">@L["No feed points at this site. Add equipment with the role Feed point below a line on the Equipment screen."]</p>
 }
 else
 {
     <div class="table-panel mb-4">
         <table class="table align-middle">
             <thead>
-                <tr><th>Feed point</th><th>Line</th><th>Loaded now</th></tr>
+                <tr><th>@L["Feed point"]</th><th>@L["Line"]</th><th>@L["Loaded now"]</th></tr>
             </thead>
             <tbody>
                 @foreach (var p in _points)
@@ -39,19 +39,19 @@ else
                             <span class="fw-semibold">@p.Code</span> <div class="small text-muted">@p.Name</div>
                             @if (p.HasCounter)
                             {
-                                <span class="chip" title="Its consumed counter takes what it counts out of the lot loaded then">Counter</span>
+                                <span class="chip" title="@L["Its consumed counter takes what it counts out of the lot loaded then"]">@L["Counter"]</span>
                             }
                         </td>
                         <td>@(p.LineCode ?? "—")</td>
                         <td>
                             @if (p.Loads.Count == 0)
                             {
-                                <span class="text-muted">Nothing</span>
+                                <span class="text-muted">@L["Nothing"]</span>
                             }
                             @foreach (var load in p.Loads)
                             {
                                 <div @key="load.LotId">
-                                    <a class="fw-semibold" href="inventory/lots/@load.LotId">@InventoryView.LotLabel(load.LotNumber, load.IsBulk, load.LocationCode)</a>
+                                    <a class="fw-semibold" href="inventory/lots/@load.LotId">@InventoryView.LotLabel(L, load.LotNumber, load.IsBulk, load.LocationCode)</a>
                                     <span class="small">@load.MaterialCode</span>
                                     <span class="small text-muted">@InventoryView.Qty(load.Quantity) @load.UomCode · since @Display.SiteTime(load.LoadedAt, Sites.Site?.TimeZone)</span>
                                 </div>
@@ -66,23 +66,23 @@ else
 
 <section aria-labelledby="shortfalls-title">
     <div class="inv-section-head">
-        <h2 id="shortfalls-title" class="h5">What automation couldn't consume</h2>
-        <select class="form-select form-select-sm w-auto" aria-label="Status" @bind="_status" @bind:after="LoadShortfallsAsync">
-            <option value="open">Open</option>
-            <option value="resolved">Resolved</option>
-            <option value="dismissed">Dismissed</option>
+        <h2 id="shortfalls-title" class="h5">@L["What automation couldn't consume"]</h2>
+        <select class="form-select form-select-sm w-auto" aria-label="@L["Status"]" @bind="_status" @bind:after="LoadShortfallsAsync">
+            <option value="open">@L["Open"]</option>
+            <option value="resolved">@L["Resolved"]</option>
+            <option value="dismissed">@L["Dismissed"]</option>
         </select>
     </div>
     @if (_shortfalls.Count == 0)
     {
-        <p class="text-muted">@(_status == "open" ? "Nothing open: every automated consumption was covered." : "None.")</p>
+        <p class="text-muted">@(_status == "open" ? L["Nothing open: every automated consumption was covered."] : L["None."])</p>
     }
     else
     {
         <div class="table-panel">
             <table class="table table-sm align-middle">
                 <thead>
-                    <tr><th>When</th><th>Where</th><th>Job</th><th>Material</th><th class="inv-num">Short</th><th>From</th><th>Why</th><th></th></tr>
+                    <tr><th>@L["When"]</th><th>@L["Where"]</th><th>@L["Job"]</th><th>@L["Material"]</th><th class="inv-num">@L["Short"]</th><th>@L["From"]</th><th>@L["Why"]</th><th></th></tr>
                 </thead>
                 <tbody>
                     @foreach (var s in _shortfalls)
@@ -93,13 +93,13 @@ else
                             <td>@(s.JobNumber ?? "—")</td>
                             <td>@(s.MaterialCode ?? "—")@(s.LotNumber is { } lot ? $" · {lot}" : "")</td>
                             <td class="inv-num">@InventoryView.Qty(s.Quantity) @s.UomCode</td>
-                            <td class="small">@SourceLabel(s.Source)</td>
+                            <td class="small">@L[SourceLabel(s.Source)]</td>
                             <td class="small">
                                 @s.Reason
                                 @if (s.Status != "open")
                                 {
                                     <div class="text-muted">
-                                        @L.Label(s.Status)@(s.ResolvedLotNumber is { } used ? $" from {used}" : "")@(s.ResolutionNote is { } note ? $": {note}" : "")
+                                        @L.Label(s.Status)@(s.ResolvedLotNumber is { } used ? L[" from {0}", used] : "")@(s.ResolutionNote is { } note ? $": {note}" : "")
                                     </div>
                                 }
                             </td>
@@ -108,11 +108,11 @@ else
                                 {
                                     @if (s.JobId is not null && User.Can(PermissionCodes.ProductionReport, s.SiteId))
                                     {
-                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => StartAsync(s, resolve: true)">Resolve…</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => StartAsync(s, resolve: true)">@L["Resolve…"]</button>
                                     }
                                     @if (User.Can(PermissionCodes.InventoryCorrect, s.SiteId))
                                     {
-                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => StartAsync(s, resolve: false)">Dismiss…</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => StartAsync(s, resolve: false)">@L["Dismiss…"]</button>
                                     }
                                 }
                             </td>
@@ -124,19 +124,19 @@ else
                                     <form class="d-flex flex-wrap gap-2" @onsubmit="SaveAsync" @onsubmit:preventDefault>
                                         @if (_resolve)
                                         {
-                                            <select class="form-select form-select-sm w-auto" aria-label="Lot to consume from" @bind="_lotId">
-                                                <option value="@Guid.Empty">Choose the lot it came from</option>
+                                            <select class="form-select form-select-sm w-auto" aria-label="@L["Lot to consume from"]" @bind="_lotId">
+                                                <option value="@Guid.Empty">@L["Choose the lot it came from"]</option>
                                                 @foreach (var l in _lots)
                                                 {
-                                                    <option value="@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode) · @InventoryView.Qty(l.Quantity) @l.UomCode</option>
+                                                    <option value="@l.Id">@InventoryView.LotLabel(L, l.LotNumber, l.IsBulk, l.LocationCode) · @InventoryView.Qty(l.Quantity) @l.UomCode</option>
                                                 }
                                             </select>
                                         }
                                         <input class="form-control form-control-sm" style="max-width: 24rem" maxlength="1000"
-                                               placeholder="@(_resolve ? "Comment (optional)" : "Why it is dismissed (required)")" aria-label="Comment" @bind="_comment" @bind:event="oninput" />
+                                               placeholder="@(_resolve ? L["Comment (optional)"] : L["Why it is dismissed (required)"])" aria-label="@L["Comment"]" @bind="_comment" @bind:event="oninput" />
                                         <button type="submit" class="btn btn-sm btn-primary"
-                                                disabled="@(_busy || (_resolve ? _lotId == Guid.Empty : string.IsNullOrWhiteSpace(_comment)))">@(_resolve ? "Consume it" : "Dismiss")</button>
-                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _acting = null">Cancel</button>
+                                                disabled="@(_busy || (_resolve ? _lotId == Guid.Empty : string.IsNullOrWhiteSpace(_comment)))">@(_resolve ? L["Consume it"] : L["Dismiss"])</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _acting = null">@L["Cancel"]</button>
                                     </form>
                                 </td>
                             </tr>
@@ -162,9 +162,9 @@ else
 
     public static string SourceLabel(string source) => source switch
     {
-        "backflush" => "Backflush",
-        "time_window" => "Time window",
-        "counter" => "Counter",
+        "backflush" => Term.Mark("Backflush"),
+        "time_window" => Term.Mark("Time window"),
+        "counter" => Term.Mark("Counter"),
         _ => source,
     };
 

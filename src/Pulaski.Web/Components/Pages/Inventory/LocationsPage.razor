@@ -5,10 +5,10 @@
 @inject Downloads Downloads
 @inject CurrentUser User
 
-<PageTitle>Locations · Inventory · Pulaski</PageTitle>
+<PageTitle>@L["Locations · Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="Locations" SiteChanged="LoadAsync">
-    <Description>Equipment that holds inventory: stores, staging areas and the feed points on a line. Mark more on the <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> page with <strong>Holds inventory</strong>.</Description>
+<InventoryHeader Title="@L["Locations"]" SiteChanged="LoadAsync">
+    <Description>@L["Equipment that holds inventory: stores, staging areas and the feed points on a line. Mark more on the Equipment page with Holds inventory."] <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">@L["Equipment"]</ScreenLink></Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
@@ -17,14 +17,14 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_locations.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No locations yet</h2>
-        <p class="text-muted mb-0">Lots need somewhere to be. On the Equipment page, add a storage zone (for example <em>Raw material stores</em>) and tick <strong>Holds inventory</strong>.</p>
+        <h2>@L["No locations yet"]</h2>
+        <p class="text-muted mb-0">@L["Lots need somewhere to be. On the Equipment page, add a storage zone (for example Raw material stores) and tick Holds inventory."]</p>
     </div>
 }
 else
@@ -33,11 +33,11 @@ else
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Location</th>
-                    <th>Kind</th>
-                    <th>In</th>
-                    <th class="inv-num">Lots</th>
-                    <th class="inv-num">Materials</th>
+                    <th>@L["Location"]</th>
+                    <th>@L["Kind"]</th>
+                    <th>@L["In"]</th>
+                    <th class="inv-num">@L["Lots"]</th>
+                    <th class="inv-num">@L["Materials"]</th>
                     <th></th>
                 </tr>
             </thead>
@@ -50,41 +50,41 @@ else
                             @L.Label(l.EquipmentRole)
                             @if (l.ComminglesLots)
                             {
-                                <span class="chip ms-1" title="Lots here mix into one balance per material">Mixes lots</span>
+                                <span class="chip ms-1" title="@L["Lots here mix into one balance per material"]">@L["Mixes lots"]</span>
                                 <div class="small text-muted">
-                                    @(l.FlowModel == "fifo" ? "First in, first out" : "Mixed")@(l.MinResidenceMinutes is { } m ? $", at least {m} min" : "")@(l.EmptyLevel is { } e ? $", empty at ≤ {InventoryView.Qty(e)}" : "")@(l.LevelTolerance is { } t ? $", level ± {InventoryView.Qty(t)}" : "")
+                                    @(l.FlowModel == "fifo" ? L["First in, first out"] : L["Mixed"])@(l.MinResidenceMinutes is { } m ? L[", at least {0} min", m] : "")@(l.EmptyLevel is { } e ? L[", empty at ≤ {0}", InventoryView.Qty(e)] : "")@(l.LevelTolerance is { } t ? L[", level ± {0}", InventoryView.Qty(t)] : "")
                                     @if (User.Can(PermissionCodes.Equipment, l.SiteId))
                                     {
-                                        <button type="button" class="btn btn-sm btn-link p-0 ms-1" @onclick="() => EditFlow(l)">Change</button>
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-1" @onclick="() => EditFlow(l)">@L["Change"]</button>
                                     }
                                 </div>
                                 @if (_flow?.Id == l.Id)
                                 {
                                     <form class="d-flex flex-wrap gap-2 mt-1" @onsubmit="SaveFlowAsync" @onsubmit:preventDefault>
-                                        <select class="form-select form-select-sm w-auto" aria-label="How it flows" @bind="_flowModel">
-                                            <option value="mixed">Mixed: everything blends</option>
-                                            <option value="fifo">First in, first out</option>
+                                        <select class="form-select form-select-sm w-auto" aria-label="@L["How it flows"]" @bind="_flowModel">
+                                            <option value="mixed">@L["Mixed: everything blends"]</option>
+                                            <option value="fifo">@L["First in, first out"]</option>
                                         </select>
-                                        <input type="number" min="0" class="form-control form-control-sm" style="width: 9rem" placeholder="Min. minutes" aria-label="Minimum residence in minutes" @bind="_residence" />
-                                        <input type="number" step="any" class="form-control form-control-sm" style="width: 9rem" placeholder="Empty at level" aria-label="Level reading at or below which it is empty" title="In the level tag's unit: a reading at or below this means empty" @bind="_emptyLevel" />
-                                        <input type="number" min="0" step="any" class="form-control form-control-sm" style="width: 9rem" placeholder="Level tolerance" aria-label="How far the level may differ from declared stock" title="In the level tag's unit; blank: the level isn't compared with declared stock" @bind="_levelTolerance" />
-                                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save</button>
-                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _flow = null">Cancel</button>
+                                        <input type="number" min="0" class="form-control form-control-sm" style="width: 9rem" placeholder="@L["Min. minutes"]" aria-label="@L["Minimum residence in minutes"]" @bind="_residence" />
+                                        <input type="number" step="any" class="form-control form-control-sm" style="width: 9rem" placeholder="@L["Empty at level"]" aria-label="@L["Level reading at or below which it is empty"]" title="@L["In the level tag's unit: a reading at or below this means empty"]" @bind="_emptyLevel" />
+                                        <input type="number" min="0" step="any" class="form-control form-control-sm" style="width: 9rem" placeholder="@L["Level tolerance"]" aria-label="@L["How far the level may differ from declared stock"]" title="@L["In the level tag's unit; blank: the level isn't compared with declared stock"]" @bind="_levelTolerance" />
+                                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">@L["Save"]</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _flow = null">@L["Cancel"]</button>
                                     </form>
                                 }
                             }
                             @if (l.SingleMaterial)
                             {
-                                <span class="chip ms-1" title="Takes one material at a time">One material</span>
+                                <span class="chip ms-1" title="@L["Takes one material at a time"]">@L["One material"]</span>
                             }
                         </td>
                         <td>@l.ParentCode</td>
                         <td class="inv-num">@l.LotCount</td>
                         <td class="inv-num">@l.MaterialCount</td>
                         <td class="text-end text-nowrap">
-                            <a class="btn btn-sm btn-outline-secondary" href="inventory?locationId=@l.Id">Stock</a>
-                            <a class="btn btn-sm btn-outline-secondary" href="inventory/lots?locationId=@l.Id">Lots</a>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" title="A label to scan when moving stock here" @onclick="() => LabelAsync(l)">Label</button>
+                            <a class="btn btn-sm btn-outline-secondary" href="inventory?locationId=@l.Id">@L["Stock"]</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="inventory/lots?locationId=@l.Id">@L["Lots"]</a>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" title="@L["A label to scan when moving stock here"]" @onclick="() => LabelAsync(l)">@L["Label"]</button>
                             <PrintLabelControl Kind="location" Id="l.Id" SiteId="l.SiteId" ButtonClass="btn btn-sm btn-outline-secondary" />
                         </td>
                     </tr>

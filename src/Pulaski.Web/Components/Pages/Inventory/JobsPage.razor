@@ -3,34 +3,34 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 
-<PageTitle>Jobs · Inventory · Pulaski</PageTitle>
+<PageTitle>@L["Jobs · Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="Declare against a job" SiteChanged="SearchAsync">
-    <Description>Production jobs that are running, paused, or completed but not yet closed. Pick one to record the lots it used and the lots it made.</Description>
+<InventoryHeader Title="@L["Declare against a job"]" SiteChanged="SearchAsync">
+    <Description>@L["Production jobs that are running, paused, or completed but not yet closed. Pick one to record the lots it used and the lots it made."]</Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
 
 <form class="inv-toolbar" role="search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
     <div class="inv-search inv-grow">
-        <input type="search" class="form-control" placeholder="Job, order or material" aria-label="Find a job" @bind="_search" />
+        <input type="search" class="form-control" placeholder="@L["Job, order or material"]" aria-label="@L["Find a job"]" @bind="_search" />
         <Icon Name="search" Size="16" />
     </div>
-    <button type="submit" class="btn btn-primary">Search</button>
+    <button type="submit" class="btn btn-primary">@L["Search"]</button>
 </form>
 
 @if (_jobs is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_jobs.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No job has run yet</h2>
-        <p class="text-muted mb-0">Material is used and made while a job runs. Start a job on the <ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">Floor</ScreenLink> first; jobs come from work orders on the <ScreenLink Href="schedule" Permission="@PermissionCodes.ScheduleView">Schedule</ScreenLink>.</p>
+        <h2>@L["No job has run yet"]</h2>
+        <p class="text-muted mb-0">@L["Material is used and made while a job runs. Start a job on the Floor first; jobs come from work orders on the Schedule."] <ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">@L["Floor"]</ScreenLink> · <ScreenLink Href="schedule" Permission="@PermissionCodes.ScheduleView">@L["Schedule"]</ScreenLink></p>
     </div>
 }
 else
@@ -39,11 +39,11 @@ else
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Job</th>
-                    <th>Makes</th>
-                    <th>Line</th>
-                    <th>Status</th>
-                    <th class="inv-num">Planned</th>
+                    <th>@L["Job"]</th>
+                    <th>@L["Makes"]</th>
+                    <th>@L["Line"]</th>
+                    <th>@L["Status"]</th>
+                    <th class="inv-num">@L["Planned"]</th>
                 </tr>
             </thead>
             <tbody>

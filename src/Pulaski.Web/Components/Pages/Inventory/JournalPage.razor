@@ -5,57 +5,57 @@
 @inject TimeProvider Time
 @inject Downloads Downloads
 
-<PageTitle>Journal · Inventory · Pulaski</PageTitle>
+<PageTitle>@L["Journal · Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="Movement journal" SiteChanged="SearchAsync">
-    <Description>Every receipt, adjustment, move, hold, consumption and production in the site, newest first.</Description>
+<InventoryHeader Title="@L["Movement journal"]" SiteChanged="SearchAsync">
+    <Description>@L["Every receipt, adjustment, move, hold, consumption and production in the site, newest first."]</Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
 
 <form class="inv-toolbar" role="search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
-    <label class="small text-muted" for="j-from">From</label>
+    <label class="small text-muted" for="j-from">@L["From"]</label>
     <input id="j-from" type="date" class="form-control" style="min-width:auto" @bind="_from" />
-    <label class="small text-muted" for="j-to">to</label>
+    <label class="small text-muted" for="j-to">@L["to"]</label>
     <input id="j-to" type="date" class="form-control" style="min-width:auto" @bind="_to" />
-    <select class="form-select" aria-label="Movement" @bind="_kind">
-        <option value="">Every movement</option>
+    <select class="form-select" aria-label="@L["Movement"]" @bind="_kind">
+        <option value="">@L["Every movement"]</option>
         @foreach (var kind in Kinds)
         {
-            <option value="@kind">@InventoryView.EventLabel(kind)</option>
+            <option value="@kind">@(L[InventoryView.EventLabel(kind)])</option>
         }
     </select>
-    <div class="inv-picker"><MaterialPicker Materials="_materials" @bind-Value="_materialId" Placeholder="Any material" /></div>
-    <select class="form-select" aria-label="Location" @bind="_locationId">
-        <option value="">Any location</option>
+    <div class="inv-picker"><MaterialPicker Materials="_materials" @bind-Value="_materialId" Placeholder="@L["Any material"]" /></div>
+    <select class="form-select" aria-label="@L["Location"]" @bind="_locationId">
+        <option value="">@L["Any location"]</option>
         @foreach (var l in _locations)
         {
             <option value="@l.Id">@l.Code · @l.Name</option>
         }
     </select>
-    <input type="search" class="form-control" placeholder="Lot or supplier lot" aria-label="Lot number" @bind="_search" />
-    <input type="search" class="form-control" placeholder="Who" aria-label="Who" @bind="_actor" />
-    <button type="submit" class="btn btn-primary">Search</button>
-    <button type="button" class="btn btn-outline-secondary" disabled="@(_entries is not { Count: > 0 })" @onclick="ExportAsync">Export CSV</button>
+    <input type="search" class="form-control" placeholder="@L["Lot or supplier lot"]" aria-label="@L["Lot number"]" @bind="_search" />
+    <input type="search" class="form-control" placeholder="@L["Who"]" aria-label="@L["Who"]" @bind="_actor" />
+    <button type="submit" class="btn btn-primary">@L["Search"]</button>
+    <button type="button" class="btn btn-outline-secondary" disabled="@(_entries is not { Count: > 0 })" @onclick="ExportAsync">@L["Export CSV"]</button>
 </form>
 
 @if (JobQuery is not null)
 {
-    <p class="small">Showing one job's movements only. <a href="inventory/journal">Show every job</a></p>
+    <p class="small">@L["Showing one job's movements only."] <a href="inventory/journal">@L["Show every job"]</a></p>
 }
 
 @if (_entries is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_entries.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No movements</h2>
-        <p class="text-muted mb-0">Nothing matches in these dates. Widen the dates or clear a filter.</p>
+        <h2>@L["No movements"]</h2>
+        <p class="text-muted mb-0">@L["Nothing matches in these dates. Widen the dates or clear a filter."]</p>
     </div>
 }
 else
@@ -64,15 +64,15 @@ else
         <table class="table table-sm align-middle">
             <thead>
                 <tr>
-                    <th>When</th>
-                    <th>What</th>
-                    <th>Lot</th>
-                    <th class="inv-num">Change</th>
-                    <th class="inv-num">After</th>
-                    <th>Where</th>
-                    <th>Job</th>
-                    <th>Reason</th>
-                    <th>Who</th>
+                    <th>@L["When"]</th>
+                    <th>@L["What"]</th>
+                    <th>@L["Lot"]</th>
+                    <th class="inv-num">@L["Change"]</th>
+                    <th class="inv-num">@L["After"]</th>
+                    <th>@L["Where"]</th>
+                    <th>@L["Job"]</th>
+                    <th>@L["Reason"]</th>
+                    <th>@L["Who"]</th>
                 </tr>
             </thead>
             <tbody>
@@ -84,18 +84,18 @@ else
                             @Display.SiteTime(e.OccurredAt, Sites.Site?.TimeZone)
                             @if (e.IsBackdated)
                             {
-                                <div class="text-muted" title="Back-dated: recorded at the time above, counts from this one">counts from @Display.SiteTime(e.EffectiveAt, Sites.Site?.TimeZone)</div>
+                                <div class="text-muted" title="@L["Back-dated: recorded at the time above, counts from this one"]">@L["counts from {0}", Display.SiteTime(e.EffectiveAt, Sites.Site?.TimeZone)]</div>
                             }
                         </td>
                         <td>
-                            @InventoryView.EventLabel(e.Kind)
+                            @(L[InventoryView.EventLabel(e.Kind)])
                             @if (e.ToStatus is { } to)
                             {
                                 <div class="small text-muted">@L.Label(e.FromStatus) → @L.Label(to)</div>
                             }
                         </td>
                         <td>
-                            <a class="fw-semibold" href="inventory/lots/@entry.LotId">@InventoryView.LotLabel(entry.LotNumber, entry.IsBulk, entry.LocationCode)</a>
+                            <a class="fw-semibold" href="inventory/lots/@entry.LotId">@InventoryView.LotLabel(L, entry.LotNumber, entry.IsBulk, entry.LocationCode)</a>
                             <div class="small"><a class="text-muted" href="inventory/materials/@entry.MaterialId">@entry.MaterialCode</a></div>
                         </td>
                         <td class="inv-num">@(e.QtyDelta is { } d ? InventoryView.Delta(d) : "")</td>
@@ -132,7 +132,7 @@ else
         <span class="small text-muted">@_entries.Count @(_entries.Count == 1 ? "movement" : "movements")</span>
         @if (_hasMore)
         {
-            <button type="button" class="btn btn-outline-secondary" disabled="@_loading" @onclick="MoreAsync">Show older</button>
+            <button type="button" class="btn btn-outline-secondary" disabled="@_loading" @onclick="MoreAsync">@L["Show older"]</button>
         }
     </div>
 }
@@ -226,7 +226,7 @@ else
                     {
                         var e = entry.Movement;
                         return (IReadOnlyList<object?>)[
-                            Display.SiteTime(e.OccurredAt, tz), Display.SiteTime(e.EffectiveAt, tz), InventoryView.EventLabel(e.Kind), InventoryView.LotLabel(entry.LotNumber, entry.IsBulk, entry.LocationCode), entry.MaterialCode, e.QtyDelta, e.QtyAfter, e.UomCode,
+                            Display.SiteTime(e.OccurredAt, tz), Display.SiteTime(e.EffectiveAt, tz), L[InventoryView.EventLabel(e.Kind)], InventoryView.LotLabel(L, entry.LotNumber, entry.IsBulk, entry.LocationCode), entry.MaterialCode, e.QtyDelta, e.QtyAfter, e.UomCode,
                             e.FromLocationCode, e.ToLocationCode, e.FromStatus, e.ToStatus, e.JobNumber, e.Reference, e.ReasonName, e.ReasonGroupPath, e.Comment, e.ActorId];
                     })));
         }

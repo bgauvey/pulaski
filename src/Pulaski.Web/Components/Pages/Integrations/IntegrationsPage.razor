@@ -189,7 +189,7 @@ else
                             }
                             else if (d.EventType.StartsWith("pulaski.lot.", StringComparison.Ordinal))
                             {
-                                <ScreenLink Href="@($"inventory/lots/{d.Subject}")" Permission="@PermissionCodes.InventoryView">@InventoryView.LotLabel(d.LotNumber, d.IsBulk, d.LocationCode)</ScreenLink>
+                                <ScreenLink Href="@($"inventory/lots/{d.Subject}")" Permission="@PermissionCodes.InventoryView">@InventoryView.LotLabel(L, d.LotNumber, d.IsBulk, d.LocationCode)</ScreenLink>
                             }
                             else
                             {

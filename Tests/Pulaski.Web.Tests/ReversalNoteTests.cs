@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Web.Services.Inventory;
 
@@ -26,11 +27,11 @@ public class ReversalNoteTests
     [Fact]
     public void Each_kind_of_reversal_says_what_it_puts_back()
     {
-        Assert.StartsWith("The 30 kg goes back to the lot", InventoryView.ReversalNote(E("consumed", -30m), Lot), StringComparison.Ordinal);
-        Assert.Contains("new lot is cancelled", InventoryView.ReversalNote(E("split", 5m), Lot), StringComparison.Ordinal);
-        Assert.Contains("merge comes apart", InventoryView.ReversalNote(E("merged", 5m), Lot), StringComparison.Ordinal);
-        Assert.Contains("balance it came from", InventoryView.ReversalNote(E("moved", -5m, Guid.CreateVersion7()), Lot), StringComparison.Ordinal);
-        Assert.Contains("reported output stays", InventoryView.ReversalNote(E("produced", 5m), Lot), StringComparison.Ordinal);
-        Assert.Contains("as if it never happened", InventoryView.ReversalNote(E("adjusted", 5m), Lot), StringComparison.Ordinal);
+        Assert.StartsWith("The 30 kg goes back to the lot", InventoryView.ReversalNote(Text.English, E("consumed", -30m), Lot), StringComparison.Ordinal);
+        Assert.Contains("new lot is cancelled", InventoryView.ReversalNote(Text.English, E("split", 5m), Lot), StringComparison.Ordinal);
+        Assert.Contains("merge comes apart", InventoryView.ReversalNote(Text.English, E("merged", 5m), Lot), StringComparison.Ordinal);
+        Assert.Contains("balance it came from", InventoryView.ReversalNote(Text.English, E("moved", -5m, Guid.CreateVersion7()), Lot), StringComparison.Ordinal);
+        Assert.Contains("reported output stays", InventoryView.ReversalNote(Text.English, E("produced", 5m), Lot), StringComparison.Ordinal);
+        Assert.Contains("as if it never happened", InventoryView.ReversalNote(Text.English, E("adjusted", 5m), Lot), StringComparison.Ordinal);
     }
 }

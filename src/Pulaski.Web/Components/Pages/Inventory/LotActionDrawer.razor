@@ -11,9 +11,9 @@
         <header class="drawer-head">
             <div>
                 <div class="small text-muted">@Context</div>
-                <h2 id="lot-drawer-title" class="mb-0">@LotActions.Title(action)</h2>
+                <h2 id="lot-drawer-title" class="mb-0">@(L[LotActions.Title(action)])</h2>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-secondary btn-square" aria-label="Close" @onclick="OnClose"><Icon Name="close" Size="18" /></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary btn-square" aria-label="@L["Close"]" @onclick="OnClose"><Icon Name="close" Size="18" /></button>
         </header>
 
         <form class="drawer-body" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
@@ -21,7 +21,7 @@
 
             @if (_loading)
             {
-                <p class="text-muted">Loading…</p>
+                <p class="text-muted">@L["Loading…"]</p>
             }
             else
             {
@@ -29,22 +29,22 @@
                 {
                     case LotAction.Receive:
                         <div class="mb-3">
-                            <label class="form-label" for="lot-material">Material</label>
+                            <label class="form-label" for="lot-material">@L["Material"]</label>
                             <MaterialPicker Id="lot-material" Materials="_materials" Value="@(_materialId == Guid.Empty ? null : _materialId)"
                                             ValueChanged="id => SelectMaterialAsync(id ?? Guid.Empty)" />
                         </div>
                         @if (_expected.Count > 0)
                         {
                             <div class="mb-3">
-                                <label class="form-label" for="lot-expected">Against expected receipt <span class="text-muted">(optional)</span></label>
+                                <label class="form-label" for="lot-expected">@L["Against expected receipt"] <span class="text-muted">@L["(optional)"]</span></label>
                                 <select id="lot-expected" class="form-select" @bind="_expectedId" @bind:after="ExpectedChosen">
-                                    <option value="@Guid.Empty">None</option>
+                                    <option value="@Guid.Empty">@L["None"]</option>
                                     @foreach (var e in _expected)
                                     {
-                                        <option value="@e.Id">@(e.Reference ?? "No reference") · @InventoryView.Qty(e.RemainingQty) @e.UomCode@(e.ReceivedQty > 0 ? " still to come" : "") · due @Display.SiteTime(e.ExpectedAt, Sites.Site?.TimeZone)</option>
+                                        <option value="@e.Id">@(e.Reference ?? L["No reference"]) · @InventoryView.Qty(e.RemainingQty) @e.UomCode@(e.ReceivedQty > 0 ? " still to come" : "") · due @Display.SiteTime(e.ExpectedAt, Sites.Site?.TimeZone)</option>
                                     }
                                 </select>
-                                <div class="form-text">Receiving against it closes it: nothing more is expected, whatever quantity arrives.</div>
+                                <div class="form-text">@L["Receiving against it closes it: nothing more is expected, whatever quantity arrives."]</div>
                             </div>
                         }
                         @LocationField(null)
@@ -53,25 +53,25 @@
                             @if (received.IsLotTracked)
                             {
                                 <div class="mb-3">
-                                    <label class="form-label" for="lot-number">Lot number@(Mixing ? " (optional)" : "")</label>
+                                    <label class="form-label" for="lot-number">@(Mixing ? L["Lot number (optional)"] : L["Lot number"])</label>
                                     <input id="lot-number" class="form-control" maxlength="100" @bind="_lotNumber" />
                                     @if (Mixing)
                                     {
-                                        <div class="form-text">Lots mix at @LocationCode(_locationId): this joins its balance of @received.Code. Give the supplier's lot number to keep it traceable.</div>
+                                        <div class="form-text">@L["Lots mix at {0}: this joins its balance of {1}. Give the supplier's lot number to keep it traceable.", LocationCode(_locationId), received.Code]</div>
                                     }
                                 </div>
                                 <div class="row g-2 mb-3">
                                     <div class="col-7">
-                                        <label class="form-label" for="lot-supplier">Supplier lot</label>
+                                        <label class="form-label" for="lot-supplier">@L["Supplier lot"]</label>
                                         <input id="lot-supplier" class="form-control" maxlength="100" @bind="_supplierLot" />
                                     </div>
                                     <div class="col-5">
-                                        <label class="form-label" for="lot-expires">Expires</label>
+                                        <label class="form-label" for="lot-expires">@L["Expires"]</label>
                                         <input id="lot-expires" type="date" class="form-control" @bind="_expires" />
                                     </div>
                                     @if (received.ShelfLifeDays is { } days)
                                     {
-                                        <div class="col-12 form-text mt-1">Blank: @days days from today, @(received.Code)'s shelf life.</div>
+                                        <div class="col-12 form-text mt-1">@L["Blank: {0} days from today, {1}'s shelf life.", days, received.Code]</div>
                                     }
                                 </div>
                             }
@@ -90,11 +90,11 @@
                         {
                             <div class="row g-2 mb-3">
                                 <div class="col-7">
-                                    <label class="form-label" for="lot-number">Lot number</label>
-                                    <input id="lot-number" class="form-control" maxlength="100" placeholder="@(Mixing ? "Blank: straight into the balance" : $"Blank: {SelectedJob?.JobNumber ?? "job"}-01, -02…")" @bind="_lotNumber" />
+                                    <label class="form-label" for="lot-number">@L["Lot number"]</label>
+                                    <input id="lot-number" class="form-control" maxlength="100" placeholder="@(Mixing ? L["Blank: straight into the balance"] : L["Blank: {0}-01, -02…", SelectedJob?.JobNumber ?? L["job"]])" @bind="_lotNumber" />
                                 </div>
                                 <div class="col-5">
-                                    <label class="form-label" for="lot-expires">Expires</label>
+                                    <label class="form-label" for="lot-expires">@L["Expires"]</label>
                                     <input id="lot-expires" type="date" class="form-control" @bind="_expires" />
                                 </div>
                             </div>
@@ -106,9 +106,9 @@
                         @if (Lot is null)
                         {
                             <div class="mb-3">
-                                <label class="form-label" for="lot-component">Material</label>
+                                <label class="form-label" for="lot-component">@L["Material"]</label>
                                 <select id="lot-component" class="form-select" value="@_materialId" @onchange="OnComponentChangedAsync">
-                                    <option value="@Guid.Empty">Choose a material…</option>
+                                    <option value="@Guid.Empty">@L["Choose a material…"]</option>
                                     @foreach (var c in _components)
                                     {
                                         <option value="@c.MaterialId">@c.MaterialCode · @c.MaterialName@(c.IsPlanned ? " · planned" : "")</option>
@@ -121,12 +121,12 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label" for="lot-pick">Lot</label>
+                                <label class="form-label" for="lot-pick">@L["Lot"]</label>
                                 <select id="lot-pick" class="form-select" @bind="_lotId" disabled="@(_materialId == Guid.Empty)">
-                                    <option value="@Guid.Empty">@(_lots.Count == 0 && _materialId != Guid.Empty ? "No available lot of this material" : "Choose a lot…")</option>
+                                    <option value="@Guid.Empty">@(_lots.Count == 0 && _materialId != Guid.Empty ? L["No available lot of this material"] : L["Choose a lot…"])</option>
                                     @foreach (var l in _lots)
                                     {
-                                        <option value="@l.Id">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, l.LocationCode) · @InventoryView.Qty(l.Quantity) @l.UomCode@(l.IsBulk ? "" : $" · {l.LocationCode}")</option>
+                                        <option value="@l.Id">@InventoryView.LotLabel(L, l.LotNumber, l.IsBulk, l.LocationCode) · @InventoryView.Qty(l.Quantity) @l.UomCode@(l.IsBulk ? "" : $" · {l.LocationCode}")</option>
                                     }
                                 </select>
                             </div>
@@ -136,7 +136,7 @@
                         {
                             @JobField()
                         }
-                        @QuantityField(true, ConsumeLot is { } lot ? $"{InventoryView.Qty(lot.Quantity)} {lot.UomCode} available" : null)
+                        @QuantityField(true, ConsumeLot is { } lot ? L["{0} {1} available", InventoryView.Qty(lot.Quantity), lot.UomCode] : null)
                         break;
 
                     case LotAction.WriteUp:
@@ -145,15 +145,15 @@
                         break;
 
                     case LotAction.WriteOff:
-                        @QuantityField(false, $"Leave blank to write off all {InventoryView.Qty(Lot!.Quantity)} {Lot.UomCode}.")
+                        @(QuantityField(false, L["Leave blank to write off all {0} {1}.", InventoryView.Qty(Lot!.Quantity), Lot.UomCode]))
                         @ReasonField()
                         break;
 
                     case LotAction.Load:
                         <div class="mb-3">
-                            <label class="form-label" for="lot-feed">Feed point</label>
+                            <label class="form-label" for="lot-feed">@L["Feed point"]</label>
                             <select id="lot-feed" class="form-select" @bind="_locationId">
-                                <option value="@Guid.Empty">@(_feedPoints.Count == 0 ? "No feed points at this site" : "Choose a feed point…")</option>
+                                <option value="@Guid.Empty">@(_feedPoints.Count == 0 ? L["No feed points at this site"] : L["Choose a feed point…"])</option>
                                 @foreach (var f in _feedPoints)
                                 {
                                     <option value="@f.Id">@f.Code · @f.Name@(f.LineCode is { } line ? $" ({line})" : "")</option>
@@ -162,9 +162,9 @@
                         </div>
                         <p class="small text-muted">
                             @(_locationId == Lot!.LocationId
-                                ? "It is there already: it feeds from now, and the lot of its material loaded before it stops feeding."
-                                : $"The whole lot moves there, all {InventoryView.Qty(Lot.Quantity)} {Lot.UomCode}, and feeds from now.")
-                            Automated consumption (backflush, time window, a counter) takes from it while it is loaded.
+                                ? L["It is there already: it feeds from now, and the lot of its material loaded before it stops feeding."]
+                                : L["The whole lot moves there, all {0} {1}, and feeds from now.", InventoryView.Qty(Lot.Quantity), Lot.UomCode])
+                            @L["Automated consumption (backflush, time window, a counter) takes from it while it is loaded."]
                         </p>
                         break;
 
@@ -172,44 +172,44 @@
                         @LocationField(Lot!.LocationId)
                         @if (Lot.IsBulk)
                         {
-                            @QuantityField(true, $"{InventoryView.Qty(Lot.Quantity)} {Lot.UomCode} here. It joins the balance at the new location.")
+                            @(QuantityField(true, L["{0} {1} here. It joins the balance at the new location.", InventoryView.Qty(Lot.Quantity), Lot.UomCode]))
                         }
                         else
                         {
-                            <p class="small text-muted">The whole lot moves, all @InventoryView.Qty(Lot.Quantity) @Lot.UomCode.</p>
+                            <p class="small text-muted">@L["The whole lot moves, all {0} {1}.", InventoryView.Qty(Lot.Quantity), Lot.UomCode]</p>
                         }
                         break;
 
                     case LotAction.Hold:
                         <fieldset class="mb-3">
-                            <legend class="form-label">Set to</legend>
+                            <legend class="form-label">@L["Set to"]</legend>
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" id="lot-hold" name="lot-hold" checked="@(_holdStatus == "on_hold")" @onchange='() => _holdStatus = "on_hold"' disabled="@(Lot!.Status == "on_hold")" />
-                                <label class="form-check-label" for="lot-hold">On hold: waiting for a decision</label>
+                                <label class="form-check-label" for="lot-hold">@L["On hold: waiting for a decision"]</label>
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" id="lot-quarantine" name="lot-hold" checked="@(_holdStatus == "quarantine")" @onchange='() => _holdStatus = "quarantine"' disabled="@(Lot.Status == "quarantine")" />
-                                <label class="form-check-label" for="lot-quarantine">Quarantine: kept apart, suspected bad</label>
+                                <label class="form-check-label" for="lot-quarantine">@L["Quarantine: kept apart, suspected bad"]</label>
                             </div>
                         </fieldset>
                         @ReasonField()
                         break;
 
                     case LotAction.Release:
-                        <p>@InventoryView.LotLabel(Lot!.LotNumber, Lot.IsBulk, Lot.LocationCode) becomes available again, and can be consumed.</p>
+                        <p>@InventoryView.LotLabel(L, Lot!.LotNumber, Lot.IsBulk, Lot.LocationCode) becomes available again, and can be consumed.</p>
                         break;
 
                     case LotAction.Split:
-                        @QuantityField(true, $"Of {InventoryView.Qty(Lot!.Quantity)} {Lot.UomCode}; the rest stays in {Lot.LotNumber}.")
+                        @(QuantityField(true, L["Of {0} {1}; the rest stays in {2}.", InventoryView.Qty(Lot!.Quantity), Lot.UomCode, Lot.LotNumber]))
                         <div class="row g-2 mb-3">
                             <div class="col-6">
-                                <label class="form-label" for="lot-number">New lot number</label>
-                                <input id="lot-number" class="form-control" maxlength="100" placeholder="Blank: @Lot.LotNumber-1…" @bind="_lotNumber" />
+                                <label class="form-label" for="lot-number">@L["New lot number"]</label>
+                                <input id="lot-number" class="form-control" maxlength="100" placeholder="@L["Blank: {0}-1…", Lot?.LotNumber]" @bind="_lotNumber" />
                             </div>
                             <div class="col-6">
-                                <label class="form-label" for="lot-split-to">Goes to</label>
+                                <label class="form-label" for="lot-split-to">@L["Goes to"]</label>
                                 <select id="lot-split-to" class="form-select" @bind="_locationId">
-                                    <option value="@Guid.Empty">Where it is (@Lot.LocationCode)</option>
+                                    <option value="@Guid.Empty">@L["Where it is ({0})", Lot!.LocationCode]</option>
                                     @foreach (var l in _locations.Where(l => l.Id != Lot.LocationId))
                                     {
                                         <option value="@l.Id">@l.Code · @l.Name</option>
@@ -221,24 +221,24 @@
 
                     case LotAction.Merge:
                         <p class="small text-muted">
-                            Lots of @Lot!.MaterialCode at @Lot.LocationCode that are @L.Label(Lot.Status).ToLowerInvariant() can be merged in.
-                            They go to zero; @Lot.LotNumber takes their stock and the earliest expiry.
+                            @L["Lots of {0} at {1} that are {2} can be merged in.", Lot!.MaterialCode, Lot.LocationCode, L.Label(Lot.Status).ToLowerInvariant()]
+                            @L["They go to zero; {0} takes their stock and the earliest expiry.", Lot.LotNumber]
                         </p>
                         @if (_lots.Count == 0)
                         {
-                            <p class="text-muted">No other lot can be merged into this one. Move or release lots first.</p>
+                            <p class="text-muted">@L["No other lot can be merged into this one. Move or release lots first."]</p>
                         }
                         else
                         {
                             <fieldset class="mb-3">
-                                <legend class="form-label">Merge in</legend>
+                                <legend class="form-label">@L["Merge in"]</legend>
                                 @foreach (var l in _lots)
                                 {
                                     <div class="form-check" @key="l.Id">
                                         <input class="form-check-input" type="checkbox" id="merge-@l.Id" checked="@_mergeIds.Contains(l.Id)"
                                                @onchange="e => ToggleMerge(l.Id, e.Value is true)" />
                                         <label class="form-check-label" for="merge-@l.Id">
-                                            @l.LotNumber · @InventoryView.Qty(l.Quantity) @l.UomCode@(l.ExpiresAt is { } x ? $" · expires {Display.SiteTime(x, Sites.Site?.TimeZone)[..10]}" : "")
+                                            @l.LotNumber · @InventoryView.Qty(l.Quantity) @l.UomCode@(l.ExpiresAt is { } x ? L[" · expires {0}", Display.SiteTime(x, Sites.Site?.TimeZone)[..10]] : "")
                                         </label>
                                     </div>
                                 }
@@ -247,58 +247,58 @@
                         break;
 
                     case LotAction.Ship:
-                        @QuantityField(false, $"Leave blank to ship all {InventoryView.Qty(Lot!.Quantity)} {Lot.UomCode}.")
+                        @(QuantityField(false, L["Leave blank to ship all {0} {1}.", InventoryView.Qty(Lot!.Quantity), Lot.UomCode]))
                         <div class="mb-3">
-                            <label class="form-label" for="lot-reference">Delivery or shipment number</label>
+                            <label class="form-label" for="lot-reference">@L["Delivery or shipment number"]</label>
                             <input id="lot-reference" class="form-control" maxlength="100" @bind="_reference" @bind:event="oninput" />
                         </div>
                         break;
 
                     case LotAction.Correct:
                         <div class="mb-3">
-                            <label class="form-label" for="lot-number">Lot number</label>
+                            <label class="form-label" for="lot-number">@L["Lot number"]</label>
                             <input id="lot-number" class="form-control" maxlength="100" disabled="@Lot!.IsBulk" @bind="_lotNumber" />
                             @if (Lot.IsBulk)
                             {
-                                <div class="form-text">A balance has no lot number; it is named by its location.</div>
+                                <div class="form-text">@L["A balance has no lot number; it is named by its location."]</div>
                             }
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-7">
-                                <label class="form-label" for="lot-supplier">Supplier lot</label>
+                                <label class="form-label" for="lot-supplier">@L["Supplier lot"]</label>
                                 <input id="lot-supplier" class="form-control" maxlength="100" @bind="_supplierLot" />
                             </div>
                             <div class="col-5">
-                                <label class="form-label" for="lot-expires">Expires</label>
+                                <label class="form-label" for="lot-expires">@L["Expires"]</label>
                                 <input id="lot-expires" type="date" class="form-control" @bind="_expires" />
                             </div>
                         </div>
-                        <p class="small text-muted">Say why in the comment; it is required.</p>
+                        <p class="small text-muted">@L["Say why in the comment; it is required."]</p>
                         break;
 
                     case LotAction.Reverse:
                         @if (Movement is { } undo)
                         {
                             <dl class="facts">
-                                <dt>Movement</dt>
-                                <dd>@InventoryView.EventLabel(undo.Kind)@(undo.QtyDelta is { } d ? $" {InventoryView.Delta(d)} {undo.UomCode}" : "")</dd>
-                                <dt>When</dt>
+                                <dt>@L["Movement"]</dt>
+                                <dd>@(L[InventoryView.EventLabel(undo.Kind)])@(undo.QtyDelta is { } d ? $" {InventoryView.Delta(d)} {undo.UomCode}" : "")</dd>
+                                <dt>@L["When"]</dt>
                                 <dd>@Display.SiteTime(undo.OccurredAt, Sites.Site?.TimeZone)</dd>
                             </dl>
-                            <p class="small text-muted">@InventoryView.ReversalNote(undo, Lot!)</p>
+                            <p class="small text-muted">@InventoryView.ReversalNote(L, undo, Lot!)</p>
                             <div class="form-check mb-2">
                                 <input class="form-check-input" type="checkbox" id="lot-chain" checked="@_chain" @onchange="e => { _chain = e.Value is true; _chainCheck = null; }" />
-                                <label class="form-check-label" for="lot-chain">With everything after it that depends on it</label>
-                                <div class="form-text">Every later movement of this lot, and of lots split off it since, is reversed first, latest first. Check shows the list before anything is done.</div>
+                                <label class="form-check-label" for="lot-chain">@L["With everything after it that depends on it"]</label>
+                                <div class="form-text">@L["Every later movement of this lot, and of lots split off it since, is reversed first, latest first. Check shows the list before anything is done."]</div>
                             </div>
                             @if (_chainCheck is { } check)
                             {
                                 <div class="small mb-2">
-                                    <div class="fw-semibold">@(check.Reversible ? $"It reverses {check.Steps.Count} {(check.Steps.Count == 1 ? "movement" : "movements")}, latest first:" : "It can't all be reversed:")</div>
+                                    <div class="fw-semibold">@(check.Reversible ? (check.Steps.Count == 1 ? L["It reverses 1 movement:"] : L["It reverses these movements, latest first: {0}", check.Steps.Count]) : L["It can't all be reversed:"])</div>
                                     <ol class="mb-1">
                                         @foreach (var step in check.Steps)
                                         {
-                                            <li>@step.LotName: @InventoryView.EventLabel(step.Kind).ToLowerInvariant()@(step.Quantity is { } q ? $" {InventoryView.Delta(q)}" : "")@(step.JobNumber is { } job ? $" ({job})" : ""), @Display.SiteTime(step.EffectiveAt, Sites.Site?.TimeZone)</li>
+                                            <li>@step.LotName: @(L[InventoryView.EventLabel(step.Kind)]).ToLowerInvariant()@(step.Quantity is { } q ? $" {InventoryView.Delta(q)}" : "")@(step.JobNumber is { } job ? $" ({job})" : ""), @Display.SiteTime(step.EffectiveAt, Sites.Site?.TimeZone)</li>
                                         }
                                     </ol>
                                     @if (check.Problem is { } problem)
@@ -315,26 +315,26 @@
                 @if (CanBackdate)
                 {
                     <div class="mb-3">
-                        <label class="form-label" for="lot-effective">Counts from <span class="text-muted">(optional)</span></label>
+                        <label class="form-label" for="lot-effective">@L["Counts from"] <span class="text-muted">@L["(optional)"]</span></label>
                         <input id="lot-effective" type="datetime-local" class="form-control" @bind="_effective" />
                         <div class="form-text">
-                            To back-date it, up to 31 days, to when it was really done; it is recorded now as well. A comment saying why is required.
-                            @(Action is LotAction.Consume or LotAction.Produce ? "It goes into the run going on then." : "")
-                            @(Action is LotAction.Move or LotAction.Hold or LotAction.Release ? "Only as the lot's latest movement: nothing else may count after it." : "")
-                            @(Action is LotAction.Split or LotAction.Ship ? "Only if the lot's status and location haven't changed since." : "")
-                            @(Action is LotAction.Merge ? "The lots taken in must have nothing counting after it." : "")
+                            @L["To back-date it, up to 31 days, to when it was really done; it is recorded now as well. A comment saying why is required."]
+                            @(Action is LotAction.Consume or LotAction.Produce ? L["It goes into the run going on then."] : "")
+                            @(Action is LotAction.Move or LotAction.Hold or LotAction.Release ? L["Only as the lot's latest movement: nothing else may count after it."] : "")
+                            @(Action is LotAction.Split or LotAction.Ship ? L["Only if the lot's status and location haven't changed since."] : "")
+                            @(Action is LotAction.Merge ? L["The lots taken in must have nothing counting after it."] : "")
                         </div>
                     </div>
                 }
 
                 <div class="mb-3">
-                    <label class="form-label" for="lot-comment">Comment@(SelectedReason?.RequiresComment == true || _effective is not null || Action == LotAction.Reverse ? " (required)" : "")</label>
+                    <label class="form-label" for="lot-comment">@(SelectedReason?.RequiresComment == true || _effective is not null || Action == LotAction.Reverse ? L["Comment (required)"] : L["Comment"])</label>
                     <textarea id="lot-comment" class="form-control" rows="2" maxlength="1000" @bind="_comment"></textarea>
                 </div>
 
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanSubmit)">@SubmitLabel</button>
-                    <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">@L["Cancel"]</button>
                 </div>
             }
         </form>
@@ -434,33 +434,33 @@
     private LotSummaryDto? ConsumeLot => Lot ?? _lots.FirstOrDefault(l => l.Id == _lotId);
 
     private string Context => Lot is { } lot
-        ? $"{lot.MaterialCode} · {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)}"
+        ? $"{lot.MaterialCode} · {InventoryView.LotLabel(L, lot.LotNumber, lot.IsBulk, lot.LocationCode)}"
         : Job is { } job ? $"{job.JobNumber} · {job.MaterialCode}" : Sites.Site?.Code ?? "";
 
     private bool _chain;
     private ChainReversalDto? _chainCheck;
 
     private string SubmitLabel => Action == LotAction.Reverse && _chain
-        ? _chainCheck is { Reversible: true } check ? $"Undo {check.Steps.Count} {(check.Steps.Count == 1 ? "movement" : "movements")}" : "Check"
+        ? _chainCheck is { Reversible: true } check ? (check.Steps.Count == 1 ? L["Undo 1 movement"] : L["Undo movements: {0}", check.Steps.Count]) : L["Check"]
         : PlainSubmitLabel;
 
     private string PlainSubmitLabel => Action switch
     {
-        LotAction.Receive => "Receive",
-        LotAction.Produce => "Record production",
-        LotAction.Consume => "Record consumption",
-        LotAction.WriteUp => "Write up",
-        LotAction.WriteOff => "Write off",
-        LotAction.Move => "Move",
-        LotAction.Load => "Load",
-        LotAction.Hold => _holdStatus == "quarantine" ? "Quarantine" : "Hold",
-        LotAction.Release => "Release",
-        LotAction.Split => "Split",
-        LotAction.Merge => _mergeIds.Count == 0 ? "Merge" : $"Merge {_mergeIds.Count} {(_mergeIds.Count == 1 ? "lot" : "lots")}",
-        LotAction.Ship => "Ship",
-        LotAction.Correct => "Correct",
-        LotAction.Reverse => "Reverse",
-        _ => "Save",
+        LotAction.Receive => L["Receive"],
+        LotAction.Produce => L["Record production"],
+        LotAction.Consume => L["Record consumption"],
+        LotAction.WriteUp => L["Write up"],
+        LotAction.WriteOff => L["Write off"],
+        LotAction.Move => L["Move"],
+        LotAction.Load => L["Load"],
+        LotAction.Hold => _holdStatus == "quarantine" ? L["Quarantine"] : L["Hold"],
+        LotAction.Release => L["Release"],
+        LotAction.Split => L["Split"],
+        LotAction.Merge => _mergeIds.Count == 0 ? L["Merge"] : (_mergeIds.Count == 1 ? L["Merge 1 lot"] : L["Merge lots: {0}", _mergeIds.Count]),
+        LotAction.Ship => L["Ship"],
+        LotAction.Correct => L["Correct"],
+        LotAction.Reverse => L["Reverse"],
+        _ => L["Save"],
     };
 
     private bool CanSubmit => Action switch
@@ -730,8 +730,8 @@
                 LotAction.Receive => await ReceiveAsync(comment),
                 LotAction.Produce => await ProduceAsync(comment),
                 LotAction.Consume => await ConsumeAsync(comment),
-                LotAction.WriteUp => Done(await Api.WriteUpLotAsync(Lot!.Id, Adjustment(comment)), $"written up by {QtyText}"),
-                LotAction.WriteOff => Done(await Api.WriteOffLotAsync(Lot!.Id, Adjustment(comment)), _quantity is null ? "written off" : $"{QtyText} written off"),
+                LotAction.WriteUp => Done(await Api.WriteUpLotAsync(Lot!.Id, Adjustment(comment)), L["written up by {0}", QtyText]),
+                LotAction.WriteOff => Done(await Api.WriteOffLotAsync(Lot!.Id, Adjustment(comment)), _quantity is null ? L["written off"] : L["{0} written off", QtyText]),
                 LotAction.Move => Done(
                     await Api.MoveLotAsync(Lot!.Id, new MoveLotRequest
                     {
@@ -742,20 +742,20 @@
                         Comment = comment,
                         EffectiveAt = EffectiveAt,
                     }),
-                    $"{(Lot.IsBulk ? QtyText + " " : "")}moved to {LocationCode(_locationId)}"),
+                    (Lot.IsBulk ? L["{0} moved to {1}", QtyText, LocationCode(_locationId)] : L["moved to {0}", LocationCode(_locationId)])),
                 LotAction.Load => Done(
                     await Api.LoadLotAsync(Lot!.Id, new LoadLotRequest { Version = Lot.Version, FeedPointId = _locationId, Comment = comment }),
-                    $"loaded at {_feedPoints.FirstOrDefault(f => f.Id == _locationId)?.Code}"),
+                    L["loaded at {0}", _feedPoints.FirstOrDefault(f => f.Id == _locationId)?.Code]),
                 LotAction.Hold => Done(
                     await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = _holdStatus, ReasonCodeId = _reasonId, Comment = comment, EffectiveAt = EffectiveAt }),
-                    _holdStatus == "quarantine" ? "quarantined" : "put on hold"),
+                    _holdStatus == "quarantine" ? L["quarantined"] : L["put on hold"]),
                 LotAction.Release => Done(
                     await Api.ChangeLotStatusAsync(Lot!.Id, new ChangeLotStatusRequest { Version = Lot.Version, Status = "available", Comment = comment, EffectiveAt = EffectiveAt }),
-                    "released"),
+                    L["released"]),
                 LotAction.Split => await SplitAsync(comment),
                 LotAction.Merge => Done(
                     await Api.MergeLotsAsync(Lot!.Id, new MergeLotsRequest { Version = Lot.Version, SourceLotIds = [.. _mergeIds], Comment = comment, EffectiveAt = EffectiveAt }),
-                    $"took in {_mergeIds.Count} {(_mergeIds.Count == 1 ? "lot" : "lots")}"),
+                    (_mergeIds.Count == 1 ? L["took in 1 lot"] : L["took in lots: {0}", _mergeIds.Count])),
                 LotAction.Ship => Done(
                     await Api.ShipLotAsync(Lot!.Id, new ShipLotRequest
                     {
@@ -766,7 +766,7 @@
                         Comment = comment,
                         EffectiveAt = EffectiveAt,
                     }),
-                    $"{(_quantity is null ? "" : QtyText + " ")}shipped on {_reference!.Trim()}"),
+                    (_quantity is null ? L["shipped on {0}", _reference!.Trim()] : L["{0} shipped on {1}", QtyText, _reference!.Trim()])),
                 LotAction.Correct => Done(
                     await Api.CorrectLotAsync(Lot!.Id, new CorrectLotRequest
                     {
@@ -776,11 +776,11 @@
                         ExpiresAt = Display.FromSiteLocal(_expires, Sites.Site?.TimeZone),
                         Comment = comment!,
                     }),
-                    "corrected"),
+                    L["corrected"]),
                 LotAction.Reverse when chained is { } done => done,
                 LotAction.Reverse => Done(
                     await Api.ReverseMovementAsync(Lot!.Id, new ReverseMovementRequest { Version = Lot.Version, EventId = Movement!.Id, ReasonCodeId = _reasonId, Comment = comment }),
-                    $"had a movement ({InventoryView.EventLabel(Movement.Kind).ToLowerInvariant()}) reversed"),
+                    L["had a movement ({0}) reversed", L[InventoryView.EventLabel(Movement.Kind)].ToLowerInvariant()]),
                 _ => throw new InvalidOperationException(),
             };
             await OnDone.InvokeAsync(new LotActionResult(response, message));
@@ -810,7 +810,7 @@
             EffectiveAt = EffectiveAt,
             ExpectedReceiptId = _expectedId == Guid.Empty ? null : _expectedId,
         });
-        return (response, $"{QtyText} of {ReceivingMaterial?.Code} received into {LocationCode(_locationId)}");
+        return (response, L["{0} of {1} received into {2}", QtyText, ReceivingMaterial?.Code, LocationCode(_locationId)]);
     }
 
     private async Task<(LotTransactionResponse, string)> ProduceAsync(string? comment)
@@ -827,7 +827,7 @@
             RunId = RunId,
             EffectiveAt = EffectiveAt,
         });
-        return (response, $"{QtyText} of {job.MaterialCode} produced by {job.JobNumber}");
+        return (response, L["{0} of {1} produced by {2}", QtyText, job.MaterialCode, job.JobNumber]);
     }
 
     private async Task<(LotTransactionResponse, string)> ConsumeAsync(string? comment)
@@ -843,7 +843,7 @@
             RunId = RunId,
             EffectiveAt = EffectiveAt,
         });
-        return (response, $"{QtyText} of {InventoryView.LotLabel(lot.LotNumber, lot.IsBulk, lot.LocationCode)} consumed by {job.JobNumber}");
+        return (response, L["{0} of {1} consumed by {2}", QtyText, InventoryView.LotLabel(L, lot.LotNumber, lot.IsBulk, lot.LocationCode), job.JobNumber]);
     }
 
     // A chain undo (#79): the first click checks and lists what it would reverse; the second does it, refused if the chain changed meanwhile.
@@ -859,7 +859,7 @@
         var done = await Api.ReverseChainAsync(Lot!.Id, request, dryRun: false);
         _chainCheck = null;
         return (new LotTransactionResponse { LotId = Lot.Id, LotNumber = Lot.LotNumber, Quantity = Lot.Quantity, Status = Lot.Status, Version = Lot.Version },
-            $"had {done.Steps.Count} {(done.Steps.Count == 1 ? "movement" : "movements")} reversed, latest first");
+            (done.Steps.Count == 1 ? L["had 1 movement reversed"] : L["had movements reversed, latest first: {0}", done.Steps.Count]));
     }
 
     private async Task<(LotTransactionResponse, string)> SplitAsync(string? comment)
@@ -874,7 +874,7 @@
             Comment = comment,
             EffectiveAt = EffectiveAt,
         });
-        return (response, $"{QtyText} split off {Lot.LotNumber} into {response.LotNumber}.");
+        return (response, L["{0} split off {1} into {2}.", QtyText, Lot.LotNumber, response.LotNumber]);
     }
 
     private void ToggleMerge(Guid id, bool on)
@@ -890,7 +890,7 @@
     }
 
     private (LotTransactionResponse, string) Done(LotTransactionResponse response, string what) =>
-        (response, $"{InventoryView.LotLabel(response.LotNumber, Lot?.IsBulk == true, Lot?.LocationCode)} {what}.");
+        (response, $"{InventoryView.LotLabel(L, response.LotNumber, Lot?.IsBulk == true, Lot?.LocationCode)} {what}.");
 
     private AdjustLotRequest Adjustment(string? comment) => new()
     {
@@ -917,9 +917,9 @@
     private RenderFragment LocationField(Guid? exclude) => __builder =>
     {
         <div class="mb-3">
-            <label class="form-label" for="lot-location">@(Action == LotAction.Move ? "To location" : "Location")</label>
+            <label class="form-label" for="lot-location">@(Action == LotAction.Move ? L["To location"] : L["Location"])</label>
             <select id="lot-location" class="form-select" @bind="_locationId">
-                <option value="@Guid.Empty">@(_locations.Count == 0 ? "No location holds inventory: mark one on the Equipment page" : "Choose a location…")</option>
+                <option value="@Guid.Empty">@(_locations.Count == 0 ? L["No location holds inventory: mark one on the Equipment page"] : L["Choose a location…"])</option>
                 @foreach (var l in _locations.Where(l => l.Id != exclude))
                 {
                     <option value="@l.Id">@l.Code · @l.Name</option>
@@ -932,13 +932,13 @@
     {
         <div class="row g-2 mb-3">
             <div class="col-7">
-                <label class="form-label" for="lot-qty">Quantity@(required ? "" : " (optional)")</label>
+                <label class="form-label" for="lot-qty">@(required ? L["Quantity"] : L["Quantity (optional)"])</label>
                 <input id="lot-qty" type="number" class="form-control" min="0" step="any" @bind="_quantity" @bind:event="oninput" />
             </div>
             <div class="col-5">
-                <label class="form-label" for="lot-uom">Unit</label>
+                <label class="form-label" for="lot-uom">@L["Unit"]</label>
                 <select id="lot-uom" class="form-select" @bind="_uomId">
-                    <option value="@Guid.Empty">Unit…</option>
+                    <option value="@Guid.Empty">@L["Unit…"]</option>
                     @foreach (var u in _uoms)
                     {
                         <option value="@u.Id">@u.Code</option>
@@ -955,9 +955,9 @@
     private RenderFragment ReasonField() => __builder =>
     {
         <div class="mb-3">
-            <label class="form-label" for="lot-reason">Reason</label>
+            <label class="form-label" for="lot-reason">@L["Reason"]</label>
             <select id="lot-reason" class="form-select" @bind="_reasonId">
-                <option value="@Guid.Empty">@(_reasons.Count == 0 ? "No reasons set up: load db/seed-reasons.sql" : "Choose a reason…")</option>
+                <option value="@Guid.Empty">@(_reasons.Count == 0 ? L["No reasons set up: load db/seed-reasons.sql"] : L["Choose a reason…"])</option>
                 @foreach (var r in _reasons)
                 {
                     <option value="@r.Id">@Display.ReasonLabel(r)</option>
@@ -971,24 +971,24 @@
         @if (Job is { } fixedJob)
         {
             <dl class="facts">
-                <dt>Job</dt>
-                <dd>@fixedJob.JobNumber · @fixedJob.MaterialCode on @fixedJob.LineCode</dd>
+                <dt>@L["Job"]</dt>
+                <dd>@L["{0} · {1} on {2}", fixedJob.JobNumber, fixedJob.MaterialCode, fixedJob.LineCode]</dd>
             </dl>
         }
         else
         {
             <div class="mb-3">
-                <label class="form-label" for="lot-job">Job</label>
+                <label class="form-label" for="lot-job">@L["Job"]</label>
                 <select id="lot-job" class="form-select" value="@_jobId" @onchange="e => OnJobChangedAsync(Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty)">
-                    <option value="@Guid.Empty">@(_jobs.Count == 0 ? "No open production job" : "Choose a job…")</option>
+                    <option value="@Guid.Empty">@(_jobs.Count == 0 ? L["No open production job"] : L["Choose a job…"])</option>
                     @foreach (var j in _jobs)
                     {
-                        <option value="@j.Id">@j.JobNumber · @j.MaterialCode on @j.LineCode@(j.PlansComponent ? " · planned" : "")</option>
+                        <option value="@j.Id">@L["{0} · {1} on {2}", j.JobNumber, j.MaterialCode, j.LineCode]@(j.PlansComponent ? $" · {L["planned"]}" : "")</option>
                     }
                 </select>
                 @if (Action == LotAction.Consume && SelectedJob is { PlansComponent: false })
                 {
-                    <div class="form-text text-warning-strong">This job has no planned component of @Lot?.MaterialCode; it will be recorded as a substitution.</div>
+                    <div class="form-text text-warning-strong">@L["This job has no planned component of {0}; it will be recorded as a substitution.", Lot?.MaterialCode]</div>
                 }
             </div>
         }
@@ -1009,23 +1009,23 @@
 
         @if (_runs.Count == 0)
         {
-            <p class="small text-warning-strong mb-3">@SelectedJob.JobNumber hasn't run yet. Start it on the <ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">Floor</ScreenLink> first.</p>
+            <p class="small text-warning-strong mb-3">@L["{0} hasn't run yet. Start it on the Floor first.", SelectedJob.JobNumber] <ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">@L["Floor"]</ScreenLink></p>
         }
         else
         {
             <div class="mb-3">
-                <label class="form-label" for="lot-run">Run</label>
+                <label class="form-label" for="lot-run">@L["Run"]</label>
                 <select id="lot-run" class="form-select" @bind="_runId">
                     @foreach (var r in _runs.Reverse())
                     {
                         <option value="@(r.EndedAt is null ? Guid.Empty : r.Id)">
-                            Run @r.RunNo on @r.LineCode · @Display.SiteTime(r.StartedAt, Sites.Site?.TimeZone)@(r.EndedAt is { } end ? $" to {Display.SiteTime(end, Sites.Site?.TimeZone)}" : " · running now")
+                            @L["Run {0} on {1}", r.RunNo, r.LineCode] · @(r.EndedAt is { } end ? L["{0} to {1}", Display.SiteTime(r.StartedAt, Sites.Site?.TimeZone), Display.SiteTime(end, Sites.Site?.TimeZone)] : L["{0} · running now", Display.SiteTime(r.StartedAt, Sites.Site?.TimeZone)])
                         </option>
                     }
                 </select>
                 @if (_runId != Guid.Empty)
                 {
-                    <div class="form-text">That run has ended: this is recorded late, into it.</div>
+                    <div class="form-text">@L["That run has ended: this is recorded late, into it."]</div>
                 }
             </div>
         }

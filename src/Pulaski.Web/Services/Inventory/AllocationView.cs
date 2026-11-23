@@ -1,4 +1,5 @@
 using Pulaski.Contracts.Inventory;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Inventory;
 
@@ -6,29 +7,29 @@ namespace Pulaski.Web.Services.Inventory;
 public static class AllocationView
 {
     /// <summary>"2 allocated, 1 trimmed, 1 released, across 3 jobs", or "Nothing to change."</summary>
-    public static string Summary(AllocationChangeResponse result)
+    public static string Summary(Text l, AllocationChangeResponse result)
     {
         List<string> parts = [];
         if (result.Allocated > 0)
         {
-            parts.Add($"{result.Allocated} allocated");
+            parts.Add(l["{0} allocated", result.Allocated]);
         }
 
         if (result.Trimmed > 0)
         {
-            parts.Add($"{result.Trimmed} trimmed");
+            parts.Add(l["{0} trimmed", result.Trimmed]);
         }
 
         if (result.Released > 0)
         {
-            parts.Add($"{result.Released} released");
+            parts.Add(l["{0} released", result.Released]);
         }
 
         if (parts.Count == 0)
         {
-            return result.Jobs > 1 ? $"Nothing to change across {result.Jobs} jobs." : "Nothing to change.";
+            return result.Jobs > 1 ? l["Nothing to change across {0} jobs.", result.Jobs] : l["Nothing to change."];
         }
 
-        return string.Join(", ", parts) + (result.Jobs > 1 ? $", across {result.Jobs} jobs." : ".");
+        return string.Join(", ", parts) + (result.Jobs > 1 ? l[", across {0} jobs.", result.Jobs] : ".");
     }
 }

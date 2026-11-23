@@ -4,10 +4,10 @@
 @inject SiteSelection Sites
 @inject CurrentUser User
 
-<PageTitle>@(_count?.Count.CountNumber ?? "Count") · Inventory · Pulaski</PageTitle>
+<PageTitle>@(_count?.Count.CountNumber ?? L["Count"]) · @L["Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="@(_count?.Count.CountNumber ?? "Count")">
-    <Back><a href="inventory/counts">← Counts</a></Back>
+<InventoryHeader Title="@(_count?.Count.CountNumber ?? L["Count"])">
+    <Back><a href="inventory/counts">@L["← Counts"]</a></Back>
     <Description>
         @if (_count?.Count is { } c)
         {
@@ -17,8 +17,8 @@
     <Actions>
         @if (Editable)
         {
-            <button type="button" class="btn btn-outline-secondary" disabled="@_saving" @onclick="CancelAsync">Cancel count</button>
-            <button type="button" class="btn btn-primary" disabled="@(_saving || !Dirty)" @onclick="SaveAsync">Save counts</button>
+            <button type="button" class="btn btn-outline-secondary" disabled="@_saving" @onclick="CancelAsync">@L["Cancel count"]</button>
+            <button type="button" class="btn btn-primary" disabled="@(_saving || !Dirty)" @onclick="SaveAsync">@L["Save counts"]</button>
         }
     </Actions>
 </InventoryHeader>
@@ -36,12 +36,12 @@
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Lot</th>
-                    <th class="inv-num">Expected</th>
-                    <th class="inv-num">Now</th>
-                    <th class="inv-num" style="width: 12rem">Counted</th>
-                    <th class="inv-num">Difference</th>
-                    <th>Counted by</th>
+                    <th>@L["Lot"]</th>
+                    <th class="inv-num">@L["Expected"]</th>
+                    <th class="inv-num">@L["Now"]</th>
+                    <th class="inv-num" style="width: 12rem">@L["Counted"]</th>
+                    <th class="inv-num">@L["Difference"]</th>
+                    <th>@L["Counted by"]</th>
                 </tr>
             </thead>
             <tbody>
@@ -50,15 +50,15 @@
                     var counted = Counted(l);
                     <tr @key="l.Id">
                         <td>
-                            <a class="fw-semibold" href="inventory/lots/@l.LotId">@InventoryView.LotLabel(l.LotNumber, l.IsBulk, detail.Count.LocationCode)</a>
+                            <a class="fw-semibold" href="inventory/lots/@l.LotId">@InventoryView.LotLabel(L, l.LotNumber, l.IsBulk, detail.Count.LocationCode)</a>
                             <div class="small text-muted">@l.MaterialCode · @l.MaterialName</div>
                         </td>
                         <td class="inv-num">@InventoryView.Qty(l.ExpectedQty) <span class="small text-muted">@l.UomCode</span></td>
-                        <td class="inv-num @(Open && l.CurrentQty != l.ExpectedQty ? "inv-held" : "")" title="@(Open && l.CurrentQty != l.ExpectedQty ? "Moved since the count started" : "")">@InventoryView.Qty(l.CurrentQty)</td>
+                        <td class="inv-num @(Open && l.CurrentQty != l.ExpectedQty ? "inv-held" : "")" title="@(Open && l.CurrentQty != l.ExpectedQty ? L["Moved since the count started"] : "")">@InventoryView.Qty(l.CurrentQty)</td>
                         <td class="inv-num">
                             @if (Editable)
                             {
-                                <input type="number" class="form-control form-control-sm text-end" min="0" step="any" aria-label="Counted @l.LotNumber"
+                                <input type="number" class="form-control form-control-sm text-end" min="0" step="any" aria-label="@L["Counted {0}", l.LotNumber]"
                                        value="@counted?.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)" @oninput="e => Enter(l.Id, e.Value?.ToString())" />
                             }
                             else
@@ -76,7 +76,7 @@
                             @* Posting changes the lots itself, so only an open count warns. *@
                             @if (Open && l.ChangedSinceCounted)
                             {
-                                <span class="chip chip-warning">changed since counted</span>
+                                <span class="chip chip-warning">@L["changed since counted"]</span>
                             }
                             else if (l.CountedAt is { } at)
                             {
@@ -89,22 +89,22 @@
         </table>
         @if (detail.Lines.Count == 0)
         {
-            <p class="text-muted p-4 mb-0">There was nothing on hand at @detail.Count.LocationCode when the count started. Stock found there is received separately.</p>
+            <p class="text-muted p-4 mb-0">@L["There was nothing on hand at {0} when the count started. Stock found there is received separately.", detail.Count.LocationCode]</p>
         }
     </div>
 
     @if (Editable)
     {
         <form class="inv-facts" @onsubmit="PostAsync" @onsubmit:preventDefault>
-            <h2 class="h6">Post the count</h2>
+            <h2 class="h6">@L["Post the count"]</h2>
             <p class="small text-muted">
-                Each lot whose count differs from what it holds now is written up or off, for the reason below, with the count number as its reference.
-                @(uncounted > 0 ? $"{uncounted} {(uncounted == 1 ? "lot is" : "lots are")} still to count; enter 0 for a lot that isn't there." : "")
-                @(Dirty ? "Save the counts first." : "")
+                @L["Each lot whose count differs from what it holds now is written up or off, for the reason below, with the count number as its reference."]
+                @(uncounted > 0 ? (uncounted == 1 ? L["1 lot is still to count; enter 0 for a lot that isn't there."] : L["Lots still to count: {0}. Enter 0 for a lot that isn't there.", uncounted]) : "")
+                @(Dirty ? L["Save the counts first."] : "")
             </p>
             <div class="row g-2 align-items-end">
                 <div class="col-sm-5">
-                    <label class="form-label" for="count-reason">Reason</label>
+                    <label class="form-label" for="count-reason">@L["Reason"]</label>
                     <select id="count-reason" class="form-select" @bind="_reasonId">
                         @foreach (var r in _reasons)
                         {
@@ -113,11 +113,11 @@
                     </select>
                 </div>
                 <div class="col-sm-5">
-                    <label class="form-label" for="count-comment">Comment</label>
+                    <label class="form-label" for="count-comment">@L["Comment"]</label>
                     <input id="count-comment" class="form-control" maxlength="1000" @bind="_comment" />
                 </div>
                 <div class="col-sm-2">
-                    <button type="submit" class="btn btn-primary w-100" disabled="@(_saving || Dirty || uncounted > 0 || _reasonId == Guid.Empty)">Post</button>
+                    <button type="submit" class="btn btn-primary w-100" disabled="@(_saving || Dirty || uncounted > 0 || _reasonId == Guid.Empty)">@L["Post"]</button>
                 </div>
             </div>
         </form>
@@ -125,7 +125,7 @@
 }
 else if (_error is null)
 {
-    <p class="text-muted">Loading…</p>
+    <p class="text-muted">@L["Loading…"]</p>
 }
 
 @code {
@@ -201,7 +201,7 @@ else if (_error is null)
                 Version = _count!.Count.Version,
                 Lines = [.. _entered.Select(e => new CountedLineRequest(e.Key, e.Value))],
             });
-            _message = "Counts saved.";
+            _message = L["Counts saved."];
         });
     }
 
@@ -212,7 +212,7 @@ else if (_error is null)
             var posted = await Api.PostStockCountAsync(CountId, new PostStockCountRequest { Version = _count!.Count.Version, ReasonCodeId = _reasonId, Comment = _comment });
             _message = posted.Adjusted == 0
                 ? "Posted. Every lot matched; nothing was adjusted."
-                : $"Posted. {posted.Adjusted} {(posted.Adjusted == 1 ? "lot was" : "lots were")} adjusted.";
+                : (posted.Adjusted == 1 ? L["Posted. 1 lot was adjusted."] : L["Posted. Lots adjusted: {0}.", posted.Adjusted]);
         });
     }
 
@@ -221,7 +221,7 @@ else if (_error is null)
         await RunAsync(async () =>
         {
             await Api.CancelStockCountAsync(CountId, new CancelStockCountRequest { Version = _count!.Count.Version });
-            _message = "Count cancelled. Nothing was adjusted.";
+            _message = L["Count cancelled. Nothing was adjusted."];
         });
     }
 

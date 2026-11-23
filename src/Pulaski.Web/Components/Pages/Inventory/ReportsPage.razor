@@ -5,72 +5,72 @@
 @inject Downloads Downloads
 @inject TimeProvider Time
 
-<PageTitle>Reports · Inventory · Pulaski</PageTitle>
+<PageTitle>@L["Reports · Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="Inventory reports" SiteChanged="LoadAgingAsync">
-    <Description>Stock as it was at the end of a past day, and how old the stock on hand is.</Description>
+<InventoryHeader Title="@L["Inventory reports"]" SiteChanged="LoadAgingAsync">
+    <Description>@L["Stock as it was at the end of a past day, and how old the stock on hand is."]</Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
 
 <section class="inv-section" aria-labelledby="on-date-title">
     <div class="inv-section-head">
-        <h2 id="on-date-title">Stock on a date</h2>
+        <h2 id="on-date-title">@L["Stock on a date"]</h2>
         @if (_onDate is { Count: > 0 })
         {
-            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ExportOnDateAsync">Export CSV</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ExportOnDateAsync">@L["Export CSV"]</button>
         }
     </div>
     <form class="inv-toolbar" @onsubmit="LoadOnDateAsync" @onsubmit:preventDefault>
-        <label class="small text-muted" for="on-date">At the end of</label>
+        <label class="small text-muted" for="on-date">@L["At the end of"]</label>
         <input id="on-date" type="date" class="form-control" style="min-width:auto" @bind="_date" />
-        <button type="submit" class="btn btn-primary" disabled="@(_date is null)">Show</button>
+        <button type="submit" class="btn btn-primary" disabled="@(_date is null)">@L["Show"]</button>
     </form>
     @if (_onDate is { } rows)
     {
         @if (rows.Count == 0)
         {
-            <p class="text-muted">Nothing was on hand then.</p>
+            <p class="text-muted">@L["Nothing was on hand then."]</p>
         }
         else
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Material</th><th>Class</th><th class="inv-num">On hand</th><th class="inv-num">Of it on hold</th><th>Where</th><th class="inv-num">Lots</th></tr></thead>
+                    <thead><tr><th>@L["Material"]</th><th>@L["Class"]</th><th class="inv-num">@L["On hand"]</th><th class="inv-num">@L["Of it on hold"]</th><th>@L["Where"]</th><th class="inv-num">@L["Lots"]</th></tr></thead>
                     <tbody>
                         @foreach (var r in rows)
                         {
                             <tr @key="r.MaterialId">
                                 <td><a class="fw-semibold" href="inventory/materials/@r.MaterialId">@r.Code</a> <span class="small text-muted">@r.Name</span></td>
-                                <td>@(r.MaterialClassName ?? "No class")</td>
+                                <td>@(r.MaterialClassName ?? L["No class"])</td>
                                 <td class="inv-num">@InventoryView.Qty(r.Quantity) <span class="small text-muted">@r.UomCode</span></td>
                                 <td class="inv-num">@(r.OnHoldQuantity > 0 ? InventoryView.Qty(r.OnHoldQuantity) : "—")</td>
-                                <td class="small">@string.Join(", ", r.Locations.Select(l => $"{(l.LocationCode.Length > 0 ? l.LocationCode : "no location")} {InventoryView.Qty(l.Quantity)}"))</td>
+                                <td class="small">@string.Join(", ", r.Locations.Select(l => $"{(l.LocationCode.Length > 0 ? l.LocationCode : L["no location"])} {InventoryView.Qty(l.Quantity)}"))</td>
                                 <td class="inv-num">@r.LotCount</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            <p class="small text-muted mt-2">Each lot as it was then: its quantity, where it was and whether it was on hold, from its movements in the order they count (back-dated ones at their time), so it agrees with the journal.</p>
+            <p class="small text-muted mt-2">@L["Each lot as it was then: its quantity, where it was and whether it was on hold, from its movements in the order they count (back-dated ones at their time), so it agrees with the journal."]</p>
         }
     }
 </section>
 
 <section class="inv-section" aria-labelledby="aging-title">
     <div class="inv-section-head">
-        <h2 id="aging-title">Aging</h2>
+        <h2 id="aging-title">@L["Aging"]</h2>
         @if (_aging is { Count: > 0 })
         {
-            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ExportAgingAsync">Export CSV</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ExportAgingAsync">@L["Export CSV"]</button>
         }
     </div>
-    <p class="small text-muted">On-hand stock by how long ago each lot was received or made (a split lot counts from the split). Balances of materials that aren't lot-tracked aren't aged.</p>
+    <p class="small text-muted">@L["On-hand stock by how long ago each lot was received or made (a split lot counts from the split). Balances of materials that aren't lot-tracked aren't aged."]</p>
     @if (_aging is { } aging)
     {
         @if (aging.Count == 0)
         {
-            <p class="text-muted">No lots on hand.</p>
+            <p class="text-muted">@L["No lots on hand."]</p>
         }
         else
         {
@@ -78,13 +78,13 @@
                 <table class="table table-sm align-middle">
                     <thead>
                         <tr>
-                            <th>Material</th>
-                            <th class="inv-num">Up to 30 days</th>
+                            <th>@L["Material"]</th>
+                            <th class="inv-num">@L["Up to 30 days"]</th>
                             <th class="inv-num">31–90</th>
                             <th class="inv-num">91–180</th>
-                            <th class="inv-num">Over 180</th>
-                            <th class="inv-num">Total</th>
-                            <th>Oldest</th>
+                            <th class="inv-num">@L["Over 180"]</th>
+                            <th class="inv-num">@L["Total"]</th>
+                            <th>@L["Oldest"]</th>
                         </tr>
                     </thead>
                     <tbody>
