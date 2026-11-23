@@ -6,20 +6,20 @@
 @inject NavigationManager Navigation
 @inject CurrentUser User
 
-<PageTitle>Schedule · Pulaski</PageTitle>
+<PageTitle>@L["Schedule"] · Pulaski</PageTitle>
 
 <div class="schedule-head">
     <div>
-        <h1 class="mb-1">Schedule</h1>
+        <h1 class="mb-1">@L["Schedule"]</h1>
         <div class="live-status" role="status">
             <span class="live-dot @(_controller.IsRefreshing ? "is-busy" : "")" aria-hidden="true"></span>
             @if (_controller.Board.LoadedAt > DateTimeOffset.MinValue)
             {
-                <span>Live · updated @ScheduleFormat.Time(_controller.Board.LoadedAt, _controller.TimeZone) site time</span>
+                <span>@L["Live · updated {0} site time", ScheduleFormat.Time(_controller.Board.LoadedAt, _controller.TimeZone)]</span>
             }
             else
             {
-                <span>Connecting…</span>
+                <span>@L["Connecting…"]</span>
             }
         </div>
     </div>
@@ -27,7 +27,7 @@
     <div class="schedule-tools">
         @if (_controller.Sites.Count > 1)
         {
-            <select class="form-select" aria-label="Site" value="@_controller.SiteId" @onchange="OnSiteChanged">
+            <select class="form-select" aria-label="@L["Site"]" value="@_controller.SiteId" @onchange="OnSiteChanged">
                 @foreach (var site in _controller.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -35,30 +35,30 @@
             </select>
         }
 
-        <div class="segmented" role="tablist" aria-label="View">
+        <div class="segmented" role="tablist" aria-label="@L["View"]">
             @foreach (var (key, label, icon) in Views)
             {
-                <a role="tab" href="@ViewHref(key)" aria-label="@label" aria-selected="@(CurrentView == key ? "true" : "false")"
+                <a role="tab" href="@ViewHref(key)" aria-label="@L[label]" aria-selected="@(CurrentView == key ? "true" : "false")"
                    class="segmented-item @(CurrentView == key ? "is-active" : "")">
-                    <Icon Name="@icon" Size="18" /><span>@label</span>
+                    <Icon Name="@icon" Size="18" /><span>@L[label]</span>
                 </a>
             }
         </div>
 
         @if (User.Can(PermissionCodes.WorkOrderManage))
         {
-            <a class="btn btn-primary text-nowrap" href="schedule/work-orders/new">New work order</a>
+            <a class="btn btn-primary text-nowrap" href="schedule/work-orders/new">@L["New work order"]</a>
         }
 
-        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Refresh now"
-                title="Refresh now" disabled="@_controller.IsRefreshing" @onclick="RefreshAsync">
+        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="@L["Refresh now"]"
+                title="@L["Refresh now"]" disabled="@_controller.IsRefreshing" @onclick="RefreshAsync">
             <Icon Name="refresh" Size="18" />
         </button>
     </div>
 </div>
 
 <ProblemAlert Error="_controller.LoadError" />
-<ViewOnlyNote Permission="@PermissionCodes.SchedulePlan" What="plan jobs" SiteId="_controller.SiteId" />
+<ViewOnlyNote Permission="@PermissionCodes.SchedulePlan" What="@L["plan jobs"]" SiteId="_controller.SiteId" />
 
 <OverlapBanner Board="_controller.Board" TimeZone="@_controller.TimeZone" OnShow="SelectItem" />
 
@@ -66,14 +66,14 @@
 {
     @if (_controller.LoadError is null)
     {
-        <p class="text-muted">Loading the schedule…</p>
+        <p class="text-muted">@L["Loading the schedule…"]</p>
     }
 }
 else if (_controller.Board.Lines.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No schedulable lines</h2>
-        <p class="text-muted mb-0">Mark a work center as schedulable on the <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> page to plan work on it.</p>
+        <h2>@L["No schedulable lines"]</h2>
+        <p class="text-muted mb-0">@L["Mark a work center as schedulable on the Equipment page to plan work on it."] <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">@L["Equipment"]</ScreenLink></p>
     </div>
 }
 else
@@ -113,7 +113,7 @@ else
                 <Icon Name="alert" Size="18" />
             }
             <span>@toast.Text</span>
-            <button type="button" class="toast-close" aria-label="Dismiss" @onclick="() => _controller.Dismiss(toast.Id)">
+            <button type="button" class="toast-close" aria-label="@L["Dismiss"]" @onclick="() => _controller.Dismiss(toast.Id)">
                 <Icon Name="close" Size="16" />
             </button>
         </div>
@@ -123,10 +123,10 @@ else
 @code {
     private static readonly (string Key, string Label, string Icon)[] Views =
     [
-        ("gantt", "Gantt", "gantt"),
-        ("calendar", "Calendar", "calendar"),
-        ("kanban", "Kanban", "kanban"),
-        ("table", "Table", "table"),
+        ("gantt", Term.Mark("Gantt"), "gantt"),
+        ("calendar", Term.Mark("Calendar"), "calendar"),
+        ("kanban", Term.Mark("Kanban"), "kanban"),
+        ("table", Term.Mark("Table"), "table"),
     ];
 
     [SupplyParameterFromQuery(Name = "view")]
@@ -146,7 +146,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _controller = new ScheduleController(Api, Time)
+        _controller = new ScheduleController(Api, Time, L)
         {
             CanPlanAt = id => User.Can(PermissionCodes.SchedulePlan, id),
             CanManageOrdersAt = id => User.Can(PermissionCodes.WorkOrderManage, id),

@@ -8,13 +8,12 @@
         <div class="overlap-banner-head">
             <Icon Name="alert" />
             <strong id="overlap-title">
-                @(Board.Overlaps.Count == 1 ? "1 overlap" : $"{Board.Overlaps.Count} overlaps"):
-                a line can't run these at the same time
+                @(Board.Overlaps.Count == 1 ? L["1 overlap: a line can't run these at the same time"] : L["{0} overlaps: a line can't run these at the same time", Board.Overlaps.Count])
             </strong>
             @if (Board.Overlaps.Count > Collapsed)
             {
                 <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _expanded = !_expanded">
-                    @(_expanded ? "Show fewer" : $"Show all {Board.Overlaps.Count}")
+                    @(_expanded ? L["Show fewer"] : L["Show all {0}", Board.Overlaps.Count])
                 </button>
             }
         </div>
@@ -23,12 +22,12 @@
             {
                 <li @key="overlap.Key">
                     <span>
-                        @overlap.Describe(),
+                        @overlap.Describe(L),
                         @ScheduleFormat.When(overlap.Start, TimeZone)–@ScheduleFormat.Time(overlap.End, TimeZone).
                         @Hint(overlap)
                     </span>
                     <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => OnShow.InvokeAsync(Target(overlap))">
-                        Show
+                        @L["Show"]
                     </button>
                 </li>
             }

@@ -381,7 +381,7 @@
             }
         </ol>
         <p class="ov-foot">
-            @_orders.Count(o => o.Status == "closed") closed and @_orders.Count(o => o.Status == "cancelled") cancelled.
+            @L["{0} closed and {1} cancelled.", _orders.Count(o => o.Status == "closed"), _orders.Count(o => o.Status == "cancelled")]
             @if (User.Can(PermissionCodes.WorkOrderManage))
             {
                 <a href="schedule/work-orders/new">@L["New work order"]</a>

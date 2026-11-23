@@ -1,40 +1,41 @@
 using System.Globalization;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.Materials;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Materials;
 
 /// <summary>How the connections panel words a check or an import (D-068).</summary>
 public static class MaterialConnectionView
 {
-    public static string Summary(string code, ImportMaterialsResponse r) =>
-        r.FileProblems.Count > 0 ? $"{code} can't be imported: {string.Join(" ", r.FileProblems)}"
-        : r.Applied ? $"Imported from {code}: {r.Created} created, {r.Updated} updated, {r.Unchanged} unchanged."
-        : r.Errors > 0 ? $"{code}: {r.Errors} {(r.Errors == 1 ? "item has" : "items have")} errors, so nothing can be imported yet. Fix them at the source or in the field map, then check again."
-        : r.Created + r.Updated == 0 ? $"{code} is up to date: {r.Unchanged} unchanged."
-        : $"{code} is ready: {r.Created} to create, {r.Updated} to update, {r.Unchanged} unchanged. Click Import.";
+    public static string Summary(Text l, string code, ImportMaterialsResponse r) =>
+        r.FileProblems.Count > 0 ? l["{0} can't be imported: {1}", code, string.Join(" ", r.FileProblems)]
+        : r.Applied ? l["Imported from {0}: {1} created, {2} updated, {3} unchanged.", code, r.Created, r.Updated, r.Unchanged]
+        : r.Errors > 0 ? l["{0}: items with errors: {1}. Nothing can be imported yet; fix them at the source or in the field map, then check again.", code, r.Errors]
+        : r.Created + r.Updated == 0 ? l["{0} is up to date: {1} unchanged.", code, r.Unchanged]
+        : l["{0} is ready: {1} to create, {2} to update, {3} unchanged. Click Import.", code, r.Created, r.Updated, r.Unchanged];
 
     /// <summary>Where a connection reads from, by its kind (#72).</summary>
-    public static string Source(MaterialConnectionDto c) => c.Kind switch
+    public static string Source(Text l, MaterialConnectionDto c) => c.Kind switch
     {
         "scim" => $"SCIM {c.BaseUrl}/Users{(c.Filter is { } scimFilter ? $" · {scimFilter}" : "")}",
-        "database" => $"PostgreSQL query: {Shorten(c.Query)}",
-        "soap" => $"SOAP {c.BaseUrl} · items <{c.EntitySet}>",
-        "rest" => $"REST {c.BaseUrl}{(c.EntitySet.Length > 0 ? $" · items at {c.EntitySet}" : "")}{(c.NextLinkPath is { } next ? $" · next at {next}" : "")}",
+        "database" => l["PostgreSQL query: {0}", Shorten(c.Query)],
+        "soap" => l["SOAP {0} · items <{1}>", c.BaseUrl, c.EntitySet],
+        "rest" => $"REST {c.BaseUrl}{(c.EntitySet.Length > 0 ? l[" · items at {0}", c.EntitySet] : "")}{(c.NextLinkPath is { } next ? l[" · next at {0}", next] : "")}",
         _ => $"{c.BaseUrl}/{c.EntitySet}{(c.Filter is { } f ? $" · {f}" : "")}",
     };
 
     /// <summary>When it runs on its own (#71).</summary>
-    public static string Schedule(MaterialConnectionDto c) =>
-        c.ScheduleEveryHours is { } hours ? (hours == 1 ? "Every hour" : $"Every {hours} hours")
-        : c.ScheduleDailyAt.Count > 0 ? $"Daily at {string.Join(", ", c.ScheduleDailyAt.Select(t => t.ToString("HH:mm", CultureInfo.InvariantCulture)))} UTC"
-        : "On demand";
+    public static string Schedule(Text l, MaterialConnectionDto c) =>
+        c.ScheduleEveryHours is { } hours ? (hours == 1 ? l["Every hour"] : l["Every {0} hours", hours])
+        : c.ScheduleDailyAt.Count > 0 ? l["Daily at {0} UTC", string.Join(", ", c.ScheduleDailyAt.Select(t => t.ToString("HH:mm", CultureInfo.InvariantCulture)))]
+        : l["On demand"];
 
     public static string Outcome(string? outcome) => outcome switch
     {
-        "applied" => "Imported",
-        "not_applied" => "Not imported (errors)",
-        "failed" => "Failed",
+        "applied" => Term.Mark("Imported"),
+        "not_applied" => Term.Mark("Not imported (errors)"),
+        "failed" => Term.Mark("Failed"),
         _ => "",
     };
 

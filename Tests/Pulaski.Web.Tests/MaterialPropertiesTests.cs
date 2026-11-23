@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Web.Components;
@@ -28,7 +29,7 @@ public class MaterialPropertiesTests
 
     private static PropertyEditor EditorOf(IReadOnlyList<PropertyItem> items, string key) => items.Single(i => i.Key == key).Editor;
 
-    private static IReadOnlyList<PropertyItem> For(MaterialDto m, MaterialUsageDto usage) => MaterialProperties.For(m, usage, [Resins, Retired], [Kg]);
+    private static IReadOnlyList<PropertyItem> For(MaterialDto m, MaterialUsageDto usage) => MaterialProperties.For(Text.English, m, usage, [Resins, Retired], [Kg]);
 
     [Fact]
     public void An_unused_local_material_can_change_every_field()

@@ -5,31 +5,31 @@
 @inject NavigationManager Navigation
 @inject CurrentUser User
 
-<PageTitle>New work order · Pulaski</PageTitle>
+<PageTitle>@L["New work order"] · Pulaski</PageTitle>
 
-<h1>New work order</h1>
-<p class="text-muted">The process decides where the order runs: each of its operations becomes a job on its lines or departments.</p>
+<h1>@L["New work order"]</h1>
+<p class="text-muted">@L["The process decides where the order runs: each of its operations becomes a job on its lines or departments."]</p>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.WorkOrderManage" What="create work orders" />
+<ViewOnlyNote Permission="@PermissionCodes.WorkOrderManage" What="@L["create work orders"]" />
 
 @if (_sites is null || _materials is null || _uoms is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_sites.Count == 0)
 {
-    <p class="text-muted">Create a site under <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink> before adding work orders.</p>
+    <p class="text-muted">@L["Create a site under Equipment before adding work orders."] <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">@L["Equipment"]</ScreenLink></p>
 }
 else
 {
     <EditForm Model="_form" OnSubmit="SaveAsync" FormName="work-order" class="col-lg-9 col-xl-7">
         <div class="row g-3">
             <div class="col-sm-6">
-                <label class="form-label" for="site">Site</label>
+                <label class="form-label" for="site">@L["Site"]</label>
                 <InputSelect id="site" class="form-select" Value="_form.SiteId" ValueExpression="() => _form.SiteId"
                              ValueChanged="(Guid id) => OnSiteChangedAsync(id)">
                     @foreach (var site in _sites)
@@ -39,15 +39,15 @@ else
                 </InputSelect>
             </div>
             <div class="col-sm-6">
-                <label class="form-label" for="number">Order number</label>
+                <label class="form-label" for="number">@L["Order number"]</label>
                 <InputText id="number" class="form-control" @bind-Value="_form.OrderNumber" maxlength="50" />
             </div>
 
             <div class="col-12">
-                <label class="form-label" for="material">Material produced</label>
+                <label class="form-label" for="material">@L["Material produced"]</label>
                 <InputSelect id="material" class="form-select" Value="_form.MaterialId" ValueExpression="() => _form.MaterialId"
                              ValueChanged="(Guid id) => OnMaterialChangedAsync(id)">
-                    <option value="@Guid.Empty">Choose a material…</option>
+                    <option value="@Guid.Empty">@L["Choose a material…"]</option>
                     @foreach (var m in _materials)
                     {
                         <option value="@m.Id">@m.Code · @m.Name</option>
@@ -56,7 +56,7 @@ else
             </div>
 
             <div class="col-12">
-                <label class="form-label" for="process">Process</label>
+                <label class="form-label" for="process">@L["Process"]</label>
                 <InputSelect id="process" class="form-select" Value="_form.ProcessId" ValueExpression="() => _form.ProcessId"
                              ValueChanged="(Guid id) => OnProcessChangedAsync(id)" disabled="@(_form.MaterialId == Guid.Empty)">
                     <option value="@Guid.Empty">@ProcessPrompt</option>
@@ -73,7 +73,7 @@ else
                         @foreach (var check in _unavailable)
                         {
                             <div>
-                                <strong>@ProcessCode(check.ProcessId)</strong> can't be used for @MaterialCode:
+                                <strong>@ProcessCode(check.ProcessId)</strong> @L["can't be used for {0}:", MaterialCode]
                                 <ul class="mb-1">
                                     @foreach (var problem in check.Problems)
                                     {
@@ -87,19 +87,19 @@ else
             </div>
 
             <div class="col-sm-6">
-                <label class="form-label" for="qty">Planned quantity</label>
+                <label class="form-label" for="qty">@L["Planned quantity"]</label>
                 <InputNumber id="qty" class="form-control" @bind-Value="_form.PlannedQty" min="0" step="any" />
                 @if (_materials?.FirstOrDefault(m => m.Id == _form.MaterialId) is { BatchSize: { } batch } batchMaterial)
                 {
                     var perLine = OrderBatchHint.Operations(SelectedCheck, batch, batchMaterial.BaseUomCode);
                     @if (perLine.Count == 0)
                     {
-                        <div class="form-text">Made in batches of @batch.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) @batchMaterial.BaseUomCode: plan whole batches.</div>
+                        <div class="form-text">@L["Made in batches of {0} {1}: plan whole batches.", batch.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), batchMaterial.BaseUomCode]</div>
                     }
                     else
                     {
                         <div class="form-text">
-                            Each line plans whole batches of its own size, so the order must share into them exactly:
+                            @L["Each line plans whole batches of its own size, so the order must share into them exactly:"]
                             @foreach (var phrase in perLine)
                             {
                                 <div>@phrase</div>
@@ -109,9 +109,9 @@ else
                 }
             </div>
             <div class="col-sm-6">
-                <label class="form-label" for="uom">Unit</label>
+                <label class="form-label" for="uom">@L["Unit"]</label>
                 <InputSelect id="uom" class="form-select" @bind-Value="_form.UomId">
-                    <option value="@Guid.Empty">Choose a unit…</option>
+                    <option value="@Guid.Empty">@L["Choose a unit…"]</option>
                     @foreach (var u in _uoms.Where(u => u.IsActive))
                     {
                         <option value="@u.Id">@u.Code · @u.Name</option>
@@ -119,46 +119,46 @@ else
                 </InputSelect>
                 @if (MaterialCode is not null)
                 {
-                    <div class="form-text">Any unit that converts to @MaterialCode's base unit. <ScreenLink Href="@($"units?material={_form.MaterialId}")" Permission="@PermissionCodes.UnitsView">Its conversions</ScreenLink></div>
+                    <div class="form-text">@L["Any unit that converts to {0}'s base unit.", MaterialCode] <ScreenLink Href="@($"units?material={_form.MaterialId}")" Permission="@PermissionCodes.UnitsView">@L["Its conversions"]</ScreenLink></div>
                 }
             </div>
 
             <div class="col-sm-6">
-                <label class="form-label" for="start">Start</label>
+                <label class="form-label" for="start">@L["Start"]</label>
                 <InputDate id="start" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.PlannedStart" />
             </div>
             <div class="col-sm-6">
-                <label class="form-label" for="due">Due@(NeedsDueDate ? " (required)" : "")</label>
+                <label class="form-label" for="due">@L["Due{0}", NeedsDueDate ? " (required)" : ""]</label>
                 <InputDate id="due" Type="InputDateType.DateTimeLocal" class="form-control" @bind-Value="_form.DueAt" />
             </div>
             <div class="col-sm-6">
-                <label class="form-label" for="priority">Priority</label>
+                <label class="form-label" for="priority">@L["Priority"]</label>
                 <InputNumber id="priority" class="form-control" @bind-Value="_form.Priority" />
             </div>
             <div class="col-12 small text-muted">
-                Times are in the site's time zone (@(SiteZone(_form.SiteId) ?? "UTC")). No job starts before the start.
+                @L["Times are in the site's time zone ({0}). No job starts before the start.", SiteZone(_form.SiteId) ?? "UTC"]
                 @if (NeedsDueDate)
                 {
-                    <span>Operation @string.Join(", ", SelectedCheck!.DepartmentOperations) runs on a department, so its job must finish by the due date.</span>
+                    <span>@L["Operation {0} runs on a department, so its job must finish by the due date.", string.Join(", ", SelectedCheck!.DepartmentOperations)]</span>
                 }
             </div>
 
             <div class="col-12">
-                <label class="form-label" for="notes">Notes</label>
+                <label class="form-label" for="notes">@L["Notes"]</label>
                 <InputTextArea id="notes" class="form-control" rows="3" maxlength="4000" @bind-Value="_form.Notes" />
             </div>
         </div>
 
         @if (_operations is { Count: > 0 })
         {
-            <h2 class="h6 mt-4">Jobs this order will create</h2>
+            <h2 class="h6 mt-4">@L["Jobs this order will create"]</h2>
             <table class="table table-sm align-middle">
                 <thead>
                     <tr>
-                        <th>Operation</th>
-                        <th>Line or department</th>
-                        <th class="text-end">Share</th>
-                        <th class="text-end">Quantity</th>
+                        <th>@L["Operation"]</th>
+                        <th>@L["Line or department"]</th>
+                        <th class="text-end">@L["Share"]</th>
+                        <th class="text-end">@L["Quantity"]</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -172,7 +172,7 @@ else
                                     @EquipmentCode(use.EquipmentId)
                                     @if (IsDepartment(use.EquipmentId))
                                     {
-                                        <span class="badge text-bg-light border ms-1">department</span>
+                                        <span class="badge text-bg-light border ms-1">@L["department"]</span>
                                     }
                                 </td>
                                 <td class="text-end">@use.SharePercent.ToString("0.##")%</td>
@@ -182,27 +182,26 @@ else
                     }
                 </tbody>
             </table>
-            <p class="small text-muted">Each job goes at the end of its line's sequence; move it on the schedule afterwards.</p>
+            <p class="small text-muted">@L["Each job goes at the end of its line's sequence; move it on the schedule afterwards."]</p>
 
             @if (SelectedBom is { } bom)
             {
                 <p class="small">
-                    Components are planned from the
-                    <ScreenLink Href="@($"boms/{bom.Id}")" Permission="@PermissionCodes.ProcessesView">BOM for @(bom.ProcessCode ?? "any process"), version @bom.ReleasedVersion</ScreenLink>
-                    (@bom.ReleasedItems components), for each job that consumes them.
+                    @L["Components are planned from the BOM ({0} components), for each job that consumes them.", bom.ReleasedItems]
+                    <ScreenLink Href="@($"boms/{bom.Id}")" Permission="@PermissionCodes.ProcessesView">@L["BOM for {0}, version {1}", bom.ProcessCode ?? L["any process"], bom.ReleasedVersion]</ScreenLink>
                 </p>
             }
             else
             {
                 <p class="small text-warning-strong">
-                    @MaterialCode has no released BOM, so this order plans no components. <ScreenLink Href="boms" Permission="@PermissionCodes.ProcessesView">Create one</ScreenLink> to plan them.
+                    @MaterialCode has no released BOM, so this order plans no components. <ScreenLink Href="boms" Permission="@PermissionCodes.ProcessesView">@L["Create one"]</ScreenLink> @L["to plan them."]
                 </p>
             }
         }
 
         <div class="mt-4">
-            <button type="submit" class="btn btn-primary" disabled="@(_saving || _form.ProcessId == Guid.Empty || !User.Can(PermissionCodes.WorkOrderManage))">Create</button>
-            <a class="btn btn-link" href="schedule">Cancel</a>
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || _form.ProcessId == Guid.Empty || !User.Can(PermissionCodes.WorkOrderManage))">@L["Create"]</button>
+            <a class="btn btn-link" href="schedule">@L["Cancel"]</a>
         </div>
     </EditForm>
 }
@@ -244,11 +243,11 @@ else
     }
 
     private string ProcessPrompt =>
-        _form.MaterialId == Guid.Empty ? "Choose a material first"
-        : _loadingProcesses ? "Loading…"
-        : _processes.Count == 0 ? "No released process at this site makes this material"
-        : !_processes.Any(p => CanUse(p.Id)) ? "No process can run this material yet; see below"
-        : "Choose a process…";
+        _form.MaterialId == Guid.Empty ? L["Choose a material first"]
+        : _loadingProcesses ? L["Loading…"]
+        : _processes.Count == 0 ? L["No released process at this site makes this material"]
+        : !_processes.Any(p => CanUse(p.Id)) ? L["No process can run this material yet; see below"]
+        : L["Choose a process…"];
 
     private string? SiteZone(Guid siteId) => _sites?.FirstOrDefault(s => s.Id == siteId)?.TimeZone;
 

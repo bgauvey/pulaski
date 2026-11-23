@@ -6,13 +6,13 @@
 @inject CurrentUser User
 @inject Downloads Downloads
 
-<PageTitle>@(_job?.JobNumber ?? "Job") · Pulaski</PageTitle>
+<PageTitle>@(_job?.JobNumber ?? L["Job"]) · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <div class="small mb-1"><ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">← Floor</ScreenLink></div>
+        <div class="small mb-1"><ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">@L["← Floor"]</ScreenLink></div>
         <h1 class="mb-1">
-            @(_job?.JobNumber ?? "Job")
+            @(_job?.JobNumber ?? L["Job"])
             @if (_job is { } h)
             {
                 <span class="@Display.JobStatusChip(h.Status) ms-2 align-middle">@L.Label(h.Status)</span>
@@ -21,10 +21,10 @@
         @if (_job is { } d)
         {
             <p class="text-muted mb-0">
-                @(d.MaterialCode is { } code ? $"Makes {code} · {d.MaterialName} on {d.LineCode}" : $"{L.Label(d.JobType)} on {d.LineCode}")
+                @(d.MaterialCode is { } code ? L["Makes {0} · {1} on {2}", code, d.MaterialName, d.LineCode] : L["{0} on {1}", L.Label(d.JobType), d.LineCode])
                 @if (d.WorkOrderNumber is { } order)
                 {
-                    <span> · work order @order (@L.Label(d.WorkOrderStatus))</span>
+                    <span> @L["· work order {0} ({1})", order, L.Label(d.WorkOrderStatus)]</span>
                 }
             </p>
         }
@@ -35,37 +35,37 @@
         <div class="inv-head-tools">
             @if (j.JobType == "production")
             {
-                <ScreenLink Href="@($"inventory/jobs/{JobId}")" Permission="@PermissionCodes.InventoryView" Hide class="btn btn-outline-secondary">Materials and lots</ScreenLink>
+                <ScreenLink Href="@($"inventory/jobs/{JobId}")" Permission="@PermissionCodes.InventoryView" Hide class="btn btn-outline-secondary">@L["Materials and lots"]</ScreenLink>
             }
             @if (j.JobType == "production" && j.WorkOrderId is not null)
             {
-                <button type="button" class="btn btn-outline-secondary" title="Download the job's totals as a B2MML production performance for the ERP"
-                        @onclick="DownloadPerformanceAsync">Production performance (B2MML)</button>
+                <button type="button" class="btn btn-outline-secondary" title="@L["Download the job's totals as a B2MML production performance for the ERP"]"
+                        @onclick="DownloadPerformanceAsync">@L["Production performance (B2MML)"]</button>
             }
             @if (j.JobType == "production" && User.Can(PermissionCodes.QualityView, j.SiteId))
             {
-                <a class="btn btn-outline-secondary" href="@($"quality/results?jobId={JobId}&jobNumber={Uri.EscapeDataString(j.JobNumber)}&materialId={j.MaterialId}")">Quality results</a>
+                <a class="btn btn-outline-secondary" href="@($"quality/results?jobId={JobId}&jobNumber={Uri.EscapeDataString(j.JobNumber)}&materialId={j.MaterialId}")">@L["Quality results"]</a>
             }
             @if (actions.CanStart && !j.IsOnGroup && May(PermissionCodes.JobExecute))
             {
-                <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="StartAsync">@(j.Status == "paused" ? "Resume" : "Start")</button>
+                <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="StartAsync">@(j.Status == "paused" ? L["Resume"] : L["Start"])</button>
             }
             @if (actions.CanPause && May(PermissionCodes.JobExecute))
             {
-                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="() => _stop = StopMode.Pause">Pause</button>
+                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="() => _stop = StopMode.Pause">@L["Pause"]</button>
             }
             @if (actions.CanComplete && May(PermissionCodes.JobExecute))
             {
                 <button type="button" class="btn btn-outline-secondary" disabled="@_busy"
-                        @onclick="CompleteOrStopAsync">Complete</button>
+                        @onclick="CompleteOrStopAsync">@L["Complete"]</button>
             }
             @if (actions.CanReopen && May(PermissionCodes.JobReopen))
             {
-                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="ReopenAsync">Reopen</button>
+                <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="ReopenAsync">@L["Reopen"]</button>
             }
             @if (actions.CanReport && !_reporting && May(PermissionCodes.ProductionReport))
             {
-                <button type="button" class="btn btn-primary" @onclick="() => _reporting = true">Report production</button>
+                <button type="button" class="btn btn-primary" @onclick="() => _reporting = true">@L["Report production"]</button>
             }
         </div>
     }
@@ -83,25 +83,25 @@
     {
         <div class="drawer-alert is-warning mb-3" role="status">
             <Icon Name="clock" Size="18" />
-            <span>@waiting@(job.ReadyAt is { } at ? $" It can start at {Display.SiteTime(at, job.SiteTimeZone)}." : "")</span>
+            <span>@waiting@(job.ReadyAt is { } at ? L[" It can start at {0}.", Display.SiteTime(at, job.SiteTimeZone)] : "")</span>
         </div>
     }
     @if (job.IsOnGroup)
     {
-        <p class="text-muted">Waiting on its department: start it from the <ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">Floor</ScreenLink>, choosing the line it runs on.</p>
+        <p class="text-muted">@L["Waiting on its department: start it from the Floor, choosing the line it runs on."] <ScreenLink Href="floor" Permission="@PermissionCodes.FloorView">@L["Floor"]</ScreenLink></p>
     }
 
     <div class="inv-tiles">
         @if (job.PlannedQty is { } planned)
         {
-            <div class="inv-tile"><span class="metric">@FloorView.Qty(planned)</span><span class="inv-tile-label">Planned, @job.UomCode</span></div>
+            <div class="inv-tile"><span class="metric">@FloorView.Qty(planned)</span><span class="inv-tile-label">@L["Planned, {0}", job.UomCode]</span></div>
             <div class="inv-tile">
                 <span class="metric @(job.GoodQty == 0 ? "is-zero" : "")">@FloorView.Qty(job.GoodQty)</span>
-                <span class="inv-tile-label">Good, @job.UomCode · @FloorView.Progress(planned, job.GoodQty)%</span>
+                <span class="inv-tile-label">@L["Good, {0} · {1}%", job.UomCode, FloorView.Progress(planned, job.GoodQty)]</span>
             </div>
-            <div class="inv-tile"><span class="metric @(job.ScrapQty == 0 ? "is-zero" : "")">@FloorView.Qty(job.ScrapQty)</span><span class="inv-tile-label">Scrap, @job.UomCode</span></div>
+            <div class="inv-tile"><span class="metric @(job.ScrapQty == 0 ? "is-zero" : "")">@FloorView.Qty(job.ScrapQty)</span><span class="inv-tile-label">@L["Scrap, {0}", job.UomCode]</span></div>
         }
-        <div class="inv-tile"><span class="metric @(job.Runs.Count == 0 ? "is-zero" : "")">@job.Runs.Count</span><span class="inv-tile-label">@(job.Runs.Count == 1 ? "Run" : "Runs")</span></div>
+        <div class="inv-tile"><span class="metric @(job.Runs.Count == 0 ? "is-zero" : "")">@job.Runs.Count</span><span class="inv-tile-label">@(job.Runs.Count == 1 ? L["Run"] : L["Runs"])</span></div>
     </div>
 
     @if (_stop is { } stop)
@@ -120,23 +120,23 @@
     {
         <section class="inv-section" aria-labelledby="filling-title">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <h2 id="filling-title" class="mb-0">Lots being filled</h2>
+                <h2 id="filling-title" class="mb-0">@L["Lots being filled"]</h2>
                 @if (job.FillingLots.Count > 0 && May(PermissionCodes.ProductionReport))
                 {
                     <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="StartNewLotAsync"
-                            title="Close the lot being filled, so the next report starts a new one">Start a new lot</button>
+                            title="@L["Close the lot being filled, so the next report starts a new one"]">@L["Start a new lot"]</button>
                 }
             </div>
             <p class="small text-muted mt-1">@lotRule A lot that is moved, held, split, packed or used isn't filled any more.</p>
             @if (job.FillingLots.Count == 0)
             {
-                <p class="small mb-0">No lot is being filled: the next report starts one.</p>
+                <p class="small mb-0">@L["No lot is being filled: the next report starts one."]</p>
             }
             else
             {
                 <div class="table-panel">
                     <table class="table table-sm align-middle">
-                        <thead><tr><th>Lot</th><th>Location</th><th class="inv-num">Holds</th><th>Started</th></tr></thead>
+                        <thead><tr><th>@L["Lot"]</th><th>@L["Location"]</th><th class="inv-num">@L["Holds"]</th><th>@L["Started"]</th></tr></thead>
                         <tbody>
                             @foreach (var lot in job.FillingLots)
                             {
@@ -157,29 +157,29 @@
     @if (job.PartialBatches.Count > 0)
     {
         <section class="inv-section" aria-labelledby="partials-title">
-            <h2 id="partials-title">Partial batches</h2>
+            <h2 id="partials-title">@L["Partial batches"]</h2>
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Run</th><th>Lot</th><th class="inv-num">Quantity</th><th>Status</th><th>Reported</th><th>Decision</th><th></th></tr></thead>
+                    <thead><tr><th>@L["Run"]</th><th>@L["Lot"]</th><th class="inv-num">@L["Quantity"]</th><th>@L["Status"]</th><th>@L["Reported"]</th><th>@L["Decision"]</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var p in job.PartialBatches)
                         {
                             <tr @key="p.Id">
                                 <td>@p.RunNo</td>
                                 <td><ScreenLink Href="@($"inventory/lots/{p.LotId}")" Permission="@PermissionCodes.InventoryView">@p.LotNumber</ScreenLink></td>
-                                <td class="inv-num">@FloorView.Qty(p.Quantity) of @FloorView.Qty(p.BatchSize) @p.UomCode</td>
+                                <td class="inv-num">@L["{0} of {1} {2}", FloorView.Qty(p.Quantity), FloorView.Qty(p.BatchSize), p.UomCode]</td>
                                 <td><span class="@(p.Status == "pending" ? "chip chip-warning" : "chip")">@L.Label(p.Status)</span></td>
                                 <td class="small">@Display.SiteTime(p.OccurredAt, job.SiteTimeZone)</td>
-                                <td class="small">@(p.DecidedAt is { } decided ? $"{Display.SiteTime(decided, job.SiteTimeZone)} by {p.DecidedBy}{(p.DecisionComment is { } c ? ": " + c : "")}" : "")</td>
+                                <td class="small">@(p.DecidedAt is { } decided ? L["{0} by {1}{2}", Display.SiteTime(decided, job.SiteTimeZone), p.DecidedBy, (p.DecisionComment is { } c ? ": " + c : "")] : "")</td>
                                 <td class="text-end text-nowrap">
                                     @if (p.Status == "pending" && p.ReportedBy == User.Me?.ActorId)
                                     {
-                                        <span class="small text-muted" title="Whoever reports a partial batch doesn't decide on it">You reported it: someone else decides</span>
+                                        <span class="small text-muted" title="@L["Whoever reports a partial batch doesn't decide on it"]">@L["You reported it: someone else decides"]</span>
                                     }
                                     else if (p.Status == "pending" && May(PermissionCodes.PartialBatchDecide))
                                     {
-                                        <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => ApproveAsync(p)">Approve</button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => _rejecting = p.Id">Reject</button>
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => ApproveAsync(p)">@L["Approve"]</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => _rejecting = p.Id">@L["Reject"]</button>
                                     }
                                 </td>
                             </tr>
@@ -189,9 +189,9 @@
                                     <td colspan="7">
                                         <div class="d-flex flex-wrap gap-2 align-items-end">
                                             <div>
-                                                <label class="form-label small" for="reject-reason">Scrap reason</label>
+                                                <label class="form-label small" for="reject-reason">@L["Scrap reason"]</label>
                                                 <select id="reject-reason" class="form-select form-select-sm" @bind="_rejectReason">
-                                                    <option value="@Guid.Empty">Choose a reason…</option>
+                                                    <option value="@Guid.Empty">@L["Choose a reason…"]</option>
                                                     @foreach (var r in _scrapReasons)
                                                     {
                                                         <option value="@r.Id">@Display.ReasonLabel(r)</option>
@@ -199,11 +199,11 @@
                                                 </select>
                                             </div>
                                             <div class="flex-grow-1">
-                                                <label class="form-label small" for="reject-comment">Comment</label>
+                                                <label class="form-label small" for="reject-comment">@L["Comment"]</label>
                                                 <input id="reject-comment" class="form-control form-control-sm" maxlength="1000" @bind="_decisionComment" />
                                             </div>
-                                            <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || _rejectReason == Guid.Empty)" @onclick="() => RejectAsync(p)">Reject and write off</button>
-                                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _rejecting = null">Cancel</button>
+                                            <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || _rejectReason == Guid.Empty)" @onclick="() => RejectAsync(p)">@L["Reject and write off"]</button>
+                                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _rejecting = null">@L["Cancel"]</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -212,27 +212,27 @@
                     </tbody>
                 </table>
             </div>
-            <p class="small text-muted">A partial batch of a finished good waits on hold until approved: approving releases its lot; rejecting writes it off and counts it as scrap.</p>
+            <p class="small text-muted">@L["A partial batch of a finished good waits on hold until approved: approving releases its lot; rejecting writes it off and counts it as scrap."]</p>
         </section>
     }
 
     <section class="inv-section" aria-labelledby="runs-title">
         <div class="inv-section-head">
-            <h2 id="runs-title">Runs</h2>
+            <h2 id="runs-title">@L["Runs"]</h2>
             @if (job.IdealRatePerHour is { } rate)
             {
-                <span class="small text-muted">Ideal rate @FloorView.Qty(rate) @job.UomCode/h; a run can hold up to @FloorView.Qty(job.RateTolerancePct)% of it.</span>
+                <span class="small text-muted">@L["Ideal rate {0} {1}/h; a run can hold up to {2}% of it.", FloorView.Qty(rate), job.UomCode, FloorView.Qty(job.RateTolerancePct)]</span>
             }
         </div>
         @if (job.Runs.Count == 0)
         {
-            <p class="text-muted">It hasn't run yet.</p>
+            <p class="text-muted">@L["It hasn't run yet."]</p>
         }
         else
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Run</th><th>Line</th><th>Started</th><th>Ended</th><th>Length</th><th class="inv-num">Good</th><th class="inv-num">Scrap</th><th class="inv-num">Cap</th><th>Why it ended</th></tr></thead>
+                    <thead><tr><th>@L["Run"]</th><th>@L["Line"]</th><th>@L["Started"]</th><th>@L["Ended"]</th><th>@L["Length"]</th><th class="inv-num">@L["Good"]</th><th class="inv-num">@L["Scrap"]</th><th class="inv-num">@L["Cap"]</th><th>@L["Why it ended"]</th></tr></thead>
                     <tbody>
                         @foreach (var r in job.Runs)
                         {
@@ -255,16 +255,16 @@
     </section>
 
     <section class="inv-section" aria-labelledby="reports-title">
-        <h2 id="reports-title">Production reports</h2>
+        <h2 id="reports-title">@L["Production reports"]</h2>
         @if (job.Reports.Count == 0)
         {
-            <p class="text-muted">Nothing reported yet.</p>
+            <p class="text-muted">@L["Nothing reported yet."]</p>
         }
         else
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>Entered</th><th>Run</th><th class="inv-num">Good</th><th class="inv-num">Scrap</th><th>Scrap reason</th><th>By</th><th>Comment</th><th></th></tr></thead>
+                    <thead><tr><th>@L["Entered"]</th><th>@L["Run"]</th><th class="inv-num">@L["Good"]</th><th class="inv-num">@L["Scrap"]</th><th>@L["Scrap reason"]</th><th>@L["By"]</th><th>@L["Comment"]</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var r in job.Reports)
                         {
@@ -273,15 +273,15 @@
                                     @Display.SiteTime(r.RecordedAt, job.SiteTimeZone)
                                     @if (r.IsLate)
                                     {
-                                        <span class="chip ms-1" title="Entered after the run ended; counted at the run's end">late</span>
+                                        <span class="chip ms-1" title="@L["Entered after the run ended; counted at the run's end"]">@L["late"]</span>
                                     }
                                     @if (r.MachineThrough is { } through)
                                     {
-                                        <span class="chip ms-1" title="From the machine: its counts up to @Display.SiteTime(through, job.SiteTimeZone)">machine</span>
+                                        <span class="chip ms-1" title="@L["From the machine: its counts up to {0}", Display.SiteTime(through, job.SiteTimeZone)]">@L["machine"]</span>
                                     }
                                     @if (r.IsReversed)
                                     {
-                                        <span class="chip chip-muted ms-1" title="Reversed: its counts are offset and its lots taken back">reversed</span>
+                                        <span class="chip chip-muted ms-1" title="@L["Reversed: its counts are offset and its lots taken back"]">@L["reversed"]</span>
                                     }
                                 </td>
                                 <td>@r.RunNo</td>
@@ -293,8 +293,8 @@
                                 <td class="text-end">
                                     @if (r.ReportId is { } reportId && !r.IsReversed && May(PermissionCodes.ProductionCorrect))
                                     {
-                                        <button type="button" class="btn btn-sm btn-link p-0 me-2" disabled="@_busy" @onclick="() => StartReverseAsync(reportId, r)">Correct…</button>
-                                        <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => StartReverseAsync(reportId)">Reverse…</button>
+                                        <button type="button" class="btn btn-sm btn-link p-0 me-2" disabled="@_busy" @onclick="() => StartReverseAsync(reportId, r)">@L["Correct…"]</button>
+                                        <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => StartReverseAsync(reportId)">@L["Reverse…"]</button>
                                     }
                                 </td>
                             </tr>
@@ -308,17 +308,17 @@
                                                 @* The right figures (#80): the report is reversed and these reported in its place, in one go. *@
                                                 @if (job.BatchSize is not null)
                                                 {
-                                                    <input class="form-control" style="width: 14rem" placeholder="Good batches, each weight" aria-label="Good batch weights, comma-separated" @bind="_fixBatches" />
+                                                    <input class="form-control" style="width: 14rem" placeholder="@L["Good batches, each weight"]" aria-label="@L["Good batch weights, comma-separated"]" @bind="_fixBatches" />
                                                 }
                                                 else
                                                 {
-                                                    <input type="number" step="any" min="0" class="form-control" style="width: 8rem" aria-label="Good" placeholder="Good" @bind="_fixGood" />
+                                                    <input type="number" step="any" min="0" class="form-control" style="width: 8rem" aria-label="@L["Good"]" placeholder="@L["Good"]" @bind="_fixGood" />
                                                 }
-                                                <input type="number" step="any" min="0" class="form-control" style="width: 8rem" aria-label="Scrap" placeholder="Scrap" @bind="_fixScrap" />
+                                                <input type="number" step="any" min="0" class="form-control" style="width: 8rem" aria-label="@L["Scrap"]" placeholder="@L["Scrap"]" @bind="_fixScrap" />
                                                 @if (_fixScrap > 0)
                                                 {
-                                                    <select class="form-select w-auto" aria-label="Scrap reason" @bind="_fixScrapReason">
-                                                        <option value="@Guid.Empty">Scrap reason…</option>
+                                                    <select class="form-select w-auto" aria-label="@L["Scrap reason"]" @bind="_fixScrapReason">
+                                                        <option value="@Guid.Empty">@L["Scrap reason…"]</option>
                                                         @foreach (var reason in _scrapReasons)
                                                         {
                                                             <option value="@reason.Id">@Display.ReasonLabel(reason)</option>
@@ -326,25 +326,24 @@
                                                     </select>
                                                 }
                                             }
-                                            <select class="form-select w-auto" aria-label="Reason" @bind="_reverseReason">
-                                                <option value="@Guid.Empty">Reason…</option>
+                                            <select class="form-select w-auto" aria-label="@L["Reason"]" @bind="_reverseReason">
+                                                <option value="@Guid.Empty">@L["Reason…"]</option>
                                                 @foreach (var reason in _adjustReasons)
                                                 {
                                                     <option value="@reason.Id">@Display.ReasonLabel(reason)</option>
                                                 }
                                             </select>
-                                            <input class="form-control inv-grow" maxlength="1000" placeholder="Why, e.g. reported on the wrong job (required)" aria-label="Comment"
+                                            <input class="form-control inv-grow" maxlength="1000" placeholder="@L["Why, e.g. reported on the wrong job (required)"]" aria-label="@L["Comment"]"
                                                    @bind="_reverseComment" @bind:event="oninput" />
                                             <ActionButton Type="submit" Class="@(_correcting ? "btn btn-sm btn-primary" : "btn btn-sm btn-danger")" Busy="_busy"
-                                                          Reason="@(_reverseReason == Guid.Empty ? "Choose why first." : string.IsNullOrWhiteSpace(_reverseComment) ? "Say why first." : null)">
-                                                @(_correcting ? "Correct report" : "Reverse report")
+                                                          Reason="@(_reverseReason == Guid.Empty ? L["Choose why first."] : string.IsNullOrWhiteSpace(_reverseComment) ? L["Say why first."] : null)">
+                                                @(_correcting ? L["Correct report"] : L["Reverse report"])
                                             </ActionButton>
-                                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _reversing = null">Cancel</button>
+                                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _reversing = null">@L["Cancel"]</button>
                                         </form>
                                         <div class="form-text">
-                                            @(_correcting ? "The report is reversed and the figures above reported in its place, at its time, in one go: its lots give their quantity back and new lots are made. " : "")
-                                            Its good and scrap come off the run, and every lot it made gives the quantity back. A lot that has been used, split or
-                                            moved into a silo since must be put right first; Pulaski says which.
+                                            @(_correcting ? L["The report is reversed and the figures above reported in its place, at its time, in one go: its lots give their quantity back and new lots are made. "] : "")
+                                            @L["Its good and scrap come off the run, and every lot it made gives the quantity back. A lot that has been used, split or moved into a silo since must be put right first; Pulaski says which."]
                                         </div>
                                     </td>
                                 </tr>
@@ -358,7 +357,7 @@
 }
 else if (_error is null)
 {
-    <p class="text-muted">Loading…</p>
+    <p class="text-muted">@L["Loading…"]</p>
 }
 
 @code {
@@ -429,7 +428,7 @@ else if (_error is null)
         try
         {
             var closed = await Api.StartNewLotAsync(JobId, null);
-            _notes = [$"Closed {(closed.ClosedLots.Count == 1 ? "lot " : "lots ")}{string.Join(", ", closed.ClosedLots)}; the next report starts a new lot."];
+            _notes = [(closed.ClosedLots.Count == 1 ? L["Closed lot {0}; the next report starts a new lot.", closed.ClosedLots[0]] : L["Closed lots {0}; the next report starts a new lot.", string.Join(", ", closed.ClosedLots)])];
             await LoadAsync();
         }
         catch (ApiException ex)
@@ -532,7 +531,7 @@ else if (_error is null)
             {
                 if (FloorView.ParseQuantities(_fixBatches) is not { } batches)
                 {
-                    _error = new ApiException(400, "Batches", "Type each good batch's weight as a number, separated by commas, such as 1000, 998.5.", null);
+                    _error = new ApiException(400, L["Batches"], L["Type each good batch's weight as a number, separated by commas, such as 1000, 998.5."], null);
                     return;
                 }
 
@@ -545,8 +544,7 @@ else if (_error is null)
                     ReasonCodeId = _reverseReason,
                     Comment = _reverseComment!.Trim(),
                 });
-                _notes = [$"Corrected: run now has {FloorView.Qty(fixedReport.RunGoodQty)} good and {FloorView.Qty(fixedReport.RunScrapQty)} scrap; " +
-                    $"{fixedReport.TakenBack.Count} lot(s) gave their output back and {fixedReport.Lots.Count} new lot(s) were made.", .. fixedReport.Warnings.Select(w => w.Message)];
+                _notes = [L["Corrected: run now has {0} good and {1} scrap; lots that gave their output back: {2}; new lots: {3}.", FloorView.Qty(fixedReport.RunGoodQty), FloorView.Qty(fixedReport.RunScrapQty), fixedReport.TakenBack.Count, fixedReport.Lots.Count], .. fixedReport.Warnings.Select(w => w.Message)];
                 _reversing = null;
                 await LoadAsync();
                 return;
@@ -554,7 +552,7 @@ else if (_error is null)
 
             var result = await Api.ReverseProductionReportAsync(JobId, _reversing!.Value,
                 new ReverseProductionRequest { ReasonCodeId = _reverseReason, Comment = _reverseComment!.Trim() });
-            _notes = [$"Reversed: run now has {FloorView.Qty(result.RunGoodQty)} good and {FloorView.Qty(result.RunScrapQty)} scrap; {result.Lots.Count} lot(s) took the output back."];
+            _notes = [L["Reversed: run now has {0} good and {1} scrap; {2} lot(s) took the output back.", FloorView.Qty(result.RunGoodQty), FloorView.Qty(result.RunScrapQty), result.Lots.Count]];
             _reversing = null;
             await LoadAsync();
         }
@@ -598,7 +596,7 @@ else if (_error is null)
     private async Task OnReportedAsync(ReportProductionResponse result)
     {
         _reporting = false;
-        _notes = [$"Reported: run now has {FloorView.Qty(result.RunGoodQty)} good and {FloorView.Qty(result.RunScrapQty)} scrap{(result.Lots.Count > 1 ? $"; good output in lots {string.Join(", ", result.Lots.Select(l => l.LotNumber ?? "balance"))}" : result.Lot is { } lot ? $"; good output in lot {lot.LotNumber ?? "balance"}" : "")}.",
+        _notes = [L["Reported: run now has {0} good and {1} scrap{2}.", FloorView.Qty(result.RunGoodQty), FloorView.Qty(result.RunScrapQty), (result.Lots.Count > 1 ? L["; good output in lots {0}", string.Join(", ", result.Lots.Select(l => l.LotNumber ?? L["balance"]))] : result.Lot is { } lot ? L["; good output in lot {0}", lot.LotNumber ?? L["balance"]] : "")],
             .. result.Warnings.Select(w => w.Message)];
         await LoadAsync();
     }

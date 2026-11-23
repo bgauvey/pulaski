@@ -1,6 +1,7 @@
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Scheduling;
 
@@ -15,7 +16,7 @@ public sealed record PlacementPreset(Guid WorkOrderId, Guid TargetId, DateTimeOf
 /// API (no save step) and the board is re-read, because times are projected server-side (D-014).
 /// Not thread-safe: the page calls it from the Blazor dispatcher only.
 /// </summary>
-public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
+public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time, Text l)
 {
     public static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan ToastLife = TimeSpan.FromSeconds(6);
@@ -126,9 +127,9 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
     /// <summary>The user may not move the site's work orders between statuses: the Kanban doesn't drag, the drawer has no status buttons.</summary>
     public bool OrdersReadOnly => SiteId is not { } site || !CanManageOrdersAt(site);
 
-    public const string ReadOnlyMessage = "You can view the schedule, but planning needs permission to plan jobs at this site.";
+    public static readonly string ReadOnlyMessage = Term.Mark("You can view the schedule, but planning needs permission to plan jobs at this site.");
 
-    public const string OrdersReadOnlyMessage = "You can view work orders, but dispatching, firming or cancelling them needs permission to manage work orders at this site.";
+    public static readonly string OrdersReadOnlyMessage = Term.Mark("You can view work orders, but dispatching, firming or cancelling them needs permission to manage work orders at this site.");
 
     public void StartDrag(BoardItem item)
     {
@@ -181,7 +182,7 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
             {
                 foreach (var overlap in board.NewOverlapsSince(previous))
                 {
-                    Toast("danger", $"New overlap. {overlap.Describe()}.");
+                    Toast("danger", l["New overlap. {0}.", overlap.Describe(l)]);
                 }
             }
 
@@ -219,12 +220,12 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         }
 
         var where = beforeJobId is { } before && Board.Find(before) is { } next
-            ? $"before {next.Segment.JobNumber}"
-            : "at the end";
-        var line = Board.FindLine(lineId)?.Code ?? "the line";
+            ? l["before {0}", next.Segment.JobNumber]
+            : l["at the end"];
+        var line = Board.FindLine(lineId)?.Code ?? l["the line"];
         var message = item.Segment.Status == "firmed"
-            ? $"{item.Segment.JobNumber} moved to {line}; it keeps its firmed start."
-            : $"{item.Segment.JobNumber} moved to {line}, {where}.";
+            ? l["{0} moved to {1}; it keeps its firmed start.", item.Segment.JobNumber, line]
+            : l["{0} moved to {1}, {2}.", item.Segment.JobNumber, line, where];
 
         return RunAsync(item.Key, message, () => api.SequenceJobAsync(
             item.JobId, new SequenceJobRequest { Version = item.Segment.Version ?? 0, LineId = lineId, BeforeJobId = beforeJobId }));
@@ -246,9 +247,9 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
 
         var message = target switch
         {
-            { IsGroup: true } => $"{number} is back on {target.Code}, waiting for a line.",
-            _ when item.IsWindow => $"{number} assigned to {target?.Code ?? "the line"}.",
-            _ => $"{number} moved to {target?.Code ?? "the line"}.",
+            { IsGroup: true } => l["{0} is back on {1}, waiting for a line.", number, target.Code],
+            _ when item.IsWindow => l["{0} assigned to {1}.", number, target?.Code ?? l["the line"]],
+            _ => l["{0} moved to {1}.", number, target?.Code ?? l["the line"]],
         };
 
         return RunAsync(item.Key, message, () => api.AssignJobAsync(
@@ -265,15 +266,15 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         var s = item.Segment;
         var message = (isLocked, earliestStart, latestEnd) switch
         {
-            (true, _, _) when !s.IsLocked => $"{s.JobNumber} locked.",
-            (false, _, _) when s.IsLocked => $"{s.JobNumber} unlocked.",
+            (true, _, _) when !s.IsLocked => l["{0} locked.", s.JobNumber],
+            (false, _, _) when s.IsLocked => l["{0} unlocked.", s.JobNumber],
             _ when latestEnd != s.LatestEnd && item.IsWindow =>
-                $"{s.JobNumber}'s window is now {ScheduleFormat.When(earliestStart ?? Now, TimeZone)} to {ScheduleFormat.When(latestEnd, TimeZone)}.",
+                l["{0}'s window is now {1} to {2}.", s.JobNumber, ScheduleFormat.When(earliestStart ?? Now, TimeZone), ScheduleFormat.When(latestEnd, TimeZone)],
             _ when latestEnd != s.LatestEnd => latestEnd is null
-                ? $"{s.JobNumber} no longer has a finish-by time."
-                : $"{s.JobNumber} must finish by {ScheduleFormat.When(latestEnd, TimeZone)}.",
-            (_, null, _) => $"{s.JobNumber} no longer waits for a start time.",
-            (_, { } at, _) => $"{s.JobNumber} starts no earlier than {ScheduleFormat.When(at, TimeZone)}.",
+                ? l["{0} no longer has a finish-by time.", s.JobNumber]
+                : l["{0} must finish by {1}.", s.JobNumber, ScheduleFormat.When(latestEnd, TimeZone)],
+            (_, null, _) => l["{0} no longer waits for a start time.", s.JobNumber],
+            (_, { } at, _) => l["{0} starts no earlier than {1}.", s.JobNumber, ScheduleFormat.When(at, TimeZone)],
         };
 
         return RunAsync(item.Key, message, () => api.PinJobAsync(
@@ -291,7 +292,7 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         var (dayStart, _) = ScheduleLayout.DayRange(day, TimeZone);
         if (item.IsWindow)
         {
-            Toast("info", $"{item.Segment.JobNumber} waits for a line in its window; change the window in its editor.");
+            Toast("info", l["{0} waits for a line in its window; change the window in its editor.", item.Segment.JobNumber]);
             return Task.CompletedTask;
         }
 
@@ -305,16 +306,16 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
             return PinJobAsync(item, item.Segment.IsLocked, null);
         }
 
-        Toast("info", $"{item.Segment.JobNumber} already starts as early as its line allows. Change the sequence on the Gantt to run it sooner.");
+        Toast("info", l["{0} already starts as early as its line allows. Change the sequence on the Gantt to run it sooner.", item.Segment.JobNumber]);
         return Task.CompletedTask;
     }
 
     public Task CancelJobAsync(BoardItem item, bool replace, string? reason, bool exact = false, bool roundDown = false) =>
         RunAsync(
             item.Key,
-            !replace ? $"{item.Segment.JobNumber} cancelled."
-                : roundDown ? $"{item.Segment.JobNumber} cancelled and replaced for the whole batches left; the order may end short."
-                : $"{item.Segment.JobNumber} cancelled and replaced for {(exact ? "exactly " : "")}the rest of its quantity.",
+            !replace ? l["{0} cancelled.", item.Segment.JobNumber]
+                : roundDown ? l["{0} cancelled and replaced for the whole batches left; the order may end short.", item.Segment.JobNumber]
+                : (exact ? l["{0} cancelled and replaced for exactly the rest of its quantity.", item.Segment.JobNumber] : l["{0} cancelled and replaced for the rest of its quantity.", item.Segment.JobNumber]),
             async () => (await api.CancelJobAsync(item.JobId, new CancelJobRequest
             {
                 Version = item.Segment.Version ?? 0,
@@ -347,8 +348,8 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         var number = Board.NextJobNumber(workOrder);
         var target = Board.FindLine(lineId);
         var message = target?.IsGroup == true
-            ? $"{number} planned to {target.Code} for {ScheduleFormat.Qty(qty, workOrder.UomCode)}, {ScheduleFormat.When(earliestStart ?? Now, TimeZone)} to {ScheduleFormat.When(latestEnd, TimeZone)}."
-            : $"{number} created on {target?.Code ?? "the line"} for {ScheduleFormat.Qty(qty, workOrder.UomCode)}.";
+            ? l["{0} planned to {1} for {2}, {3} to {4}.", number, target.Code, ScheduleFormat.Qty(qty, workOrder.UomCode), ScheduleFormat.When(earliestStart ?? Now, TimeZone), ScheduleFormat.When(latestEnd, TimeZone)]
+            : l["{0} created on {1} for {2}.", number, target?.Code ?? l["the line"], ScheduleFormat.Qty(qty, workOrder.UomCode)];
         return RunAsync(
             ScheduleBoard.WorkOrderKey(workOrder.Id),
             message,
@@ -375,7 +376,7 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
 
         if (!workOrder.NextStatuses.Contains(status))
         {
-            Toast("warning", $"{workOrder.OrderNumber} can't go from {Display.Label(workOrder.Status).ToLowerInvariant()} to {Display.Label(status).ToLowerInvariant()}.");
+            Toast("warning", l["{0} can't go from {1} to {2}.", workOrder.OrderNumber, l.Label(workOrder.Status).ToLowerInvariant(), l.Label(status).ToLowerInvariant()]);
             return Task.CompletedTask;
         }
 
@@ -389,7 +390,7 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
             {
                 await RunAsync(
                     ScheduleBoard.WorkOrderKey(workOrder.Id),
-                    $"{workOrder.OrderNumber} is now {Display.Label(status).ToLowerInvariant()}.",
+                    l["{0} is now {1}.", workOrder.OrderNumber, l.Label(status).ToLowerInvariant()],
                     () => api.MoveWorkOrderAsync(workOrder, status),
                     orders: true);
             }
@@ -424,7 +425,7 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
     {
         if (orders ? OrdersReadOnly : ReadOnly)
         {
-            Toast("warning", orders ? OrdersReadOnlyMessage : ReadOnlyMessage);
+            Toast("warning", l[orders ? OrdersReadOnlyMessage : ReadOnlyMessage]);
             return;
         }
 
@@ -437,7 +438,7 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time)
         catch (ApiException ex)
         {
             Toast(ex.IsConflict ? "warning" : "danger", ex.IsConflict
-                ? "Someone else changed this first; the board now shows their change."
+                ? l["Someone else changed this first; the board now shows their change."]
                 : ex.Detail ?? ex.Title);
         }
         finally

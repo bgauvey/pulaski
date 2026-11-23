@@ -211,9 +211,9 @@
                     {
                         <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
                             <td><span class="fw-semibold">@c.Code</span><div class="small text-muted">@c.Name · @c.ExternalSystem@(c.IsActive ? "" : " · off")</div></td>
-                            <td class="small text-break">@MaterialConnectionView.Source(c)</td>
+                            <td class="small text-break">@MaterialConnectionView.Source(L, c)</td>
                             <td class="small">
-                                @MaterialConnectionView.Schedule(c)
+                                @MaterialConnectionView.Schedule(L, c)
                                 @if (c.NextRunAt is { } next && c.IsActive)
                                 {
                                     <div class="text-muted">Next @Display.SiteTime(next, null) UTC</div>
@@ -225,7 +225,7 @@
                                 {
                                     @if (c.LastRunOutcome is "failed" or "not_applied")
                                     {
-                                        <span class="chip chip-warn">@MaterialConnectionView.Outcome(c.LastRunOutcome)</span>
+                                        <span class="chip chip-warn">@L[MaterialConnectionView.Outcome(c.LastRunOutcome)]</span>
                                     }
                                     <div>@($"{Display.SiteTime(at, null)} UTC by {c.LastRunBy}: {c.LastRunSummary}")</div>
                                 }
@@ -270,7 +270,7 @@
                                                     <tr @key="run.Id" class="@(run.Outcome == "applied" ? "" : "table-warning")">
                                                         <td class="small text-nowrap">@Display.SiteTime(run.StartedAt, null)</td>
                                                         <td class="small">@(run.Trigger == "schedule" ? "Schedule" : run.Actor)</td>
-                                                        <td class="small">@MaterialConnectionView.Outcome(run.Outcome)</td>
+                                                        <td class="small">@L[MaterialConnectionView.Outcome(run.Outcome)]</td>
                                                         <td class="small">@run.Summary</td>
                                                     </tr>
                                                 }
@@ -300,7 +300,7 @@
     else if (_result is { } r && _runFor is { } ran)
     {
         <div class="drawer-alert @(r.Errors > 0 || r.FileProblems.Count > 0 ? "is-warning" : "") mt-3" role="status">
-            <span>@MaterialConnectionView.Summary(ran.Code, r)</span>
+            <span>@MaterialConnectionView.Summary(L, ran.Code, r)</span>
         </div>
         @if (r.Rows.Any(x => x.Action == "error" || x.Notes.Count > 0))
         {

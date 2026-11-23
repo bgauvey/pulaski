@@ -21,7 +21,7 @@ public sealed record PropertyChoice(string Value, string Label)
 {
     /// <summary>True/False, as a property grid shows a boolean.</summary>
     public static IReadOnlyList<PropertyChoice> Boolean { get; } =
-        [new("true", "True"), new("false", "False")];
+        [new("true", Pulaski.Web.Services.Localization.Term.Mark("True")), new("false", Pulaski.Web.Services.Localization.Term.Mark("False"))];
 }
 
 /// <summary>One row of a <see cref="Shared.PropertyGrid"/>. Values travel as text; booleans as "true"/"false".</summary>

@@ -3,26 +3,22 @@
 @* ERP work orders from a B2MML production schedule (D-102): checked first (a dry run), then imported order by order, as the ERP order import
    does (D-066). A request that can't be read, or that the import refuses, is left out with why; the others are imported. *@
 <section class="inv-facts mb-3" aria-labelledby="wo-b2mml">
-    <h2 class="h6" id="wo-b2mml">Import work orders from a B2MML file</h2>
+    <h2 class="h6" id="wo-b2mml">@L["Import work orders from a B2MML file"]</h2>
     <p class="small text-muted mb-2">
-        Each <code>ProductionRequest</code> is one order: its <code>ID</code> the order number and the ERP's key, the material its
-        <code>SegmentRequirement</code> produces (<code>MaterialProducedRequirement</code>, or a <code>MaterialRequirement</code> used as
-        <code>Produced</code>) with its <code>Quantity</code>, from its <code>StartTime</code> to its <code>EndTime</code>. The site is its
-        <code>HierarchyScope</code>, or its schedule's. Importing the same file again changes nothing; a changed order is updated as the ERP's
-        orders always are.
-        <a href="@TemplateHref" download="production-schedule.xml">Download a template</a>
+        @L["Each ProductionRequest is one order: its ID the order number and the ERP's key, the material its SegmentRequirement produces (MaterialProducedRequirement, or a MaterialRequirement used as Produced) with its Quantity, from its StartTime to its EndTime. The site is its HierarchyScope, or its schedule's. Importing the same file again changes nothing; a changed order is updated as the ERP's orders always are."]
+        <a href="@TemplateHref" download="production-schedule.xml">@L["Download a template"]</a>
     </p>
     <div class="row g-2 align-items-end">
         <div class="col-md-3">
-            <label class="form-label small fw-semibold" for="wo-b2mml-system">External system</label>
-            <input id="wo-b2mml-system" class="form-control form-control-sm" maxlength="100" placeholder="SAP-PRD" aria-describedby="wo-b2mml-system-note"
+            <label class="form-label small fw-semibold" for="wo-b2mml-system">@L["External system"]</label>
+            <input id="wo-b2mml-system" class="form-control form-control-sm" maxlength="100" placeholder="@L["SAP-PRD"]" aria-describedby="wo-b2mml-system-note"
                    value="@_system" @onchange="SystemChangedAsync" />
-            <div class="form-text" id="wo-b2mml-system-note">The ERP the orders come from; its IDs are its keys.</div>
+            <div class="form-text" id="wo-b2mml-system-note">@L["The ERP the orders come from; its IDs are its keys."]</div>
         </div>
         <div class="col-md-3">
-            <label class="form-label small fw-semibold" for="wo-b2mml-site">Site, where the file names none</label>
+            <label class="form-label small fw-semibold" for="wo-b2mml-site">@L["Site, where the file names none"]</label>
             <select id="wo-b2mml-site" class="form-select form-select-sm" value="@(_siteCode ?? "")" @onchange="SiteChangedAsync">
-                <option value="">Named in the file</option>
+                <option value="">@L["Named in the file"]</option>
                 @foreach (var site in Sites)
                 {
                     <option value="@site.Code">@site.Code · @site.Name</option>
@@ -30,11 +26,11 @@
             </select>
         </div>
         <div class="col-md-4">
-            <label class="form-label small fw-semibold" for="wo-b2mml-file">File</label>
+            <label class="form-label small fw-semibold" for="wo-b2mml-file">@L["File"]</label>
             <InputFile id="wo-b2mml-file" OnChange="PickAsync" accept=".xml,application/xml,text/xml" class="form-control form-control-sm" disabled="@_busy" />
         </div>
         <div class="col-md-2">
-            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@ErpOrderImportView.Why(_check, _system)" OnClick="ImportAsync">Import</ActionButton>
+            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@ErpOrderImportView.Why(_check, _system)" OnClick="ImportAsync">@L["Import"]</ActionButton>
         </div>
     </div>
     <ProblemAlert Error="_error" />
@@ -45,7 +41,7 @@
         {
             <div class="table-panel" style="max-height: 20rem; overflow-y: auto;">
                 <table class="table table-sm align-middle small mb-0">
-                    <thead><tr><th>Order</th><th>Result</th><th>Why</th></tr></thead>
+                    <thead><tr><th>@L["Order"]</th><th>@L["Result"]</th><th>@L["Why"]</th></tr></thead>
                     <tbody>
                         @foreach (var row in c.Results)
                         {
@@ -120,7 +116,7 @@
         (_check, _xml, _error) = (null, null, null);
         if (e.File.Size > MaxFileBytes)
         {
-            _error = new ApiException(400, "Too large", $"{e.File.Name} is larger than 5 MB; split it.", null);
+            _error = new ApiException(400, L["Too large"], L["{0} is larger than 5 MB; split it.", e.File.Name], null);
             return;
         }
 

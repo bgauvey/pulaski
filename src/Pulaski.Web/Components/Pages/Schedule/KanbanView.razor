@@ -2,10 +2,10 @@
    un-dispatches, firms or changes its status; columns it can't go to dim during the drag. *@
 
 <div class="view-toolbar">
-    <span class="small text-muted">Drag an order to dispatch, un-dispatch or firm it. Click it to see its jobs.</span>
+    <span class="small text-muted">@L["Drag an order to dispatch, un-dispatch or firm it. Click it to see its jobs."]</span>
     <div class="form-check form-switch ms-auto mb-0">
         <input class="form-check-input" type="checkbox" role="switch" id="kanban-finished" @bind="_showFinished" />
-        <label class="form-check-label" for="kanban-finished">Closed and cancelled</label>
+        <label class="form-check-label" for="kanban-finished">@L["Closed and cancelled"]</label>
     </div>
 </div>
 
@@ -46,7 +46,7 @@
                         <div class="kanban-card-meta">
                             @if (wo.DueAt is not null)
                             {
-                                <span class="small @(late ? "text-warning-strong" : "text-muted")">Due @ScheduleFormat.When(wo.DueAt, Tz)</span>
+                                <span class="small @(late ? "text-warning-strong" : "text-muted")">@L["Due {0}", ScheduleFormat.When(wo.DueAt, Tz)]</span>
                             }
                             @foreach (var line in lines)
                             {
@@ -56,7 +56,7 @@
                         @if (jobs.Count > 0)
                         {
                             <div class="small text-muted">
-                                @(jobs.Count == 1 ? "1 job" : $"{jobs.Count} jobs"),
+                                @(jobs.Count == 1 ? "1 job" : L["{0} jobs", jobs.Count]),
                                 @ScheduleFormat.When(jobs.Min(j => j.Segment.Start), Tz) – @ScheduleFormat.When(jobs.Max(j => j.Segment.End), Tz)
                             </div>
                         }
@@ -69,11 +69,11 @@
                             <div class="kanban-card-flags">
                                 @if (overlap)
                                 {
-                                    <span class="chip chip-danger"><Icon Name="alert" Size="12" />Overlap</span>
+                                    <span class="chip chip-danger"><Icon Name="alert" Size="12" />@L["Overlap"]</span>
                                 }
                                 @if (late)
                                 {
-                                    <span class="chip chip-warning">Late</span>
+                                    <span class="chip chip-warning">@L["Late"]</span>
                                 }
                             </div>
                         }
@@ -81,7 +81,7 @@
                 }
                 @if (cards.Count == 0)
                 {
-                    <p class="kanban-empty">No orders</p>
+                    <p class="kanban-empty">@L["No orders"]</p>
                 }
             </div>
         </section>

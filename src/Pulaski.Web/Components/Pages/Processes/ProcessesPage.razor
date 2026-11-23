@@ -4,21 +4,21 @@
 @inject NavigationManager Navigation
 @inject CurrentUser User
 
-<PageTitle>Processes · Pulaski</PageTitle>
+<PageTitle>@L["Processes"] · Pulaski</PageTitle>
 
 <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
     <div>
-        <h1 class="mb-1">Processes</h1>
-        <p class="text-muted mb-0">Process routes: the operations an order goes through, and the lines or departments that run each one.</p>
+        <h1 class="mb-1">@L["Processes"]</h1>
+        <p class="text-muted mb-0">@L["Process routes: the operations an order goes through, and the lines or departments that run each one."]</p>
     </div>
     @if (User.Can(PermissionCodes.Processes))
     {
-        <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New process</button>
+        <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">@L["New process"]</button>
     }
 </div>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.Processes" What="maintain processes" />
+<ViewOnlyNote Permission="@PermissionCodes.Processes" What="@L["maintain processes"]" />
 
 @if (_adding)
 {
@@ -26,7 +26,7 @@
         @if (_sites.Count > 1)
         {
             <div>
-                <label class="form-label" for="new-site">Site</label>
+                <label class="form-label" for="new-site">@L["Site"]</label>
                 <select id="new-site" class="form-select" @bind="_siteId">
                     @foreach (var site in _sites)
                     {
@@ -36,16 +36,16 @@
             </div>
         }
         <div>
-            <label class="form-label" for="new-code">Code</label>
-            <input id="new-code" class="form-control" maxlength="50" placeholder="EXT-PACK" @bind="_code" />
+            <label class="form-label" for="new-code">@L["Code"]</label>
+            <input id="new-code" class="form-control" maxlength="50" placeholder="@L["EXT-PACK"]" @bind="_code" />
         </div>
         <div class="flex-grow-1">
-            <label class="form-label" for="new-name">Name</label>
-            <input id="new-name" class="form-control" maxlength="200" placeholder="Extrude and Pack" @bind="_name" />
+            <label class="form-label" for="new-name">@L["Name"]</label>
+            <input id="new-name" class="form-control" maxlength="200" placeholder="@L["Extrude and Pack"]" @bind="_name" />
         </div>
         <div class="d-flex gap-2 align-self-end">
-            <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">Create and edit</button>
-            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">@L["Create and edit"]</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">@L["Cancel"]</button>
         </div>
     </form>
 }
@@ -54,14 +54,14 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_processes.Count == 0)
 {
     <div class="empty-panel">
-        <h2>No processes yet</h2>
-        <p class="text-muted mb-0">Create one to describe how an order is made, for example extrude on two lines, then pack.</p>
+        <h2>@L["No processes yet"]</h2>
+        <p class="text-muted mb-0">@L["Create one to describe how an order is made, for example extrude on two lines, then pack."]</p>
     </div>
 }
 else
@@ -70,12 +70,12 @@ else
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Process</th>
-                    <th>Released</th>
-                    <th>Draft</th>
-                    <th>Makes</th>
-                    <th>Default for</th>
-                    <th>Updated</th>
+                    <th>@L["Process"]</th>
+                    <th>@L["Released"]</th>
+                    <th>@L["Draft"]</th>
+                    <th>@L["Makes"]</th>
+                    <th>@L["Default for"]</th>
+                    <th>@L["Updated"]</th>
                 </tr>
             </thead>
             <tbody>
@@ -86,25 +86,25 @@ else
                             <a class="fw-semibold" href="processes/@p.Id">@p.Code</a>
                             <div class="small text-muted">@p.Name@(p.IsActive ? "" : " · inactive")</div>
                         </td>
-                        <td>@(p.ReleasedVersion is { } r ? $"Version {r}" : "—")</td>
+                        <td>@(p.ReleasedVersion is { } r ? L["Version {0}", r] : "—")</td>
                         <td>
                             @if (p.DraftVersion is { } d)
                             {
-                                <span class="chip">Version @d</span>
+                                <span class="chip">@L["Version {0}", d]</span>
                             }
                         </td>
                         <td>
                             @if (p.MakesAllMaterials)
                             {
-                                <span class="chip">All materials</span>
+                                <span class="chip">@L["All materials"]</span>
                             }
                             else if (p.MakesClasses.Count == 0 && p.MakesMaterials.Count == 0)
                             {
-                                <span class="small text-warning-strong">Nothing yet</span>
+                                <span class="small text-warning-strong">@L["Nothing yet"]</span>
                             }
                             @foreach (var classCode in p.MakesClasses)
                             {
-                                <span class="chip me-1"><span class="scope-kind">Class</span> @classCode</span>
+                                <span class="chip me-1"><span class="scope-kind">@L["Class"]</span> @classCode</span>
                             }
                             @foreach (var materialCode in p.MakesMaterials)
                             {

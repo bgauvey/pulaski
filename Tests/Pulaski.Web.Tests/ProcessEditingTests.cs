@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Processes;
 using Pulaski.Web.Services.Processes;
 
@@ -74,7 +75,7 @@ public class ProcessEditingTests
     {
         var link = new ProcessDependencyDto(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), ProcessEditing.AfterEnd, TimeSpan.FromMinutes(30));
 
-        Assert.Equal("after end +30m", ProcessEditing.Describe(link));
-        Assert.Equal("after start", ProcessEditing.Describe(link with { Type = ProcessEditing.AfterStart, Lag = TimeSpan.Zero }));
+        Assert.Equal("after end +30m", ProcessEditing.Describe(Text.English, link));
+        Assert.Equal("after start", ProcessEditing.Describe(Text.English, link with { Type = ProcessEditing.AfterStart, Lag = TimeSpan.Zero }));
     }
 }

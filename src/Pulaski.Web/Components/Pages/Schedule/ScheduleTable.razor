@@ -2,10 +2,10 @@
    change; the row opens the editor for everything else. *@
 
 <div class="view-toolbar">
-    <input type="search" class="form-control table-search" placeholder="Find job, order or material"
-           aria-label="Find job, order or material" @bind="_search" @bind:event="oninput" />
-    <select class="form-select w-auto" aria-label="Line" @bind="_lineFilter">
-        <option value="">All lines</option>
+    <input type="search" class="form-control table-search" placeholder="@L["Find job, order or material"]"
+           aria-label="@L["Find job, order or material"]" @bind="_search" @bind:event="oninput" />
+    <select class="form-select w-auto" aria-label="@L["Line"]" @bind="_lineFilter">
+        <option value="">@L["All lines"]</option>
         @foreach (var line in Controller.Board.Lines)
         {
             <option value="@line.Id">@line.Code</option>
@@ -13,7 +13,7 @@
     </select>
     <div class="form-check form-switch mb-0">
         <input class="form-check-input" type="checkbox" role="switch" id="table-issues" @bind="_issuesOnly" />
-        <label class="form-check-label" for="table-issues">Only with warnings</label>
+        <label class="form-check-label" for="table-issues">@L["Only with warnings"]</label>
     </div>
     <span class="small text-muted ms-auto">@Rows.Count() jobs</span>
 </div>
@@ -26,13 +26,13 @@
                 {
                     <th class="@(end ? "text-end" : "")" aria-sort="@(_sort == key ? (_descending ? "descending" : "ascending") : "none")">
                         <button type="button" class="sort-button" @onclick="() => SortBy(key)">
-                            @label @(_sort == key ? (_descending ? "↓" : "↑") : "")
+                            @L[label] @(_sort == key ? (_descending ? "↓" : "↑") : "")
                         </button>
                     </th>
                 }
-                <th>Lock</th>
-                <th>Hold until</th>
-                <th>Finish by</th>
+                <th>@L["Lock"]</th>
+                <th>@L["Hold until"]</th>
+                <th>@L["Finish by"]</th>
             </tr>
         </thead>
         <tbody>
@@ -51,18 +51,18 @@
                         @if (item.IsFromGroup && item.CanChangeLine)
                         {
                             @* Planned to a department: the floor moves it between its lines (D-022). *@
-                            <select class="form-select form-select-sm" aria-label="Line for @s.JobNumber"
+                            <select class="form-select form-select-sm" aria-label="@L["Line for {0}", s.JobNumber]"
                                     value="@item.LineId" @onchange="e => ChangeLineAsync(item, e)">
                                 <option value="@item.LineId">@item.LineCode@(item.IsWindow ? " · waiting" : "")</option>
                                 @foreach (var line in Controller.Board.AssignTargets(item))
                                 {
-                                    <option value="@line.Id">@(line.IsGroup ? $"Back to {line.Code}" : line.Code)</option>
+                                    <option value="@line.Id">@(line.IsGroup ? L["Back to {0}", line.Code] : line.Code)</option>
                                 }
                             </select>
                         }
                         else if (item.CanChangeLine && Controller.Board.Lines.Count(l => !l.IsGroup) > 1)
                         {
-                            <select class="form-select form-select-sm" aria-label="Line for @s.JobNumber"
+                            <select class="form-select form-select-sm" aria-label="@L["Line for {0}", s.JobNumber]"
                                     value="@item.LineId" @onchange="e => ChangeLineAsync(item, e)">
                                 @foreach (var line in Controller.Board.Lines.Where(l => !l.IsGroup))
                                 {
@@ -75,7 +75,7 @@
                             @item.LineCode
                             @if (item.IsWindow)
                             {
-                                <div class="small text-muted">waiting for a line</div>
+                                <div class="small text-muted">@L["waiting for a line"]</div>
                             }
                         }
                     </td>
@@ -92,17 +92,17 @@
                         }
                         @if (overlap)
                         {
-                            <span class="chip chip-danger" title="@string.Join("; ", Controller.Board.OverlapsFor(item).Select(o => o.Describe()))">Overlap</span>
+                            <span class="chip chip-danger" title="@string.Join("; ", Controller.Board.OverlapsFor(item).Select(o => o.Describe(L)))">@L["Overlap"]</span>
                         }
                     </td>
                     <td>
-                        <input class="form-check-input" type="checkbox" aria-label="Lock @s.JobNumber"
+                        <input class="form-check-input" type="checkbox" aria-label="@L["Lock {0}", s.JobNumber]"
                                checked="@s.IsLocked" @onchange="e => LockAsync(item, e)" />
                     </td>
                     <td>
                         @if (item.CanResequence)
                         {
-                            <input type="datetime-local" class="form-control form-control-sm" aria-label="Hold @s.JobNumber until"
+                            <input type="datetime-local" class="form-control form-control-sm" aria-label="@L["Hold {0} until", s.JobNumber]"
                                    value="@LocalValue(s.EarliestStart)" @onchange="e => HoldAsync(item, e)" />
                         }
                         else
@@ -120,16 +120,16 @@
     </table>
     @if (!Rows.Any())
     {
-        <p class="text-muted p-4 mb-0">No jobs match.</p>
+        <p class="text-muted p-4 mb-0">@L["No jobs match."]</p>
     }
 </div>
 
 @code {
     private static readonly (string Key, string Label, bool End)[] ColumnHeads =
     [
-        ("job", "Job", false), ("order", "Work order", false), ("line", "Line", false), ("material", "Material", false),
-        ("qty", "To make", true), ("start", "Start", false), ("end", "End", false), ("due", "Due", false),
-        ("status", "Status", false), ("warnings", "Warnings", false),
+        ("job", Term.Mark("Job"), false), ("order", Term.Mark("Work order"), false), ("line", Term.Mark("Line"), false), ("material", Term.Mark("Material"), false),
+        ("qty", Term.Mark("To make"), true), ("start", Term.Mark("Start"), false), ("end", Term.Mark("End"), false), ("due", Term.Mark("Due"), false),
+        ("status", Term.Mark("Status"), false), ("warnings", Term.Mark("Warnings"), false),
     ];
 
     [Parameter, EditorRequired]

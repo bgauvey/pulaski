@@ -1,6 +1,7 @@
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Scheduling;
 
@@ -49,12 +50,12 @@ public sealed record BoardItem(Guid LineId, string LineCode, TimelineSegmentDto 
     private bool IsOpenForFloor => Segment.Status is "planned" or "dispatched" or "firmed";
 
     /// <summary>Why it can't change line now (#47), for the buttons' reason; null when it can.</summary>
-    public string? WhyNoLineChange =>
+    public string? WhyNoLineChange(Text l) =>
         CanChangeLine ? null
-        : IsPlaceholder ? "This is a placeholder, not a job yet."
-        : Segment.IsLocked ? "The job is pinned; unpin it to move it."
-        : IsFromGroup ? $"The job is {Segment.Status.Replace('_', ' ')}; it is on the floor now."
-        : $"The job is {Segment.Status.Replace('_', ' ')}; only planned and firmed jobs change line.";
+        : IsPlaceholder ? l["This is a placeholder, not a job yet."]
+        : Segment.IsLocked ? l["The job is pinned; unpin it to move it."]
+        : IsFromGroup ? l["The job is {0}; it is on the floor now.", l.Label(Segment.Status).ToLowerInvariant()]
+        : l["The job is {0}; only planned and firmed jobs change line.", l.Label(Segment.Status).ToLowerInvariant()];
 
     /// <summary>The board only shows open jobs, and any open job can be pinned or cancelled.</summary>
     public bool CanPin => !IsPlaceholder;
@@ -76,14 +77,14 @@ public sealed record BoardOverlap(BoardLine Line, BoardItem First, BoardItem Sec
     /// <summary>Identifies the pair across refreshes, so only new overlaps are announced.</summary>
     public string Key => $"{First.Key}~{Second.Key}";
 
-    public string Describe()
+    public string Describe(Text l)
     {
-        var text = $"{Name(First)} and {Name(Second)} overlap by {ScheduleFormat.Duration(Duration)} on {Line.Code}";
-        return char.ToUpperInvariant(text[0]) + text[1..];
+        var text = l["{0} and {1} overlap by {2} on {3}", Name(l, First), Name(l, Second), ScheduleFormat.Duration(Duration), Line.Code];
+        return char.ToUpper(text[0], System.Globalization.CultureInfo.CurrentCulture) + text[1..];
     }
 
-    private static string Name(BoardItem item) =>
-        item.IsPlaceholder ? $"the changeover before {item.Segment.JobNumber}" : item.Segment.JobNumber;
+    private static string Name(Text l, BoardItem item) =>
+        item.IsPlaceholder ? l["the changeover before {0}", item.Segment.JobNumber] : item.Segment.JobNumber;
 }
 
 /// <summary>

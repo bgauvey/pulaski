@@ -64,7 +64,7 @@
 }
 else
 {
-    <ViewOnlyNote Permission="@PermissionCodes.Equipment" What="maintain edge nodes" SiteId="_detail.Node.SiteId" />
+    <ViewOnlyNote Permission="@PermissionCodes.Equipment" What="@L["maintain edge nodes"]" SiteId="_detail.Node.SiteId" />
 
     <fieldset class="view-only-scope" disabled="@(!CanManage)">
         <form class="inv-toolbar" @onsubmit="SaveNodeAsync" @onsubmit:preventDefault>

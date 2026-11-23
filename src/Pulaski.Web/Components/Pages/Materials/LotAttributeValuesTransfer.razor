@@ -4,19 +4,17 @@
 
 @* Lot attribute values in bulk (#78): export every recorded value of the site's numbered lots, and import them back, all or nothing. *@
 <section class="inv-facts mt-3" aria-labelledby="values-transfer">
-    <h2 class="h6" id="values-transfer">Values in bulk</h2>
+    <h2 class="h6" id="values-transfer">@L["Values in bulk"]</h2>
     <p class="small text-muted mb-2">
-        One row per lot: <code>lot_number</code>, <code>material_code</code> (needed only when two materials share a lot number), then a column per
-        attribute code. Values are read as on the lot page. A blank cell leaves the value as it is; <code>(clear)</code> clears it. Balances have no
-        lot number, so they aren't in the file. Nothing is saved until every row is valid.
+        @L["One row per lot: lot_number, material_code (needed only when two materials share a lot number), then a column per attribute code. Values are read as on the lot page. A blank cell leaves the value as it is; (clear) clears it. Balances have no lot number, so they aren't in the file. Nothing is saved until every row is valid."]
     </p>
     <div class="d-flex flex-wrap gap-2 align-items-center">
-        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="ExportAsync">Export values</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="ExportAsync">@L["Export values"]</button>
         @if (User.Can(PermissionCodes.LotRecords, SiteId))
         {
             <InputFile OnChange="PickAsync" accept=".csv,text/csv,text/plain" class="form-control form-control-sm" style="max-width: 24rem"
-                       aria-label="Lot attribute values file" disabled="@_busy" />
-            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@ImportReadiness.Why(_check is not null, _check?.Applied == true, _check?.FileProblems.Count ?? 0, _check?.Errors ?? 0, _check is null ? 0 : _check.Updated)" OnClick="ImportAsync">Import</ActionButton>
+                       aria-label="@L["Lot attribute values file"]" disabled="@_busy" />
+            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@ImportReadiness.Why(_check is not null, _check?.Applied == true, _check?.FileProblems.Count ?? 0, _check?.Errors ?? 0, _check is null ? 0 : _check.Updated)" OnClick="ImportAsync">@L["Import"]</ActionButton>
         }
     </div>
     <ProblemAlert Error="_error" />
@@ -24,12 +22,12 @@
     {
         <p class="small mt-2 mb-1 @(c.Errors > 0 ? "text-danger" : "")">
             @(c.FileProblems.Count > 0 ? string.Join(" ", c.FileProblems)
-                : c.Errors > 0 ? $"{c.Errors} rows have errors, so nothing can be imported yet. Fix them and pick the file again."
-                : $"{(c.Applied ? "Imported" : "Ready")}: {c.Updated} lots to change, {c.Unchanged} unchanged.")
+                : c.Errors > 0 ? L["{0} rows have errors, so nothing can be imported yet. Fix them and pick the file again.", c.Errors]
+                : L["{0}: {1} lots to change, {2} unchanged.", (c.Applied ? L["Imported"] : L["Ready"]), c.Updated, c.Unchanged])
         </p>
         @foreach (var row in c.Rows.Where(r => r.Action == "error"))
         {
-            <div class="small text-danger">Line @row.Line, @row.Code: @row.Message</div>
+            <div class="small text-danger">@L["Line {0}, {1}: {2}", row.Line, row.Code, row.Message]</div>
         }
         @if (c.Errors == 0)
         {
@@ -73,7 +71,7 @@
         (_check, _csv, _error) = (null, null, null);
         if (e.File.Size > MaxFileBytes)
         {
-            _error = new ApiException(400, "Too large", $"{e.File.Name} is larger than 5 MB; split it.", null);
+            _error = new ApiException(400, L["Too large"], L["{0} is larger than 5 MB; split it.", e.File.Name], null);
             return;
         }
 

@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using System.Net;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components;
@@ -49,7 +50,7 @@ public class ScheduleControllerPermissionTests
     {
         var http = new Counting();
         var api = new PulaskiApiClient(new HttpClient(http) { BaseAddress = new Uri("http://api/") }, new ApiSession(new Anonymous(), new Nowhere()));
-        var controller = new ScheduleController(api, TimeProvider.System)
+        var controller = new ScheduleController(api, TimeProvider.System, Text.English)
         {
             CanPlanAt = id => id == PlantA,
             CanManageOrdersAt = id => id == PlantB,

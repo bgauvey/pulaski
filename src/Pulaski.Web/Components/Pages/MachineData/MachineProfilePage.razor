@@ -45,7 +45,7 @@
 else
 {
     var p = _detail.Profile;
-    <ViewOnlyNote Permission="@PermissionCodes.Equipment" What="maintain machine profiles" SiteId="p.SiteId" />
+    <ViewOnlyNote Permission="@PermissionCodes.Equipment" What="@L["maintain machine profiles"]" SiteId="p.SiteId" />
 
     @if (_importing && CanManage)
     {
