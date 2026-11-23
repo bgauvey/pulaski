@@ -46,7 +46,7 @@ public sealed record GanttScale(DateTimeOffset Start, TimeSpan Span, string? Tim
             {
                 var isDay = wall.TimeOfDay == TimeSpan.Zero;
                 var label = isDay
-                    ? wall.ToString("ddd d MMM", CultureInfo.InvariantCulture)
+                    ? wall.ToString("ddd d MMM", CultureInfo.CurrentCulture)
                     : wall.ToString("HH:mm", CultureInfo.InvariantCulture);
                 ticks.Add(new GanttTick(at, Percent(at), label, isDay));
             }
@@ -182,7 +182,7 @@ public static class ScheduleFormat
 
     /// <summary>A short site-local time: 'Wed 14 Oct 06:30'.</summary>
     public static string When(DateTimeOffset? at, string? timeZone) =>
-        at is null ? "" : Display.ToSite(at.Value, timeZone).ToString("ddd d MMM HH:mm", CultureInfo.InvariantCulture);
+        at is null ? "" : Display.ToSite(at.Value, timeZone).ToString("ddd d MMM HH:mm", CultureInfo.CurrentCulture);
 
     public static string Time(DateTimeOffset at, string? timeZone) =>
         Display.ToSite(at, timeZone).ToString("HH:mm", CultureInfo.InvariantCulture);

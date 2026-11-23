@@ -21,7 +21,7 @@ public static class OeeTrend
     public const string Quality = "quality";
 
     public static IReadOnlyList<(string Measure, string Label)> Measures { get; } =
-        [(Oee, "OEE"), (Availability, "Availability"), (Performance, "Performance"), (Quality, "Quality")];
+        [(Oee, Pulaski.Web.Services.Localization.Term.Mark("OEE")), (Availability, Pulaski.Web.Services.Localization.Term.Mark("Availability")), (Performance, Pulaski.Web.Services.Localization.Term.Mark("Performance")), (Quality, Pulaski.Web.Services.Localization.Term.Mark("Quality"))];
 
     public static string LabelOf(string measure) => Measures.FirstOrDefault(m => m.Measure == measure).Label ?? "OEE";
 

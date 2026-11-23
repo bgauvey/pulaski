@@ -16,7 +16,7 @@
     @if (_characteristic is { } c)
     {
         <p class="text-muted mb-0">
-            @c.Name, on the @ControlChartView.Chart(L, c.ChartType, c.SubgroupSize).
+            @L["{0}, on the {1}.", c.Name, ControlChartView.Chart(L, c.ChartType, c.SubgroupSize)]
             @L["Limits say how much the process varies when nothing unusual happens; they come from the results themselves, not from the specification."]
         </p>
     }

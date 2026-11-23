@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Materials;
 using Pulaski.Web.Services.Materials;
@@ -42,9 +43,9 @@ public class CapabilityFormTests
     [Fact]
     public void A_lines_lot_rule_is_edited_and_described_on_its_row()
     {
-        Assert.Null(CapabilityForm.LotRule(Existing, "m"));
+        Assert.Null(CapabilityForm.LotRule(Text.English, Existing, "m"));
         var filling = Existing with { LotSize = 1000.000000m, LotHours = 8.00m, LotByShift = true };
-        Assert.Equal("Lots of at most 1000 m, 8 h, a shift", CapabilityForm.LotRule(filling, "m"));
+        Assert.Equal("Lots of at most 1000 m, 8 h, a shift", CapabilityForm.LotRule(Text.English, filling, "m"));
 
         var form = CapabilityForm.For(filling);
         Assert.Equal((1000m, 8m, true), (form.LotSize!.Value, form.LotHours!.Value, form.LotByShift));

@@ -5,14 +5,13 @@
 @* A planning rate from run history (D-045): worked out on request, shown with every run it looked at and why any was left
    out, and only made the calculated rate when the planner accepts it. A modified rate stays in force either way. *@
 <div class="border-top pt-3 mt-3">
-    <h4 class="h6 mb-1">From run history</h4>
+    <h4 class="h6 mb-1">@L["From run history"]</h4>
     <p class="small text-muted mb-2">
-        Work out the rate @LineCode really made @MaterialCode at: good output ÷ run time over its ended runs, or ÷ running time with the stops
-        inside the runs taken out. Short runs, runs with no good output and unusually slow or fast runs are left out. Nothing changes until you accept it.
+        @L["Work out the rate {0} really made {1} at: good output ÷ run time over its ended runs, or ÷ running time with the stops inside the runs taken out. Short runs, runs with no good output and unusually slow or fast runs are left out. Nothing changes until you accept it.", LineCode, MaterialCode]
     </p>
     <div class="d-flex flex-wrap gap-2 align-items-end">
         <div>
-            <label class="form-label small" for="hist-days">Runs that ended in the last</label>
+            <label class="form-label small" for="hist-days">@L["Runs that ended in the last"]</label>
             <select id="hist-days" class="form-select form-select-sm" @bind="_days">
                 @foreach (var d in new[] { 30, 60, 90, 180, 365 })
                 {
@@ -22,12 +21,12 @@
         </div>
         <div class="form-check mb-1">
             <input id="hist-stops" type="checkbox" class="form-check-input" checked="@TakeOutStops" @onchange="e => _takeOutStops = e.Value is true" />
-            <label class="form-check-label small" for="hist-stops">Take out stops</label>
+            <label class="form-check-label small" for="hist-stops">@L["Take out stops"]</label>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="ReviewAsync">Work it out</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="ReviewAsync">@L["Work it out"]</button>
         @if (RateProposalView.IsRunHistory(Basis))
         {
-            <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="UseIdealAsync">Back to the ideal rate</button>
+            <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="UseIdealAsync">@L["Back to the ideal rate"]</button>
         }
     </div>
 
@@ -44,8 +43,8 @@
             {
                 <div class="border rounded p-2 mb-2 small" role="status">
                     <div>
-                        <span class="fw-semibold">Proposed @Display.SiteTime(proposal.ProposedAt, TimeZone): @Qty(proposal.ProposedRatePerHour) @r.UomCode/h</span>
-                        (@RateProposalView.Basis(proposal.CalculationBasis); @RateProposalView.Sample(proposal)).
+                        <span class="fw-semibold">@L["Proposed {0}: {1} {2}/h", Display.SiteTime(proposal.ProposedAt, TimeZone), Qty(proposal.ProposedRatePerHour), r.UomCode]</span>
+                        (@L[RateProposalView.Basis(proposal.CalculationBasis)]; @RateProposalView.Sample(L, proposal)).
                     </div>
                     @if (proposal.ReviewReason is { } why)
                     {
@@ -54,8 +53,8 @@
                     @if (CanDecide)
                     {
                         <div class="d-flex gap-2 mt-1">
-                            <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_busy" @onclick="() => AcceptProposalAsync(proposal)">Accept proposal</button>
-                            <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => RejectProposalAsync(proposal)">Reject</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_busy" @onclick="() => AcceptProposalAsync(proposal)">@L["Accept proposal"]</button>
+                            <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => RejectProposalAsync(proposal)">@L["Reject"]</button>
                         </div>
                     }
                 </div>
@@ -64,35 +63,37 @@
             {
                 <p class="mb-2">
                     <span class="fw-semibold">@Qty(suggested) @r.UomCode/h</span>
-                    from @r.UsedRuns runs, @Qty(r.UsedHours) hours @(r.StopsTakenOut ? $"running ({Qty(r.UsedStoppedHours)} h of stops taken out)" : "") and @Qty(r.UsedGoodQty) @r.UomCode good.
+                    @(r.StopsTakenOut
+                        ? L["from {0} runs, {1} hours running ({2} h of stops taken out) and {3} {4} good.", r.UsedRuns, Qty(r.UsedHours), Qty(r.UsedStoppedHours), Qty(r.UsedGoodQty), r.UomCode]
+                        : L["from {0} runs, {1} hours and {2} {3} good.", r.UsedRuns, Qty(r.UsedHours), Qty(r.UsedGoodQty), r.UomCode])
                     <span class="small text-muted">
-                        Now: calculated @Qty(r.CalculatedRatePerHour)@(r.IdealRatePerHour is { } ideal ? $", ideal {Qty(ideal)}" : "")@(r.ModifiedRatePerHour is { } m ? $", modified {Qty(m)} (in force)" : "") @r.UomCode/h;
-                        @Drift(suggested, r.EffectiveRatePerHour) the rate in force.
+                        @L["Now: calculated {0}", Qty(r.CalculatedRatePerHour)]@(r.IdealRatePerHour is { } ideal ? L[", ideal {0}", Qty(ideal)] : "")@(r.ModifiedRatePerHour is { } m ? L[", modified {0} (in force)", Qty(m)] : "") @r.UomCode/h;
+                        @Drift(suggested, r.EffectiveRatePerHour)
                     </span>
                 </p>
                 @if (r.ModifiedRatePerHour is not null)
                 {
-                    <p class="small text-muted mb-2">Accepting sets the calculated rate. The modified rate stays in force for planning until you clear it.</p>
+                    <p class="small text-muted mb-2">@L["Accepting sets the calculated rate. The modified rate stays in force for planning until you clear it."]</p>
                 }
                 @if (CanDecide)
                 {
-                    <button type="button" class="btn btn-sm btn-primary mb-2" disabled="@_busy" @onclick="AdoptAsync">Use @Qty(suggested) @r.UomCode/h as the calculated rate</button>
-                    <span class="small text-muted ms-1">Recorded as @RateProposalView.Basis(r.SuggestedBasis).</span>
+                    <button type="button" class="btn btn-sm btn-primary mb-2" disabled="@_busy" @onclick="AdoptAsync">@L["Use {0} {1}/h as the calculated rate", Qty(suggested), r.UomCode]</button>
+                    <span class="small text-muted ms-1">@L["Recorded as {0}.", L[RateProposalView.Basis(r.SuggestedBasis)]]</span>
                 }
             }
             else
             {
-                <p class="small text-warning-strong mb-2">No rate: @r.NotEnough It needs @r.MinRuns runs and @Qty(r.MinHours) hours of usable history.</p>
+                <p class="small text-warning-strong mb-2">@L["No rate: {0} It needs {1} runs and {2} hours of usable history.", r.NotEnough, r.MinRuns, Qty(r.MinHours)]</p>
             }
 
             @if (r.Runs.Count == 0)
             {
-                <p class="small text-muted mb-0">No ended runs of @MaterialCode on @LineCode in the last @r.Days days.</p>
+                <p class="small text-muted mb-0">@L["No ended runs of {0} on {1} in the last {2} days.", MaterialCode, LineCode, r.Days]</p>
             }
             else
             {
                 <table class="table table-sm align-middle small mb-1">
-                    <thead><tr><th>Job</th><th>Run</th><th>Ended</th><th class="inv-num">Hours</th>@if (r.StopsTakenOut) { <th class="inv-num">Stopped, h</th> }<th class="inv-num">Good, @r.UomCode</th><th class="inv-num">@r.UomCode/h</th><th></th></tr></thead>
+                    <thead><tr><th>@L["Job"]</th><th>@L["Run"]</th><th>@L["Ended"]</th><th class="inv-num">@L["Hours"]</th>@if (r.StopsTakenOut) { <th class="inv-num">@L["Stopped, h"]</th> }<th class="inv-num">@L["Good, {0}", r.UomCode]</th><th class="inv-num">@r.UomCode/h</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var run in r.Runs)
                         {
@@ -107,14 +108,14 @@
                                 }
                                 <td class="inv-num">@(run.GoodQty is { } g ? Qty(g) : "—")</td>
                                 <td class="inv-num">@(run.RatePerHour is { } rate ? Qty(rate) : "—")</td>
-                                <td>@(run.Excluded is { } why ? $"Left out: {why}" : "Used")</td>
+                                <td>@(run.Excluded is { } why ? L["Left out: {0}", why] : L["Used"])</td>
                             </tr>
                         }
                     </tbody>
                 </table>
                 @if (r.SlowFence is { } slow && r.FastFence is { } fast)
                 {
-                    <p class="small text-muted mb-0">Runs under @Qty(slow) or over @Qty(fast) @r.UomCode/h count as unusual.</p>
+                    <p class="small text-muted mb-0">@L["Runs under {0} or over {1} {2}/h count as unusual.", Qty(slow), Qty(fast), r.UomCode]</p>
                 }
             }
         </div>
@@ -156,7 +157,7 @@
         await Api.AcceptRateProposalAsync(RunStandardId, new AcceptRateProposalRequest { Version = _review!.Version, ProposalId = proposal.Id });
         var unit = _review.UomCode;
         _review = null;
-        await OnChanged.InvokeAsync($"The calculated planning rate on {LineCode} is now {Qty(proposal.ProposedRatePerHour)} {unit}/h, {RateProposalView.Basis(proposal.CalculationBasis)}.");
+        await OnChanged.InvokeAsync(L["The calculated planning rate on {0} is now {1} {2}/h, {3}.", LineCode, Qty(proposal.ProposedRatePerHour), unit, L[RateProposalView.Basis(proposal.CalculationBasis)]]);
     });
 
     private Task RejectProposalAsync(RateProposalDto proposal) => RunAsync(async () =>
@@ -176,7 +177,7 @@
             TakeOutStops = r.StopsTakenOut,
         });
         _review = null;
-        await OnChanged.InvokeAsync($"The calculated planning rate on {LineCode} is now {Qty(r.SuggestedRatePerHour!.Value)} {r.UomCode}/h, {RateProposalView.Basis(r.SuggestedBasis)}.");
+        await OnChanged.InvokeAsync(L["The calculated planning rate on {0} is now {1} {2}/h, {3}.", LineCode, Qty(r.SuggestedRatePerHour!.Value), r.UomCode, L[RateProposalView.Basis(r.SuggestedBasis)]]);
     });
 
     private Task UseIdealAsync() => RunAsync(async () =>
@@ -184,7 +185,7 @@
         var review = _review ?? await Api.GetRunHistoryRateAsync(RunStandardId, _days, _takeOutStops);
         await Api.UseIdealRateAsync(RunStandardId, new UseIdealRateRequest { Version = review.Version });
         _review = null;
-        await OnChanged.InvokeAsync($"The calculated planning rate on {LineCode} follows the ideal rate again.");
+        await OnChanged.InvokeAsync(L["The calculated planning rate on {0} follows the ideal rate again.", LineCode]);
     });
 
     private async Task RunAsync(Func<Task> action)
@@ -209,16 +210,17 @@
         }
     }
 
-    private static string Drift(decimal suggested, decimal inForce)
+    private string Drift(decimal suggested, decimal inForce)
     {
         if (inForce <= 0)
         {
-            return "against";
+            return L["against the rate in force."];
         }
 
         var pct = (suggested - inForce) / inForce * 100m;
-        return Math.Abs(pct) < 0.5m ? "about the same as" : $"{Qty(Math.Abs(pct))}% {(pct > 0 ? "faster than" : "slower than")}";
+        return Math.Abs(pct) < 0.5m ? L["about the same as the rate in force."]
+            : pct > 0 ? L["{0}% faster than the rate in force.", Qty(Math.Abs(pct))] : L["{0}% slower than the rate in force.", Qty(Math.Abs(pct))];
     }
 
-    private static string Qty(decimal value) => value.ToString("#,0.##", CultureInfo.InvariantCulture);
+    private static string Qty(decimal value) => value.ToString("#,0.##", CultureInfo.CurrentCulture);
 }

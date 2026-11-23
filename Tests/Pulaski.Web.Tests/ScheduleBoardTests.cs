@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Contracts.WorkOrders;
@@ -87,7 +88,7 @@ public class ScheduleBoardTests
 
         var overlap = Assert.Single(board.Overlaps);
         Assert.Equal(("J-1", "J-2", TimeSpan.FromHours(1)), (overlap.First.Segment.JobNumber, overlap.Second.Segment.JobNumber, overlap.Duration));
-        Assert.Equal("J-1 and J-2 overlap by 1h on EXT-01", overlap.Describe());
+        Assert.Equal("J-1 and J-2 overlap by 1h on EXT-01", overlap.Describe(Text.English));
         Assert.True(board.IsOverlapping(board.Find(a.JobId)!));
         Assert.True(board.IsOverlapping(board.Find(firmed.JobId)!));
     }
@@ -117,7 +118,7 @@ public class ScheduleBoardTests
             [],
             T0);
 
-        Assert.Equal("The changeover before J-2 and J-2 overlap by 30m on EXT-01", Assert.Single(board.Overlaps).Describe());
+        Assert.Equal("The changeover before J-2 and J-2 overlap by 30m on EXT-01", Assert.Single(board.Overlaps).Describe(Text.English));
     }
 
     [Fact]

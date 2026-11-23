@@ -1,4 +1,5 @@
 using Pulaski.Contracts.Scheduling;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Scheduling;
 
@@ -59,11 +60,11 @@ public sealed record PlacementGhost(
     public bool IsLate => Warnings.Any(w => w.Code == "late");
 
     /// <summary>'Thu 15 Oct 01:03 → Thu 15 Oct 08:12 · 7h 9m with a 45m changeover · pushes 2 jobs back, up to 7h 9m'.</summary>
-    public string Summary(string? timeZone)
+    public string Summary(Text l, string? timeZone)
     {
         if (Error is not null)
         {
-            return $"Can't place here: {Error}";
+            return l["Can't place here: {0}", Error];
         }
 
         if (Note is not null)
@@ -73,31 +74,31 @@ public sealed record PlacementGhost(
 
         if (Job is not { } job)
         {
-            return "Working out where it lands…";
+            return l["Working out where it lands…"];
         }
 
         var start = Changeover?.Start ?? job.Start;
         var parts = new List<string> { $"{ScheduleFormat.When(start, timeZone)} → {ScheduleFormat.When(job.End, timeZone)}" };
         parts.Add(job.End == job.Start
-            ? "duration unknown (no run standard)"
+            ? l["duration unknown (no run standard)"]
             : Changeover is { } changeover
-                ? $"{ScheduleFormat.Duration(job.End - job.Start)} with a {ScheduleFormat.Duration(changeover.End - changeover.Start)} changeover"
+                ? l["{0} with a {1} changeover", ScheduleFormat.Duration(job.End - job.Start), ScheduleFormat.Duration(changeover.End - changeover.Start)]
                 : ScheduleFormat.Duration(job.End - job.Start));
 
         if (Delayed.Count > 0)
         {
             var most = ScheduleFormat.Duration(Delayed.Max(d => d.Delay));
-            parts.Add(Delayed.Count == 1 ? $"pushes {Delayed[0].JobNumber} back {most}" : $"pushes {Delayed.Count} jobs back, up to {most}");
+            parts.Add(Delayed.Count == 1 ? l["pushes {0} back {1}", Delayed[0].JobNumber, most] : l["pushes {0} jobs back, up to {1}", Delayed.Count, most]);
         }
 
         if (IsLate)
         {
-            parts.Add("finishes after its due date");
+            parts.Add(l["finishes after its due date"]);
         }
 
         if (IsOverlapping)
         {
-            parts.Add("overlaps a firmed job");
+            parts.Add(l["overlaps a firmed job"]);
         }
 
         return string.Join(" · ", parts);

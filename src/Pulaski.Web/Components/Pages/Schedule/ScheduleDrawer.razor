@@ -19,7 +19,7 @@
                     <h2 id="drawer-title" class="mb-0">@s.JobNumber</h2>
                 </div>
                 <span class="@Display.JobStatusChip(s.Status)">@L.Label(s.Status)</span>
-                <button type="button" class="icon-button" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
+                <button type="button" class="icon-button" aria-label="@L["Close"]" @onclick="OnClose"><Icon Name="close" /></button>
             </header>
 
             <div class="drawer-body">
@@ -27,7 +27,7 @@
                 {
                     <div class="drawer-alert is-danger" @key="overlap.Key">
                         <Icon Name="alert" Size="18" />
-                        <span>@overlap.Describe(), from @ScheduleFormat.When(overlap.Start, Tz) to @ScheduleFormat.Time(overlap.End, Tz).</span>
+                        <span>@overlap.Describe(L), from @ScheduleFormat.When(overlap.Start, Tz) to @ScheduleFormat.Time(overlap.End, Tz).</span>
                     </div>
                 }
                 @foreach (var warning in s.Warnings)
@@ -38,67 +38,67 @@
                 }
 
                 <dl class="facts">
-                    <dt>@(item.IsWindow ? "Window" : "Projected")</dt>
+                    <dt>@(item.IsWindow ? L["Window"] : L["Projected"])</dt>
                     <dd>@ScheduleFormat.When(s.Start, Tz) – @ScheduleFormat.When(s.End, Tz) <span class="text-muted">(@ScheduleFormat.Duration(s.End - s.Start))</span></dd>
                     @if (group is not null)
                     {
-                        <dt>Planned to</dt>
-                        <dd>@group.Code <span class="text-muted">@(item.IsWindow ? "· waiting for a line" : $"· running on {item.LineCode}")</span></dd>
+                        <dt>@L["Planned to"]</dt>
+                        <dd>@group.Code <span class="text-muted">@(item.IsWindow ? "· waiting for a line" : L["· running on {0}", item.LineCode])</span></dd>
                     }
                     @if (s.LinkReadyAt is not null)
                     {
-                        <dt>Process links</dt>
-                        <dd>Can start from @ScheduleFormat.When(s.LinkReadyAt, Tz) <span class="text-muted">· when the operations it follows allow</span></dd>
+                        <dt>@L["Process links"]</dt>
+                        <dd>@L["Can start from {0}", ScheduleFormat.When(s.LinkReadyAt, Tz)] <span class="text-muted">@L["· when the operations it follows allow"]</span></dd>
                     }
                     @if (s.LatestEnd is not null && !item.IsWindow)
                     {
-                        <dt>Finish by</dt>
+                        <dt>@L["Finish by"]</dt>
                         <dd>@ScheduleFormat.When(s.LatestEnd, Tz)</dd>
                     }
                     @if (s.BaselineStart is not null)
                     {
-                        <dt>Baseline</dt>
+                        <dt>@L["Baseline"]</dt>
                         <dd>@ScheduleFormat.When(s.BaselineStart, Tz) – @ScheduleFormat.When(s.BaselineEnd, Tz)</dd>
                     }
                     @if (order is not null)
                     {
-                        <dt>Work order</dt>
+                        <dt>@L["Work order"]</dt>
                         <dd><button type="button" class="link-button" @onclick="() => OnSelectWorkOrder.InvokeAsync(order.Id)">@order.OrderNumber</button> · @L.Label(order.Status)</dd>
                     }
                     @if (s.MaterialCode is not null)
                     {
-                        <dt>Material</dt>
+                        <dt>@L["Material"]</dt>
                         <dd>@s.MaterialCode</dd>
                     }
                     @if (s.PlannedQty is not null)
                     {
-                        <dt>Quantity</dt>
+                        <dt>@L["Quantity"]</dt>
                         <dd>@ScheduleFormat.Qty(s.RemainingQty, s.UomCode) to make of @ScheduleFormat.Qty(s.PlannedQty, s.UomCode)</dd>
                     }
                     @if (s.RatePerHour is not null)
                     {
-                        <dt>Rate</dt>
+                        <dt>@L["Rate"]</dt>
                         <dd>@ScheduleFormat.Qty(s.RatePerHour, s.UomCode)/h <span class="text-muted">(@s.RateSource)</span></dd>
                     }
                     @if (s.DueAt is not null)
                     {
-                        <dt>Due</dt>
+                        <dt>@L["Due"]</dt>
                         <dd>@ScheduleFormat.When(s.DueAt, Tz)</dd>
                     }
                 </dl>
 
                 @if (Controller.ReadOnly && (item.CanChangeLine || item.CanPin || item.CanCancel))
                 {
-                    @Locked($"You can view {s.JobNumber}, but moving, pinning or cancelling it needs permission to plan jobs at this site.")
+                    @Locked(L["You can view {0}, but moving, pinning or cancelling it needs permission to plan jobs at this site.", s.JobNumber])
                 }
 
                 @if (item.IsWindow)
                 {
                     <section class="drawer-section">
-                        <h3>Lines that could run it</h3>
+                        <h3>@L["Lines that could run it"]</h3>
                         @if (s.Candidates.Count == 0)
                         {
-                            <p class="small text-muted mb-0">No line in @group?.Code can run @s.MaterialCode.</p>
+                            <p class="small text-muted mb-0">@L["No line in {0} can run {1}.", group?.Code, s.MaterialCode]</p>
                         }
                         else
                         {
@@ -108,27 +108,27 @@
                                     <li @key="candidate.LineId">
                                         <span class="fw-semibold">@candidate.LineCode</span>
                                         <span class="small text-muted">@(candidate.Work is { } work ? $"~{ScheduleFormat.Duration(work)}" : "no run standard")</span>
-                                        <span class="chip @(candidate.FitsWindow ? "" : "chip-warning")">@(candidate.FitsWindow ? "Fits the window" : "Won't fit")</span>
+                                        <span class="chip @(candidate.FitsWindow ? "" : "chip-warning")">@(candidate.FitsWindow ? L["Fits the window"] : L["Won't fit"])</span>
                                         @if (!Controller.ReadOnly)
                                         {
-                                            <ActionButton Class="btn btn-outline-primary btn-sm ms-auto" Busy="Busy(item)" Reason="@item.WhyNoLineChange"
+                                            <ActionButton Class="btn btn-outline-primary btn-sm ms-auto" Busy="Busy(item)" Reason="@item.WhyNoLineChange(L)"
                                                           OnClick="() => Controller.AssignJobAsync(item, candidate.LineId, null)">Run on @candidate.LineCode</ActionButton>
                                         }
                                     </li>
                                 }
                             </ul>
-                            <p class="small text-muted mt-2 mb-0">It joins the end of that line. To put it elsewhere in the line, drag it onto the line on the Gantt.</p>
+                            <p class="small text-muted mt-2 mb-0">@L["It joins the end of that line. To put it elsewhere in the line, drag it onto the line on the Gantt."]</p>
                         }
                     </section>
                 }
                 else if (item.IsFromGroup && group is not null && !Controller.ReadOnly)
                 {
                     <section class="drawer-section">
-                        <h3>On the floor</h3>
-                        <p class="small text-muted">Planned to @group.Code, so it can move between its lines whatever its plan status, until it starts.</p>
+                        <h3>@L["On the floor"]</h3>
+                        <p class="small text-muted">@L["Planned to {0}, so it can move between its lines whatever its plan status, until it starts.", group.Code]</p>
                         <div class="row g-2">
                             <div class="col-6">
-                                <label class="form-label" for="assign-line">Line</label>
+                                <label class="form-label" for="assign-line">@L["Line"]</label>
                                 <select id="assign-line" class="form-select" @bind="_moveLine" @bind:after="ResetBefore">
                                     <option value="@item.LineId">@item.LineCode</option>
                                     @foreach (var line in Controller.Board.AssignTargets(item).Where(l => !l.IsGroup))
@@ -138,19 +138,19 @@
                                 </select>
                             </div>
                             <div class="col-6">
-                                <label class="form-label" for="assign-before">Runs</label>
+                                <label class="form-label" for="assign-before">@L["Runs"]</label>
                                 <select id="assign-before" class="form-select" @bind="_moveBefore">
                                     @foreach (var other in BeforeChoices(item))
                                     {
-                                        <option value="@other.JobId">Before @other.Segment.JobNumber</option>
+                                        <option value="@other.JobId">@L["Before {0}", other.Segment.JobNumber]</option>
                                     }
-                                    <option value="">At the end</option>
+                                    <option value="">@L["At the end"]</option>
                                 </select>
                             </div>
                         </div>
                         <div class="d-flex flex-wrap gap-2 mt-2">
-                            <ActionButton Class="btn btn-primary btn-sm" Busy="Busy(item)" Reason="@item.WhyNoLineChange" OnClick="() => MoveAsync(item)">Move</ActionButton>
-                            <ActionButton Class="btn btn-outline-secondary btn-sm" Busy="Busy(item)" Reason="@item.WhyNoLineChange"
+                            <ActionButton Class="btn btn-primary btn-sm" Busy="Busy(item)" Reason="@item.WhyNoLineChange(L)" OnClick="() => MoveAsync(item)">@L["Move"]</ActionButton>
+                            <ActionButton Class="btn btn-outline-secondary btn-sm" Busy="Busy(item)" Reason="@item.WhyNoLineChange(L)"
                                           OnClick="() => Controller.AssignJobAsync(item, group.Id, null)">Send back to @group.Code</ActionButton>
                         </div>
                     </section>
@@ -158,10 +158,10 @@
                 else if (item.CanChangeLine && !Controller.ReadOnly)
                 {
                     <section class="drawer-section">
-                        <h3>Line and sequence</h3>
+                        <h3>@L["Line and sequence"]</h3>
                         <div class="row g-2">
                             <div class="col-6">
-                                <label class="form-label" for="move-line">Line</label>
+                                <label class="form-label" for="move-line">@L["Line"]</label>
                                 <select id="move-line" class="form-select" @bind="_moveLine" @bind:after="ResetBefore">
                                     @foreach (var line in Controller.Board.Lines.Where(l => !l.IsGroup))
                                     {
@@ -170,61 +170,61 @@
                                 </select>
                             </div>
                             <div class="col-6">
-                                <label class="form-label" for="move-before">Runs</label>
+                                <label class="form-label" for="move-before">@L["Runs"]</label>
                                 <select id="move-before" class="form-select" @bind="_moveBefore" disabled="@(s.Status == "firmed")">
                                     @foreach (var other in BeforeChoices(item))
                                     {
-                                        <option value="@other.JobId">Before @other.Segment.JobNumber</option>
+                                        <option value="@other.JobId">@L["Before {0}", other.Segment.JobNumber]</option>
                                     }
-                                    <option value="">At the end</option>
+                                    <option value="">@L["At the end"]</option>
                                 </select>
                             </div>
                         </div>
                         @if (s.Status == "firmed")
                         {
-                            <p class="small text-muted mt-2 mb-0">Firmed: it keeps its start, so it takes its place on the new line by time.</p>
+                            <p class="small text-muted mt-2 mb-0">@L["Firmed: it keeps its start, so it takes its place on the new line by time."]</p>
                         }
-                        <button type="button" class="btn btn-primary btn-sm mt-2" disabled="@Busy(item)" @onclick="() => MoveAsync(item)">Move</button>
+                        <button type="button" class="btn btn-primary btn-sm mt-2" disabled="@Busy(item)" @onclick="() => MoveAsync(item)">@L["Move"]</button>
                     </section>
                 }
 
                 @if (item.CanPin && !Controller.ReadOnly)
                 {
                     <section class="drawer-section">
-                        <h3>Pins</h3>
+                        <h3>@L["Pins"]</h3>
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" role="switch" id="pin-lock"
                                    checked="@s.IsLocked" disabled="@Busy(item)" @onchange="e => Controller.PinJobAsync(item, e.Value is true, s.EarliestStart)" />
-                            <label class="form-check-label" for="pin-lock">Locked: it keeps its place when others move</label>
+                            <label class="form-check-label" for="pin-lock">@L["Locked: it keeps its place when others move"]</label>
                         </div>
                         @{ var holdShown = item.CanResequence || item.IsWindow; }
                         <div class="row g-2 mt-1">
                             @if (holdShown)
                             {
                                 <div class="col-6">
-                                    <label class="form-label" for="pin-hold">@(item.IsWindow ? "Window opens" : "Hold until") (site time)</label>
+                                    <label class="form-label" for="pin-hold">@(item.IsWindow ? L["Window opens"] : L["Hold until"]) (site time)</label>
                                     <input id="pin-hold" type="datetime-local" class="form-control" @bind="_holdUntil" />
                                 </div>
                             }
                             <div class="col-6">
-                                <label class="form-label" for="pin-finish">Finish by (site time)</label>
+                                <label class="form-label" for="pin-finish">@L["Finish by (site time)"]</label>
                                 <input id="pin-finish" type="datetime-local" class="form-control" @bind="_finishBy" />
                             </div>
                         </div>
                         <div class="d-flex flex-wrap gap-2 mt-2">
                             <button type="button" class="btn btn-outline-primary btn-sm" disabled="@Busy(item)"
                                     @onclick="() => Controller.PinJobAsync(item, s.IsLocked, holdShown ? Display.FromSiteLocal(_holdUntil, Tz) : s.EarliestStart, Display.FromSiteLocal(_finishBy, Tz))">
-                                @(item.IsWindow ? "Set window" : "Set")
+                                @(item.IsWindow ? L["Set window"] : L["Set"])
                             </button>
                             @if (holdShown && s.EarliestStart is not null)
                             {
                                 <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@Busy(item)"
-                                        @onclick="() => Controller.PinJobAsync(item, s.IsLocked, null)">@(item.IsWindow ? "Open from now" : "Clear hold")</button>
+                                        @onclick="() => Controller.PinJobAsync(item, s.IsLocked, null)">@(item.IsWindow ? L["Open from now"] : L["Clear hold"])</button>
                             }
                             @if (s.LatestEnd is not null && !item.IsWindow)
                             {
                                 <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@Busy(item)"
-                                        @onclick="() => Controller.PinJobAsync(item, s.IsLocked, s.EarliestStart, null)">Clear finish-by</button>
+                                        @onclick="() => Controller.PinJobAsync(item, s.IsLocked, s.EarliestStart, null)">@L["Clear finish-by"]</button>
                             }
                         </div>
                     </section>
@@ -233,46 +233,46 @@
                 @if (item.CanCancel && !Controller.ReadOnly)
                 {
                     <section class="drawer-section">
-                        <h3>Cancel</h3>
+                        <h3>@L["Cancel"]</h3>
                         @if (!_confirmCancel)
                         {
-                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => _confirmCancel = true">Cancel job…</button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => _confirmCancel = true">@L["Cancel job…"]</button>
                         }
                         else
                         {
-                            <label class="form-label" for="cancel-reason">Reason</label>
+                            <label class="form-label" for="cancel-reason">@L["Reason"]</label>
                             <input id="cancel-reason" class="form-control" @bind="_cancelReason" />
                             @if (s.JobType == "production")
                             {
                                 <div class="form-check mt-2">
                                     <input class="form-check-input" type="checkbox" id="cancel-replace" @bind="_cancelReplace" />
-                                    <label class="form-check-label" for="cancel-replace">Replace it with a job for the quantity not yet made</label>
+                                    <label class="form-check-label" for="cancel-replace">@L["Replace it with a job for the quantity not yet made"]</label>
                                 </div>
                                 @if (_cancelReplace)
                                 {
                                     <fieldset class="ms-4">
-                                        <legend class="form-text mb-1">For a material made in batches:</legend>
+                                        <legend class="form-text mb-1">@L["For a material made in batches:"]</legend>
                                         <div class="form-check">
                                             <input class="form-check-input" type="radio" name="cancel-rounding" id="cancel-up" checked="@(_cancelRounding == "up")" @onchange='() => _cancelRounding = "up"' />
-                                            <label class="form-check-label" for="cancel-up">Round up to whole batches, to meet the order</label>
+                                            <label class="form-check-label" for="cancel-up">@L["Round up to whole batches, to meet the order"]</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input" type="radio" name="cancel-rounding" id="cancel-down" checked="@(_cancelRounding == "down")" @onchange='() => _cancelRounding = "down"' />
-                                            <label class="form-check-label" for="cancel-down">Round down to whole batches; the order ends short</label>
+                                            <label class="form-check-label" for="cancel-down">@L["Round down to whole batches; the order ends short"]</label>
                                         </div>
                                         @if (User.Can(PermissionCodes.SchedulePlanPartial, Controller.SiteId))
                                         {
                                             <div class="form-check">
                                                 <input class="form-check-input" type="radio" name="cancel-rounding" id="cancel-exact" checked="@(_cancelRounding == "exact")" @onchange='() => _cancelRounding = "exact"' />
-                                                <label class="form-check-label" for="cancel-exact">Exactly what is left, even a partial batch</label>
+                                                <label class="form-check-label" for="cancel-exact">@L["Exactly what is left, even a partial batch"]</label>
                                             </div>
                                         }
                                     </fieldset>
                                 }
                             }
                             <div class="d-flex gap-2 mt-2">
-                                <button type="button" class="btn btn-outline-danger btn-sm" disabled="@Busy(item)" @onclick="() => CancelAsync(item)">Cancel @s.JobNumber</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _confirmCancel = false">Keep it</button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" disabled="@Busy(item)" @onclick="() => CancelAsync(item)">@L["Cancel {0}", s.JobNumber]</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _confirmCancel = false">@L["Keep it"]</button>
                             </div>
                         }
                     </section>
@@ -286,51 +286,51 @@
             var unplaced = Controller.Board.UnplacedQty(wo);
             <header class="drawer-head">
                 <div>
-                    <div class="small text-muted">Work order · @wo.SiteCode</div>
+                    <div class="small text-muted">@L["Work order · {0}", wo.SiteCode]</div>
                     <h2 id="drawer-title" class="mb-0">@wo.OrderNumber</h2>
                 </div>
                 <span class="@Display.StatusChip(wo.Status)">@L.Label(wo.Status)</span>
-                <button type="button" class="icon-button" aria-label="Close" @onclick="OnClose"><Icon Name="close" /></button>
+                <button type="button" class="icon-button" aria-label="@L["Close"]" @onclick="OnClose"><Icon Name="close" /></button>
             </header>
 
             <div class="drawer-body">
                 <dl class="facts">
-                    <dt>Material</dt>
+                    <dt>@L["Material"]</dt>
                     <dd>@wo.MaterialCode <span class="text-muted">@wo.MaterialName</span></dd>
-                    <dt>Quantity</dt>
+                    <dt>@L["Quantity"]</dt>
                     <dd>@ScheduleFormat.Qty(wo.PlannedQty, wo.UomCode)</dd>
                     @if (wo.DueAt is not null)
                     {
-                        <dt>Due</dt>
+                        <dt>@L["Due"]</dt>
                         <dd>@ScheduleFormat.When(wo.DueAt, Tz)</dd>
                     }
                     @if (wo.ProcessCode is not null)
                     {
-                        <dt>Process</dt>
+                        <dt>@L["Process"]</dt>
                         <dd>@wo.ProcessCode <span class="text-muted">v@(wo.ProcessVersionNumber)</span></dd>
                     }
-                    <dt>Origin</dt>
+                    <dt>@L["Origin"]</dt>
                     <dd>@L.Label(wo.Origin)</dd>
                     @if (wo.Notes is not null)
                     {
-                        <dt>Notes</dt>
+                        <dt>@L["Notes"]</dt>
                         <dd style="white-space: pre-wrap">@wo.Notes</dd>
                     }
                 </dl>
 
                 @if (wo.NextStatuses.Count > 0 && Controller.OrdersReadOnly)
                 {
-                    @Locked($"You can view {wo.OrderNumber}, but changing its status needs permission to manage work orders at this site.")
+                    @Locked(L["You can view {0}, but changing its status needs permission to manage work orders at this site.", wo.OrderNumber])
                 }
                 @if (wo.Status == "planned" && Controller.ReadOnly)
                 {
-                    @Locked($"Placing {wo.OrderNumber} on a line needs permission to plan jobs at this site.")
+                    @Locked(L["Placing {0} on a line needs permission to plan jobs at this site.", wo.OrderNumber])
                 }
 
                 @if (wo.NextStatuses.Count > 0 && !Controller.OrdersReadOnly)
                 {
                     <section class="drawer-section">
-                        <h3>Status</h3>
+                        <h3>@L["Status"]</h3>
                         <div class="d-flex flex-wrap gap-2">
                             @foreach (var next in wo.NextStatuses)
                             {
@@ -344,10 +344,10 @@
                 }
 
                 <section class="drawer-section">
-                    <h3>Jobs</h3>
+                    <h3>@L["Jobs"]</h3>
                     @if (jobs.Count == 0)
                     {
-                        <p class="small text-muted mb-0">No open jobs.</p>
+                        <p class="small text-muted mb-0">@L["No open jobs."]</p>
                     }
                     else
                     {
@@ -360,7 +360,7 @@
                                     <span class="small text-muted">@ScheduleFormat.When(job.Segment.Start, Tz) – @ScheduleFormat.Time(job.Segment.End, Tz)</span>
                                     @if (Controller.Board.IsOverlapping(job))
                                     {
-                                        <span class="chip chip-danger">Overlap</span>
+                                        <span class="chip chip-danger">@L["Overlap"]</span>
                                     }
                                 </li>
                             }
@@ -372,14 +372,14 @@
                 {
                     var placeGroup = Controller.Board.FindLine(_placeLine) is { IsGroup: true } chosen ? chosen : null;
                     <section class="drawer-section">
-                        <h3>Place on a line or plan to a department</h3>
+                        <h3>@L["Place on a line or plan to a department"]</h3>
                         @if (unplaced > 0)
                         {
                             <p class="small text-muted">@ScheduleFormat.Qty(unplaced, wo.UomCode) is not on a line yet.</p>
                         }
                         <div class="row g-2">
                             <div class="col-6">
-                                <label class="form-label" for="place-line">Line or department</label>
+                                <label class="form-label" for="place-line">@L["Line or department"]</label>
                                 <select id="place-line" class="form-select" @bind="_placeLine" @bind:after="() => DefaultWindow(wo)">
                                     @foreach (var line in Controller.Board.Lines.Where(l => l.IsGroup || l.Line.IsSchedulable))
                                     {
@@ -388,7 +388,7 @@
                                 </select>
                             </div>
                             <div class="col-6">
-                                <label class="form-label" for="place-qty">Quantity (@wo.UomCode)</label>
+                                <label class="form-label" for="place-qty">@L["Quantity ({0})", wo.UomCode]</label>
                                 <input id="place-qty" type="number" min="0" step="any" class="form-control" @bind="_placeQty" />
                             </div>
                         </div>
@@ -396,20 +396,20 @@
                         {
                             <div class="row g-2 mt-1">
                                 <div class="col-6">
-                                    <label class="form-label" for="place-start">Window opens (site time)</label>
+                                    <label class="form-label" for="place-start">@L["Window opens (site time)"]</label>
                                     <input id="place-start" type="datetime-local" class="form-control" @bind="_placeStart" />
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label" for="place-end">Finish by (site time)</label>
+                                    <label class="form-label" for="place-end">@L["Finish by (site time)"]</label>
                                     <input id="place-end" type="datetime-local" class="form-control" @bind="_placeEnd" />
                                 </div>
                             </div>
-                            <p class="small text-muted mt-2 mb-0">It waits on @placeGroup.Code until one of its lines takes it; the floor decides which.</p>
+                            <p class="small text-muted mt-2 mb-0">@L["It waits on {0} until one of its lines takes it; the floor decides which.", placeGroup.Code]</p>
                         }
                         <button type="button" class="btn btn-primary btn-sm mt-2"
                                 disabled="@(Controller.Saving.Contains(key) || _placeQty is not > 0 || (placeGroup is not null && _placeEnd is null))"
                                 @onclick="() => PlaceAsync(wo)">
-                            @(placeGroup is not null ? $"Plan to {placeGroup.Code}" : "Add job at the end of the line")
+                            @(placeGroup is not null ? L["Plan to {0}", placeGroup.Code] : L["Add job at the end of the line"])
                         </button>
                     </section>
                 }

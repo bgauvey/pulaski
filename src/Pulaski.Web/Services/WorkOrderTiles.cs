@@ -1,4 +1,5 @@
 using Pulaski.Contracts.WorkOrders;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services;
 
@@ -26,12 +27,12 @@ public static class WorkOrderTiles
 
     public static IReadOnlyList<WorkOrderTile> All { get; } =
     [
-        new(StartingToday, "Starting today", "accent", "Open orders whose first job is projected to start today and isn't running yet."),
-        new(FinishingToday, "Finishing today", "accent", "Open orders whose last job is projected to finish today."),
-        new(OnTrack, "On track", "success", "Open orders on a line, projected to finish by their due date and start when published."),
-        new(Behind, "Behind", "danger", "Projected to finish after the due date, or to start more than 15 minutes after the published baseline."),
-        new(NeedAttention, "Need attention", "warning", "A job has a schedule warning or overlaps other work."),
-        new(NotOnALine, "Not on a line", "muted", "Planned orders with quantity not yet on a line or department."),
+        new(StartingToday, Term.Mark("Starting today"), "accent", Term.Mark("Open orders whose first job is projected to start today and isn't running yet.")),
+        new(FinishingToday, Term.Mark("Finishing today"), "accent", Term.Mark("Open orders whose last job is projected to finish today.")),
+        new(OnTrack, Term.Mark("On track"), "success", Term.Mark("Open orders on a line, projected to finish by their due date and start when published.")),
+        new(Behind, Term.Mark("Behind"), "danger", Term.Mark("Projected to finish after the due date, or to start more than 15 minutes after the published baseline.")),
+        new(NeedAttention, Term.Mark("Need attention"), "warning", Term.Mark("A job has a schedule warning or overlaps other work.")),
+        new(NotOnALine, Term.Mark("Not on a line"), "muted", Term.Mark("Planned orders with quantity not yet on a line or department.")),
     ];
 
     public static bool IsOpen(WorkOrderProgressDto p) => p.Order.Status is "planned" or "dispatched" or "firmed" or "in_progress";

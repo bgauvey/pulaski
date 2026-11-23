@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Contracts.Scheduling;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Scheduling;
 
@@ -13,11 +14,11 @@ public static class ChangeoverRulesView
     public const string Material = "material";
     public const string Class = "class";
 
-    public static string From(ChangeoverRuleDto r) => Side(r.FromMaterialCode, r.FromMaterialClassCode);
+    public static string From(Text l, ChangeoverRuleDto r) => Side(l, r.FromMaterialCode, r.FromMaterialClassCode);
 
-    public static string To(ChangeoverRuleDto r) => Side(r.ToMaterialCode, r.ToMaterialClassCode);
+    public static string To(Text l, ChangeoverRuleDto r) => Side(l, r.ToMaterialCode, r.ToMaterialClassCode);
 
-    public static string Line(ChangeoverRuleDto r) => r.EquipmentCode ?? "All lines";
+    public static string Line(Text l, ChangeoverRuleDto r) => r.EquipmentCode ?? l["All lines"];
 
     /// <summary>"45 min", "2 h", "1 h 30 min".</summary>
     public static string Duration(int minutes) => (minutes / 60, minutes % 60) switch
@@ -40,23 +41,23 @@ public static class ChangeoverRulesView
     }
 
     /// <summary>Why the form can't be sent yet, or null.</summary>
-    public static string? Problem(string fromKind, Guid? fromId, string toKind, Guid? toId, int? minutes)
+    public static string? Problem(Text l, string fromKind, Guid? fromId, string toKind, Guid? toId, int? minutes)
     {
         if ((fromKind != Anything && fromId is null) || (toKind != Anything && toId is null))
         {
-            return "Choose the material or class on each side, or Anything.";
+            return l["Choose the material or class on each side, or Anything."];
         }
 
         if (fromKind == Material && toKind == Material && fromId == toId)
         {
-            return "From a material to itself is no changeover.";
+            return l["From a material to itself is no changeover."];
         }
 
-        return minutes is not { } m || m < 0 || m > MaxMinutes ? $"Give the time in whole minutes, from 0 to {MaxMinutes} (7 days)." : null;
+        return minutes is not { } m || m < 0 || m > MaxMinutes ? l["Give the time in whole minutes, from 0 to {0} (7 days).", MaxMinutes] : null;
     }
 
-    private static string Side(string? material, string? materialClass) =>
-        material ?? (materialClass is { } c ? $"Class {c}" : "Anything");
+    private static string Side(Text l, string? material, string? materialClass) =>
+        material ?? (materialClass is { } c ? l["Class {0}", c] : l["Anything"]);
 
     private static bool Contains(string? value, string text) => value?.Contains(text, StringComparison.OrdinalIgnoreCase) == true;
 

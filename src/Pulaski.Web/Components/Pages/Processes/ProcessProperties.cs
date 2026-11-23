@@ -2,7 +2,7 @@ using System.Globalization;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
-using Pulaski.Web.Services;
+using Pulaski.Web.Services.Localization;
 using Pulaski.Web.Services.Processes;
 
 namespace Pulaski.Web.Components.Pages.Processes;
@@ -30,41 +30,41 @@ public static class ProcessProperties
     public const string LinkType = "type";
     public const string Lag = "lag";
 
-    private const string Identity = "Identity";
-    private const string Status = "Status";
-    private const string Makes = "Makes";
-    private const string DefaultFor = "Default for";
-    private const string RunsOn = "Runs on";
-    private const string Flow = "Flow";
-    private const string Link = "Link";
+    private static readonly string Identity = Term.Mark("Identity");
+    private static readonly string Status = Term.Mark("Status");
+    private static readonly string Makes = Term.Mark("Makes");
+    private static readonly string DefaultFor = Term.Mark("Default for");
+    private static readonly string RunsOn = Term.Mark("Runs on");
+    private static readonly string Flow = Term.Mark("Flow");
+    private static readonly string Link = Term.Mark("Link");
 
-    public static IReadOnlyList<PropertyItem> ForProcess(
+    public static IReadOnlyList<PropertyItem> ForProcess(Text l,
         ProcessDto process, ProcessVersionDto version, IReadOnlyList<MaterialDto> materials)
     {
         var items = new List<PropertyItem>
         {
-            new() { Key = "code", Name = "Code", Category = Identity, Value = process.Code, Description = "Unique within the site. Fixed once created." },
-            new() { Key = Name, Name = "Name", Category = Identity, Value = process.Name, Editor = PropertyEditor.Text, MaxLength = 200, Description = "Display name, e.g. Extrude and Pack." },
-            new() { Key = Description, Name = "Description", Category = Identity, Value = process.Description, Editor = PropertyEditor.Text, Placeholder = "Optional", Description = "Notes about the process." },
-            new() { Key = "site", Name = "Site", Category = Identity, Value = process.SiteCode, Description = "The site whose lines and departments it can use." },
+            new() { Key = "code", Name = l["Code"], Category = l[Identity], Value = process.Code, Description = l["Unique within the site. Fixed once created."] },
+            new() { Key = Name, Name = l["Name"], Category = l[Identity], Value = process.Name, Editor = PropertyEditor.Text, MaxLength = 200, Description = l["Display name, e.g. Extrude and Pack."] },
+            new() { Key = Description, Name = l["Description"], Category = l[Identity], Value = process.Description, Editor = PropertyEditor.Text, Placeholder = l["Optional"], Description = l["Notes about the process."] },
+            new() { Key = "site", Name = l["Site"], Category = l[Identity], Value = process.SiteCode, Description = l["The site whose lines and departments it can use."] },
             new()
             {
-                Key = IsActive, Name = "Active", Category = Status, Value = PropertyItem.FromBool(process.IsActive),
+                Key = IsActive, Name = l["Active"], Category = l[Status], Value = PropertyItem.FromBool(process.IsActive),
                 Editor = PropertyEditor.Choice, Choices = PropertyChoice.Boolean,
-                Description = "An inactive process can't be picked for new orders or be a material's default.",
+                Description = l["An inactive process can't be picked for new orders or be a material's default."],
             },
-            new() { Key = "version", Name = "Version shown", Category = Status, Value = $"{version.Number} · {Display.Label(version.Status)}", Description = "The version on the canvas. Pick another above the canvas." },
+            new() { Key = "version", Name = l["Version shown"], Category = l[Status], Value = $"{version.Number} · {l.Label(version.Status)}", Description = l["The version on the canvas. Pick another above the canvas."] },
             new()
             {
-                Key = "released", Name = "Released", Category = Status,
-                Value = version.ReleasedAt is { } at ? at.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC" : "Not yet",
-                Description = version.Note is { } note ? $"Release note: {note}" : "When this version was released for orders.",
+                Key = "released", Name = l["Released"], Category = l[Status],
+                Value = version.ReleasedAt is { } at ? at.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + l[" UTC"] : l["Not yet"],
+                Description = version.Note is { } note ? l["Release note: {0}", note] : l["When this version was released for orders."],
             },
             new()
             {
-                Key = AllMaterials, Name = "All materials", Category = Makes, Value = PropertyItem.FromBool(process.MakesAllMaterials),
+                Key = AllMaterials, Name = l["All materials"], Category = l[Makes], Value = PropertyItem.FromBool(process.MakesAllMaterials),
                 Editor = PropertyEditor.Choice, Choices = PropertyChoice.Boolean,
-                Description = "True: it can make any material. False: only the classes and materials listed below. Order creation offers it for any material it makes.",
+                Description = l["True: it can make any material. False: only the classes and materials listed below. Order creation offers it for any material it makes."],
             },
         };
 
@@ -73,24 +73,24 @@ public static class ProcessProperties
             items.AddRange(process.MakesClasses.Select(c => new PropertyItem
             {
                 Key = ClassPrefix + c.Id,
-                Name = $"Class {c.Code}",
-                Category = Makes,
+                Name = l["Class {0}", c.Code],
+                Category = l[Makes],
                 Value = c.Name,
                 Removable = true,
-                Description = $"It makes every material in the {c.Code} class.",
+                Description = l["It makes every material in the {0} class.", c.Code],
             }));
             items.AddRange(process.MakesMaterials.Select(m => new PropertyItem
             {
                 Key = MaterialPrefix + m.Id,
                 Name = m.Code,
-                Category = Makes,
+                Category = l[Makes],
                 Value = m.Name,
                 Removable = true,
-                Description = $"It makes {m.Code}.",
+                Description = l["It makes {0}.", m.Code],
             }));
             if (process.MakesClasses.Count == 0 && process.MakesMaterials.Count == 0)
             {
-                items.Add(new() { Key = "makesNothing", Name = "Classes and materials", Category = Makes, Value = "None yet", IsFlagged = true, Description = "It makes nothing yet, so order creation won't offer it. Add a class or a material below." });
+                items.Add(new() { Key = "makesNothing", Name = l["Classes and materials"], Category = l[Makes], Value = l["None yet"], IsFlagged = true, Description = l["It makes nothing yet, so order creation won't offer it. Add a class or a material below."] });
             }
         }
 
@@ -101,20 +101,20 @@ public static class ProcessProperties
             {
                 Key = DefaultPrefix + material.Id,
                 Name = material.Code,
-                Category = DefaultFor,
+                Category = l[DefaultFor],
                 Removable = true,
-                Value = covered ? material.Name : $"{material.Name} (not made)",
+                Value = covered ? material.Name : l["{0} (not made)", material.Name],
                 IsFlagged = !covered,
                 Description = covered
-                    ? $"Order creation pre-selects this process for {material.Code}."
-                    : $"The process no longer makes {material.Code}, so order creation won't offer it.",
+                    ? l["Order creation pre-selects this process for {0}.", material.Code]
+                    : l["The process no longer makes {0}, so order creation won't offer it.", material.Code],
             });
         }
 
         return items;
     }
 
-    public static IReadOnlyList<PropertyItem> ForOperation(
+    public static IReadOnlyList<PropertyItem> ForOperation(Text l,
         ProcessOperationDto op, ProcessDefinitionDto definition, IReadOnlyList<EquipmentDto> equipment, bool editable)
     {
         var editor = editable ? PropertyEditor.Text : PropertyEditor.ReadOnly;
@@ -122,23 +122,23 @@ public static class ProcessProperties
         {
             new()
             {
-                Key = Number, Name = "Number", Category = Identity, Value = op.Number.ToString(CultureInfo.InvariantCulture),
+                Key = Number, Name = l["Number"], Category = l[Identity], Value = op.Number.ToString(CultureInfo.InvariantCulture),
                 Editor = editable ? PropertyEditor.Number : PropertyEditor.ReadOnly, Min = 1, Step = 10,
-                Description = "Its place in the route: 10, 20, 30… Unique within the version.",
+                Description = l["Its place in the route: 10, 20, 30… Unique within the version."],
             },
-            new() { Key = Name, Name = "Name", Category = Identity, Value = op.Name, Editor = editor, MaxLength = 200, Description = "What it does, e.g. Extrude." },
-            new() { Key = Description, Name = "Description", Category = Identity, Value = op.Description, Editor = editor, Placeholder = editable ? "Optional" : null, Description = "Notes for planners and operators." },
+            new() { Key = Name, Name = l["Name"], Category = l[Identity], Value = op.Name, Editor = editor, MaxLength = 200, Description = l["What it does, e.g. Extrude."] },
+            new() { Key = Description, Name = l["Description"], Category = l[Identity], Value = op.Description, Editor = editor, Placeholder = editable ? l["Optional"] : null, Description = l["Notes for planners and operators."] },
         };
 
         foreach (var use in op.Equipment)
         {
             var eq = equipment.FirstOrDefault(e => e.Id == use.EquipmentId);
-            var kind = eq is { IsSchedulable: true, CanRunJob: false } ? "Department" : "Line";
+            var kind = eq is { IsSchedulable: true, CanRunJob: false } ? l["Department"] : l["Line"];
             items.Add(new()
             {
                 Key = SharePrefix + use.EquipmentId,
-                Name = eq?.Code ?? "Unknown equipment",
-                Category = RunsOn,
+                Name = eq?.Code ?? l["Unknown equipment"],
+                Category = l[RunsOn],
                 Value = use.SharePercent.ToString("0.##", CultureInfo.InvariantCulture),
                 Suffix = "%",
                 Editor = editable ? PropertyEditor.Number : PropertyEditor.ReadOnly,
@@ -146,7 +146,7 @@ public static class ProcessProperties
                 Max = 100,
                 Step = 0.01,
                 Removable = editable,
-                Description = $"{kind}{(eq is null ? "" : $" · {eq.Name}")}. Its share of the operation's quantity; it becomes its own job for that share.",
+                Description = l["{0}{1}. Its share of the operation's quantity; it becomes its own job for that share.", kind, (eq is null ? "" : $" · {eq.Name}")],
             });
         }
 
@@ -154,44 +154,44 @@ public static class ProcessProperties
         items.Add(new()
         {
             Key = "total",
-            Name = "Total",
-            Category = RunsOn,
-            Value = op.Equipment.Count == 0 ? "No line or department yet" : total.ToString("0.##", CultureInfo.InvariantCulture) + "%",
+            Name = l["Total"],
+            Category = l[RunsOn],
+            Value = op.Equipment.Count == 0 ? l["No line or department yet"] : total.ToString("0.##", CultureInfo.InvariantCulture) + "%",
             IsFlagged = op.Equipment.Count == 0 || total != 100m,
-            Description = "The shares must add up to 100% before the version can be released.",
+            Description = l["The shares must add up to 100% before the version can be released."],
         });
 
         string Names(IEnumerable<ProcessDependencyDto> links, Func<ProcessDependencyDto, Guid> other) =>
-            string.Join(", ", links.Select(l => definition.Operations.FirstOrDefault(o => o.Id == other(l)) is { } o
-                ? $"{o.Number} {o.Name} ({ProcessEditing.Describe(l)})"
+            string.Join(", ", links.Select(d => definition.Operations.FirstOrDefault(o => o.Id == other(d)) is { } o
+                ? $"{o.Number} {o.Name} ({ProcessEditing.Describe(l, d)})"
                 : "?"));
         var follows = definition.Dependencies.Where(d => d.ToOperationId == op.Id).ToList();
         var leads = definition.Dependencies.Where(d => d.FromOperationId == op.Id).ToList();
-        items.Add(new() { Key = "follows", Name = "Follows", Category = Flow, Value = follows.Count == 0 ? "Nothing: it can start first" : Names(follows, l => l.FromOperationId), Description = "The operations it waits for. Draw links on the canvas." });
-        items.Add(new() { Key = "leadsTo", Name = "Followed by", Category = Flow, Value = leads.Count == 0 ? "Nothing: it ends the route" : Names(leads, l => l.ToOperationId), Description = "The operations that wait for it." });
+        items.Add(new() { Key = "follows", Name = l["Follows"], Category = l[Flow], Value = follows.Count == 0 ? l["Nothing: it can start first"] : Names(follows, d => d.FromOperationId), Description = l["The operations it waits for. Draw links on the canvas."] });
+        items.Add(new() { Key = "leadsTo", Name = l["Followed by"], Category = l[Flow], Value = leads.Count == 0 ? l["Nothing: it ends the route"] : Names(leads, d => d.ToOperationId), Description = l["The operations that wait for it."] });
         return items;
     }
 
-    public static IReadOnlyList<PropertyItem> ForLink(ProcessDependencyDto link, ProcessDefinitionDto definition, bool editable)
+    public static IReadOnlyList<PropertyItem> ForLink(Text l, ProcessDependencyDto link, ProcessDefinitionDto definition, bool editable)
     {
         var from = definition.Operations.First(o => o.Id == link.FromOperationId);
         var to = definition.Operations.First(o => o.Id == link.ToOperationId);
         return
         [
-            new() { Key = "from", Name = "From", Category = Link, Value = $"{from.Number} {from.Name}", Description = "The earlier operation." },
-            new() { Key = "to", Name = "To", Category = Link, Value = $"{to.Number} {to.Name}", Description = "The operation that follows it." },
+            new() { Key = "from", Name = l["From"], Category = l[Link], Value = $"{from.Number} {from.Name}", Description = l["The earlier operation."] },
+            new() { Key = "to", Name = l["To"], Category = l[Link], Value = $"{to.Number} {to.Name}", Description = l["The operation that follows it."] },
             new()
             {
-                Key = LinkType, Name = "Starts", Category = Link, Value = link.Type,
+                Key = LinkType, Name = l["Starts"], Category = l[Link], Value = link.Type,
                 Editor = editable ? PropertyEditor.Choice : PropertyEditor.ReadOnly,
-                Choices = [new(ProcessEditing.AfterStart, $"After {from.Name} starts"), new(ProcessEditing.AfterEnd, $"After {from.Name} ends")],
-                Description = "After start: material flows straight through, so both run together. After end: a hand-off of the finished quantity.",
+                Choices = [new(ProcessEditing.AfterStart, l["After {0} starts", from.Name]), new(ProcessEditing.AfterEnd, l["After {0} ends", from.Name])],
+                Description = l["After start: material flows straight through, so both run together. After end: a hand-off of the finished quantity."],
             },
             new()
             {
-                Key = Lag, Name = "Lag", Category = Link, Value = ((int)link.Lag.TotalMinutes).ToString(CultureInfo.InvariantCulture), Suffix = "min",
+                Key = Lag, Name = l["Lag"], Category = l[Link], Value = ((int)link.Lag.TotalMinutes).ToString(CultureInfo.InvariantCulture), Suffix = l["min"],
                 Editor = editable ? PropertyEditor.Number : PropertyEditor.ReadOnly, Min = 0, Step = 5,
-                Description = "Extra wait after the start or end before the next operation begins.",
+                Description = l["Extra wait after the start or end before the next operation begins."],
             },
         ];
     }

@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Web.Services.Scheduling;
 
@@ -47,7 +48,7 @@ public class PlacementGhostTests
         Assert.Equal(T0.AddHours(2.75), ghost.Job!.Start);
         Assert.Equal(
             "Wed 14 Oct 08:00 → Wed 14 Oct 11:00 · 2h 15m with a 45m changeover · pushes B back 3h",
-            ghost.Summary(null));
+            ghost.Summary(Text.English, null));
     }
 
     [Fact]
@@ -60,13 +61,13 @@ public class PlacementGhostTests
 
         Assert.True(ghost.IsLate);
         Assert.True(ghost.IsOverlapping);
-        Assert.EndsWith("finishes after its due date · overlaps a firmed job", ghost.Summary(null), StringComparison.Ordinal);
+        Assert.EndsWith("finishes after its due date · overlaps a firmed job", ghost.Summary(Text.English, null), StringComparison.Ordinal);
     }
 
     [Fact]
     public void A_refused_slot_says_why_and_a_job_without_a_rate_says_its_length_is_unknown()
     {
-        Assert.Equal("Can't place here: PRF is not set up to run on EXT-02.", PlacementGhost.Refused(Line, null, "PRF is not set up to run on EXT-02.").Summary(null));
-        Assert.Contains("duration unknown", PlacementGhost.From(Line, null, Preview([Segment(NewJob, "N", 1, 1)])).Summary(null), StringComparison.Ordinal);
+        Assert.Equal("Can't place here: PRF is not set up to run on EXT-02.", PlacementGhost.Refused(Line, null, "PRF is not set up to run on EXT-02.").Summary(Text.English, null));
+        Assert.Contains("duration unknown", PlacementGhost.From(Line, null, Preview([Segment(NewJob, "N", 1, 1)])).Summary(Text.English, null), StringComparison.Ordinal);
     }
 }

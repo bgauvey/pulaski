@@ -11,7 +11,7 @@
 @inject IJSRuntime JS
 @inject CurrentUser User
 
-<PageTitle>@(_process?.Code ?? "Process") · Pulaski</PageTitle>
+<PageTitle>@(_process?.Code ?? L["Process"]) · Pulaski</PageTitle>
 
 <ProblemAlert Error="_error" />
 
@@ -19,16 +19,16 @@
 {
     <div class="process-head">
         <div class="process-title">
-            <a class="small" href="processes">Processes</a>
+            <a class="small" href="processes">@L["Processes"]</a>
             <h1 class="mb-0">@_process.Code <span class="process-name">@_process.Name</span></h1>
         </div>
 
-        <div class="process-versions" role="tablist" aria-label="Versions">
+        <div class="process-versions" role="tablist" aria-label="@L["Versions"]">
             @foreach (var v in _process.Versions)
             {
                 <a role="tab" aria-selected="@(v.Id == _version.Id ? "true" : "false")" href="@VersionHref(v.Id)"
                    class="version-chip status-@v.Status @(v.Id == _version.Id ? "is-active" : "")">
-                    Version @v.Number <span class="version-status">@L.Label(v.Status)</span>
+                    @L["Version {0}", v.Number] <span class="version-status">@L.Label(v.Status)</span>
                 </a>
             }
         </div>
@@ -42,26 +42,26 @@
             {
                 @if (_releasing)
                 {
-                    <input class="form-control form-control-sm" placeholder="What changed (optional)" aria-label="Release note" @bind="_releaseNote" />
-                    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="ReleaseAsync">Release</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _releasing = false">Not yet</button>
+                    <input class="form-control form-control-sm" placeholder="@L["What changed (optional)"]" aria-label="@L["Release note"]" @bind="_releaseNote" />
+                    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="ReleaseAsync">@L["Release"]</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _releasing = false">@L["Not yet"]</button>
                 }
                 else
                 {
                     <button type="button" class="btn btn-primary btn-sm" disabled="@(_problems.Count > 0 || _saving)"
-                            title="@(_problems.Count > 0 ? "Fix the items listed below first." : "Make this version the one orders are made from.")"
+                            title="@(_problems.Count > 0 ? L["Fix the items listed below first."] : L["Make this version the one orders are made from."])"
                             @onclick="() => _releasing = true">
-                        Release version @_version.Number…
+                        @L["Release version {0}…", _version.Number]
                     </button>
                 }
             }
             else if (!_process.Versions.Any(v => v.Status == "draft"))
             {
-                <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="StartDraftAsync">Change: start version @(_process.Versions.Max(v => v.Number) + 1)</button>
+                <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="StartDraftAsync">@L["Change: start version {0}", _process.Versions.Max(v => v.Number) + 1]</button>
             }
             else
             {
-                <a class="btn btn-outline-primary btn-sm" href="@VersionHref(_process.Versions.First(v => v.Status == "draft").Id)">Open the draft</a>
+                <a class="btn btn-outline-primary btn-sm" href="@VersionHref(_process.Versions.First(v => v.Status == "draft").Id)">@L["Open the draft"]</a>
             }
         </div>
     </div>
@@ -69,32 +69,32 @@
     @if (_releaseWarnings.Count > 0)
     {
         <div class="process-banner is-todo" role="alert">
-            <strong>Released, but some BOMs need a new version:</strong>
+            <strong>@L["Released, but some BOMs need a new version:"]</strong>
             <ul>
                 @foreach (var warning in _releaseWarnings)
                 {
                     <li>@warning</li>
                 }
             </ul>
-            <a href="boms">Open BOMs</a>
+            <a href="boms">@L["Open BOMs"]</a>
         </div>
     }
 
     @if (!CanEdit)
     {
-        <ViewOnlyNote Permission="@PermissionCodes.Processes" What="maintain processes" SiteId="_process?.SiteId" />
+        <ViewOnlyNote Permission="@PermissionCodes.Processes" What="@L["maintain processes"]" SiteId="_process?.SiteId" />
     }
 
     @if (!IsDraftVersion)
     {
         <div class="process-banner">
-            @VersionSummary(_version) It can't be changed; start a new version to change the process.
+            @VersionSummary(_version) @L["It can't be changed; start a new version to change the process."]
         </div>
     }
     else if (_problems.Count > 0)
     {
         <div class="process-banner is-todo">
-            <strong>Before it can be released:</strong>
+            <strong>@L["Before it can be released:"]</strong>
             <ul>
                 @foreach (var problem in _problems)
                 {
@@ -116,12 +116,12 @@
     <div class="process-workspace @(_hidePalette ? "hide-palette" : "") @(_hideProperties ? "hide-properties" : "")">
         @* Palette: what can run an operation, in this site. *@
         <aside class="process-palette" aria-labelledby="palette-title" hidden="@_hidePalette">
-            <h2 id="palette-title">Lines and departments</h2>
+            <h2 id="palette-title">@L["Lines and departments"]</h2>
             @if (IsDraft)
             {
-                <p class="small text-muted">Drag onto an operation, or onto the canvas for a new one.</p>
+                <p class="small text-muted">@L["Drag onto an operation, or onto the canvas for a new one."]</p>
                 <button type="button" class="btn btn-outline-primary btn-sm btn-with-icon mb-2" @onclick="AddOperationAsync">
-                    <Icon Name="plus" Size="16" /> Add operation
+                    <Icon Name="plus" Size="16" /> @L["Add operation"]
                 </button>
             }
             <ul class="palette-list">
@@ -134,7 +134,7 @@
                             <Icon Name="@(IsGroup(e) ? "process" : "equipment")" Size="16" />
                             <span class="fw-semibold">@e.Code</span>
                             <span class="text-muted text-truncate">@e.Name</span>
-                            <span class="palette-kind">@(IsGroup(e) ? "Department" : "Line")</span>
+                            <span class="palette-kind">@(IsGroup(e) ? L["Department"] : L["Line"])</span>
                         </div>
                     </li>
                 }
@@ -145,19 +145,19 @@
         <div class="process-canvas">
             <div class="canvas-toolbar">
                 <button type="button" class="btn btn-outline-secondary btn-sm btn-square" aria-pressed="@(_hidePalette ? "false" : "true")"
-                        aria-label="@(_hidePalette ? "Show" : "Hide") lines and departments" title="@(_hidePalette ? "Show" : "Hide") lines and departments"
+                        aria-label="@(_hidePalette ? L["Show lines and departments"] : L["Hide lines and departments"])" title="@(_hidePalette ? L["Show lines and departments"] : L["Hide lines and departments"])"
                         @onclick="() => TogglePaneAsync(palette: true)">
                     <Icon Name="panel-left" Size="16" />
                 </button>
                 <span class="ms-auto"></span>
                 @if (IsDraft)
                 {
-                    <ActionButton Class="btn btn-outline-secondary btn-sm btn-with-icon" Reason="@(_definition.Operations.Count < 2 ? "There is only one operation to arrange." : null)" OnClick="ArrangeAsync">
-                        <Icon Name="arrange" Size="16" /> Arrange
+                    <ActionButton Class="btn btn-outline-secondary btn-sm btn-with-icon" Reason="@(_definition.Operations.Count < 2 ? L["There is only one operation to arrange."] : null)" OnClick="ArrangeAsync">
+                        <Icon Name="arrange" Size="16" /> @L["Arrange"]
                     </ActionButton>
                 }
                 <button type="button" class="btn btn-outline-secondary btn-sm btn-square" aria-pressed="@(_hideProperties ? "false" : "true")"
-                        aria-label="@(_hideProperties ? "Show" : "Hide") properties" title="@(_hideProperties ? "Show" : "Hide") properties"
+                        aria-label="@(_hideProperties ? L["Show properties"] : L["Hide properties"])" title="@(_hideProperties ? L["Show properties"] : L["Hide properties"])"
                         @onclick="() => TogglePaneAsync(palette: false)">
                     <Icon Name="panel-right" Size="16" />
                 </button>
@@ -189,7 +189,7 @@
                 {
                     <button type="button" class="link-label @(_selectedLink == link.Id ? "is-selected" : "")" data-link-label="@link.Id" @key="(link.Id, true)"
                             @onclick="() => SelectLink(link.Id)" @onclick:stopPropagation>
-                        @ProcessEditing.Describe(link)
+                        @ProcessEditing.Describe(L, link)
                     </button>
                 }
 
@@ -200,7 +200,7 @@
                          style="left:@Px(op.X);top:@Px(op.Y);width:@Px(ProcessEditing.NodeWidth)"
                          @ondragover:preventDefault @ondrop="() => DropOnOperationAsync(op.Id)" @ondrop:stopPropagation
                          @onclick="() => SelectOperation(op.Id)" @onclick:stopPropagation>
-                        <div class="op-head" data-grip title="@(IsDraft ? "Drag to move" : null)">
+                        <div class="op-head" data-grip title="@(IsDraft ? L["Drag to move"] : null)">
                             <span class="op-number">@op.Number</span>
                             <span class="op-name">@op.Name</span>
                             @if (problems > 0)
@@ -220,12 +220,12 @@
                             }
                             @if (op.Equipment.Count == 0)
                             {
-                                <div class="op-empty">@(IsDraft ? "Drop a line or department here" : "No equipment")</div>
+                                <div class="op-empty">@(IsDraft ? L["Drop a line or department here"] : L["No equipment"])</div>
                             }
                         </div>
                         @if (IsDraft)
                         {
-                            <span class="op-connector" data-connector title="Drag to the operation that follows" aria-hidden="true"></span>
+                            <span class="op-connector" data-connector title="@L["Drag to the operation that follows"]" aria-hidden="true"></span>
                         }
                     </div>
                 }
@@ -233,7 +233,7 @@
                 @if (_definition.Operations.Count == 0)
                 {
                     <div class="canvas-empty">
-                        @(IsDraft ? "Drag a line or department here to start, or use Add operation." : "This version has no operations.")
+                        @(IsDraft ? L["Drag a line or department here to start, or use Add operation."] : L["This version has no operations."])
                     </div>
                 }
             </div>
@@ -253,18 +253,18 @@
         <table class="table table-sm align-middle mb-0">
             <thead>
                 <tr>
-                    <th>Operation</th>
-                    <th>Runs on</th>
-                    <th>Kind</th>
-                    <th class="text-end">Share</th>
-                    <th>Follows</th>
+                    <th>@L["Operation"]</th>
+                    <th>@L["Runs on"]</th>
+                    <th>@L["Kind"]</th>
+                    <th class="text-end">@L["Share"]</th>
+                    <th>@L["Follows"]</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var op in _definition.Operations.OrderBy(o => o.Number))
                 {
                     var follows = _definition.Dependencies.Where(d => d.ToOperationId == op.Id)
-                        .Select(d => $"{_definition.Operations.First(o => o.Id == d.FromOperationId).Number} ({ProcessEditing.Describe(d)})");
+                        .Select(d => $"{_definition.Operations.First(o => o.Id == d.FromOperationId).Number} ({ProcessEditing.Describe(L, d)})");
                     List<OperationEquipmentDto?> rows = op.Equipment.Count == 0 ? [null] : [.. op.Equipment];
                     var first = true;
                     @foreach (var use in rows)
@@ -273,7 +273,7 @@
                         <tr class="@(_selectedOp == op.Id ? "table-active" : "")" @onclick="() => SelectOperation(op.Id)" @key="(op.Id, use?.EquipmentId)">
                             <td>@(first ? $"{op.Number} · {op.Name}" : "")</td>
                             <td>@(eq?.Code ?? (use is null ? "—" : "?")) <span class="small text-muted">@eq?.Name</span></td>
-                            <td class="small">@(eq is null ? "" : IsGroup(eq) ? "Department" : "Line")</td>
+                            <td class="small">@(eq is null ? "" : IsGroup(eq) ? L["Department"] : L["Line"])</td>
                             <td class="text-end">@(use is null ? "" : Share(use.SharePercent))</td>
                             <td class="small">@(first ? string.Join(", ", follows) : "")</td>
                         </tr>
@@ -282,14 +282,14 @@
                     <tr class="process-grid-sum" @key="@($"{op.Id}:sum")">
                         <td colspan="3"></td>
                         <td class="text-end @(op.Equipment.Count > 0 && ProcessEditing.ShareTotal(op) != 100m ? "text-danger fw-semibold" : "text-muted")">
-                            Sum @Share(ProcessEditing.ShareTotal(op))
+                            @L["Sum {0}", Share(ProcessEditing.ShareTotal(op))]
                         </td>
                         <td></td>
                     </tr>
                 }
                 @if (_definition.Operations.Count == 0)
                 {
-                    <tr><td colspan="5" class="text-muted">No operations yet.</td></tr>
+                    <tr><td colspan="5" class="text-muted">@L["No operations yet."]</td></tr>
                 }
             </tbody>
         </table>
@@ -297,7 +297,7 @@
 }
 else if (_error is null)
 {
-    <p class="text-muted">Loading…</p>
+    <p class="text-muted">@L["Loading…"]</p>
 }
 
 @code {
@@ -352,8 +352,8 @@ else if (_error is null)
         .Where(e => e.SiteId == _process?.SiteId && e.IsActive && (e.IsSchedulable || e.CanRunJob));
 
     private string SaveState => _saving
-        ? "Saving…"
-        : _saveMessage ?? (_savedAt is not null ? "All changes saved" : IsDraft ? "Changes save as you go" : "");
+        ? L["Saving…"]
+        : _saveMessage ?? (_savedAt is not null ? L["All changes saved"] : IsDraft ? L["Changes save as you go"] : "");
 
     protected override async Task OnInitializedAsync()
     {
@@ -432,12 +432,12 @@ else if (_error is null)
     }
 
     /// <summary>'Version 1 was released 2026-10-15 01:58 UTC: first cut.' or, when superseded, 'Version 1 is obsolete…'.</summary>
-    private static string VersionSummary(ProcessVersionDto version)
+    private string VersionSummary(ProcessVersionDto version)
     {
-        var when = version.ReleasedAt is { } at ? $" {at.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} UTC" : "";
+        var when = version.ReleasedAt is { } at ? L[" {0} UTC", at.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)] : "";
         var text = version.Status == "obsolete"
-            ? $"Version {version.Number} is obsolete; it was released{when} and a newer version has replaced it"
-            : $"Version {version.Number} was released{when}";
+            ? L["Version {0} is obsolete; it was released{1} and a newer version has replaced it", version.Number, when]
+            : L["Version {0} was released{1}", version.Number, when];
         return version.Note is { } note ? $"{text}: {note.TrimEnd('.')}." : $"{text}.";
     }
 
@@ -504,7 +504,7 @@ else if (_error is null)
         var (next, refusal) = ProcessEditing.Connect(_definition, from, to, Guid.CreateVersion7());
         if (next is null)
         {
-            _saveMessage = refusal;
+            _saveMessage = L.Of(refusal);
         }
         else
         {
@@ -613,7 +613,7 @@ else if (_error is null)
             var selected = (_selectedOp, _selectedLink);
             await LoadAsync(_version!.Id);
             (_selectedOp, _selectedLink) = selected;
-            _saveMessage = ex.IsConflict ? "Someone else changed this draft; showing their version." : $"Not saved: {L.Problem(ex)}";
+            _saveMessage = ex.IsConflict ? L["Someone else changed this draft; showing their version."] : L["Not saved: {0}", L.Problem(ex)];
         }
         finally
         {
@@ -640,7 +640,7 @@ else if (_error is null)
                 IsActive = active ?? _process.IsActive,
             });
             _process = await Api.GetProcessAsync(Id);
-            _saveMessage = "Process details saved";
+            _saveMessage = L["Process details saved"];
         }
         catch (ApiException ex)
         {
@@ -657,9 +657,9 @@ else if (_error is null)
     private int _pickerRevision;
 
     private IReadOnlyList<PropertyItem> PropertyItems =>
-        SelectedOperation is { } op ? ProcessProperties.ForOperation(op, _definition, _equipment, IsDraft)
-        : SelectedLink is { } link ? ProcessProperties.ForLink(link, _definition, IsDraft)
-        : _process is not null && _version is not null ? ProcessProperties.ForProcess(_process, _version, _materials)
+        SelectedOperation is { } op ? ProcessProperties.ForOperation(L, op, _definition, _equipment, IsDraft)
+        : SelectedLink is { } link ? ProcessProperties.ForLink(L, link, _definition, IsDraft)
+        : _process is not null && _version is not null ? ProcessProperties.ForProcess(L, _process, _version, _materials)
         : [];
 
     private string PropertiesTitle =>
@@ -667,7 +667,7 @@ else if (_error is null)
         : SelectedLink is { } link ? $"{OperationLabel(link.FromOperationId)} → {OperationLabel(link.ToOperationId)}"
         : _process?.Code ?? "";
 
-    private string PropertiesSubtitle => SelectedOperation is not null ? "Operation" : SelectedLink is not null ? "Link" : "Process";
+    private string PropertiesSubtitle => SelectedOperation is not null ? L["Operation"] : SelectedLink is not null ? L["Link"] : L["Process"];
 
     private string OperationLabel(Guid id) => _definition.Operations.FirstOrDefault(o => o.Id == id) is { } o ? o.Number.ToString(CultureInfo.InvariantCulture) : "?";
 
@@ -678,17 +678,17 @@ else if (_error is null)
         {
             if (IsDraft)
             {
-                <select @key="@($"Add a line or department:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a line or department" value="" @onchange="e => AddEquipmentFromListAsync(op.Id, e)">
-                    <option value="">Add a line or department…</option>
+                <select @key="@($"Add a line or department:{_pickerRevision}")" class="form-select form-select-sm" aria-label="@L["Add a line or department"]" value="" @onchange="e => AddEquipmentFromListAsync(op.Id, e)">
+                    <option value="">@L["Add a line or department…"]</option>
                     @foreach (var e in Palette.Where(e => op.Equipment.All(u => u.EquipmentId != e.Id)))
                     {
                         <option value="@e.Id">@e.Code · @e.Name</option>
                     }
                 </select>
-                <ActionButton Class="btn btn-outline-secondary btn-sm" Reason="@(op.Equipment.Count < 2 ? "Add a second line or department to share the work between." : null)"
-                              OnClick="() => ChangeOperationAsync(op.Id, ProcessEditing.SplitEvenly)">Split evenly</ActionButton>
+                <ActionButton Class="btn btn-outline-secondary btn-sm" Reason="@(op.Equipment.Count < 2 ? L["Add a second line or department to share the work between."] : null)"
+                              OnClick="() => ChangeOperationAsync(op.Id, ProcessEditing.SplitEvenly)">@L["Split evenly"]</ActionButton>
                 <button type="button" class="btn btn-outline-danger btn-sm btn-with-icon" @onclick="() => RemoveOperationAsync(op.Id)">
-                    <Icon Name="trash" Size="16" /> Delete operation
+                    <Icon Name="trash" Size="16" /> @L["Delete operation"]
                 </button>
             }
         }
@@ -697,7 +697,7 @@ else if (_error is null)
             if (IsDraft)
             {
                 <button type="button" class="btn btn-outline-danger btn-sm btn-with-icon" @onclick="() => RemoveLinkAsync(link.Id)">
-                    <Icon Name="trash" Size="16" /> Delete link
+                    <Icon Name="trash" Size="16" /> @L["Delete link"]
                 </button>
             }
         }
@@ -705,23 +705,23 @@ else if (_error is null)
         {
             if (!process.MakesAllMaterials)
             {
-                <select @key="@($"Add a material class:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a material class" value="" @onchange="AddScopeClassAsync">
-                    <option value="">Make a material class…</option>
+                <select @key="@($"Add a material class:{_pickerRevision}")" class="form-select form-select-sm" aria-label="@L["Add a material class"]" value="" @onchange="AddScopeClassAsync">
+                    <option value="">@L["Make a material class…"]</option>
                     @foreach (var c in _classes.Where(c => ClassIds.All(id => id != c.Id)))
                     {
                         <option value="@c.Id">@c.Code · @c.Name</option>
                     }
                 </select>
-                <select @key="@($"Add a material:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a material" value="" @onchange="AddScopeMaterialAsync">
-                    <option value="">Make a single material…</option>
+                <select @key="@($"Add a material:{_pickerRevision}")" class="form-select form-select-sm" aria-label="@L["Add a material"]" value="" @onchange="AddScopeMaterialAsync">
+                    <option value="">@L["Make a single material…"]</option>
                     @foreach (var m in _materials.Where(m => m.IsActive && !ProcessProperties.Covers(process, m)))
                     {
                         <option value="@m.Id">@m.Code · @m.Name</option>
                     }
                 </select>
             }
-            <select @key="@($"Add a default material:{_pickerRevision}")" class="form-select form-select-sm" aria-label="Add a default material" value="" @onchange="AddDefaultAsync">
-                <option value="">Default for a material…</option>
+            <select @key="@($"Add a default material:{_pickerRevision}")" class="form-select form-select-sm" aria-label="@L["Add a default material"]" value="" @onchange="AddDefaultAsync">
+                <option value="">@L["Default for a material…"]</option>
                 @foreach (var m in _materials.Where(m => m.IsActive && ProcessProperties.Covers(process, m) && process.DefaultFor.All(d => d.Id != m.Id)))
                 {
                     <option value="@m.Id">@m.Code · @m.Name</option>
@@ -784,7 +784,7 @@ else if (_error is null)
         }
 
         // Not a value we can take: put the editors back to what is saved.
-        _saveMessage = "That value isn't valid here.";
+        _saveMessage = L["That value isn't valid here."];
         _revision++;
     }
 
@@ -856,7 +856,7 @@ else if (_error is null)
                 MaterialClassIds = [.. classIds],
                 MaterialIds = [.. materialIds],
             });
-            _saveMessage = "What it makes is saved";
+            _saveMessage = L["What it makes is saved"];
         }
         catch (ApiException ex)
         {
@@ -897,7 +897,7 @@ else if (_error is null)
             _releaseNote = null;
             await LoadAsync(_version.Id);
             _releaseWarnings = released.Warnings;
-            _saveMessage = $"Version {_version.Number} released";
+            _saveMessage = L["Version {0} released", _version.Number];
         }
         catch (ApiException ex)
         {

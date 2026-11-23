@@ -6,20 +6,20 @@
 @* Which lines can run the material, and how fast (D-020, D-034). *@
 <section class="inv-section" aria-labelledby="cap-title">
     <div class="inv-section-head">
-        <h2 id="cap-title">Where it can run</h2>
+        <h2 id="cap-title">@L["Where it can run"]</h2>
         <div class="d-flex gap-2 align-items-center">
             @if (_ended > 0)
             {
                 <div class="form-check mb-0">
                     <input class="form-check-input" type="checkbox" id="cap-ended" @bind="_showEnded" />
-                    <label class="form-check-label small" for="cap-ended">Show ended (@_ended)</label>
+                    <label class="form-check-label small" for="cap-ended">@L["Show ended ({0})", _ended]</label>
                 </div>
             }
             @if (CanCapabilities)
             {
-                <ActionButton Class="btn btn-sm btn-outline-secondary" Busy="_busy" Title="@($"Add a line that can run {Material.Code}")"
-                              Reason="@(Material.IsActive ? null : $"{Material.Code} is switched off; switch it on to add a line.")" OnClick="StartAdd">
-                    Add line
+                <ActionButton Class="btn btn-sm btn-outline-secondary" Busy="_busy" Title="@L["Add a line that can run {0}", Material.Code]"
+                              Reason="@(Material.IsActive ? null : L["{0} is switched off; switch it on to add a line.", Material.Code])" OnClick="StartAdd">
+                    @L["Add line"]
                 </ActionButton>
             }
         </div>
@@ -37,12 +37,12 @@
     @if (_form is { } form)
     {
         <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
-            <h3 class="h6">@(form.IsNew ? "Add a line" : "Change the capability on " + LineCode(form.EquipmentId))</h3>
+            <h3 class="h6">@(form.IsNew ? L["Add a line"] : L["Change the capability on {0}", LineCode(form.EquipmentId)])</h3>
             <div class="row g-2">
                 <div class="col-sm-5">
-                    <label class="form-label" for="cap-line">Line</label>
+                    <label class="form-label" for="cap-line">@L["Line"]</label>
                     <select id="cap-line" class="form-select" @bind="form.EquipmentId" disabled="@(!form.IsNew)">
-                        <option value="@Guid.Empty">Choose…</option>
+                        <option value="@Guid.Empty">@L["Choose…"]</option>
                         @foreach (var (line, label) in _lines)
                         {
                             <option value="@line.Id">@label</option>
@@ -50,11 +50,11 @@
                     </select>
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label" for="cap-rate">Ideal rate, per hour</label>
+                    <label class="form-label" for="cap-rate">@L["Ideal rate, per hour"]</label>
                     <input id="cap-rate" type="number" class="form-control" min="0" step="any" @bind="form.IdealRatePerHour" @bind:event="oninput" />
                 </div>
                 <div class="col-sm-4">
-                    <label class="form-label" for="cap-unit">Rate unit</label>
+                    <label class="form-label" for="cap-unit">@L["Rate unit"]</label>
                     <select id="cap-unit" class="form-select" @bind="form.RateUomId">
                         @foreach (var u in Units.Where(u => u.IsActive || u.Id == form.RateUomId))
                         {
@@ -63,79 +63,79 @@
                     </select>
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label" for="cap-changeover">Standard changeover (min)</label>
-                    <input id="cap-changeover" type="number" class="form-control" min="0" max="10080" step="1" placeholder="None" @bind="form.ChangeoverMinutes" />
+                    <label class="form-label" for="cap-changeover">@L["Standard changeover (min)"]</label>
+                    <input id="cap-changeover" type="number" class="form-control" min="0" max="10080" step="1" placeholder="@L["None"]" @bind="form.ChangeoverMinutes" />
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label" for="cap-crew">Crew size</label>
-                    <input id="cap-crew" type="number" class="form-control" min="0" step="0.5" placeholder="None" @bind="form.CrewSize" />
+                    <label class="form-label" for="cap-crew">@L["Crew size"]</label>
+                    <input id="cap-crew" type="number" class="form-control" min="0" step="0.5" placeholder="@L["None"]" @bind="form.CrewSize" />
                 </div>
                 <div class="col-sm-3">
                     <label class="form-label" for="cap-per-count">@Material.BaseUomCode per machine count</label>
                     <input id="cap-per-count" type="number" class="form-control" min="0" step="any" placeholder="1" @bind="form.UnitsPerCount" aria-describedby="cap-per-count-help" />
-                    <div id="cap-per-count-help" class="form-text">What one count of the line's counter makes, e.g. 2.4 for 2.4 m a cut.</div>
+                    <div id="cap-per-count-help" class="form-text">@L["What one count of the line's counter makes, e.g. 2.4 for 2.4 m a cut."]</div>
                 </div>
                 @if (Material.BatchSize is { } materialBatch)
                 {
                     <div class="col-sm-3">
-                        <label class="form-label" for="cap-batch">Batch size on this line, @Material.BaseUomCode</label>
-                        <input id="cap-batch" type="number" class="form-control" min="0" step="any" placeholder="@($"{Qty(materialBatch)} (the material's)")" @bind="form.BatchSize" />
+                        <label class="form-label" for="cap-batch">@L["Batch size on this line, {0}", Material.BaseUomCode]</label>
+                        <input id="cap-batch" type="number" class="form-control" min="0" step="any" placeholder="@L["{0} (the material's)", Qty(materialBatch)]" @bind="form.BatchSize" />
                     </div>
                     <div class="col-sm-3">
-                        <label class="form-label" for="cap-tolerance">Batch tolerance on this line, %</label>
-                        <input id="cap-tolerance" type="number" class="form-control" min="0" max="50" step="0.1" placeholder="@($"{Qty(Material.BatchTolerancePct)} (the material's)")"
+                        <label class="form-label" for="cap-tolerance">@L["Batch tolerance on this line, %"]</label>
+                        <input id="cap-tolerance" type="number" class="form-control" min="0" max="50" step="0.1" placeholder="@L["{0} (the material's)", Qty(Material.BatchTolerancePct)]"
                                @bind="form.BatchTolerancePct" />
                         @if (Material.BatchRule == "exact")
                         {
-                            <div class="form-text">Counts only for the near rule: @Material.Code is made to the exact rule.</div>
+                            <div class="form-text">@L["Counts only for the near rule: {0} is made to the exact rule.", Material.Code]</div>
                         }
                     </div>
                 }
                 @if (Material.IsLotTracked && Material.BatchSize is null)
                 {
                     <div class="col-12">
-                        <div class="small fw-semibold">Production lots on this line</div>
+                        <div class="small fw-semibold">@L["Production lots on this line"]</div>
                         <div class="form-text mt-0" id="cap-lot-help">
-                            Left blank, each production report makes its own lot. Set any of these and reports fill one lot until it is full, then start the next.
+                            @L["Left blank, each production report makes its own lot. Set any of these and reports fill one lot until it is full, then start the next."]
                         </div>
                     </div>
                     <div class="col-sm-3">
-                        <label class="form-label" for="cap-lot-size">Lot size, @Material.BaseUomCode</label>
-                        <input id="cap-lot-size" type="number" class="form-control" min="0" step="any" placeholder="No size" @bind="form.LotSize" aria-describedby="cap-lot-help" />
+                        <label class="form-label" for="cap-lot-size">@L["Lot size, {0}", Material.BaseUomCode]</label>
+                        <input id="cap-lot-size" type="number" class="form-control" min="0" step="any" placeholder="@L["No size"]" @bind="form.LotSize" aria-describedby="cap-lot-help" />
                     </div>
                     <div class="col-sm-3">
-                        <label class="form-label" for="cap-lot-hours">Lot age, hours</label>
-                        <input id="cap-lot-hours" type="number" class="form-control" min="0" max="720" step="0.5" placeholder="No limit" @bind="form.LotHours" aria-describedby="cap-lot-help" />
+                        <label class="form-label" for="cap-lot-hours">@L["Lot age, hours"]</label>
+                        <input id="cap-lot-hours" type="number" class="form-control" min="0" max="720" step="0.5" placeholder="@L["No limit"]" @bind="form.LotHours" aria-describedby="cap-lot-help" />
                     </div>
                     <div class="col-sm-3 d-flex align-items-end">
                         <div class="form-check mb-2">
                             <input id="cap-lot-shift" type="checkbox" class="form-check-input" @bind="form.LotByShift" />
-                            <label class="form-check-label" for="cap-lot-shift">New lot each shift</label>
+                            <label class="form-check-label" for="cap-lot-shift">@L["New lot each shift"]</label>
                         </div>
                     </div>
                 }
                 <div class="col-sm-3">
-                    <label class="form-label" for="cap-from">Starts</label>
+                    <label class="form-label" for="cap-from">@L["Starts"]</label>
                     <input id="cap-from" type="date" class="form-control" @bind="form.From" />
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label" for="cap-to">Ends on <span class="text-muted">(optional)</span></label>
+                    <label class="form-label" for="cap-to">@L["Ends on"] <span class="text-muted">@L["(optional)"]</span></label>
                     <input id="cap-to" type="date" class="form-control" @bind="form.EndsOn" />
                 </div>
                 <div class="col-12">
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="cap-preferred" @bind="form.IsPreferred" />
-                        <label class="form-check-label" for="cap-preferred">Preferred line for @Material.Code</label>
+                        <label class="form-check-label" for="cap-preferred">@L["Preferred line for {0}", Material.Code]</label>
                     </div>
                 </div>
             </div>
             <div class="d-flex gap-2 mt-3">
-                <button type="submit" class="btn btn-primary" disabled="@(_busy || !form.CanSubmit)">@(form.IsNew ? "Add" : "Save")</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="Cancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" disabled="@(_busy || !form.CanSubmit)">@(form.IsNew ? L["Add"] : L["Save"])</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="Cancel">@L["Cancel"]</button>
             </div>
             <p class="small text-muted mt-2 mb-0">
-                Dates are days at the line's site; it stops applying at the start of its end day.
-                @(form.IsNew ? "If the line has no planning rate for " + Material.Code + " yet, the ideal rate becomes it." : "A new ideal rate also updates the calculated planning rate.")
+                @L["Dates are days at the line's site; it stops applying at the start of its end day."]
+                @(form.IsNew ? L["If the line has no planning rate for {0} yet, the ideal rate becomes it.", Material.Code] : L["A new ideal rate also updates the calculated planning rate."])
             </p>
         </form>
     }
@@ -143,29 +143,29 @@
     @if (_rate is { } rate)
     {
         <form class="inv-facts mb-3" @onsubmit="SetRateAsync" @onsubmit:preventDefault>
-            <h3 class="h6">Planning rate for @Material.Code on @rate.Capability.EquipmentCode</h3>
+            <h3 class="h6">@L["Planning rate for {0} on {1}", Material.Code, rate.Capability.EquipmentCode]</h3>
             <p class="small mb-2">
-                Calculated: @Qty(rate.Capability.CalculatedRatePerHour) @rate.Capability.RunStandardUomCode/h
-                (@Pulaski.Web.Services.Scheduling.RateProposalView.Basis(rate.Capability.CalculationBasis)).
-                A modified rate replaces it for planning until you clear it.
+                @L["Calculated: {0} {1}/h", Qty(rate.Capability.CalculatedRatePerHour), rate.Capability.RunStandardUomCode]
+                (@L[Pulaski.Web.Services.Scheduling.RateProposalView.Basis(rate.Capability.CalculationBasis)]).
+                @L["A modified rate replaces it for planning until you clear it."]
             </p>
             <div class="row g-2">
                 <div class="col-sm-3">
-                    <label class="form-label" for="rate-value">Modified rate, @rate.Capability.RunStandardUomCode/h</label>
+                    <label class="form-label" for="rate-value">@L["Modified rate, {0}/h", rate.Capability.RunStandardUomCode]</label>
                     <input id="rate-value" type="number" class="form-control" min="0" step="any" @bind="rate.Value" @bind:event="oninput" />
                 </div>
                 <div class="col-sm-9">
-                    <label class="form-label" for="rate-note">Note or reason</label>
-                    <input id="rate-note" class="form-control" maxlength="500" placeholder="Why, e.g. trial on new die" @bind="rate.Note" />
+                    <label class="form-label" for="rate-note">@L["Note or reason"]</label>
+                    <input id="rate-note" class="form-control" maxlength="500" placeholder="@L["Why, e.g. trial on new die"]" @bind="rate.Note" />
                 </div>
             </div>
             <div class="d-flex gap-2 mt-3">
-                <button type="submit" class="btn btn-primary" disabled="@(_busy || !(rate.Value > 0))">Set modified rate</button>
+                <button type="submit" class="btn btn-primary" disabled="@(_busy || !(rate.Value > 0))">@L["Set modified rate"]</button>
                 @if (rate.Capability.ModifiedRatePerHour is not null)
                 {
-                    <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="ClearRateAsync">Back to calculated</button>
+                    <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="ClearRateAsync">@L["Back to calculated"]</button>
                 }
-                <button type="button" class="btn btn-link" @onclick="Cancel">Cancel</button>
+                <button type="button" class="btn btn-link" @onclick="Cancel">@L["Cancel"]</button>
             </div>
             <RunHistoryPanel RunStandardId="rate.Capability.RunStandardId!.Value" LineCode="@rate.Capability.EquipmentCode" MaterialCode="@Material.Code"
                              Basis="@rate.Capability.CalculationBasis" TimeZone="@rate.Capability.SiteTimeZone" OnChanged="OnHistoryRateChangedAsync" />
@@ -174,7 +174,7 @@
 
     @if (Capabilities.Count == 0)
     {
-        <p class="text-muted">No line has a capability for @Material.Code, so no job for it can be placed yet.</p>
+        <p class="text-muted">@L["No line has a capability for {0}, so no job for it can be placed yet.", Material.Code]</p>
     }
     else
     {
@@ -182,8 +182,8 @@
             <table class="table table-sm align-middle">
                 <thead>
                     <tr>
-                        <th>Line</th><th class="inv-num">Ideal rate</th><th class="inv-num">Planning rate</th><th>Changeover</th>
-                        <th class="inv-num">Crew</th>@if (Material.BatchSize is not null) { <th class="inv-num" title="The line's own batch size; blank means the material's">Batch</th> }<th>Starts</th><th>Ends on</th><th></th>
+                        <th>@L["Line"]</th><th class="inv-num">@L["Ideal rate"]</th><th class="inv-num">@L["Planning rate"]</th><th>@L["Changeover"]</th>
+                        <th class="inv-num">@L["Crew"]</th>@if (Material.BatchSize is not null) { <th class="inv-num" title="@L["The line's own batch size; blank means the material's"]">@L["Batch"]</th> }<th>@L["Starts"]</th><th>@L["Ends on"]</th><th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -194,9 +194,9 @@
                                 <span class="fw-semibold">@c.EquipmentCode</span>@(c.IsPreferred ? " ★" : "") <span class="small text-muted">@c.EquipmentName</span>
                                 @if (!c.IsInEffect)
                                 {
-                                    <span class="chip chip-muted ms-1">@(c.EffectiveFrom > Clock.GetUtcNow() ? "Not started" : "Ended")</span>
+                                    <span class="chip chip-muted ms-1">@(c.EffectiveFrom > Clock.GetUtcNow() ? L["Not started"] : L["Ended"])</span>
                                 }
-                                @if (CapabilityForm.LotRule(c, Material.BaseUomCode) is { } lotRule)
+                                @if (CapabilityForm.LotRule(L, c, Material.BaseUomCode) is { } lotRule)
                                 {
                                     <div class="small text-muted">@lotRule</div>
                                 }
@@ -212,26 +212,26 @@
                                 @if (c.EffectiveRatePerHour is { } r)
                                 {
                                     @($"{Qty(r)} {c.RunStandardUomCode}/h ")
-                                    <span class="small text-muted" title="@(c.ModifiedRatePerHour is null ? "" : $"Set by {c.ModifiedBy}{(c.ModifiedNote is { } n ? ": " + n : "")}; calculated {Qty(c.CalculatedRatePerHour)}")">@c.RateSource</span>
+                                    <span class="small text-muted" title="@(c.ModifiedRatePerHour is null ? "" : L["Set by {0}{1}; calculated {2}", c.ModifiedBy, c.ModifiedNote is { } n ? ": " + n : "", Qty(c.CalculatedRatePerHour)])">@c.RateSource</span>
                                     @if (c.ProposedRatePerHour is { } proposed)
                                     {
-                                        <div class="small"><span class="chip">proposed @Qty(proposed)</span></div>
+                                        <div class="small"><span class="chip">@L["proposed {0}", Qty(proposed)]</span></div>
                                     }
                                 }
                                 else
                                 {
-                                    <span class="text-muted">none</span>
+                                    <span class="text-muted">@L["none"]</span>
                                 }
                             </td>
-                            <td>@(c.StandardChangeover is { } ch ? $"{(int)ch.TotalMinutes} min" : "—")</td>
+                            <td>@(c.StandardChangeover is { } ch ? L["{0} min", (int)ch.TotalMinutes] : "—")</td>
                             <td class="inv-num">@(c.StandardCrewSize?.ToString("0.##", CultureInfo.InvariantCulture) ?? "—")</td>
                             @if (Material.BatchSize is { } batchOfMaterial)
                             {
                                 <td class="inv-num">
-                                @(c.BatchSize is { } own ? $"{Qty(own)} {Material.BaseUomCode}" : $"{Qty(batchOfMaterial)}") @if (c.BatchSize is null) { <span class="small text-muted">material's</span> }
+                                @(c.BatchSize is { } own ? $"{Qty(own)} {Material.BaseUomCode}" : $"{Qty(batchOfMaterial)}") @if (c.BatchSize is null) { <span class="small text-muted">@L["material's"]</span> }
                                 @if (c.BatchTolerancePct is { } ownTolerance)
                                 {
-                                    <div class="small">± @Qty(ownTolerance)% <span class="text-muted">line's</span></div>
+                                    <div class="small">± @Qty(ownTolerance)% <span class="text-muted">@L["line's"]</span></div>
                                 }
                             </td>
                             }
@@ -240,15 +240,15 @@
                             <td class="text-end text-nowrap">
                                 @if (CanCapabilities)
                                 {
-                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartEdit(c)">Change</button>
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartEdit(c)">@L["Change"]</button>
                                 }
                                 @if (c.RunStandardId is not null && User.Can(PermissionCodes.RateModify))
                                 {
-                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartRate(c)">Rate</button>
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartRate(c)">@L["Rate"]</button>
                                 }
                                 @if (c.IsInEffect && CanCapabilities)
                                 {
-                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => EndAsync(c)">End now</button>
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => EndAsync(c)">@L["End now"]</button>
                                 }
                             </td>
                         </tr>
@@ -346,7 +346,7 @@
     private Task EndAsync(MaterialCapabilityDto c) => RunAsync(async () =>
     {
         var result = await Api.EndCapabilityAsync(c.Id, c.Version);
-        _notes = [$"{c.EquipmentCode} no longer runs {Material.Code}.", .. result.Notes];
+        _notes = [L["{0} no longer runs {1}.", c.EquipmentCode, Material.Code], .. result.Notes];
     });
 
     private Task SetRateAsync() => RunAsync(async () =>
@@ -358,7 +358,7 @@
             RatePerHour = rate.Value ?? 0,
             Note = rate.Note,
         });
-        _notes = [$"Planning rate on {rate.Capability.EquipmentCode} set to {Qty(rate.Value)} {rate.Capability.RunStandardUomCode}/h."];
+        _notes = [L["Planning rate on {0} set to {1} {2}/h.", rate.Capability.EquipmentCode, Qty(rate.Value), rate.Capability.RunStandardUomCode]];
         _rate = null;
     });
 
@@ -370,7 +370,7 @@
             Version = rate.Capability.RunStandardVersion ?? 0,
             Reason = string.IsNullOrWhiteSpace(rate.Note) ? null : rate.Note.Trim(),
         });
-        _notes = [$"Planning rate on {rate.Capability.EquipmentCode} is the calculated {Qty(rate.Capability.CalculatedRatePerHour)} {rate.Capability.RunStandardUomCode}/h again."];
+        _notes = [L["Planning rate on {0} is the calculated {1} {2}/h again.", rate.Capability.EquipmentCode, Qty(rate.Capability.CalculatedRatePerHour), rate.Capability.RunStandardUomCode]];
         _rate = null;
     });
 

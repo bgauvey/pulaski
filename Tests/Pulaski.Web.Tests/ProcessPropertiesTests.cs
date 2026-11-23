@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Processes;
 using Pulaski.Contracts.ReferenceData;
@@ -63,7 +64,7 @@ public class ProcessPropertiesTests
             classes: [new ProcessMaterialClassDto(Profiles, "PROFILE", "Profiles")],
             defaults: [new ProcessMaterialDto(white.Id, "WH", "White"), new ProcessMaterialDto(resin.Id, "RS", "Resin")]);
 
-        var items = ProcessProperties.ForProcess(process, Draft, [white, resin]);
+        var items = ProcessProperties.ForProcess(Text.English, process, Draft, [white, resin]);
 
         Assert.Equal(PropertyEditor.ReadOnly, Row(items, "code").Editor);
         Assert.Equal(PropertyEditor.Text, Row(items, ProcessProperties.Name).Editor);
@@ -76,8 +77,8 @@ public class ProcessPropertiesTests
     [Fact]
     public void A_process_that_makes_nothing_says_so_and_all_materials_lists_no_items()
     {
-        Assert.True(Row(ProcessProperties.ForProcess(Process(), Draft, []), "makesNothing").IsFlagged);
-        Assert.DoesNotContain(ProcessProperties.ForProcess(Process(all: true), Draft, []), i => i.Key == "makesNothing");
+        Assert.True(Row(ProcessProperties.ForProcess(Text.English, Process(), Draft, []), "makesNothing").IsFlagged);
+        Assert.DoesNotContain(ProcessProperties.ForProcess(Text.English, Process(all: true), Draft, []), i => i.Key == "makesNothing");
     }
 
     [Fact]
@@ -87,13 +88,13 @@ public class ProcessPropertiesTests
         definition = ProcessEditing.AddEquipment(definition, op, Dept.Id);
         definition = ProcessEditing.SetShare(definition, op, Dept.Id, 40m);
 
-        var items = ProcessProperties.ForOperation(definition.Operations[0], definition, [Ext1, Dept], editable: true);
+        var items = ProcessProperties.ForOperation(Text.English, definition.Operations[0], definition, [Ext1, Dept], editable: true);
 
         var share = Row(items, ProcessProperties.SharePrefix + Dept.Id);
         Assert.Equal((PropertyEditor.Number, "40", "%", true), (share.Editor, share.Value, share.Suffix, share.Removable));
         Assert.StartsWith("Department", share.Description, StringComparison.Ordinal);
         Assert.True(Row(items, "total").IsFlagged);
-        Assert.Equal(PropertyEditor.ReadOnly, ProcessProperties.ForOperation(definition.Operations[0], definition, [Ext1, Dept], editable: false)
+        Assert.Equal(PropertyEditor.ReadOnly, ProcessProperties.ForOperation(Text.English, definition.Operations[0], definition, [Ext1, Dept], editable: false)
             .Single(i => i.Key == ProcessProperties.Number).Editor);
     }
 
@@ -105,7 +106,7 @@ public class ProcessPropertiesTests
         definition = ProcessEditing.Connect(definition, a, b, Guid.CreateVersion7()).Definition!;
         definition = ProcessEditing.UpdateDependency(definition, definition.Dependencies[0].Id, ProcessEditing.AfterEnd, TimeSpan.FromMinutes(30));
 
-        var items = ProcessProperties.ForLink(definition.Dependencies[0], definition, editable: true);
+        var items = ProcessProperties.ForLink(Text.English, definition.Dependencies[0], definition, editable: true);
 
         Assert.Equal(["After Extrude starts", "After Extrude ends"], Row(items, ProcessProperties.LinkType).Choices.Select(c => c.Label));
         Assert.Equal(("30", "min"), (Row(items, ProcessProperties.Lag).Value, Row(items, ProcessProperties.Lag).Suffix));

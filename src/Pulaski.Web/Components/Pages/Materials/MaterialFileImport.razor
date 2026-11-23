@@ -4,22 +4,22 @@
 @* Bulk load from a file (D-034, D-053, D-055): materials in any source adapter's format, or capabilities from CSV. Pick what and
    the file, check it, then import it all or nothing. *@
 <section class="inv-facts mb-3" aria-labelledby="import-title">
-    <h2 class="h6" id="import-title">Import from a file</h2>
+    <h2 class="h6" id="import-title">@L["Import from a file"]</h2>
     <div class="row g-2 mb-2 align-items-end">
         <div class="col-sm-2">
-            <label class="form-label small" for="import-kind">Import</label>
+            <label class="form-label small" for="import-kind">@L["Import"]</label>
             <select id="import-kind" class="form-select" disabled="@_busy" @bind="_kind" @bind:after="RecheckAsync">
-                <option value="@Materials">Materials</option>
+                <option value="@Materials">@L["Materials"]</option>
                 @if (User.Can(PermissionCodes.Processes))
                 {
-                    <option value="@Capabilities">Capabilities</option>
+                    <option value="@Capabilities">@L["Capabilities"]</option>
                 }
             </select>
         </div>
         @if (_kind == Materials)
         {
             <div class="col-sm-2">
-                <label class="form-label small" for="import-format">Format</label>
+                <label class="form-label small" for="import-format">@L["Format"]</label>
                 <select id="import-format" class="form-select" disabled="@_busy" @bind="_sourceName" @bind:after="RecheckAsync">
                     @foreach (var source in _sources)
                     {
@@ -31,8 +31,8 @@
         @if (_kind == Materials && Source.TakesExternalSystem)
         {
             <div class="col-sm-3">
-                <label class="form-label small" for="import-system">External system <span class="text-muted">(optional)</span></label>
-                <input id="import-system" class="form-control" maxlength="100" placeholder="e.g. ERP1" disabled="@_busy"
+                <label class="form-label small" for="import-system">@L["External system"] <span class="text-muted">@L["(optional)"]</span></label>
+                <input id="import-system" class="form-control" maxlength="100" placeholder="@L["e.g. ERP1"]" disabled="@_busy"
                        @bind="_externalSystem" @bind:after="RecheckAsync" />
             </div>
         }
@@ -41,46 +41,37 @@
             <div class="col-sm-3">
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" id="import-classes" disabled="@_busy" @bind="_createClasses" @bind:after="RecheckAsync" />
-                    <label class="form-check-label small" for="import-classes">Create missing classes</label>
+                    <label class="form-check-label small" for="import-classes">@L["Create missing classes"]</label>
                 </div>
             </div>
         }
         <div class="col-sm-auto">
-            <a class="btn btn-link btn-sm px-0 mb-1" href="@TemplateHref" download="@Source.TemplateFileName">Download a template</a>
+            <a class="btn btn-link btn-sm px-0 mb-1" href="@TemplateHref" download="@Source.TemplateFileName">@L["Download a template"]</a>
         </div>
     </div>
 
     @if (_kind == Capabilities)
     {
         <p class="small text-muted mb-2">
-            One row per material and line; material, line, ideal_rate (per hour) and rate_unit are required, and site only when the line
-            code is used at more than one site. A row changes the capability in effect now, or adds one from now; active = no ends it.
-            With effective_from (a site-local date, yyyy-MM-dd) a row is the period starting that day: an open-ended period starting earlier
-            ends there, and any other overlap is an error. effective_to (the day after the last) ends a period.
-            The planning rate follows the ideal rate as on the material page. Nothing is saved until every row is valid.
+            @L["One row per material and line; material, line, ideal_rate (per hour) and rate_unit are required, and site only when the line code is used at more than one site. A row changes the capability in effect now, or adds one from now; active = no ends it."]
+            @L["With effective_from (a site-local date, yyyy-MM-dd) a row is the period starting that day: an open-ended period starting earlier ends there, and any other overlap is an error. effective_to (the day after the last) ends a period."]
+            @L["The planning rate follows the ideal rate as on the material page. Nothing is saved until every row is valid."]
         </p>
-        <p class="small mb-2"><span class="text-muted">All columns:</span> <code>@CapabilityCsvFormat.Header</code></p>
+        <p class="small mb-2"><span class="text-muted">@L["All columns:"]</span> <code>@CapabilityCsvFormat.Header</code></p>
     }
     else if (Source.Name == Csv)
     {
         <p class="small text-muted mb-2">
-            The first line names the columns; code, name, type and base_unit are required. A column left out keeps what each material
-            already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code. A class
-            that doesn't exist is an error unless <em>Create missing classes</em> is ticked (class_name names it). Nothing is saved until
-            every row is valid.
+            @L["The first line names the columns; code, name, type and base_unit are required. A column left out keeps what each material already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code. A class that doesn't exist is an error unless Create missing classes is ticked (class_name names it). Nothing is saved until every row is valid."]
         </p>
-        <p class="small mb-2"><span class="text-muted">All columns:</span> <code>@MaterialCsvFormat.Header</code></p>
+        <p class="small mb-2"><span class="text-muted">@L["All columns:"]</span> <code>@MaterialCsvFormat.Header</code></p>
     }
     else if (Source.Name == B2mml)
     {
         <p class="small text-muted mb-2">
-            @Source.Description Each <code>MaterialDefinition</code> is one material: its <code>ID</code> is the code, its
-            <code>Description</code> the name and its <code>MaterialClassID</code> the class. Type, base unit, lot tracking, shelf life
-            and active come from properties with those IDs, such as <code>MaterialType</code> and <code>BaseUnit</code>. Each
-            <code>MaterialClass</code> (its <code>ID</code> the code, its <code>Description</code> the name) is added if it is new and
-            renamed if its name differs, whatever <em>Create missing classes</em> says. <em>Export B2MML</em> on this page writes this format.
-            @(Source.TakesExternalSystem ? "With an external system, the materials are that system's items, matched on their ID; without one, they are Pulaski materials matched on their code. " : "")
-            Nothing is saved until every material is valid.
+            @Source.Description @L["Each MaterialDefinition is one material: its ID is the code, its Description the name and its MaterialClassID the class. Type, base unit, lot tracking, shelf life and active come from properties with those IDs, such as MaterialType and BaseUnit. Each MaterialClass (its ID the code, its Description the name) is added if it is new and renamed if its name differs, whatever Create missing classes says. Export B2MML on this page writes this format."]
+            @(Source.TakesExternalSystem ? L["With an external system, the materials are that system's items, matched on their ID; without one, they are Pulaski materials matched on their code. "] : "")
+            @L["Nothing is saved until every material is valid."]
         </p>
     }
     else
@@ -90,11 +81,11 @@
 
     <div class="d-flex flex-wrap gap-2 align-items-center">
         <InputFile OnChange="PickAsync" accept="@string.Join(",", Source.FileTypes)" class="form-control" style="max-width: 28rem"
-                   aria-label="@($"{Source.DisplayName} file")" disabled="@_busy" />
+                   aria-label="@L["{0} file", Source.DisplayName]" disabled="@_busy" />
         <ActionButton Class="btn btn-primary" Busy="_busy" Reason="@ImportReadiness.Why(_result is not null, _result?.Applied == true, _result?.FileProblems.Count ?? 0, _result?.Errors ?? 0, _result is null ? 0 : _result.Created + _result.Updated + _result.CreatedClasses.Count + _result.RenamedClasses.Count)" OnClick="ImportAsync">
             @ImportLabel
         </ActionButton>
-        <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">Close</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">@L["Close"]</button>
     </div>
 
     <ProblemAlert Error="_error" />
@@ -105,7 +96,7 @@
 
     @if (_busy)
     {
-        <p class="text-muted small mt-3 mb-0">Checking @_fileName…</p>
+        <p class="text-muted small mt-3 mb-0">@L["Checking {0}…", _fileName]</p>
     }
     else if (_result is { } r)
     {
@@ -114,28 +105,28 @@
             <span>
                 @if (r.Applied)
                 {
-                    @($"Imported {_fileName}: {r.Created} created, {r.Updated} updated, {r.Unchanged} unchanged.")
+                    @(L["Imported {0}: {1} created, {2} updated, {3} unchanged.", _fileName, r.Created, r.Updated, r.Unchanged])
                 }
                 else if (r.FileProblems.Count > 0)
                 {
-                    @($"{_fileName} can't be imported: {string.Join(" ", r.FileProblems)}")
+                    @(L["{0} can't be imported: {1}", _fileName, string.Join(" ", r.FileProblems)])
                 }
                 else if (r.Errors > 0)
                 {
-                    @($"{_fileName}: {Count(r.Errors, "row")} with errors, so nothing can be imported yet. Fix them and pick the file again." +
-                        (r.Rows.Count > r.Errors ? $" The other rows would give {r.Created} created, {r.Updated} updated, {r.Unchanged} unchanged." : ""))
+                    @(L["{0}: rows with errors: {1}. Nothing can be imported yet; fix them and pick the file again.", _fileName, r.Errors] +
+                        (r.Rows.Count > r.Errors ? L[" The other rows would give {0} created, {1} updated, {2} unchanged.", r.Created, r.Updated, r.Unchanged] : ""))
                 }
                 else
                 {
-                    @($"{_fileName} is ready: {r.Created} to create, {r.Updated} to update, {r.Unchanged} unchanged.")
+                    @(L["{0} is ready: {1} to create, {2} to update, {3} unchanged.", _fileName, r.Created, r.Updated, r.Unchanged])
                 }
                 @if (r.CreatedClasses.Count > 0)
                 {
-                    @($" {(r.Applied ? "Created" : "Creates")} {Count(r.CreatedClasses.Count, "class", "classes")}: {string.Join(", ", r.CreatedClasses)}.")
+                    @(" " + (r.Applied ? L["Classes created: {0}.", string.Join(", ", r.CreatedClasses)] : L["Classes to create: {0}.", string.Join(", ", r.CreatedClasses)]))
                 }
                 @if (r.RenamedClasses.Count > 0)
                 {
-                    @($" {(r.Applied ? "Renamed" : "Renames")} {Count(r.RenamedClasses.Count, "class", "classes")}: {string.Join(", ", r.RenamedClasses)}.")
+                    @(" " + (r.Applied ? L["Classes renamed: {0}.", string.Join(", ", r.RenamedClasses)] : L["Classes to rename: {0}.", string.Join(", ", r.RenamedClasses)]))
                 }
             </span>
         </div>
@@ -147,13 +138,13 @@
                 {
                     <div class="form-check mb-0">
                         <input class="form-check-input" type="checkbox" id="import-errors" @bind="_errorsOnly" />
-                        <label class="form-check-label small" for="import-errors">Only rows with errors</label>
+                        <label class="form-check-label small" for="import-errors">@L["Only rows with errors"]</label>
                     </div>
                 }
             </div>
             <div class="table-panel mt-2" style="max-height: 24rem; overflow: auto">
                 <table class="table table-sm align-middle mb-0 import-table">
-                    <thead><tr><th class="inv-num">Line</th><th>Code</th><th>@(r.Applied ? "Done" : "Would")</th><th>Details</th></tr></thead>
+                    <thead><tr><th class="inv-num">@L["Line"]</th><th>@L["Code"]</th><th>@(r.Applied ? L["Done"] : L["Would"])</th><th>@L["Details"]</th></tr></thead>
                     <tbody>
                         @foreach (var row in r.Rows.Where(x => !_errorsOnly || x.Action == "error"))
                         {
@@ -162,7 +153,7 @@
                                 <td class="fw-semibold">@row.Code</td>
                                 <td>@ActionLabel(row.Action, r.Applied)</td>
                                 <td class="small">
-                                    @(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? "Changed " : "Changes ") + string.Join(", ", row.Changes) : ""))
+                                    @(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? L["Changed: {0}", string.Join(", ", row.Changes)] : L["Changes: {0}", string.Join(", ", row.Changes)]) : ""))
                                     @foreach (var note in row.Notes)
                                     {
                                         <div class="text-muted">@note</div>
@@ -247,8 +238,8 @@
     }
 
     private string ImportLabel => _result is { Errors: 0, Applied: false } r && r.Created + r.Updated > 0
-        ? $"Import {Count(r.Created + r.Updated, _kind == Capabilities ? "capability" : "material", _kind == Capabilities ? "capabilities" : null)}"
-        : "Import";
+        ? (_kind == Capabilities ? L["Import capabilities: {0}", r.Created + r.Updated] : L["Import materials: {0}", r.Created + r.Updated])
+        : L["Import"];
 
     private async Task PickAsync(InputFileChangeEventArgs e)
     {
@@ -259,7 +250,7 @@
         _fileName = e.File.Name;
         if (e.File.Size > MaxBytes)
         {
-            _readProblem = $"{e.File.Name} is larger than 5 MB; split it into smaller files.";
+            _readProblem = L["{0} is larger than 5 MB; split it into smaller files.", e.File.Name];
             return;
         }
 
@@ -276,7 +267,7 @@
         }
         catch (IOException ex)
         {
-            _readProblem = $"{e.File.Name} couldn't be read: {ex.Message}";
+            _readProblem = L["{0} couldn't be read: {1}", e.File.Name, ex.Message];
         }
         finally
         {
@@ -349,15 +340,14 @@
         }
     }
 
-    private static string ActionLabel(string action, bool applied) => (action, applied) switch
+    private string ActionLabel(string action, bool applied) => (action, applied) switch
     {
-        ("create", false) => "Create",
-        ("create", true) => "Created",
-        ("update", false) => "Update",
-        ("update", true) => "Updated",
-        ("unchanged", _) => "Unchanged",
-        _ => "Error",
+        ("create", false) => L["Create"],
+        ("create", true) => L["Created"],
+        ("update", false) => L["Update"],
+        ("update", true) => L["Updated"],
+        ("unchanged", _) => L["Unchanged"],
+        _ => L["Error"],
     };
 
-    private static string Count(int n, string what, string? plural = null) => $"{n} {(n == 1 ? what : plural ?? what + "s")}";
 }

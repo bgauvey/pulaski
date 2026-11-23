@@ -6,16 +6,16 @@
 
 <PageTitle>@(_bom?.MaterialCode ?? "BOM") · BOMs · Pulaski</PageTitle>
 
-<p class="small mb-2"><a href="boms">Bills of materials</a></p>
+<p class="small mb-2"><a href="boms">@L["Bills of materials"]</a></p>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.Processes" What="maintain BOMs" />
+<ViewOnlyNote Permission="@PermissionCodes.Processes" What="@L["maintain BOMs"]" />
 
 @if (_bom is null || _version is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
@@ -32,12 +32,12 @@ else
             {
                 <button type="button" class="btn btn-sm @(v.Id == _version.Id ? "btn-secondary" : "btn-outline-secondary")"
                         @onclick="() => OpenVersionAsync(v.Id)">
-                    Version @v.Number · @L.Label(v.Status)
+                    @L["Version {0} · {1}", v.Number, L.Label(v.Status)]
                 </button>
             }
             @if (CanStartDraft && CanEdit)
             {
-                <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="StartDraftAsync">New draft</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="StartDraftAsync">@L["New draft"]</button>
             }
         </div>
     </div>
@@ -45,31 +45,31 @@ else
     @if (_bom.MissingOperations.Length > 0)
     {
         <div class="alert alert-warning small" role="alert">
-            The released version names operation @string.Join(", ", _bom.MissingOperations), which @_bom.ProcessCode's released version no longer has,
-            so orders for @_bom.MaterialCode made with @_bom.ProcessCode are refused.
-            @(CanStartDraft ? "Start a new draft, move those lines to operations the process has, and release it." : "Change those lines in the draft and release it.")
+            @L["The released version names operation {0}, which {1}'s released version no longer has,", string.Join(", ", _bom.MissingOperations), _bom.ProcessCode]
+            @L["so orders for {0} made with {1} are refused.", _bom.MaterialCode, _bom.ProcessCode]
+            @(CanStartDraft ? L["Start a new draft, move those lines to operations the process has, and release it."] : L["Change those lines in the draft and release it."])
         </div>
     }
 
     <div class="d-flex flex-wrap gap-3 align-items-end mb-3">
         <div>
-            <label class="form-label" for="base-qty">Quantities are per</label>
+            <label class="form-label" for="base-qty">@L["Quantities are per"]</label>
             <div class="input-group">
                 <input id="base-qty" type="number" class="form-control" min="0" step="any" style="max-width: 9rem"
                        value="@Plain(_baseQty)" @onchange="e => Edit(() => _baseQty = Decimal(e))" disabled="@ReadOnly" />
-                <select class="form-select" style="max-width: 7rem" aria-label="BOM unit" value="@_baseUomId" disabled="@ReadOnly"
+                <select class="form-select" style="max-width: 7rem" aria-label="@L["BOM unit"]" value="@_baseUomId" disabled="@ReadOnly"
                         @onchange="e => Edit(() => _baseUomId = Guid.Parse(e.Value!.ToString()!))">
                     @foreach (var u in ActiveUnits(_baseUomId))
                     {
                         <option value="@u.Id">@u.Code</option>
                     }
                 </select>
-                <span class="input-group-text">of @_bom.MaterialCode</span>
+                <span class="input-group-text">@L["of {0}", _bom.MaterialCode]</span>
             </div>
         </div>
         <div class="small pb-2">
-            <ScreenLink Href="@($"units?material={_bom.MaterialId}")" Permission="@PermissionCodes.UnitsView">Unit conversions for @_bom.MaterialCode</ScreenLink>
-            <span class="text-muted">· orders may use any unit that converts to this one</span>
+            <ScreenLink Href="@($"units?material={_bom.MaterialId}")" Permission="@PermissionCodes.UnitsView">@L["Unit conversions for {0}", _bom.MaterialCode]</ScreenLink>
+            <span class="text-muted">@L["· orders may use any unit that converts to this one"]</span>
         </div>
     </div>
 
@@ -77,15 +77,15 @@ else
         <table class="table table-sm align-middle mb-0">
             <thead>
                 <tr>
-                    <th style="width: 5rem">Line</th>
-                    <th>Component</th>
-                    <th style="width: 9rem" class="text-end">Quantity</th>
-                    <th style="width: 8rem">Unit</th>
-                    <th style="width: 7rem" class="text-end">Scrap %</th>
-                    <th style="width: 10rem">Consumed by</th>
+                    <th style="width: 5rem">@L["Line"]</th>
+                    <th>@L["Component"]</th>
+                    <th style="width: 9rem" class="text-end">@L["Quantity"]</th>
+                    <th style="width: 8rem">@L["Unit"]</th>
+                    <th style="width: 7rem" class="text-end">@L["Scrap %"]</th>
+                    <th style="width: 10rem">@L["Consumed by"]</th>
                     @if (_bom.ProcessId is not null)
                     {
-                        <th style="width: 11rem">Operation</th>
+                        <th style="width: 11rem">@L["Operation"]</th>
                     }
                     <th style="width: 2.5rem"></th>
                 </tr>
@@ -99,7 +99,7 @@ else
                         <td>
                             <select class="form-select form-select-sm" value="@item.ComponentMaterialId" disabled="@ReadOnly"
                                     @onchange="e => Edit(() => SetComponent(item, e))">
-                                <option value="@Guid.Empty">Choose a component…</option>
+                                <option value="@Guid.Empty">@L["Choose a component…"]</option>
                                 @foreach (var m in _materials.Where(m => m.Id != _bom.MaterialId))
                                 {
                                     <option value="@m.Id">@m.Code · @m.Name</option>
@@ -124,7 +124,7 @@ else
                                     @onchange="e => Edit(() => item.ConsumptionMethod = e.Value?.ToString() ?? Methods[0].Code)">
                                 @foreach (var method in Methods)
                                 {
-                                    <option value="@method.Code">@method.Label</option>
+                                    <option value="@method.Code">@L[method.Label]</option>
                                 }
                             </select>
                         </td>
@@ -133,7 +133,7 @@ else
                             <td>
                                 <select class="form-select form-select-sm" value="@(item.OperationNumber?.ToString() ?? "")" disabled="@ReadOnly"
                                         @onchange="e => Edit(() => item.OperationNumber = int.TryParse(e.Value?.ToString(), out var n) ? n : null)">
-                                    <option value="">First operation</option>
+                                    <option value="">@L["First operation"]</option>
                                     @foreach (var op in _operations)
                                     {
                                         <option value="@op.Number">@op.Number · @op.Name</option>
@@ -148,7 +148,7 @@ else
                         <td>
                             @if (!ReadOnly)
                             {
-                                <button type="button" class="btn btn-sm btn-link text-danger p-0" title="Remove line" @onclick="() => Edit(() => _items.Remove(item))">×</button>
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0" title="@L["Remove line"]" @onclick="() => Edit(() => _items.Remove(item))">×</button>
                             }
                         </td>
                     </tr>
@@ -160,24 +160,24 @@ else
                                 @foreach (var alternate in item.Alternates)
                                 {
                                     <div class="d-flex flex-wrap gap-2 align-items-center small mb-1">
-                                        <span class="text-muted">Alternate</span>
-                                        <select class="form-select form-select-sm" style="max-width: 22rem" aria-label="Alternate material" value="@alternate.MaterialId" disabled="@ReadOnly"
+                                        <span class="text-muted">@L["Alternate"]</span>
+                                        <select class="form-select form-select-sm" style="max-width: 22rem" aria-label="@L["Alternate material"]" value="@alternate.MaterialId" disabled="@ReadOnly"
                                                 @onchange="e => Edit(() => alternate.MaterialId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : Guid.Empty)">
-                                            <option value="@Guid.Empty">Choose a material…</option>
+                                            <option value="@Guid.Empty">@L["Choose a material…"]</option>
                                             @foreach (var m in _materials.Where(m => m.Id != _bom.MaterialId && m.Id != item.ComponentMaterialId))
                                             {
                                                 <option value="@m.Id">@m.Code · @m.Name</option>
                                             }
                                         </select>
-                                        <span class="text-muted">uses</span>
-                                        <input type="number" class="form-control form-control-sm text-end" style="max-width: 7rem" min="0" step="any" aria-label="Ratio"
+                                        <span class="text-muted">@L["uses"]</span>
+                                        <input type="number" class="form-control form-control-sm text-end" style="max-width: 7rem" min="0" step="any" aria-label="@L["Ratio"]"
                                                value="@Plain(alternate.Ratio)" disabled="@ReadOnly" @onchange="e => Edit(() => alternate.Ratio = Decimal(e))" />
-                                        <span class="text-muted">@BaseUnit(alternate.MaterialId) per @BaseUnit(item.ComponentMaterialId) of the component · priority</span>
-                                        <input type="number" class="form-control form-control-sm text-end" style="max-width: 5rem" min="1" step="1" aria-label="Priority"
+                                        <span class="text-muted">@L["{0} per {1} of the component · priority", BaseUnit(alternate.MaterialId), BaseUnit(item.ComponentMaterialId)]</span>
+                                        <input type="number" class="form-control form-control-sm text-end" style="max-width: 5rem" min="1" step="1" aria-label="@L["Priority"]"
                                                value="@alternate.Priority" disabled="@ReadOnly" @onchange="e => Edit(() => alternate.Priority = (int)Decimal(e))" />
                                         @if (!ReadOnly)
                                         {
-                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" title="Remove alternate"
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" title="@L["Remove alternate"]"
                                                     @onclick="() => Edit(() => item.Alternates.Remove(alternate))">×</button>
                                         }
                                     </div>
@@ -185,7 +185,7 @@ else
                                 @if (!ReadOnly)
                                 {
                                     <button type="button" class="btn btn-sm btn-link p-0 small" @onclick="() => Edit(() => item.Alternates.Add(new AlternateModel { Priority = item.Alternates.Count + 1 }))">
-                                        Add an approved alternate
+                                        @L["Add an approved alternate"]
                                     </button>
                                 }
                             </td>
@@ -195,7 +195,7 @@ else
                 }
                 @if (_items.Count == 0)
                 {
-                    <tr><td colspan="8" class="text-muted small">No components yet.</td></tr>
+                    <tr><td colspan="8" class="text-muted small">@L["No components yet."]</td></tr>
                 }
             </tbody>
         </table>
@@ -204,14 +204,14 @@ else
     @if (!ReadOnly)
     {
         <div class="d-flex flex-wrap gap-2 mb-3">
-            <button type="button" class="btn btn-outline-secondary" @onclick="AddLine"><Icon Name="plus" /> Add component</button>
-            <button type="button" class="btn btn-primary" disabled="@(_saving || !_dirty)" @onclick="SaveAsync">@(_dirty ? "Save draft" : "Saved")</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="AddLine"><Icon Name="plus" /> @L["Add component"]</button>
+            <button type="button" class="btn btn-primary" disabled="@(_saving || !_dirty)" @onclick="SaveAsync">@(_dirty ? L["Save draft"] : L["Saved"])</button>
         </div>
 
         @if (_problems.Count > 0)
         {
             <div class="alert alert-warning small">
-                <strong>Before this version can be released:</strong>
+                <strong>@L["Before this version can be released:"]</strong>
                 <ul class="mb-0">
                     @foreach (var p in _problems)
                     {
@@ -224,18 +224,18 @@ else
         {
             <div class="d-flex flex-wrap gap-2 align-items-end">
                 <div class="flex-grow-1" style="max-width: 28rem">
-                    <label class="form-label" for="note">Release note</label>
+                    <label class="form-label" for="note">@L["Release note"]</label>
                     <input id="note" class="form-control" maxlength="500" @bind="_note" />
                 </div>
-                <ActionButton Class="btn btn-success" Busy="_saving" Reason="@(_dirty ? "Save the draft first: the version released is the one saved." : null)" OnClick="ReleaseAsync">Release version @_version.Number</ActionButton>
+                <ActionButton Class="btn btn-success" Busy="_saving" Reason="@(_dirty ? L["Save the draft first: the version released is the one saved."] : null)" OnClick="ReleaseAsync">@L["Release version {0}", _version.Number]</ActionButton>
             </div>
         }
     }
     else if (_version.Status != "draft")
     {
         <p class="small text-muted">
-            Version @_version.Number is @L.Label(_version.Status)@(_version.ReleasedAt is { } at ? $", released {at:yyyy-MM-dd}" : "")@(_version.Note is null ? "" : $": {_version.Note}").
-            A released version never changes; start a new draft to change the BOM.
+            @L["Version {0} is {1}", _version.Number, L.Label(_version.Status)]@(_version.ReleasedAt is { } at ? L[", released {0:yyyy-MM-dd}", at] : "")@(_version.Note is null ? "" : $": {_version.Note}").
+            @L["A released version never changes; start a new draft to change the BOM."]
         </p>
     }
 }
@@ -245,10 +245,10 @@ else
 
     private static readonly (string Code, string Label)[] Methods =
     [
-        ("backflush", "Backflush on count"),
-        ("time_window", "Time window (loaded lot)"),
-        ("declared", "Declared by operator"),
-        ("scan", "Scanned lot"),
+        ("backflush", Term.Mark("Backflush on count")),
+        ("time_window", Term.Mark("Time window (loaded lot)")),
+        ("declared", Term.Mark("Declared by operator")),
+        ("scan", Term.Mark("Scanned lot")),
     ];
 
     private BomDto? _bom;

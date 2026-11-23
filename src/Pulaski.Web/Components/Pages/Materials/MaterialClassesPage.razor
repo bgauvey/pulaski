@@ -3,26 +3,25 @@
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 
-<PageTitle>Material classes · Pulaski</PageTitle>
+<PageTitle>@L["Material classes"] · Pulaski</PageTitle>
 
 <div class="mb-3">
-    <h1 class="mb-1">Materials</h1>
+    <h1 class="mb-1">@L["Materials"]</h1>
     <p class="text-muted mb-0">
-        Classes group similar materials, so a process or a changeover rule can name a class instead of each material. Classes are one level deep. A class's
-        code can't change; switch it off instead of reusing it.
+        @L["Classes group similar materials, so a process or a changeover rule can name a class instead of each material. Classes are one level deep. A class's code can't change; switch it off instead of reusing it."]
     </p>
 </div>
 
 <MaterialsTabs />
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.Materials" What="maintain materials" />
+<ViewOnlyNote Permission="@PermissionCodes.Materials" What="@L["maintain materials"]" />
 
 @if (User.Can(PermissionCodes.Materials))
 {
 <form class="inv-toolbar" @onsubmit="CreateAsync" @onsubmit:preventDefault>
-    <input class="form-control" style="min-width: 8rem; width: 10rem" maxlength="30" placeholder="CODE" aria-label="Code" @bind="_code" @bind:event="oninput" />
-    <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Extruded profiles" aria-label="Name" @bind="_name" @bind:event="oninput" />
-    <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">Add class</button>
+    <input class="form-control" style="min-width: 8rem; width: 10rem" maxlength="30" placeholder="@L["CODE"]" aria-label="@L["Code"]" @bind="_code" @bind:event="oninput" />
+    <input class="form-control inv-grow" maxlength="100" placeholder="@L["Name, e.g. Extruded profiles"]" aria-label="@L["Name"]" @bind="_name" @bind:event="oninput" />
+    <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">@L["Add class"]</button>
 </form>
 }
 
@@ -30,28 +29,28 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
 {
     <div class="table-panel">
         <table class="table align-middle">
-            <thead><tr><th>Code</th><th>Name</th><th class="inv-num">Materials</th><th>Active</th><th></th></tr></thead>
+            <thead><tr><th>@L["Code"]</th><th>@L["Name"]</th><th class="inv-num">@L["Materials"]</th><th>@L["Active"]</th><th></th></tr></thead>
             <tbody>
                 @foreach (var c in _classes)
                 {
                     var edit = _edits.GetValueOrDefault(c.Id) ?? c;
                     <tr @key="c.Id" class="@(c.IsActive ? "" : "text-muted")">
                         <td class="fw-semibold">@c.Code</td>
-                        <td><input class="form-control form-control-sm" maxlength="100" aria-label="Name of @c.Code" value="@edit.Name" @onchange="e => Change(c, edit with { Name = NameOf(e) })" /></td>
+                        <td><input class="form-control form-control-sm" maxlength="100" aria-label="@L["Name of {0}", c.Code]" value="@edit.Name" @onchange="e => Change(c, edit with { Name = NameOf(e) })" /></td>
                         <td class="inv-num"><a href="materials?class=@Uri.EscapeDataString(c.Code)">@c.MaterialCount</a></td>
                         <td><input class="form-check-input" type="checkbox" aria-label="@c.Code active" checked="@edit.IsActive" @onchange="e => Change(c, edit with { IsActive = e.Value is true })" /></td>
                         <td class="text-end">
                             @if (_edits.ContainsKey(c.Id))
                             {
-                                <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SaveAsync(c)">Save</button>
-                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _edits.Remove(c.Id)">Undo</button>
+                                <button type="button" class="btn btn-sm btn-primary" disabled="@_saving" @onclick="() => SaveAsync(c)">@L["Save"]</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _edits.Remove(c.Id)">@L["Undo"]</button>
                             }
                         </td>
                     </tr>
@@ -60,7 +59,7 @@ else
         </table>
         @if (_classes.Count == 0)
         {
-            <p class="text-muted p-4 mb-0">No classes yet. Add one above.</p>
+            <p class="text-muted p-4 mb-0">@L["No classes yet. Add one above."]</p>
         }
     </div>
 }

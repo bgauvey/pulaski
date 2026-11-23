@@ -1,3 +1,4 @@
+using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Web.Services.Scheduling;
 
@@ -25,7 +26,7 @@ public class ChangeoverRulesViewTests
     public void A_rule_reads_as_line_from_and_to_and_its_time()
     {
         var rule = R(null, "WH", "PROFILES");
-        Assert.Equal(("All lines", "WH", "Class PROFILES"), (ChangeoverRulesView.Line(rule), ChangeoverRulesView.From(rule), ChangeoverRulesView.To(rule)));
+        Assert.Equal(("All lines", "WH", "Class PROFILES"), (ChangeoverRulesView.Line(Text.English, rule), ChangeoverRulesView.From(Text.English, rule), ChangeoverRulesView.To(Text.English, rule)));
         Assert.Equal(("45 min", "2 h", "1 h 30 min"), (ChangeoverRulesView.Duration(45), ChangeoverRulesView.Duration(120), ChangeoverRulesView.Duration(90)));
     }
 
@@ -43,10 +44,10 @@ public class ChangeoverRulesViewTests
     public void The_form_needs_each_side_chosen_a_real_change_and_minutes_within_a_week()
     {
         var white = Guid.CreateVersion7();
-        Assert.Null(ChangeoverRulesView.Problem(ChangeoverRulesView.Anything, null, ChangeoverRulesView.Material, white, 30));
-        Assert.NotNull(ChangeoverRulesView.Problem(ChangeoverRulesView.Material, null, ChangeoverRulesView.Anything, null, 30));
-        Assert.NotNull(ChangeoverRulesView.Problem(ChangeoverRulesView.Material, white, ChangeoverRulesView.Material, white, 30));
-        Assert.NotNull(ChangeoverRulesView.Problem(ChangeoverRulesView.Anything, null, ChangeoverRulesView.Anything, null, ChangeoverRulesView.MaxMinutes + 1));
-        Assert.NotNull(ChangeoverRulesView.Problem(ChangeoverRulesView.Anything, null, ChangeoverRulesView.Anything, null, null));
+        Assert.Null(ChangeoverRulesView.Problem(Text.English, ChangeoverRulesView.Anything, null, ChangeoverRulesView.Material, white, 30));
+        Assert.NotNull(ChangeoverRulesView.Problem(Text.English, ChangeoverRulesView.Material, null, ChangeoverRulesView.Anything, null, 30));
+        Assert.NotNull(ChangeoverRulesView.Problem(Text.English, ChangeoverRulesView.Material, white, ChangeoverRulesView.Material, white, 30));
+        Assert.NotNull(ChangeoverRulesView.Problem(Text.English, ChangeoverRulesView.Anything, null, ChangeoverRulesView.Anything, null, ChangeoverRulesView.MaxMinutes + 1));
+        Assert.NotNull(ChangeoverRulesView.Problem(Text.English, ChangeoverRulesView.Anything, null, ChangeoverRulesView.Anything, null, null));
     }
 }

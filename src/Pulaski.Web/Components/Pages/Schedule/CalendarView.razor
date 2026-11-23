@@ -4,18 +4,18 @@
 @using System.Globalization
 
 <div class="view-toolbar">
-    <div class="btn-group" role="group" aria-label="Change month">
-        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Previous month" @onclick="() => MoveAsync(-1)">
+    <div class="btn-group" role="group" aria-label="@L["Change month"]">
+        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="@L["Previous month"]" @onclick="() => MoveAsync(-1)">
             <Icon Name="chevron-left" Size="18" />
         </button>
-        <button type="button" class="btn btn-outline-secondary" @onclick="ThisMonthAsync">This month</button>
-        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="Next month" @onclick="() => MoveAsync(1)">
+        <button type="button" class="btn btn-outline-secondary" @onclick="ThisMonthAsync">@L["This month"]</button>
+        <button type="button" class="btn btn-outline-secondary btn-square" aria-label="@L["Next month"]" @onclick="() => MoveAsync(1)">
             <Icon Name="chevron-right" Size="18" />
         </button>
     </div>
-    <span class="range-label">@_month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</span>
+    <span class="range-label">@_month.ToString("MMMM yyyy", CultureInfo.CurrentCulture)</span>
 
-    <div class="line-filter ms-auto" role="group" aria-label="Lines">
+    <div class="line-filter ms-auto" role="group" aria-label="@L["Lines"]">
         @foreach (var (line, index) in Controller.Board.Lines.Select((l, i) => (l, i)))
         {
             var on = !_hiddenLines.Contains(line.Id);
@@ -27,7 +27,7 @@
     </div>
 </div>
 
-<div class="calendar" role="grid" aria-label="@_month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)">
+<div class="calendar" role="grid" aria-label="@_month.ToString("MMMM yyyy", CultureInfo.CurrentCulture)">
     <div class="calendar-row calendar-weekdays" role="row">
         @foreach (var name in WeekdayNames)
         {
@@ -49,7 +49,7 @@
                         <span>@day.Day</span>
                         @if (items.Count > 0)
                         {
-                            <span class="calendar-load" title="Jobs running this day">@items.Count(i => !i.IsPlaceholder)</span>
+                            <span class="calendar-load" title="@L["Jobs running this day"]">@items.Count(i => !i.IsPlaceholder)</span>
                         }
                     </div>
                     <div class="calendar-items">
@@ -63,7 +63,7 @@
                                  @ondragstart="() => Controller.StartDrag(item)" @ondragend="Controller.EndDrag"
                                  @onclick="() => SelectAsync(item)" @onkeydown="e => OnKey(e, item)">
                                 <span class="cal-time">@(continues ? "…" : ScheduleFormat.Time(s.Start, Tz))</span>
-                                <span class="cal-title">@(item.IsPlaceholder ? "Changeover" : s.JobNumber)</span>
+                                <span class="cal-title">@(item.IsPlaceholder ? L["Changeover"] : s.JobNumber)</span>
                                 <span class="cal-line">@item.LineCode</span>
                                 @if (s.IsLocked)
                                 {
@@ -74,7 +74,7 @@
                         @if (items.Count > MaxPerDay)
                         {
                             <button type="button" class="cal-more" @onclick="() => ToggleDay(day)">
-                                @(_expanded.Contains(day) ? "Show fewer" : $"+{items.Count - MaxPerDay} more")
+                                @(_expanded.Contains(day) ? L["Show fewer"] : L["+{0} more", items.Count - MaxPerDay])
                             </button>
                         }
                     </div>
@@ -85,13 +85,14 @@
 </div>
 
 <p class="small text-muted mt-2">
-    Drag a planned job to a later day to hold it until then. To run something sooner, change its place in the line on the Gantt.
+    @L["Drag a planned job to a later day to hold it until then. To run something sooner, change its place in the line on the Gantt."]
 </p>
 
 @code {
     private const int MaxPerDay = 4;
     private const int LinePalette = 6;
-    private static readonly string[] WeekdayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    // Monday first, in the reader's language.
+    private static string[] WeekdayNames => [.. Enumerable.Range(1, 7).Select(i => System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName((DayOfWeek)(i % 7)))];
 
     [Parameter, EditorRequired]
     public ScheduleController Controller { get; set; } = null!;
@@ -169,7 +170,7 @@
 
         if (!CanHold(item))
         {
-            Controller.Toast("warning", $"{item.Segment.JobNumber} is {(item.Segment.IsLocked ? "locked" : item.Segment.Status)}; only planned, unlocked jobs move in time.");
+            Controller.Toast("warning", L["{0} is {1}; only planned, unlocked jobs move in time.", item.Segment.JobNumber, (item.Segment.IsLocked ? "locked" : item.Segment.Status)]);
             return;
         }
 
@@ -204,8 +205,8 @@
     private string Describe(BoardItem item)
     {
         var s = item.Segment;
-        var head = item.IsPlaceholder ? $"Changeover {s.FromMaterialCode} → {s.MaterialCode}" : $"{s.JobNumber} {s.MaterialCode}";
-        var text = $"{head} on {item.LineCode}, {ScheduleFormat.When(s.Start, Tz)} – {ScheduleFormat.When(s.End, Tz)}";
+        var head = item.IsPlaceholder ? L["Changeover {0} → {1}", s.FromMaterialCode, s.MaterialCode] : $"{s.JobNumber} {s.MaterialCode}";
+        var text = L["{0} on {1}, {2} – {3}", head, item.LineCode, ScheduleFormat.When(s.Start, Tz), ScheduleFormat.When(s.End, Tz)];
         return Controller.Board.IsOverlapping(item) ? text + " — overlaps other work" : text;
     }
 }

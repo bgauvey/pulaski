@@ -4,27 +4,27 @@
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 
-<PageTitle>@(_detail?.Material.Code ?? "Material") · Pulaski</PageTitle>
+<PageTitle>@(_detail?.Material.Code ?? L["Material"]) · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <div class="small mb-1"><a href="materials">← Materials</a></div>
+        <div class="small mb-1"><a href="materials">@L["← Materials"]</a></div>
         <h1 class="mb-1">
-            @(_detail?.Material.Code ?? "Material")
+            @(_detail?.Material.Code ?? L["Material"])
             @if (_detail?.Material is { } h && MaterialProperties.IsFromErp(h))
             {
-                <span class="chip ms-2 align-middle" title="Code, name, base unit and type come from @h.ExternalSystem">From @h.ExternalSystem</span>
+                <span class="chip ms-2 align-middle" title="@L["Code, name, base unit and type come from {0}", h.ExternalSystem]">@L["From {0}", h.ExternalSystem]</span>
             }
             @if (_detail?.Material is { IsActive: false })
             {
-                <span class="chip chip-muted ms-2 align-middle">Inactive</span>
+                <span class="chip chip-muted ms-2 align-middle">@L["Inactive"]</span>
             }
         </h1>
         <p class="text-muted mb-0">@_detail?.Material.Name</p>
     </div>
     <div class="inv-head-tools">
-        <ScreenLink Href="@($"units?material={MaterialId}")" Permission="@PermissionCodes.UnitsView" Hide class="btn btn-outline-secondary">Conversions</ScreenLink>
-        <ScreenLink Href="@($"inventory/materials/{MaterialId}")" Permission="@PermissionCodes.InventoryView" Hide class="btn btn-outline-secondary">Stock</ScreenLink>
+        <ScreenLink Href="@($"units?material={MaterialId}")" Permission="@PermissionCodes.UnitsView" Hide class="btn btn-outline-secondary">@L["Conversions"]</ScreenLink>
+        <ScreenLink Href="@($"inventory/materials/{MaterialId}")" Permission="@PermissionCodes.InventoryView" Hide class="btn btn-outline-secondary">@L["Stock"]</ScreenLink>
     </div>
 </div>
 
@@ -33,7 +33,7 @@
 {
     <div class="drawer-alert is-warning mb-3" role="status">
         <Icon Name="alert" Size="18" />
-        <span>Switched off. It can't be received, ordered or added to BOMs any more; these carry on: @string.Join("; ", still).</span>
+        <span>@L["Switched off. It can't be received, ordered or added to BOMs any more; these carry on: {0}.", string.Join("; ", still)]</span>
     </div>
 }
 
@@ -51,31 +51,31 @@
     var u = detail.Usage;
     <div class="inv-layout mb-4">
         <div class="props-panel">
-            <PropertyGrid Items="_items" Title="@m.Code" Subtitle="@(MaterialProperties.IsFromErp(m) ? $"From {m.ExternalSystem}" : "Maintained in Pulaski")"
+            <PropertyGrid Items="_items" Title="@m.Code" Subtitle="@(MaterialProperties.IsFromErp(m) ? L["From {0}", m.ExternalSystem] : L["Maintained in Pulaski"])"
                           Disabled="@(_saving || !User.Can(PermissionCodes.Materials))" Revision="_revision" OnChange="OnChangeAsync" />
         </div>
 
         <section aria-labelledby="use-title">
-            <h2 id="use-title">What uses it</h2>
+            <h2 id="use-title">@L["What uses it"]</h2>
             <div class="inv-tiles">
                 <ScreenLink Href="@($"inventory/materials/{MaterialId}")" Permission="@PermissionCodes.InventoryView" class="inv-tile text-decoration-none">
                     <span class="metric @(u.LotsOnHand == 0 ? "is-zero" : "")">@InventoryView.Qty(u.QuantityOnHand)</span>
-                    <span class="inv-tile-label">On hand, @m.BaseUomCode · @u.LotsOnHand @(u.LotsOnHand == 1 ? "lot" : "lots")</span>
+                    <span class="inv-tile-label">@(u.LotsOnHand == 1 ? L["On hand, {0} · 1 lot", m.BaseUomCode] : L["On hand, {0} · lots: {1}", m.BaseUomCode, u.LotsOnHand])</span>
                 </ScreenLink>
-                <div class="inv-tile"><span class="metric @(u.OpenWorkOrders == 0 ? "is-zero" : "")">@u.OpenWorkOrders</span><span class="inv-tile-label">Open work orders</span></div>
-                <div class="inv-tile"><span class="metric @(u.OpenJobs == 0 ? "is-zero" : "")">@u.OpenJobs</span><span class="inv-tile-label">Open jobs</span></div>
-                <div class="inv-tile"><span class="metric @(u.UsedInReleasedBoms == 0 ? "is-zero" : "")">@u.UsedInReleasedBoms</span><span class="inv-tile-label">Released BOMs using it</span></div>
-                <div class="inv-tile"><span class="metric @(u.Capabilities == 0 ? "is-zero" : "")">@u.Capabilities</span><span class="inv-tile-label">Lines that can run it</span></div>
+                <div class="inv-tile"><span class="metric @(u.OpenWorkOrders == 0 ? "is-zero" : "")">@u.OpenWorkOrders</span><span class="inv-tile-label">@L["Open work orders"]</span></div>
+                <div class="inv-tile"><span class="metric @(u.OpenJobs == 0 ? "is-zero" : "")">@u.OpenJobs</span><span class="inv-tile-label">@L["Open jobs"]</span></div>
+                <div class="inv-tile"><span class="metric @(u.UsedInReleasedBoms == 0 ? "is-zero" : "")">@u.UsedInReleasedBoms</span><span class="inv-tile-label">@L["Released BOMs using it"]</span></div>
+                <div class="inv-tile"><span class="metric @(u.Capabilities == 0 ? "is-zero" : "")">@u.Capabilities</span><span class="inv-tile-label">@L["Lines that can run it"]</span></div>
             </div>
             <p class="small text-muted">
                 @(u.InUse
                     ? MaterialProperties.IsFromErp(m)
-                        ? $"In use. Its code, name, base unit and type come from {m.ExternalSystem}."
-                        : "In use, so its code and base unit are fixed."
+                        ? L["In use. Its code, name, base unit and type come from {0}.", m.ExternalSystem]
+                        : L["In use, so its code and base unit are fixed."]
                     : MaterialProperties.IsFromErp(m)
-                        ? $"Nothing uses it yet. Its code, name, base unit and type come from {m.ExternalSystem}."
-                        : "Nothing uses it yet: every field can still change.")
-                Base unit: @m.BaseUomCode (@detail.BaseUomName).
+                        ? L["Nothing uses it yet. Its code, name, base unit and type come from {0}.", m.ExternalSystem]
+                        : L["Nothing uses it yet: every field can still change."])
+                @L["Base unit: {0} ({1}).", m.BaseUomCode, detail.BaseUomName]
             </p>
             @if (!string.IsNullOrWhiteSpace(m.Description))
             {
@@ -88,11 +88,11 @@
 
     <div class="inv-layout">
         <section class="inv-section" aria-labelledby="made-title">
-            <h2 id="made-title">How it is made</h2>
-            <h3 class="h6">Processes that make it</h3>
+            <h2 id="made-title">@L["How it is made"]</h2>
+            <h3 class="h6">@L["Processes that make it"]</h3>
             @if (_processes.Count == 0)
             {
-                <p class="text-muted small">No process names @m.Code, its class, or all materials.</p>
+                <p class="text-muted small">@L["No process names {0}, its class, or all materials.", m.Code]</p>
             }
             else
             {
@@ -103,20 +103,20 @@
                             <ScreenLink Href="@($"processes/{p.Id}")" Permission="@PermissionCodes.ProcessesView">@p.Code</ScreenLink> · @p.Name
                             @if (p.DefaultFor.Contains(m.Code))
                             {
-                                <span class="chip ms-1">default</span>
+                                <span class="chip ms-1">@L["default"]</span>
                             }
                             @if (p.ReleasedVersion is null)
                             {
-                                <span class="small text-muted">· no released version</span>
+                                <span class="small text-muted">@L["· no released version"]</span>
                             }
                         </li>
                     }
                 </ul>
             }
-            <h3 class="h6">Its BOMs</h3>
+            <h3 class="h6">@L["Its BOMs"]</h3>
             @if (_boms.Count == 0)
             {
-                <p class="text-muted small">No BOM. <ScreenLink Href="boms" Permission="@PermissionCodes.ProcessesView">Create one</ScreenLink> to plan its components.</p>
+                <p class="text-muted small">@L["No BOM. Create one to plan its components."] <ScreenLink Href="boms" Permission="@PermissionCodes.ProcessesView">@L["Create one"]</ScreenLink></p>
             }
             else
             {
@@ -124,8 +124,8 @@
                     @foreach (var b in _boms)
                     {
                         <li @key="b.Id">
-                            <ScreenLink Href="@($"boms/{b.Id}")" Permission="@PermissionCodes.ProcessesView">BOM for @(b.ProcessCode ?? "any process")</ScreenLink>
-                            <span class="small text-muted">· @(b.ReleasedVersion is { } r ? $"version {r} released, {b.ReleasedItems} components" : "not released")</span>
+                            <ScreenLink Href="@($"boms/{b.Id}")" Permission="@PermissionCodes.ProcessesView">@L["BOM for {0}", b.ProcessCode ?? L["any process"]]</ScreenLink>
+                            <span class="small text-muted">· @(b.ReleasedVersion is { } r ? L["version {0} released, {1} components", r, b.ReleasedItems] : L["not released"])</span>
                         </li>
                     }
                 </ul>
@@ -133,30 +133,30 @@
         </section>
 
         <section class="inv-section" aria-labelledby="used-title">
-            <h2 id="used-title">Where it is used</h2>
+            <h2 id="used-title">@L["Where it is used"]</h2>
             @if (_whereUsed is { } used)
             {
                 @if (used.Boms.Count == 0 && used.Jobs.Count == 0)
                 {
-                    <p class="text-muted small">No BOM lists @m.Code as a component, and no open job plans to use it.</p>
+                    <p class="text-muted small">@L["No BOM lists {0} as a component, and no open job plans to use it.", m.Code]</p>
                 }
                 @foreach (var b in used.Boms)
                 {
                     <div class="small" @key="(b.VersionId, b.LineNo)">
-                        <a href="materials/@b.MaterialId">@b.MaterialCode</a> · @InventoryView.Qty(b.QtyPer) @b.UomCode per @InventoryView.Qty(b.BaseQty) @b.BaseUomCode
-                        <span class="text-muted">(v@(b.VersionNumber) @b.VersionStatus@(b.OperationNumber is { } op ? $", operation {op}" : ""))</span>
+                        <a href="materials/@b.MaterialId">@b.MaterialCode</a> @L["· {0} {1} per {2} {3}", InventoryView.Qty(b.QtyPer), b.UomCode, InventoryView.Qty(b.BaseQty), b.BaseUomCode]
+                        <span class="text-muted">(v@(b.VersionNumber) @b.VersionStatus@(b.OperationNumber is { } op ? L[", operation {0}", op] : ""))</span>
                     </div>
                 }
                 @if (used.Jobs.Count > 0)
                 {
-                    <div class="small mt-2">@used.Jobs.Count open @(used.Jobs.Count == 1 ? "job plans" : "jobs plan") to use it. <ScreenLink Href="@($"inventory/materials/{MaterialId}")" Permission="@PermissionCodes.InventoryView">See them</ScreenLink></div>
+                    <div class="small mt-2">@used.Jobs.Count open @(used.Jobs.Count == 1 ? "job plans" : "jobs plan") to use it. <ScreenLink Href="@($"inventory/materials/{MaterialId}")" Permission="@PermissionCodes.InventoryView">@L["See them"]</ScreenLink></div>
                 }
             }
 
-            <h3 class="h6 mt-3">Its own conversions</h3>
+            <h3 class="h6 mt-3">@L["Its own conversions"]</h3>
             @if (_conversions.Count == 0)
             {
-                <p class="text-muted small">None: it converts only between standard units of its own kind. <ScreenLink Href="@($"units?material={MaterialId}")" Permission="@PermissionCodes.UnitsView">Add one</ScreenLink></p>
+                <p class="text-muted small">@L["None: it converts only between standard units of its own kind."] <ScreenLink Href="@($"units?material={MaterialId}")" Permission="@PermissionCodes.UnitsView">@L["Add one"]</ScreenLink></p>
             }
             else
             {
@@ -172,7 +172,7 @@
 }
 else if (_error is null)
 {
-    <p class="text-muted">Loading…</p>
+    <p class="text-muted">@L["Loading…"]</p>
 }
 
 @code {
@@ -215,7 +215,7 @@ else if (_error is null)
     private async Task LoadAsync()
     {
         _detail = await Api.GetMaterialAsync(MaterialId);
-        _items = MaterialProperties.For(_detail.Material, _detail.Usage, _classes, _uoms);
+        _items = MaterialProperties.For(L, _detail.Material, _detail.Usage, _classes, _uoms);
         _revision++;
     }
 

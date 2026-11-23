@@ -4,24 +4,23 @@
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 
-<PageTitle>Units · Pulaski</PageTitle>
+<PageTitle>@L["Units"] · Pulaski</PageTitle>
 
 <div class="mb-3">
-    <h1 class="mb-1">Units and conversions</h1>
+    <h1 class="mb-1">@L["Units and conversions"]</h1>
     <p class="text-muted mb-0">
-        Standard units convert within their dimension for every material. A material's own conversions link the rest:
-        weight per metre, pieces per box, kilograms per bag.
+        @L["Standard units convert within their dimension for every material. A material's own conversions link the rest: weight per metre, pieces per box, kilograms per bag."]
     </p>
 </div>
 
 <ProblemAlert Error="_error" />
-<ViewOnlyNote Permission="@PermissionCodes.Units" What="maintain units of measure" />
+<ViewOnlyNote Permission="@PermissionCodes.Units" What="@L["maintain units of measure"]" />
 
 @if (_units is null || _materials is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
@@ -29,11 +28,11 @@ else
     <div class="units-layout">
         @* ---- A material's own conversions ---- *@
         <section aria-labelledby="conversions-title">
-            <h2 id="conversions-title" class="h5">Material conversions</h2>
+            <h2 id="conversions-title" class="h5">@L["Material conversions"]</h2>
             <div class="mb-3" style="max-width: 32rem">
-                <label class="form-label" for="conv-material">Material</label>
+                <label class="form-label" for="conv-material">@L["Material"]</label>
                 <select id="conv-material" class="form-select" value="@_materialId" @onchange="OnMaterialChangedAsync">
-                    <option value="@Guid.Empty">Choose a material…</option>
+                    <option value="@Guid.Empty">@L["Choose a material…"]</option>
                     @foreach (var m in _materials)
                     {
                         <option value="@m.Id">@m.Code · @m.Name (@m.BaseUomCode)</option>
@@ -44,14 +43,13 @@ else
             @if (Material is { } material)
             {
                 <p class="small text-muted">
-                    @material.Code is stocked in <strong>@material.BaseUomCode</strong>. Each line reads "1 of the first unit is this many of the second"
-                    and works both ways.
+                    @L["{0} is stocked in {1}. Each line reads \"1 of the first unit is this many of the second\" and works both ways.", material.Code, material.BaseUomCode]
                 </p>
 
                 <fieldset class="view-only-scope" disabled="@(!User.Can(PermissionCodes.Materials))">
                 <div class="table-panel mb-3">
                     <table class="table table-sm align-middle mb-0">
-                        <thead><tr><th>Conversion</th><th class="text-end">And back</th><th></th></tr></thead>
+                        <thead><tr><th>@L["Conversion"]</th><th class="text-end">@L["And back"]</th><th></th></tr></thead>
                         <tbody>
                             @foreach (var c in _conversions)
                             {
@@ -60,13 +58,13 @@ else
                                     <td class="text-end small text-muted">1 @c.ToUomCode = @Plain(Math.Round(1m / c.Factor, 6)) @c.FromUomCode</td>
                                     <td class="text-end">
                                         <button type="button" class="btn btn-sm btn-link text-danger p-0" disabled="@_saving"
-                                                @onclick="() => RemoveAsync(c)">Remove</button>
+                                                @onclick="() => RemoveAsync(c)">@L["Remove"]</button>
                                     </td>
                                 </tr>
                             }
                             @if (_conversions.Count == 0)
                             {
-                                <tr><td colspan="3" class="text-muted small">No conversions yet: @material.Code converts only between standard units of its own dimension.</td></tr>
+                                <tr><td colspan="3" class="text-muted small">@L["No conversions yet: {0} converts only between standard units of its own dimension.", material.Code]</td></tr>
                             }
                         </tbody>
                     </table>
@@ -79,55 +77,55 @@ else
                 <form class="d-flex flex-wrap gap-2 align-items-end mb-4" @onsubmit="SetAsync" @onsubmit:preventDefault>
                     <span class="pb-2">1</span>
                     <div>
-                        <label class="form-label small" for="conv-from">Unit</label>
+                        <label class="form-label small" for="conv-from">@L["Unit"]</label>
                         <select id="conv-from" class="form-select form-select-sm" @bind="_from">
                             @UnitOptions()
                         </select>
                     </div>
                     <span class="pb-2">=</span>
                     <div>
-                        <label class="form-label small" for="conv-factor">Quantity</label>
+                        <label class="form-label small" for="conv-factor">@L["Quantity"]</label>
                         <input id="conv-factor" type="number" min="0" step="any" class="form-control form-control-sm" style="width: 9rem" @bind="_factor" />
                     </div>
                     <div>
-                        <label class="form-label small" for="conv-to">Unit</label>
+                        <label class="form-label small" for="conv-to">@L["Unit"]</label>
                         <select id="conv-to" class="form-select form-select-sm" @bind="_to">
                             @UnitOptions()
                         </select>
                     </div>
                     <button type="submit" class="btn btn-primary btn-sm" disabled="@(_saving || _factor is not > 0 || _from == Guid.Empty || _to == Guid.Empty)">
-                        Save conversion
+                        @L["Save conversion"]
                     </button>
                 </form>
                 }
                 else
                 {
-                    <p class="small text-muted mb-4">Changing a material's conversions needs permission to maintain materials.</p>
+                    <p class="small text-muted mb-4">@L["Changing a material's conversions needs permission to maintain materials."]</p>
                 }
             }
 
-            <h3 class="h6">Try a conversion</h3>
+            <h3 class="h6">@L["Try a conversion"]</h3>
             <form class="d-flex flex-wrap gap-2 align-items-end" @onsubmit="TryAsync" @onsubmit:preventDefault>
                 <div>
-                    <label class="form-label small" for="try-qty">Quantity</label>
+                    <label class="form-label small" for="try-qty">@L["Quantity"]</label>
                     <input id="try-qty" type="number" step="any" class="form-control form-control-sm" style="width: 9rem" @bind="_tryQty" />
                 </div>
                 <div>
-                    <label class="form-label small" for="try-from">From</label>
+                    <label class="form-label small" for="try-from">@L["From"]</label>
                     <select id="try-from" class="form-select form-select-sm" @bind="_tryFrom">@UnitOptions()</select>
                 </div>
                 <div>
-                    <label class="form-label small" for="try-to">To</label>
+                    <label class="form-label small" for="try-to">@L["To"]</label>
                     <select id="try-to" class="form-select form-select-sm" @bind="_tryTo">@UnitOptions()</select>
                 </div>
-                <button type="submit" class="btn btn-outline-primary btn-sm" disabled="@(_tryFrom == Guid.Empty || _tryTo == Guid.Empty)">Convert</button>
+                <button type="submit" class="btn btn-outline-primary btn-sm" disabled="@(_tryFrom == Guid.Empty || _tryTo == Guid.Empty)">@L["Convert"]</button>
             </form>
             @if (_tryResult is { } result)
             {
                 <p class="mt-2 @(result.Converts ? "" : "text-warning-strong")" role="status">
                     @if (result.Converts)
                     {
-                        <span>@Plain(_tryQty) @Code(_tryFrom) = <strong>@Plain(result.Quantity!.Value) @Code(_tryTo)</strong>@(Material is { } m ? $" of {m.Code}" : "")</span>
+                        <span>@Plain(_tryQty) @Code(_tryFrom) = <strong>@Plain(result.Quantity!.Value) @Code(_tryTo)</strong>@(Material is { } m ? L[" of {0}", m.Code] : "")</span>
                     }
                     else
                     {
@@ -140,10 +138,10 @@ else
         @* ---- The unit catalog ---- *@
         <section aria-labelledby="units-title">
             <div class="d-flex justify-content-between align-items-center">
-                <h2 id="units-title" class="h5 mb-0">Units</h2>
+                <h2 id="units-title" class="h5 mb-0">@L["Units"]</h2>
                 @if (User.Can(PermissionCodes.Units))
                 {
-                    <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => _adding = !_adding">New unit</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => _adding = !_adding">@L["New unit"]</button>
                 }
             </div>
 
@@ -151,41 +149,41 @@ else
             {
                 <form class="d-flex flex-wrap gap-2 align-items-end my-3" @onsubmit="CreateAsync" @onsubmit:preventDefault>
                     <div>
-                        <label class="form-label small" for="new-code">Code</label>
+                        <label class="form-label small" for="new-code">@L["Code"]</label>
                         <input id="new-code" class="form-control form-control-sm" style="width: 6rem" maxlength="20" @bind="_newCode" />
                     </div>
                     <div>
-                        <label class="form-label small" for="new-name">Name</label>
+                        <label class="form-label small" for="new-name">@L["Name"]</label>
                         <input id="new-name" class="form-control form-control-sm" maxlength="100" @bind="_newName" />
                     </div>
                     <div>
-                        <label class="form-label small" for="new-dimension">Kind</label>
+                        <label class="form-label small" for="new-dimension">@L["Kind"]</label>
                         <select id="new-dimension" class="form-select form-select-sm" @bind="_newDimension">
                             @foreach (var dimension in Dimensions)
                             {
-                                <option value="@dimension.Code">@dimension.Label</option>
+                                <option value="@dimension.Code">@L[dimension.Label]</option>
                             }
                         </select>
                     </div>
                     @if (_newDimension != "other")
                     {
                         <div>
-                            <label class="form-label small" for="new-factor">1 of it is how many @BaseCode(_newDimension)</label>
+                            <label class="form-label small" for="new-factor">@L["1 of it is how many {0}", BaseCode(_newDimension)]</label>
                             <input id="new-factor" type="number" min="0" step="any" class="form-control form-control-sm" style="width: 10rem" @bind="_newFactor" />
                         </div>
                     }
                     <button type="submit" class="btn btn-primary btn-sm"
                             disabled="@(_saving || string.IsNullOrWhiteSpace(_newCode) || string.IsNullOrWhiteSpace(_newName) || (_newDimension != "other" && _newFactor is not > 0))">
-                        Create
+                        @L["Create"]
                     </button>
-                    <div class="w-100 small text-muted">The code, kind and factor can't change later, because quantities are stored in the unit.</div>
+                    <div class="w-100 small text-muted">@L["The code, kind and factor can't change later, because quantities are stored in the unit."]</div>
                 </form>
             }
 
             <fieldset class="view-only-scope" disabled="@(!User.Can(PermissionCodes.Units))">
             @foreach (var group in _units.GroupBy(u => u.Dimension))
             {
-                <h3 class="h6 mt-3 mb-1">@DimensionLabel(group.Key)</h3>
+                <h3 class="h6 mt-3 mb-1">@L[DimensionLabel(group.Key)]</h3>
                 <div class="table-panel">
                     <table class="table table-sm align-middle mb-0">
                         <tbody>
@@ -194,7 +192,7 @@ else
                                 <tr @key="u.Id" class="@(u.IsActive ? "" : "text-muted")">
                                     <td style="width: 5rem"><strong>@u.Code</strong></td>
                                     <td>
-                                        <input class="form-control form-control-sm border-0 bg-transparent p-0" aria-label="Name of @u.Code"
+                                        <input class="form-control form-control-sm border-0 bg-transparent p-0" aria-label="@L["Name of {0}", u.Code]"
                                                value="@u.Name" @onchange="e => RenameAsync(u, e.Value?.ToString())" />
                                     </td>
                                     <td class="small text-nowrap text-end">
@@ -204,7 +202,7 @@ else
                                         <div class="form-check form-switch mb-0">
                                             <input class="form-check-input" type="checkbox" role="switch" id="active-@u.Id" checked="@u.IsActive"
                                                    @onchange="e => SetActiveAsync(u, e.Value is true)" />
-                                            <label class="form-check-label small" for="active-@u.Id">Active</label>
+                                            <label class="form-check-label small" for="active-@u.Id">@L["Active"]</label>
                                         </div>
                                     </td>
                                 </tr>
@@ -221,8 +219,8 @@ else
 @code {
     private static readonly (string Code, string Label)[] Dimensions =
     [
-        ("mass", "Mass"), ("length", "Length"), ("area", "Area"), ("volume", "Volume"),
-        ("count", "Count"), ("time", "Time"), ("other", "Packaging (per material)"),
+        ("mass", Term.Mark("Mass")), ("length", Term.Mark("Length")), ("area", Term.Mark("Area")), ("volume", Term.Mark("Volume")),
+        ("count", Term.Mark("Count")), ("time", Term.Mark("Time")), ("other", Term.Mark("Packaging (per material)")),
     ];
 
     [SupplyParameterFromQuery(Name = "material")]
@@ -268,7 +266,7 @@ else
 
     private RenderFragment UnitOptions() => __builder =>
     {
-        <option value="@Guid.Empty">Unit…</option>
+        <option value="@Guid.Empty">@L["Unit…"]</option>
         @foreach (var u in _units!.Where(u => u.IsActive))
         {
             <option value="@u.Id">@u.Code · @u.Name</option>

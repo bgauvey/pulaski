@@ -8,16 +8,16 @@
 @inject TimeProvider Time
 @inject CurrentUser User
 
-<PageTitle>Work orders · Pulaski</PageTitle>
+<PageTitle>@L["Work orders"] · Pulaski</PageTitle>
 
 <div class="wo-head">
-    <h1 class="mb-0">Work orders</h1>
+    <h1 class="mb-0">@L["Work orders"]</h1>
     <div class="wo-head-tools">
         @* New work orders are created by planners, from the Schedule page; the ERP's come by import (D-066, D-102). *@
         @if (ImportSites.Count > 0)
         {
             <button type="button" class="btn btn-sm btn-outline-secondary" aria-expanded="@(_importOpen ? "true" : "false")" aria-controls="wo-import"
-                    @onclick="() => _importOpen = !_importOpen">Import from the ERP</button>
+                    @onclick="() => _importOpen = !_importOpen">@L["Import from the ERP"]</button>
         }
         <EquipmentPicker Equipment="_equipment" Value="EquipmentId" ValueChanged="OnEquipmentChanged" />
     </div>
@@ -32,13 +32,13 @@
 }
 
 @* The tiles count everything in the selection; picking one filters the list below to it. *@
-<div class="wo-tiles" role="group" aria-label="Filter by">
+<div class="wo-tiles" role="group" aria-label="@L["Filter by"]">
     @foreach (var tile in WorkOrderTiles.All)
     {
         var count = _tiles.GetValueOrDefault(tile.Key);
         var active = _tile == tile.Key;
         <button type="button" class="wo-tile tone-@tile.Tone @(active ? "is-active" : "") @(count == 0 ? "is-zero" : "")"
-                aria-pressed="@(active ? "true" : "false")" title="@tile.Help" @onclick="() => ToggleTile(tile.Key)">
+                aria-pressed="@(active ? "true" : "false")" title="@L[tile.Help]" @onclick="() => ToggleTile(tile.Key)">
             <span class="wo-tile-count">
                 @(_progress is null ? "–" : count.ToString(CultureInfo.InvariantCulture))
                 @if (tile.Key == WorkOrderTiles.NeedAttention && count > 0)
@@ -46,7 +46,7 @@
                     <Icon Name="alert" Size="22" />
                 }
             </span>
-            <span class="wo-tile-label">@tile.Label</span>
+            <span class="wo-tile-label">@L[tile.Label]</span>
             <span class="wo-tile-foot" aria-hidden="true"><Icon Name="chevron-down" Size="16" /></span>
         </button>
     }
@@ -54,34 +54,34 @@
 
 <div class="table-panel wo-panel">
     <div class="wo-toolbar">
-        <label class="wo-toolbar-label" for="wo-find-by">Find by</label>
+        <label class="wo-toolbar-label" for="wo-find-by">@L["Find by"]</label>
         <select id="wo-find-by" class="form-select form-select-sm w-auto" @bind="_findBy">
-            <option value="order">Order</option>
-            <option value="material">Material</option>
-            <option value="line">Line or department</option>
+            <option value="order">@L["Order"]</option>
+            <option value="material">@L["Material"]</option>
+            <option value="line">@L["Line or department"]</option>
         </select>
         <div class="wo-search">
-            <input type="search" class="form-control form-control-sm" placeholder="Search" aria-label="Search"
+            <input type="search" class="form-control form-control-sm" placeholder="@L["Search"]" aria-label="@L["Search"]"
                    @bind="_search" @bind:event="oninput" />
             <Icon Name="search" Size="16" />
         </div>
-        <select class="form-select form-select-sm w-auto" aria-label="Status" @bind="_status">
-            <option value="">Open orders</option>
+        <select class="form-select form-select-sm w-auto" aria-label="@L["Status"]" @bind="_status">
+            <option value="">@L["Open orders"]</option>
             @foreach (var status in Display.WorkOrderStatuses)
             {
                 <option value="@status">@L.Label(status)</option>
             }
-            <option value="*">All statuses</option>
+            <option value="*">@L["All statuses"]</option>
         </select>
-        <button type="button" class="btn btn-outline-secondary btn-square btn-sm-square" aria-label="Refresh" title="Refresh"
+        <button type="button" class="btn btn-outline-secondary btn-square btn-sm-square" aria-label="@L["Refresh"]" title="@L["Refresh"]"
                 disabled="@_loading" @onclick="LoadAsync">
             <Icon Name="refresh" Size="16" />
         </button>
         <span class="small text-muted ms-auto">
-            @Rows.Count() of @(_progress?.Count ?? 0) orders
+            @L["{0} of {1} orders", Rows.Count(), _progress?.Count ?? 0]
             @if (_tile is not null)
             {
-                <button type="button" class="link-button ms-1" @onclick="() => _tile = null">Show all</button>
+                <button type="button" class="link-button ms-1" @onclick="() => _tile = null">@L["Show all"]</button>
             }
         </span>
     </div>
@@ -90,9 +90,9 @@
     {
         var cancelCount = SelectedOrders.Count(o => o.Order.NextStatuses.Contains(pending) && MayMove(o.Order, pending));
         <div class="wo-confirm" role="alert">
-            <span>@(cancelCount == 1 ? "Cancel this work order?" : $"Cancel {cancelCount} work orders?") Their open jobs must be cancelled first.</span>
-            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RunBulkAsync(pending)">Confirm cancellation</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _pendingBulk = null">Keep them</button>
+            <span>@(cancelCount == 1 ? L["Cancel this work order?"] : L["Cancel {0} work orders?", cancelCount]) Their open jobs must be cancelled first.</span>
+            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RunBulkAsync(pending)">@L["Confirm cancellation"]</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _pendingBulk = null">@L["Keep them"]</button>
         </div>
     }
 
@@ -100,7 +100,7 @@
     {
         <div class="wo-result @(_resultFailed ? "is-failed" : "")" role="status">
             <span>@_result</span>
-            <button type="button" class="toast-close" aria-label="Dismiss" @onclick="() => _result = null"><Icon Name="close" Size="16" /></button>
+            <button type="button" class="toast-close" aria-label="@L["Dismiss"]" @onclick="() => _result = null"><Icon Name="close" Size="16" /></button>
         </div>
     }
 
@@ -112,7 +112,7 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm btn-with-icon" aria-haspopup="menu"
                         aria-expanded="@(_actionsOpen ? "true" : "false")"
                         disabled="@(_busy || _printingId is not null)" @onclick="() => _actionsOpen = !_actionsOpen">
-                    @(_printingId is null ? "Actions" : "Preparing PDF…")
+                    @(_printingId is null ? L["Actions"] : L["Preparing PDF…"])
                     @if (_printingId is null)
                     {
                         <Icon Name="chevron-down" Size="16" />
@@ -132,7 +132,7 @@
                                     <button type="button" role="menuitem" class="wo-menu-item"
                                             disabled="@(_printingId is not null)"
                                             @onclick="() => PrintShopOrderAsync(selected.Order)">
-                                        @(_printingId == selected.Order.Id ? "Preparing PDF…" : "Print shop order")
+                                        @(_printingId == selected.Order.Id ? L["Preparing PDF…"] : L["Print shop order"])
                                     </button>
                                 </li>
                             }
@@ -148,7 +148,7 @@
                             }
                             @if (User.Can(PermissionCodes.ScheduleView, selected.Order.SiteId))
                             {
-                                <li role="none"><a role="menuitem" class="wo-menu-item" href="schedule?workOrder=@selected.Order.Id">Show on the schedule</a></li>
+                                <li role="none"><a role="menuitem" class="wo-menu-item" href="schedule?workOrder=@selected.Order.Id">@L["Show on the schedule"]</a></li>
                             }
                         }
                         else
@@ -158,53 +158,53 @@
                                 var eligible = selectedOrders.Count(o => o.Order.NextStatuses.Contains(status) && MayMove(o.Order, status));
                                 <li role="none">
                                     <ActionButton role="menuitem" Class="@($"wo-menu-item {(status == "cancelled" ? "is-danger" : "")}")"
-                                                  Reason="@(eligible == 0 ? $"None of the selected orders can move to {L.Label(status).ToLowerInvariant()}, or you may not do it." : null)"
+                                                  Reason="@(eligible == 0 ? L["None of the selected orders can move to {0}, or you may not do it.", L.Label(status).ToLowerInvariant()] : null)"
                                                   OnClick="() => StartSelectedStatus(status)">
-                                        @label <span class="text-muted">@eligible of @selectedOrders.Count</span>
+                                        @L[label] <span class="text-muted">@L["{0} of {1}", eligible, selectedOrders.Count]</span>
                                     </ActionButton>
                                 </li>
                             }
-                            <li role="none"><span class="wo-menu-note">Print and schedule actions are available for one selected order.</span></li>
+                            <li role="none"><span class="wo-menu-note">@L["Print and schedule actions are available for one selected order."]</span></li>
                         }
                     </ul>
                 }
             </div>
         }
         <button type="button" class="link-button" disabled="@(_pendingBulk is not null || !SelectableRows.Any())" @onclick="SelectAll">
-            Select visible (@SelectableRows.Count())
+            @L["Select visible ({0})", SelectableRows.Count()]
         </button>
         @if (_selected.Count > 0)
         {
-            <button type="button" class="link-button" disabled="@(_pendingBulk is not null)" @onclick="ClearSelection">Clear selection</button>
+            <button type="button" class="link-button" disabled="@(_pendingBulk is not null)" @onclick="ClearSelection">@L["Clear selection"]</button>
         }
     </div>
 
     <table class="table align-middle wo-table">
         <thead>
             <tr>
-                <th rowspan="2" class="wo-col-select">@(CanSelectAny ? "Select" : "")</th>
-                <th rowspan="2" class="wo-col-flag"><span class="visually-hidden">Flags</span></th>
-                <th rowspan="2">Order</th>
-                <th rowspan="2">Status</th>
-                <th rowspan="2">Material</th>
-                <th rowspan="2" class="wo-col-info"><span class="visually-hidden">Details</span></th>
-                <th rowspan="2">Schedule</th>
-                <th colspan="2" class="text-center wo-qty-head">Quantity</th>
-                <th rowspan="2">Unit</th>
+                <th rowspan="2" class="wo-col-select">@(CanSelectAny ? L["Select"] : "")</th>
+                <th rowspan="2" class="wo-col-flag"><span class="visually-hidden">@L["Flags"]</span></th>
+                <th rowspan="2">@L["Order"]</th>
+                <th rowspan="2">@L["Status"]</th>
+                <th rowspan="2">@L["Material"]</th>
+                <th rowspan="2" class="wo-col-info"><span class="visually-hidden">@L["Details"]</span></th>
+                <th rowspan="2">@L["Schedule"]</th>
+                <th colspan="2" class="text-center wo-qty-head">@L["Quantity"]</th>
+                <th rowspan="2">@L["Unit"]</th>
             </tr>
             <tr>
-                <th class="text-end">Planned</th>
-                <th class="text-end">Made</th>
+                <th class="text-end">@L["Planned"]</th>
+                <th class="text-end">@L["Made"]</th>
             </tr>
         </thead>
         <tbody>
             @if (_progress is null)
             {
-                <tr><td colspan="10" class="text-muted">@(_error is null ? "Loading…" : "")</td></tr>
+                <tr><td colspan="10" class="text-muted">@(_error is null ? L["Loading…"] : "")</td></tr>
             }
             else if (!Rows.Any())
             {
-                <tr><td colspan="10" class="text-muted">No work orders match.</td></tr>
+                <tr><td colspan="10" class="text-muted">@L["No work orders match."]</td></tr>
             }
             @foreach (var p in Rows)
             {
@@ -216,7 +216,7 @@
                     <td class="wo-col-select">
                         @if (CanSelect(wo))
                         {
-                            <input class="form-check-input" type="checkbox" aria-label="Select @wo.OrderNumber"
+                            <input class="form-check-input" type="checkbox" aria-label="@L["Select {0}", wo.OrderNumber]"
                                    checked="@_selected.Contains(wo.Id)" disabled="@(_pendingBulk is not null)"
                                    @onchange="e => ToggleSelected(wo.Id, e.Value is true)" />
                         }
@@ -234,15 +234,15 @@
                         <span class="@Display.StatusChip(wo.Status)">@L.Label(wo.Status)</span>
                         @if (wo.QuantityHeld)
                         {
-                            <span class="chip chip-warning ms-1" title="The ERP's quantity isn't whole batches; set one before dispatching">held</span>
+                            <span class="chip chip-warning ms-1" title="@L["The ERP's quantity isn't whole batches; set one before dispatching"]">@L["held"]</span>
                         }
                         @if (wo.PendingChange is not null)
                         {
-                            <span class="chip chip-warning ms-1" title="The ERP changed it; accept or reject the change">ERP change</span>
+                            <span class="chip chip-warning ms-1" title="@L["The ERP changed it; accept or reject the change"]">@L["ERP change"]</span>
                         }
                         @if (wo.Priority > 0)
                         {
-                            <span class="wo-priority" title="Priority @wo.Priority" aria-label="Priority @wo.Priority"><Icon Name="arrow-up" Size="16" /></span>
+                            <span class="wo-priority" title="@L["Priority {0}", wo.Priority]" aria-label="@L["Priority {0}", wo.Priority]"><Icon Name="arrow-up" Size="16" /></span>
                         }
                     </td>
                     <td>
@@ -251,30 +251,30 @@
                     </td>
                     <td class="wo-col-info">
                         <button type="button" class="wo-icon-button" aria-expanded="@(expanded ? "true" : "false")"
-                                aria-label="@(expanded ? "Hide" : "Show") details for @wo.OrderNumber" @onclick="() => ToggleExpanded(wo.Id)">
+                                aria-label="@(expanded ? L["Hide"] : L["Show"]) details for @wo.OrderNumber" @onclick="() => ToggleExpanded(wo.Id)">
                             <Icon Name="info" Size="20" />
                         </button>
                     </td>
                     <td class="wo-schedule">
                         @if (p.ProjectedStart is null)
                         {
-                            <span class="text-muted">Not on a line</span>
+                            <span class="text-muted">@L["Not on a line"]</span>
                             @if (wo.DueAt is not null)
                             {
-                                <div class="small">Due @Display.SiteTime(wo.DueAt, tz)</div>
+                                <div class="small">@L["Due {0}", Display.SiteTime(wo.DueAt, tz)]</div>
                             }
                         }
                         else
                         {
-                            <div><span class="wo-date-label">Start</span> @Display.SiteTime(p.ProjectedStart, tz)</div>
-                            <div><span class="wo-date-label">Finish</span> @Display.SiteTime(p.ProjectedEnd, tz)</div>
+                            <div><span class="wo-date-label">@L["Start"]</span> @Display.SiteTime(p.ProjectedStart, tz)</div>
+                            <div><span class="wo-date-label">@L["Finish"]</span> @Display.SiteTime(p.ProjectedEnd, tz)</div>
                             @if (p.StartSlip is { } startSlip && startSlip > WorkOrderTiles.SlipTolerance)
                             {
-                                <div class="wo-slip">Starts @ScheduleFormat.Duration(startSlip) after its baseline</div>
+                                <div class="wo-slip">@L["Starts {0} after its baseline", ScheduleFormat.Duration(startSlip)]</div>
                             }
                             @if (p.FinishSlip is { } finishSlip)
                             {
-                                <div class="wo-slip">Finishes @ScheduleFormat.Duration(finishSlip) after due</div>
+                                <div class="wo-slip">@L["Finishes {0} after due", ScheduleFormat.Duration(finishSlip)]</div>
                             }
                         }
                     </td>
@@ -288,31 +288,31 @@
                         <td colspan="10">
                             <div class="wo-details-grid">
                                 <dl class="facts mb-0">
-                                    <dt>Due</dt>
-                                    <dd>@(wo.DueAt is null ? "No due date" : Display.SiteTime(wo.DueAt, tz))</dd>
-                                    <dt>Baseline</dt>
-                                    <dd>@(p.BaselineStart is null ? "Not published yet" : $"{Display.SiteTime(p.BaselineStart, tz)} – {Display.SiteTime(p.BaselineEnd, tz)}")</dd>
-                                    <dt>On lines</dt>
-                                    <dd>@Number(p.PlacedQty) of @Number(wo.PlannedQty) @wo.UomCode</dd>
-                                    <dt>Process</dt>
-                                    <dd>@(wo.ProcessCode is null ? "None" : $"{wo.ProcessCode} · {wo.ProcessName} (v{wo.ProcessVersionNumber})")</dd>
-                                    <dt>BOM</dt>
-                                    <dd>@(wo.BomVersionNumber is { } bomVersion ? $"Version {bomVersion}" : "None: no components planned")</dd>
-                                    <dt>Origin</dt>
+                                    <dt>@L["Due"]</dt>
+                                    <dd>@(wo.DueAt is null ? L["No due date"] : Display.SiteTime(wo.DueAt, tz))</dd>
+                                    <dt>@L["Baseline"]</dt>
+                                    <dd>@(p.BaselineStart is null ? L["Not published yet"] : $"{Display.SiteTime(p.BaselineStart, tz)} – {Display.SiteTime(p.BaselineEnd, tz)}")</dd>
+                                    <dt>@L["On lines"]</dt>
+                                    <dd>@L["{0} of {1} {2}", Number(p.PlacedQty), Number(wo.PlannedQty), wo.UomCode]</dd>
+                                    <dt>@L["Process"]</dt>
+                                    <dd>@(wo.ProcessCode is null ? L["None"] : $"{wo.ProcessCode} · {wo.ProcessName} (v{wo.ProcessVersionNumber})")</dd>
+                                    <dt>@L["BOM"]</dt>
+                                    <dd>@(wo.BomVersionNumber is { } bomVersion ? L["Version {0}", bomVersion] : L["None: no components planned"])</dd>
+                                    <dt>@L["Origin"]</dt>
                                     <dd>
                                         @(wo.Origin == "erp" ? "ERP" : L.Label(wo.Origin)) · @wo.SiteCode
                                         @if (wo.ExternalKey is { } key)
                                         {
-                                            <div class="small text-muted">@wo.ExternalSystem @key@(wo.ExternalVersion is { } v ? $" · version {v}" : "")@(wo.ImportedAt is { } imported ? $" · last from the ERP {Display.SiteTime(imported, tz)}" : "")</div>
+                                            <div class="small text-muted">@wo.ExternalSystem @key@(wo.ExternalVersion is { } v ? L[" · version {0}", v] : "")@(wo.ImportedAt is { } imported ? L[" · last from the ERP {0}", Display.SiteTime(imported, tz)] : "")</div>
                                         }
                                         @if (wo.ErpQty is { } sent)
                                         {
-                                            <div class="small">The ERP sent @Number(sent) @wo.ErpUomCode: @WorkOrderView.Adjustment(wo.BatchAdjustment)</div>
+                                            <div class="small">@L["The ERP sent {0} {1}: {2}", Number(sent), wo.ErpUomCode, WorkOrderView.Adjustment(wo.BatchAdjustment)]</div>
                                         }
                                     </dd>
                                     @if (wo.Notes is not null)
                                     {
-                                        <dt>Notes</dt>
+                                        <dt>@L["Notes"]</dt>
                                         <dd class="wo-notes">@wo.Notes</dd>
                                     }
                                 </dl>
@@ -320,13 +320,13 @@
                                     @if (wo.QuantityHeld)
                                     {
                                         <div class="drawer-alert is-warning mb-2">
-                                            @wo.OrderNumber is held: the ERP's quantity isn't whole batches, so it can't be dispatched yet.
+                                            @L["{0} is held: the ERP's quantity isn't whole batches, so it can't be dispatched yet.", wo.OrderNumber]
                                             @if (CanManage(wo))
                                             {
                                                 <form class="d-flex gap-2 mt-2" @onsubmit="() => SetQuantityAsync(wo)" @onsubmit:preventDefault>
-                                                    <input type="number" class="form-control form-control-sm w-auto" min="0" step="any" aria-label="Whole-batch quantity" @bind="_heldQuantity" />
+                                                    <input type="number" class="form-control form-control-sm w-auto" min="0" step="any" aria-label="@L["Whole-batch quantity"]" @bind="_heldQuantity" />
                                                     <span class="align-self-center small">@wo.UomCode</span>
-                                                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busyId == wo.Id || _heldQuantity is not > 0)">Set quantity</button>
+                                                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_busyId == wo.Id || _heldQuantity is not > 0)">@L["Set quantity"]</button>
                                                 </form>
                                             }
                                         </div>
@@ -334,27 +334,27 @@
                                     @if (wo.PendingChange is { } change)
                                     {
                                         <div class="drawer-alert is-warning mb-2">
-                                            <div class="fw-semibold">The ERP changed this order@(change.Version is { } cv ? $" (version {cv})" : ""):</div>
+                                            <div class="fw-semibold">@(change.Version is { } cv ? L["The ERP changed this order (version {0}):", cv] : L["The ERP changed this order:"])</div>
                                             <div class="small">@WorkOrderView.PendingSummary(wo, change, tz)</div>
                                             @if (CanManage(wo))
                                             {
                                                 <div class="d-flex flex-wrap gap-2 mt-2">
-                                                    <button type="button" class="btn btn-sm btn-primary" disabled="@(_busyId == wo.Id)" @onclick="() => AcceptErpAsync(wo)">Accept</button>
-                                                    <input class="form-control form-control-sm w-auto" maxlength="500" placeholder="Why it is rejected" aria-label="Reason for rejecting" @bind="_rejectReason" @bind:event="oninput" />
-                                                    <button type="button" class="btn btn-sm btn-outline-danger" disabled="@(_busyId == wo.Id || string.IsNullOrWhiteSpace(_rejectReason))" @onclick="() => RejectErpAsync(wo)">Reject</button>
+                                                    <button type="button" class="btn btn-sm btn-primary" disabled="@(_busyId == wo.Id)" @onclick="() => AcceptErpAsync(wo)">@L["Accept"]</button>
+                                                    <input class="form-control form-control-sm w-auto" maxlength="500" placeholder="@L["Why it is rejected"]" aria-label="@L["Reason for rejecting"]" @bind="_rejectReason" @bind:event="oninput" />
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" disabled="@(_busyId == wo.Id || string.IsNullOrWhiteSpace(_rejectReason))" @onclick="() => RejectErpAsync(wo)">@L["Reject"]</button>
                                                 </div>
                                             }
                                         </div>
                                     }
                                     @if (p.Jobs.Count == 0)
                                     {
-                                        <p class="text-muted mb-0">No open jobs.</p>
+                                        <p class="text-muted mb-0">@L["No open jobs."]</p>
                                     }
                                     else
                                     {
                                         <table class="table table-sm mb-0 wo-jobs">
                                             <thead>
-                                                <tr><th>Job</th><th>Where</th><th>Status</th><th>When</th><th class="text-end">To make</th></tr>
+                                                <tr><th>@L["Job"]</th><th>@L["Where"]</th><th>@L["Status"]</th><th>@L["When"]</th><th class="text-end">@L["To make"]</th></tr>
                                             </thead>
                                             <tbody>
                                                 @foreach (var job in p.Jobs)
@@ -376,13 +376,13 @@
                                     }
                                     @if (p.HasOverlap)
                                     {
-                                        <div class="small wo-warning is-danger"><Icon Name="alert" Size="14" /> A job overlaps other work on its line.</div>
+                                        <div class="small wo-warning is-danger"><Icon Name="alert" Size="14" /> @L["A job overlaps other work on its line."]</div>
                                     }
                                     @if (_components.GetValueOrDefault(wo.Id) is { Count: > 0 } components)
                                     {
                                         <table class="table table-sm mb-0 mt-3 wo-jobs">
                                             <thead>
-                                                <tr><th>Component</th><th>For job</th><th>Consumed by</th><th class="text-end">Planned</th></tr>
+                                                <tr><th>@L["Component"]</th><th>@L["For job"]</th><th>@L["Consumed by"]</th><th class="text-end">@L["Planned"]</th></tr>
                                             </thead>
                                             <tbody>
                                                 @foreach (var c in components)
@@ -430,10 +430,10 @@
 
     private static readonly (string Status, string Label)[] BulkActions =
     [
-        ("dispatched", "Dispatch"),
-        ("planned", "Un-dispatch"),
-        ("firmed", "Firm"),
-        ("cancelled", "Cancel…"),
+        ("dispatched", Term.Mark("Dispatch")),
+        ("planned", Term.Mark("Un-dispatch")),
+        ("firmed", Term.Mark("Firm")),
+        ("cancelled", Term.Mark("Cancel…")),
     ];
 
     [SupplyParameterFromQuery(Name = "equipment")]
@@ -583,17 +583,17 @@
     private static string Number(decimal value) => value.ToString("#,##0.###", CultureInfo.InvariantCulture);
 
     /// <summary>Why the row is flagged, one reason per line, for its tooltip.</summary>
-    private static List<string> Flags(WorkOrderProgressDto p)
+    private List<string> Flags(WorkOrderProgressDto p)
     {
         var flags = new List<string>();
         if (p.FinishSlip is { } late)
         {
-            flags.Add($"Projected to finish {ScheduleFormat.Duration(late)} after its due date.");
+            flags.Add(L["Projected to finish {0} after its due date.", ScheduleFormat.Duration(late)]);
         }
 
         if (p.StartSlip is { } slip && slip > WorkOrderTiles.SlipTolerance)
         {
-            flags.Add($"Projected to start {ScheduleFormat.Duration(slip)} after its published baseline.");
+            flags.Add(L["Projected to start {0} after its published baseline.", ScheduleFormat.Duration(slip)]);
         }
 
         if (p.HasOverlap)
@@ -701,10 +701,10 @@
 
         var done = eligible.Count - failures.Count;
         var skipped = orders.Count - eligible.Count;
-        var action = BulkActions.First(a => a.Status == status).Label.TrimEnd('…');
-        _result = $"{action}: {done} done"
-            + (skipped > 0 ? $", {skipped} skipped (not allowed from their status)" : "")
-            + (failures.Count > 0 ? $", {failures.Count} failed. {string.Join(" ", failures)}" : ".");
+        var action = L[BulkActions.First(a => a.Status == status).Label].TrimEnd('…');
+        _result = L["{0}: {1} done", action, done]
+            + (skipped > 0 ? L[", {0} skipped (not allowed from their status)", skipped] : "")
+            + (failures.Count > 0 ? L[", {0} failed. {1}", failures.Count, string.Join(" ", failures)] : ".");
         _resultFailed = failures.Count > 0;
         _busy = false;
         await LoadAsync();
@@ -753,7 +753,7 @@
         try
         {
             await Api.MoveWorkOrderAsync(progress.Order, status);
-            _result = $"{progress.Order.OrderNumber} is now {L.Label(status).ToLowerInvariant()}.";
+            _result = L["{0} is now {1}.", progress.Order.OrderNumber, L.Label(status).ToLowerInvariant()];
             _resultFailed = false;
         }
         catch (ApiException ex)
@@ -779,7 +779,7 @@
         {
             var file = await Api.GetShopOrderPdfAsync(order.Id);
             await Downloads.PdfAsync(file.FileName, file.Content);
-            _result = $"Shop order {order.OrderNumber} downloaded.";
+            _result = L["Shop order {0} downloaded.", order.OrderNumber];
             _resultFailed = false;
         }
         catch (ApiException ex)

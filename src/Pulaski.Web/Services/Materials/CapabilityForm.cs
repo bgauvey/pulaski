@@ -1,5 +1,6 @@
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Materials;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Materials;
 
@@ -85,7 +86,7 @@ public sealed class CapabilityForm
     /// <summary>
     /// How a capability's production lots are cut (D-104), for its row: "lots of 1000 m, 8 h, a shift"; null when each report makes its own lot.
     /// </summary>
-    public static string? LotRule(MaterialCapabilityDto c, string baseUomCode)
+    public static string? LotRule(Text l, MaterialCapabilityDto c, string baseUomCode)
     {
         var parts = new List<string>();
         if (c.LotSize is { } size)
@@ -100,10 +101,10 @@ public sealed class CapabilityForm
 
         if (c.LotByShift)
         {
-            parts.Add("a shift");
+            parts.Add(l["a shift"]);
         }
 
-        return parts.Count == 0 ? null : "Lots of at most " + string.Join(", ", parts);
+        return parts.Count == 0 ? null : l["Lots of at most {0}", string.Join(", ", parts)];
     }
 
     /// <summary>The value without the trailing zeros of its stored scale (900.000000 becomes 900), for an input box.</summary>

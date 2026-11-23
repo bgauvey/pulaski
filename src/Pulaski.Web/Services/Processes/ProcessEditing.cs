@@ -1,5 +1,6 @@
 using Pulaski.Contracts.Processes;
 using Pulaski.Web.Services.Scheduling;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Processes;
 
@@ -89,17 +90,17 @@ public static class ProcessEditing
     {
         if (from == to)
         {
-            return (null, "An operation can't follow itself.");
+            return (null, Term.Mark("An operation can't follow itself."));
         }
 
         if (definition.Dependencies.Any(d => d.FromOperationId == from && d.ToOperationId == to))
         {
-            return (null, "Those operations are already linked.");
+            return (null, Term.Mark("Those operations are already linked."));
         }
 
         if (Reaches(definition, to, from))
         {
-            return (null, "That link would loop back; a process must flow one way.");
+            return (null, Term.Mark("That link would loop back; a process must flow one way."));
         }
 
         return (definition with { Dependencies = [.. definition.Dependencies, new ProcessDependencyDto(id, from, to, AfterStart, TimeSpan.Zero)] }, null);
@@ -144,9 +145,9 @@ public static class ProcessEditing
     public static decimal ShareTotal(ProcessOperationDto op) => op.Equipment.Sum(e => e.SharePercent);
 
     /// <summary>"After start" / "After end", with the lag when there is one.</summary>
-    public static string Describe(ProcessDependencyDto link)
+    public static string Describe(Text l, ProcessDependencyDto link)
     {
-        var type = link.Type == AfterEnd ? "after end" : "after start";
+        var type = link.Type == AfterEnd ? l["after end"] : l["after start"];
         return link.Lag > TimeSpan.Zero ? $"{type} +{ScheduleFormat.Duration(link.Lag)}" : type;
     }
 

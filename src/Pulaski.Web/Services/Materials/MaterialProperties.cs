@@ -2,6 +2,7 @@ using System.Globalization;
 using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.ReferenceData;
 using Pulaski.Web.Components;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Materials;
 
@@ -16,11 +17,11 @@ public static class MaterialProperties
 {
     public const string NoClass = "";
 
-    private const string Identity = "Identity";
-    private const string Classification = "Classification";
-    private const string Stock = "Stock";
-    private const string Status = "Status";
-    private const string Batches = "Batches";
+    private static readonly string Identity = Term.Mark("Identity");
+    private static readonly string Classification = Term.Mark("Classification");
+    private static readonly string Stock = Term.Mark("Stock");
+    private static readonly string Status = Term.Mark("Status");
+    private static readonly string Batches = Term.Mark("Batches");
 
     /// <summary>The keys of the batch settings, saved with their own request (D-036).</summary>
     public static bool IsBatchingKey(string key) => key is "batchSize" or "batchTolerance" or "batchRule";
@@ -35,16 +36,16 @@ public static class MaterialProperties
             .GroupBy(m => m.MaterialClassCode ?? NoClass)
             .Select(g => new MaterialGroup(
                 g.Key,
-                g.Key == NoClass ? "No class" : g.First().MaterialClassName ?? g.Key,
+                g.Key == NoClass ? Term.Mark("No class") : g.First().MaterialClassName ?? g.Key,
                 [.. g.OrderBy(m => m.Code, StringComparer.Ordinal)]))
             .OrderBy(g => g.Key == NoClass)
             .ThenBy(g => g.Label, StringComparer.CurrentCultureIgnoreCase)];
 
-    public static IReadOnlyList<PropertyItem> For(
+    public static IReadOnlyList<PropertyItem> For(Text l,
         MaterialDto m, MaterialUsageDto usage, IReadOnlyList<MaterialClassDto> classes, IReadOnlyList<UomDto> uoms)
     {
         var erp = IsFromErp(m);
-        var erpNote = erp ? $" Comes from {m.ExternalSystem}; change it there." : "";
+        var erpNote = erp ? l[" Comes from {0}; change it there.", m.ExternalSystem] : "";
         var codeFixed = erp || usage.InUse;
         var unitFixed = erp || usage.InUse;
         var trackingFixed = usage.LotsOnHand > 0;
@@ -53,123 +54,118 @@ public static class MaterialProperties
         [
             new()
             {
-                Key = "code", Name = "Code", Category = Identity, Value = m.Code, MaxLength = 50,
+                Key = "code", Name = l["Code"], Category = l[Identity], Value = m.Code, MaxLength = 50,
                 Editor = codeFixed ? PropertyEditor.ReadOnly : PropertyEditor.Text,
-                Description = "The item or part number." + (erp ? erpNote : usage.InUse ? " Fixed: the material is in use." : ""),
+                Description = l["The item or part number."] + (erp ? erpNote : usage.InUse ? l[" Fixed: the material is in use."] : ""),
             },
             new()
             {
-                Key = "name", Name = "Name", Category = Identity, Value = m.Name, MaxLength = 200,
+                Key = "name", Name = l["Name"], Category = l[Identity], Value = m.Name, MaxLength = 200,
                 Editor = erp ? PropertyEditor.ReadOnly : PropertyEditor.Text,
-                Description = "What people call it." + erpNote,
+                Description = l["What people call it."] + erpNote,
             },
             new()
             {
-                Key = "description", Name = "Description", Category = Identity, Value = m.Description, MaxLength = 2000,
-                Editor = PropertyEditor.Text, Description = "Notes for the people who use it. Kept in Pulaski.",
+                Key = "description", Name = l["Description"], Category = l[Identity], Value = m.Description, MaxLength = 2000,
+                Editor = PropertyEditor.Text, Description = l["Notes for the people who use it. Kept in Pulaski."],
             },
             new()
             {
-                Key = "type", Name = "Type", Category = Classification, Value = m.MaterialType,
+                Key = "type", Name = l["Type"], Category = l[Classification], Value = m.MaterialType,
                 Editor = erp ? PropertyEditor.ReadOnly : PropertyEditor.Choice,
                 Choices = [.. Types.Select(t => new PropertyChoice(t, Display.Label(t)))],
-                Description = "A label from the item master, such as its MRP class; it drives no rules." + erpNote,
+                Description = l["A label from the item master, such as its MRP class; it drives no rules."] + erpNote,
             },
             new()
             {
-                Key = "class", Name = "Class", Category = Classification, Value = m.MaterialClassId?.ToString() ?? "",
+                Key = "class", Name = l["Class"], Category = l[Classification], Value = m.MaterialClassId?.ToString() ?? "",
                 Editor = PropertyEditor.Choice,
-                Choices = [new("", "No class"), .. classes
+                Choices = [new("", l["No class"]), .. classes
                     .Where(c => c.IsActive || c.Id == m.MaterialClassId)
                     .Select(c => new PropertyChoice(c.Id.ToString(), $"{c.Code} · {c.Name}{(c.IsActive ? "" : " (inactive)")}"))],
-                Description = "Groups similar materials. Processes and changeover rules can name a class instead of each material.",
+                Description = l["Groups similar materials. Processes and changeover rules can name a class instead of each material."],
             },
             new()
             {
-                Key = "origin", Name = "Origin", Category = Classification,
-                Value = erp ? $"{m.ExternalSystem} · {m.ExternalKey}{(m.ExternalVersion is { } v ? $" · version {v}" : "")}" : "Pulaski",
-                Description = erp ? "Imported from an external item master, which owns the code, name, base unit and type." : "Created in Pulaski.",
+                Key = "origin", Name = l["Origin"], Category = l[Classification],
+                Value = erp ? $"{m.ExternalSystem} · {m.ExternalKey}{(m.ExternalVersion is { } v ? $" · version {v}" : "")}" : l["Pulaski"],
+                Description = erp ? l["Imported from an external item master, which owns the code, name, base unit and type."] : l["Created in Pulaski."],
             },
             new()
             {
-                Key = "baseUom", Name = "Base unit", Category = Stock, Value = m.BaseUomId.ToString(),
+                Key = "baseUom", Name = l["Base unit"], Category = l[Stock], Value = m.BaseUomId.ToString(),
                 Editor = unitFixed ? PropertyEditor.ReadOnly : PropertyEditor.Choice,
                 Choices = [.. uoms.Where(u => u.IsActive || u.Id == m.BaseUomId).Select(u => new PropertyChoice(u.Id.ToString(), $"{u.Code} · {u.Name}"))],
-                Description = "The unit stock is counted in." + (erp ? erpNote : usage.InUse ? " Fixed: the material is in use, and its quantities are stored in it." : ""),
+                Description = l["The unit stock is counted in."] + (erp ? erpNote : usage.InUse ? l[" Fixed: the material is in use, and its quantities are stored in it."] : ""),
             },
             new()
             {
-                Key = "lotTracked", Name = "Lot-tracked", Category = Stock, Value = PropertyItem.FromBool(m.IsLotTracked),
+                Key = "lotTracked", Name = l["Lot-tracked"], Category = l[Stock], Value = PropertyItem.FromBool(m.IsLotTracked),
                 Editor = trackingFixed ? PropertyEditor.ReadOnly : PropertyEditor.Choice, Choices = PropertyChoice.Boolean,
-                Description = "Each receipt is its own numbered lot; otherwise one balance per location." +
-                    (trackingFixed ? " Fixed while stock is on hand." : ""),
+                Description = l["Each receipt is its own numbered lot; otherwise one balance per location."] +
+                    (trackingFixed ? l[" Fixed while stock is on hand."] : ""),
             },
             new()
             {
-                Key = "shelfLife", Name = "Shelf life", Category = Stock,
+                Key = "shelfLife", Name = l["Shelf life"], Category = l[Stock],
                 Value = m.ShelfLifeDays?.ToString(CultureInfo.InvariantCulture), Editor = PropertyEditor.Number,
-                Min = 1, Max = 36_500, Step = 1, Suffix = "days", Placeholder = "None",
-                Description = "A new lot without an expiry expires this long after it arrives. Lots already on hand keep theirs.",
+                Min = 1, Max = 36_500, Step = 1, Suffix = l["days"], Placeholder = l["None"],
+                Description = l["A new lot without an expiry expires this long after it arrives. Lots already on hand keep theirs."],
             },
             new()
             {
-                Key = GtinKey, Name = "GTIN", Category = Stock, Value = m.Gtin, Editor = PropertyEditor.Text, Placeholder = "None",
-                Description = "Its GS1 trade item number (8, 12, 13 or 14 digits). Lots of it get GS1 labels when the site prints them, " +
-                    "and a scanned GS1 or supplier barcode with it finds this material.",
+                Key = GtinKey, Name = l["GTIN"], Category = l[Stock], Value = m.Gtin, Editor = PropertyEditor.Text, Placeholder = l["None"],
+                Description = l["Its GS1 trade item number (8, 12, 13 or 14 digits). Lots of it get GS1 labels when the site prints them, and a scanned GS1 or supplier barcode with it finds this material."],
             },
             new()
             {
-                Key = LeadTimeKey, Name = "Lead time", Category = Stock,
+                Key = LeadTimeKey, Name = l["Lead time"], Category = l[Stock],
                 Value = m.LeadTimeDays?.ToString(CultureInfo.InvariantCulture), Editor = PropertyEditor.Number,
-                Min = 1, Max = 3650, Step = 1, Suffix = "days", Placeholder = "None",
-                Description = "How long supply of it takes to come. The shortage check flags shortages needed sooner than this from now: " +
-                    "asked for today, supply wouldn't arrive in time. Nothing is ordered.",
+                Min = 1, Max = 3650, Step = 1, Suffix = l["days"], Placeholder = l["None"],
+                Description = l["How long supply of it takes to come. The shortage check flags shortages needed sooner than this from now: asked for today, supply wouldn't arrive in time. Nothing is ordered."],
             },
             new()
             {
-                Key = "batchSize", Name = "Batch size", Category = Batches,
+                Key = "batchSize", Name = l["Batch size"], Category = l[Batches],
                 Value = m.BatchSize?.ToString("0.######", CultureInfo.InvariantCulture), Editor = PropertyEditor.Number,
-                Min = 0, Step = 0.001, Suffix = m.BaseUomCode, Placeholder = "Made continuously",
-                Description = "Made in batches of this size: orders and jobs are whole batches, and production is reported batch by batch. " +
-                    "A batch cut short when the line stops is a partial batch. Leave blank for a material made continuously.",
+                Min = 0, Step = 0.001, Suffix = m.BaseUomCode, Placeholder = l["Made continuously"],
+                Description = l["Made in batches of this size: orders and jobs are whole batches, and production is reported batch by batch. A batch cut short when the line stops is a partial batch. Leave blank for a material made continuously."],
             },
             .. m.BatchSize is null ? Array.Empty<PropertyItem>() : [
                 new()
                 {
-                    Key = "batchRule", Name = "Batch rule", Category = Batches, Value = m.BatchRule, Editor = PropertyEditor.Choice,
-                    Choices = [new("exact", "Exact batches; partials need approval"), new("near", "Near batches; partials accepted")],
-                    Description = "Exact: every batch is exactly the batch size, and a partial batch waits on hold until approved (finished goods can't be sold as partials). " +
-                        "Near: a batch may differ by the tolerance, and a partial batch is accepted because it will be used.",
+                    Key = "batchRule", Name = l["Batch rule"], Category = l[Batches], Value = m.BatchRule, Editor = PropertyEditor.Choice,
+                    Choices = [new("exact", l["Exact batches; partials need approval"]), new("near", l["Near batches; partials accepted"])],
+                    Description = l["Exact: every batch is exactly the batch size, and a partial batch waits on hold until approved (finished goods can't be sold as partials). Near: a batch may differ by the tolerance, and a partial batch is accepted because it will be used."],
                 },
                 new()
                 {
-                    Key = "batchTolerance", Name = "Batch tolerance", Category = Batches,
+                    Key = "batchTolerance", Name = l["Batch tolerance"], Category = l[Batches],
                     Value = m.BatchTolerancePct.ToString("0.##", CultureInfo.InvariantCulture),
                     Editor = m.BatchRule == "exact" ? PropertyEditor.ReadOnly : PropertyEditor.Number, Min = 0, Max = 50, Step = 0.1, Suffix = "%",
                     Description = m.BatchRule == "exact"
-                        ? "Not used: exact batches are always the batch size."
-                        : $"How far a batch may be from the batch size: a {Batching(m)} batch is accepted from {Low(m)} to {High(m)} {m.BaseUomCode}.",
+                        ? l["Not used: exact batches are always the batch size."]
+                        : l["How far a batch may be from the batch size: a {0} batch is accepted from {1} to {2} {3}.", Batching(m), Low(m), High(m), m.BaseUomCode],
                 },
                 new()
                 {
-                    Key = ErpBatchRuleKey, Name = "ERP orders not whole batches", Category = Batches, Value = m.ErpBatchRule ?? "", Editor = PropertyEditor.Choice,
+                    Key = ErpBatchRuleKey, Name = l["ERP orders not whole batches"], Category = l[Batches], Value = m.ErpBatchRule ?? "", Editor = PropertyEditor.Choice,
                     Choices =
                     [
-                        new("", "The site's rule"),
-                        new("reject", "Refuse the order"),
-                        new("round_up", "Round up to whole batches"),
-                        new("round_down", "Round down to whole batches"),
-                        new("hold", "Import it held for a planner"),
+                        new("", l["The site's rule"]),
+                        new("reject", l["Refuse the order"]),
+                        new("round_up", l["Round up to whole batches"]),
+                        new("round_down", l["Round down to whole batches"]),
+                        new("hold", l["Import it held for a planner"]),
                     ],
-                    Description = "What happens when the ERP sends a work order for this material that isn't whole batches (D-066). " +
-                        "The site's rule is set on Site settings; the ERP's own quantity is always kept on the order beside Pulaski's.",
+                    Description = l["What happens when the ERP sends a work order for this material that isn't whole batches (D-066). The site's rule is set on Site settings; the ERP's own quantity is always kept on the order beside Pulaski's."],
                 },
             ],
             new()
             {
-                Key = "active", Name = "Active", Category = Status, Value = PropertyItem.FromBool(m.IsActive),
+                Key = "active", Name = l["Active"], Category = l[Status], Value = PropertyItem.FromBool(m.IsActive),
                 Editor = PropertyEditor.Choice, Choices = PropertyChoice.Boolean,
-                Description = "An inactive material can't be received, ordered or added to BOMs. What already uses it carries on.",
+                Description = l["An inactive material can't be received, ordered or added to BOMs. What already uses it carries on."],
             },
         ];
     }

@@ -128,7 +128,7 @@
                 <select class="form-select form-select-sm w-auto" aria-label="@L["Figure for the trend"]" value="@_trendMeasure" @onchange="@(e => _trendMeasure = e.Value?.ToString() ?? OeeTrend.Oee)">
                     @foreach (var (measure, label) in OeeTrend.Measures)
                     {
-                        <option value="@measure">@label</option>
+                        <option value="@measure">@L[label]</option>
                     }
                 </select>
                 @if (!report.ByDay)
@@ -145,9 +145,9 @@
         {
             var points = OeeTrend.Points(report, trendOf, _trendMeasure, _trendByDay);
             var (overall, below, measured) = OeeTrend.Summary(report, trendOf, _trendMeasure, points);
-            <OeeTrendChart Points="points" Label="@OeeTrend.LabelOf(_trendMeasure)" ByDay="@(report.ByDay || _trendByDay)" />
+            <OeeTrendChart Points="points" Label="@L[OeeTrend.LabelOf(_trendMeasure)]" ByDay="@(report.ByDay || _trendByDay)" />
             <p class="small text-muted mb-0">
-                @OeeTrend.LabelOf(_trendMeasure) over the period: @MachineView.Pct(overall).
+                @L["{0} over the period: {1}.", L[OeeTrend.LabelOf(_trendMeasure)], MachineView.Pct(overall)]
                 @if (measured > 0)
                 {
                     <span class="@(below > 0 ? "text-danger" : "")">@(report.ByDay || _trendByDay ? L["{0} of {1} days below target.", below, measured] : L["{0} of {1} shifts below target.", below, measured])</span>
