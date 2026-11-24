@@ -3,16 +3,15 @@
 @* How the site allocates lots to jobs (#82): kept current in the background, hard reservation, and the preferences that order lots
    expiring the same day. *@
 <section class="inv-facts mb-3" id="allocations" aria-labelledby="allocations-heading">
-    <h2 class="h6" id="allocations-heading">Lot allocations</h2>
+    <h2 class="h6" id="allocations-heading">@L["Lot allocations"]</h2>
     <p class="small text-muted">
-        How lots are set aside for jobs' components. Suggestions always take the lot that expires first; the preferences below decide among
-        lots expiring the same day (or never), in the order given, and the oldest receipt decides after that.
+        @L["How lots are set aside for jobs' components. Suggestions always take the lot that expires first; the preferences below decide among lots expiring the same day (or never), in the order given, and the oldest receipt decides after that."]
     </p>
     <ProblemAlert Error="_error" />
 
     @if (_settings is null)
     {
-        <p class="small text-muted mb-0">Loading…</p>
+        <p class="small text-muted mb-0">@L["Loading…"]</p>
     }
     else
     {
@@ -20,23 +19,22 @@
             <div class="form-check mb-1">
                 <input id="alloc-keep" type="checkbox" class="form-check-input" checked="@_keepCurrent" disabled="@(!CanManage)"
                        @onchange="e => _keepCurrent = e.Value is true" />
-                <label class="form-check-label" for="alloc-keep">Keep allocations current</label>
+                <label class="form-check-label" for="alloc-keep">@L["Keep allocations current"]</label>
                 <div class="small text-muted">
-                    A short while after stock, jobs or orders change, every open job's allocations are refreshed, as Refresh on the Shortages page does.
-                    @(_settings.RefreshedAt is { } at ? $"Last refreshed {Display.SiteTime(at, TimeZone)}." : "")
+                    @L["A short while after stock, jobs or orders change, every open job's allocations are refreshed, as Refresh on the Shortages page does."]
+                    @(_settings.RefreshedAt is { } at ? L["Last refreshed {0}.", Display.SiteTime(at, TimeZone)] : "")
                 </div>
             </div>
             <div class="form-check mb-2">
                 <input id="alloc-hard" type="checkbox" class="form-check-input" checked="@_hardReservation" disabled="@(!CanManage)"
                        @onchange="e => _hardReservation = e.Value is true" />
-                <label class="form-check-label" for="alloc-hard">Hard reservation</label>
+                <label class="form-check-label" for="alloc-hard">@L["Hard reservation"]</label>
                 <div class="small text-muted">
-                    Consuming stock allocated to another job is refused, naming that job, until its allocation is released or moved. Automated
-                    feed-point consumption leaves it alone too. Off, it is consumed with a warning.
+                    @L["Consuming stock allocated to another job is refused, naming that job, until its allocation is released or moved. Automated feed-point consumption leaves it alone too. Off, it is consumed with a warning."]
                 </div>
             </div>
 
-            <div class="small fw-semibold mb-1">Preferences, in order</div>
+            <div class="small fw-semibold mb-1">@L["Preferences, in order"]</div>
             <ul class="list-unstyled small mb-2">
                 @foreach (var (code, label) in Options.OrderBy(o => Rank(o.Code)))
                 {
@@ -44,22 +42,22 @@
                     <li class="d-flex align-items-center gap-2 mb-1" @key="code">
                         <input id="@($"pref-{code}")" type="checkbox" class="form-check-input mt-0" checked="@on" disabled="@(!CanManage)"
                                @onchange="e => Toggle(code, e.Value is true)" />
-                        <label for="@($"pref-{code}")" class="@(on ? "" : "text-muted")">@(on ? $"{_preferences.IndexOf(code) + 1}. " : "")@label</label>
+                        <label for="@($"pref-{code}")" class="@(on ? "" : "text-muted")">@(on ? $"{_preferences.IndexOf(code) + 1}. " : "")@L[label]</label>
                         @if (on && CanManage)
                         {
-                            <button type="button" class="btn btn-sm btn-link p-0" title="Earlier" disabled="@(_preferences.IndexOf(code) == 0)" @onclick="() => Move(code, -1)">↑</button>
-                            <button type="button" class="btn btn-sm btn-link p-0" title="Later" disabled="@(_preferences.IndexOf(code) == _preferences.Count - 1)" @onclick="() => Move(code, 1)">↓</button>
+                            <button type="button" class="btn btn-sm btn-link p-0" title="@L["Earlier"]" disabled="@(_preferences.IndexOf(code) == 0)" @onclick="() => Move(code, -1)">↑</button>
+                            <button type="button" class="btn btn-sm btn-link p-0" title="@L["Later"]" disabled="@(_preferences.IndexOf(code) == _preferences.Count - 1)" @onclick="() => Move(code, 1)">↓</button>
                         }
                     </li>
                 }
             </ul>
             @if (_preferences.Contains("whole_lot") && _preferences.Contains("part_lots_first"))
             {
-                <p class="small text-muted mb-2">"A whole lot" and "part lots first" pull opposite ways; the earlier one decides.</p>
+                <p class="small text-muted mb-2">@L["\"A whole lot\" and \"part lots first\" pull opposite ways; the earlier one decides."]</p>
             }
             @if (CanManage)
             {
-                <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save allocation settings</button>
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">@L["Save allocation settings"]</button>
             }
         </form>
     }
@@ -77,10 +75,10 @@
 
     private static readonly (string Code, string Label)[] Options =
     [
-        ("near_line", "Already at the job's line (picked from nearest)"),
-        ("in_container", "In a container (one move fetches it)"),
-        ("whole_lot", "A lot that covers what is needed alone"),
-        ("part_lots_first", "Part lots first, so they get used up"),
+        ("near_line", Term.Mark("Already at the job's line (picked from nearest)")),
+        ("in_container", Term.Mark("In a container (one move fetches it)")),
+        ("whole_lot", Term.Mark("A lot that covers what is needed alone")),
+        ("part_lots_first", Term.Mark("Part lots first, so they get used up")),
     ];
 
     private AllocationSettingsDto? _settings;
@@ -149,7 +147,7 @@
                 Preferences = [.. _preferences],
             });
             await LoadAsync();
-            await Saved.InvokeAsync("Saved the allocation settings.");
+            await Saved.InvokeAsync(L["Saved the allocation settings."]);
         }
         catch (ApiException ex)
         {

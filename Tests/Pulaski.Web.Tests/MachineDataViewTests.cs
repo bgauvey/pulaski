@@ -4,6 +4,7 @@ using Pulaski.Web.Components;
 using Pulaski.Web.Components.Pages.Equipment;
 using Pulaski.Web.Services;
 using Pulaski.Web.Services.MachineData;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Tests;
 
@@ -38,13 +39,13 @@ public class MachineDataViewTests
         var profile = new MachineProfileDto { Id = Guid.CreateVersion7(), SiteId = SiteId, Code = "CP-A", Name = "Case packer A", IsActive = true };
         var elsewhere = profile with { Id = Guid.CreateVersion7(), SiteId = Guid.CreateVersion7(), Code = "CP-B" };
 
-        var items = EquipmentProperties.ForExisting(Line, Tree, profiles: [profile, elsewhere]);
+        var items = EquipmentProperties.ForExisting(Text.English, Line, Tree, profiles: [profile, elsewhere]);
         var choices = items.Single(i => i.Key == EquipmentProperties.MachineProfileKey).Choices;
         Assert.Equal(["None", "CP-A · Case packer A"], choices.Select(c => c.Label));
         Assert.Equal("5", items.Single(i => i.Key == EquipmentProperties.MicroStopKey).Value);
         Assert.DoesNotContain(items, i => i.Key == EquipmentProperties.ConstraintKey);
 
-        Assert.DoesNotContain(EquipmentProperties.ForExisting(Conveyor, Tree), i => EquipmentProperties.MachineDataKeys.Contains(i.Key));
+        Assert.DoesNotContain(EquipmentProperties.ForExisting(Text.English, Conveyor, Tree), i => EquipmentProperties.MachineDataKeys.Contains(i.Key));
     }
 
     [Fact]

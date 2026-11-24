@@ -7,21 +7,21 @@
 
 @* Shop-floor terminals (D-049): shared devices where people badge to clock on and off and take breaks. A terminal offers
    the lines of a site, area or line, and works once enrolled with a one-time code typed on the device itself. *@
-<PageTitle>Terminals · Pulaski</PageTitle>
+<PageTitle>@L["Terminals"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Terminals</h1>
+        <h1 class="mb-1">@L["Terminals"]</h1>
         <p class="text-muted mb-0">
-            Shared tablets and panel PCs where people badge to record their time. Register one here, then open
-            <code>@TerminalUrl</code> on the device and type its enrolment code. Badges are issued on <ScreenLink Href="people" Permission="@PermissionCodes.People">People</ScreenLink>.
-            A TV enrolled the same way shows a line display board at <code>@BoardUrl</code>: the lines this terminal offers, read only.
+            @L["Shared tablets and panel PCs where people badge to record their time. Register one here, then open"]
+            <code>@TerminalUrl</code> @L["on the device and type its enrolment code. Badges are issued on"] <ScreenLink Href="people" Permission="@PermissionCodes.People">@L["People"]</ScreenLink>.
+            @L["A TV enrolled the same way shows a line display board at"] <code>@BoardUrl</code>@L[": the lines this terminal offers, read only."]
         </p>
     </div>
     @if (Sites.Sites.Count > 1)
     {
         <div class="inv-head-tools">
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -38,10 +38,10 @@
     <div class="alert alert-info" role="status">
         <div class="fs-4 fw-semibold font-monospace">@pending.Code.Code</div>
         <div class="small">
-            For <strong>@pending.Terminal</strong>: open <code>@TerminalUrl</code> on the device and type this code before @Display.SiteTime(pending.Code.ExpiresAt, Sites.Site?.TimeZone)[11..].
-            It works once; this is the only time it is shown. Enrolling again later replaces the terminal's credential.
+            @L["For {0}: open", pending.Terminal] <code>@TerminalUrl</code> @L["on the device and type this code before {0}.", Display.SiteTime(pending.Code.ExpiresAt, Sites.Site?.TimeZone)[11..]]
+            @L["It works once; this is the only time it is shown. Enrolling again later replaces the terminal's credential."]
         </div>
-        <button type="button" class="btn btn-sm btn-link px-0" @onclick="() => _code = null">Done</button>
+        <button type="button" class="btn btn-sm btn-link px-0" @onclick="() => _code = null">@L["Done"]</button>
     </div>
 }
 
@@ -49,24 +49,24 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
 {
     <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
-        <h2 class="h6">@(_form.Id is null ? "Register a terminal" : $"Change {_form.Code}")</h2>
+        <h2 class="h6">@(_form.Id is null ? L["Register a terminal"] : $"Change {_form.Code}")</h2>
         <div class="row g-2 align-items-end">
             <div class="col-sm-2">
-                <label class="form-label small" for="term-code">Code</label>
-                <input id="term-code" class="form-control" maxlength="30" placeholder="e.g. EXT-T1" disabled="@(_form.Id is not null)" @bind="_form.Code" @bind:event="oninput" />
+                <label class="form-label small" for="term-code">@L["Code"]</label>
+                <input id="term-code" class="form-control" maxlength="30" placeholder="@L["e.g. EXT-T1"]" disabled="@(_form.Id is not null)" @bind="_form.Code" @bind:event="oninput" />
             </div>
             <div class="col-sm-3">
-                <label class="form-label small" for="term-name">Name</label>
-                <input id="term-name" class="form-control" maxlength="100" placeholder="e.g. Extrusion hall, east wall" @bind="_form.Name" @bind:event="oninput" />
+                <label class="form-label small" for="term-name">@L["Name"]</label>
+                <input id="term-name" class="form-control" maxlength="100" placeholder="@L["e.g. Extrusion hall, east wall"]" @bind="_form.Name" @bind:event="oninput" />
             </div>
             <div class="col-sm-2">
-                <label class="form-label small" for="term-scope">Offers the lines of</label>
+                <label class="form-label small" for="term-scope">@L["Offers the lines of"]</label>
                 <select id="term-scope" class="form-select" @bind="_form.ScopeId" @bind:after="ScopeChanged">
                     @foreach (var e in Scopes)
                     {
@@ -75,9 +75,9 @@ else
                 </select>
             </div>
             <div class="col-sm-2">
-                <label class="form-label small" for="term-default">First line offered</label>
+                <label class="form-label small" for="term-default">@L["First line offered"]</label>
                 <select id="term-default" class="form-select" @bind="_form.DefaultId">
-                    <option value="@Guid.Empty">None</option>
+                    <option value="@Guid.Empty">@L["None"]</option>
                     @foreach (var e in LinesIn(_form.ScopeId))
                     {
                         <option value="@e.Id">@e.Code</option>
@@ -85,17 +85,17 @@ else
                 </select>
             </div>
             <div class="col-sm-2">
-                <label class="form-label small" for="term-mode">People identify with</label>
+                <label class="form-label small" for="term-mode">@L["People identify with"]</label>
                 <select id="term-mode" class="form-select" @bind="_form.AuthMode">
-                    <option value="badge">Badge</option>
-                    <option value="badge_plus_pin">Badge and PIN</option>
+                    <option value="badge">@L["Badge"]</option>
+                    <option value="badge_plus_pin">@L["Badge and PIN"]</option>
                 </select>
             </div>
             @* Its screens' language and region (#128): a station or board for a line whose people read another language. *@
             <div class="col-sm-2">
-                <label class="form-label small" for="term-language">Language</label>
+                <label class="form-label small" for="term-language">@L["Language"]</label>
                 <select id="term-language" class="form-select" @bind="_form.Language">
-                    <option value="">English</option>
+                    <option value="">@L["English"]</option>
                     @foreach (var language in _languages.Where(l => l.IsActive || l.Code == _form.Language))
                     {
                         <option value="@language.Code">@language.Name</option>
@@ -103,42 +103,42 @@ else
                 </select>
             </div>
             <div class="col-sm-2">
-                <label class="form-label small" for="term-region">Region <span class="text-muted">(dates, numbers)</span></label>
-                <input id="term-region" class="form-control" maxlength="20" placeholder="e.g. es-MX" @bind="_form.Region" />
+                <label class="form-label small" for="term-region">@L["Region"] <span class="text-muted">@L["(dates, numbers)"]</span></label>
+                <input id="term-region" class="form-control" maxlength="20" placeholder="@L["e.g. es-MX"]" @bind="_form.Region" />
             </div>
             <div class="col-sm-1">
                 @if (_form.Id is not null)
                 {
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="checkbox" id="term-active" @bind="_form.IsActive" />
-                        <label class="form-check-label small" for="term-active">Active</label>
+                        <label class="form-check-label small" for="term-active">@L["Active"]</label>
                     </div>
                 }
             </div>
             <div class="col-12 d-flex gap-2">
                 <button type="submit" class="btn btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_form.Name) || string.IsNullOrWhiteSpace(_form.Code) || _form.ScopeId == Guid.Empty)">
-                    @(_form.Id is null ? "Register terminal" : "Save terminal")
+                    @(_form.Id is null ? L["Register terminal"] : L["Save terminal"])
                 </button>
                 @if (_form.Id is not null)
                 {
-                    <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="ResetForm">@L["Cancel"]</button>
                 }
             </div>
             <div class="col-12 small text-muted">
-                Badge and PIN suits terminals anyone could walk up to with a found badge. Switching a terminal off stops it working at once.
+                @L["Badge and PIN suits terminals anyone could walk up to with a found badge. Switching a terminal off stops it working at once."]
             </div>
         </div>
     </form>
 
     @if (_terminals.Count == 0)
     {
-        <div class="empty-panel"><p class="text-muted mb-0">No terminals at @(Sites.Site?.Code ?? "this site") yet.</p></div>
+        <div class="empty-panel"><p class="text-muted mb-0">@L["No terminals at {0} yet.", Sites.Site?.Code ?? L["this site"]]</p></div>
     }
     else
     {
         <div class="table-panel">
             <table class="table align-middle">
-                <thead><tr><th>Terminal</th><th>Offers</th><th>First line</th><th>Identify with</th><th>Enrolled</th><th>Last badge</th><th></th></tr></thead>
+                <thead><tr><th>@L["Terminal"]</th><th>@L["Offers"]</th><th>@L["First line"]</th><th>@L["Identify with"]</th><th>@L["Enrolled"]</th><th>@L["Last badge"]</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var t in _terminals)
                     {
@@ -146,21 +146,21 @@ else
                             <td><span class="fw-semibold">@t.Code</span> <span class="small text-muted">@t.Name</span>@(t.IsActive ? "" : " · switched off")</td>
                             <td>@t.ScopeCode</td>
                             <td>@(t.DefaultCode ?? "—")</td>
-                            <td class="small">@(t.AuthMode == "badge_plus_pin" ? "Badge and PIN" : "Badge")</td>
+                            <td class="small">@(t.AuthMode == "badge_plus_pin" ? L["Badge and PIN"] : L["Badge"])</td>
                             <td class="small">
-                                @(t.EnrolledAt is { } at ? Display.SiteTime(at, Sites.Site?.TimeZone) : "Not yet")
+                                @(t.EnrolledAt is { } at ? Display.SiteTime(at, Sites.Site?.TimeZone) : L["Not yet"])
                                 @if (t.EnrolmentExpiresAt is not null)
                                 {
-                                    <div class="text-muted">code waiting</div>
+                                    <div class="text-muted">@L["code waiting"]</div>
                                 }
                             </td>
                             <td class="small">@(t.LastSeenAt is { } seen ? Display.SiteTime(seen, Sites.Site?.TimeZone) : "—")</td>
                             <td class="text-end text-nowrap">
                                 @if (t.IsActive)
                                 {
-                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => CodeAsync(t)">Enrolment code</button>
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => CodeAsync(t)">@L["Enrolment code"]</button>
                                 }
-                                <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(t)">Change</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(t)">@L["Change"]</button>
                             </td>
                         </tr>
                     }

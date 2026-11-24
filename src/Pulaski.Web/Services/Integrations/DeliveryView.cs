@@ -1,4 +1,5 @@
 using Pulaski.Contracts.Integrations;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Integrations;
 
@@ -6,25 +7,25 @@ namespace Pulaski.Web.Services.Integrations;
 public static class DeliveryView
 {
     /// <summary>The status as a chip: failed is danger, held or retrying a warning, delivered plain, skipped muted.</summary>
-    public static (string Text, string Css) Status(DeliveryDto d) => d.Status switch
+    public static (string Text, string Css) Status(Text l, DeliveryDto d) => d.Status switch
     {
-        "failed" => ("Failed", "chip chip-danger"),
-        "pending" when d.IsHeld => ("Held", "chip chip-warning"),
-        "pending" when d.Attempts > 0 => ("Retrying", "chip chip-warning"),
-        "pending" => ("Queued", "chip"),
-        "delivered" => ("Delivered", "chip chip-strong"),
-        "skipped" => ("Skipped", "chip chip-muted"),
+        "failed" => (l["Failed"], "chip chip-danger"),
+        "pending" when d.IsHeld => (l["Held"], "chip chip-warning"),
+        "pending" when d.Attempts > 0 => (l["Retrying"], "chip chip-warning"),
+        "pending" => (l["Queued"], "chip"),
+        "delivered" => (l["Delivered"], "chip chip-strong"),
+        "skipped" => (l["Skipped"], "chip chip-muted"),
         _ => (d.Status, "chip"),
     };
 
     /// <summary>A line on what happens next, in the site-less UTC the screen uses.</summary>
-    public static string Next(DeliveryDto d, DateTimeOffset now) => d.Status switch
+    public static string Next(Text l, DeliveryDto d, DateTimeOffset now) => d.Status switch
     {
-        "failed" => "Waits for someone to retry or skip it.",
-        "pending" when d.IsHeld => "Waits behind an earlier delivery for the same lot.",
-        "pending" when d.NextAttemptAt is { } at && at > now => $"Next try in {Wait(at - now)}.",
-        "pending" => "Goes on the next round.",
-        "skipped" => d.ResolveNote is { } note ? $"Skipped by {d.ResolvedBy}: {note}" : "Skipped.",
+        "failed" => l["Waits for someone to retry or skip it."],
+        "pending" when d.IsHeld => l["Waits behind an earlier delivery for the same lot."],
+        "pending" when d.NextAttemptAt is { } at && at > now => l["Next try in {0}.", Wait(at - now)],
+        "pending" => l["Goes on the next round."],
+        "skipped" => d.ResolveNote is { } note ? l["Skipped by {0}: {1}", d.ResolvedBy, note] : l["Skipped."],
         _ => "",
     };
 

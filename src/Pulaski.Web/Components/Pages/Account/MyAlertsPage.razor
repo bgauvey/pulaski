@@ -2,14 +2,14 @@
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 
-<PageTitle>My alerts · Pulaski</PageTitle>
+<PageTitle>@L["My alerts"] · Pulaski</PageTitle>
 
 @* My alerts (#121, D-109): the e-mails this user asks for, per site and optionally a line or area. Their own only; each needs its view
    permission at the site, checked again when it is sent. *@
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">My alerts</h1>
-        <p class="text-muted mb-0">E-mails Pulaski sends you when something needs you: one for each stop or call, with a link to it.</p>
+        <h1 class="mb-1">@L["My alerts"]</h1>
+        <p class="text-muted mb-0">@L["E-mails Pulaski sends you when something needs you: one for each stop or call, with a link to it."]</p>
     </div>
 </div>
 
@@ -23,27 +23,27 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
 {
     @if (!_alerts.CanSend)
     {
-        <div class="alert alert-warning small" role="status">Pulaski has no mail server set up, so no alerts are sent. Ask your administrator.</div>
+        <div class="alert alert-warning small" role="status">@L["Pulaski has no mail server set up, so no alerts are sent. Ask your administrator."]</div>
     }
     else if (_alerts.Email is null)
     {
-        <div class="alert alert-warning small" role="status">You have no e-mail address in Pulaski, so your alerts can't reach you. Ask an administrator to add it on Configure → Users.</div>
+        <div class="alert alert-warning small" role="status">@L["You have no e-mail address in Pulaski, so your alerts can't reach you. Ask an administrator to add it on Configure → Users."]</div>
     }
     else
     {
-        <p class="small">Alerts go to <span class="fw-semibold">@_alerts.Email</span>.</p>
+        <p class="small">@L["Alerts go to"] <span class="fw-semibold">@_alerts.Email</span>.</p>
     }
 
     <div class="table-panel mb-3">
         <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Alert</th><th>Where</th><th class="inv-num">Minutes</th><th>On</th><th></th></tr></thead>
+            <thead><tr><th>@L["Alert"]</th><th>@L["Where"]</th><th class="inv-num">@L["Minutes"]</th><th>@L["On"]</th><th></th></tr></thead>
             <tbody>
                 @foreach (var s in _alerts.Subscriptions)
                 {
@@ -53,7 +53,7 @@ else
                             @(kind?.Name ?? s.Kind)
                             @if (!s.CanSee)
                             {
-                                <div class="small text-warning-strong">You can't see this at @s.SiteCode any more, so it isn't sent.</div>
+                                <div class="small text-warning-strong">@L["You can't see this at {0} any more, so it isn't sent.", s.SiteCode]</div>
                             }
                         </td>
                         <td>@s.SiteCode@(s.EquipmentCode is { } e ? $" · {e}" : "")</td>
@@ -67,37 +67,37 @@ else
                                 <span title="@m">@s.Minutes</span>
                             }
                         </td>
-                        <td>@(s.IsActive ? "Yes" : "Switched off")</td>
+                        <td>@(s.IsActive ? L["Yes"] : L["Switched off"])</td>
                         <td class="text-end text-nowrap">
                             @if (_editing == s.Id)
                             {
-                                <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => SaveAsync(s, s.IsActive)">Save</button>
-                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _editing = null">Cancel</button>
+                                <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => SaveAsync(s, s.IsActive)">@L["Save"]</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _editing = null">@L["Cancel"]</button>
                             }
                             else
                             {
                                 @if (kind?.MinutesMeans is not null)
                                 {
-                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => (_editing, _editMinutes) = (s.Id, s.Minutes)">Change</button>
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => (_editing, _editMinutes) = (s.Id, s.Minutes)">@L["Change"]</button>
                                 }
-                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => SwitchAsync(s)">@(s.IsActive ? "Switch off" : "Switch on")</button>
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => SwitchAsync(s)">@(s.IsActive ? L["Switch off"] : L["Switch on"])</button>
                             }
                         </td>
                     </tr>
                 }
                 @if (_alerts.Subscriptions.Count == 0)
                 {
-                    <tr><td colspan="5" class="text-muted small">No alerts yet; add one below.</td></tr>
+                    <tr><td colspan="5" class="text-muted small">@L["No alerts yet; add one below."]</td></tr>
                 }
             </tbody>
         </table>
     </div>
 
     <section class="inv-facts" aria-labelledby="add-alert">
-        <h2 class="h6" id="add-alert">Add an alert</h2>
+        <h2 class="h6" id="add-alert">@L["Add an alert"]</h2>
         <form class="row g-2 align-items-end" @onsubmit="AddAsync" @onsubmit:preventDefault>
             <div class="col-12 col-md-4">
-                <label class="form-label small fw-semibold" for="alert-kind">Tell me when</label>
+                <label class="form-label small fw-semibold" for="alert-kind">@L["Tell me when"]</label>
                 <select id="alert-kind" class="form-select form-select-sm" value="@_kind" @onchange="OnKindChanged">
                     @foreach (var k in _alerts.Kinds)
                     {
@@ -108,7 +108,7 @@ else
             @if (Sites.Sites.Count > 1)
             {
                 <div class="col-6 col-md-2">
-                    <label class="form-label small fw-semibold" for="alert-site">Site</label>
+                    <label class="form-label small fw-semibold" for="alert-site">@L["Site"]</label>
                     <select id="alert-site" class="form-select form-select-sm" value="@_siteId" @onchange="OnSiteChangedAsync">
                         @foreach (var site in Sites.Sites)
                         {
@@ -118,9 +118,9 @@ else
                 </div>
             }
             <div class="col-6 col-md-3">
-                <label class="form-label small fw-semibold" for="alert-where">Where</label>
+                <label class="form-label small fw-semibold" for="alert-where">@L["Where"]</label>
                 <select id="alert-where" class="form-select form-select-sm" @bind="_equipmentId">
-                    <option value="@Guid.Empty">The whole site</option>
+                    <option value="@Guid.Empty">@L["The whole site"]</option>
                     @foreach (var e in _places)
                     {
                         <option value="@e.Id">@e.Code · @e.Name</option>
@@ -130,12 +130,12 @@ else
             @if (SelectedKind?.MinutesMeans is { } minutesMeans)
             {
                 <div class="col-6 col-md-2">
-                    <label class="form-label small fw-semibold" for="alert-minutes">Minutes <span class="fw-normal text-muted">(@minutesMeans)</span></label>
+                    <label class="form-label small fw-semibold" for="alert-minutes">@L["Minutes"] <span class="fw-normal text-muted">(@minutesMeans)</span></label>
                     <input id="alert-minutes" type="number" inputmode="numeric" class="form-control form-control-sm" min="1" max="10080" @bind="_minutes" />
                 </div>
             }
             <div class="col-12 col-md-1 form-actions">
-                <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(_siteId is null ? "There is no site." : null)">Add</ActionButton>
+                <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(_siteId is null ? L["There is no site."] : null)">@L["Add"]</ActionButton>
             </div>
         </form>
     </section>
@@ -205,7 +205,7 @@ else
             Kind = _kind,
             Minutes = SelectedKind?.MinutesMeans is null ? null : _minutes,
         });
-        return $"Added: {SelectedKind?.Name ?? _kind}.";
+        return L["Added: {0}.", SelectedKind?.Name ?? _kind];
     });
 
     private Task SaveAsync(AlertSubscriptionDto subscription, bool isActive) => ActAsync(async () =>
@@ -228,7 +228,7 @@ else
             Minutes = subscription.Minutes,
             IsActive = !subscription.IsActive,
         });
-        return subscription.IsActive ? "Switched off; nothing more is sent for it." : "Switched on again.";
+        return subscription.IsActive ? L["Switched off; nothing more is sent for it."] : L["Switched on again."];
     });
 
     private async Task ActAsync(Func<Task<string>> action)

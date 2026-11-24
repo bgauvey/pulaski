@@ -3,6 +3,7 @@ using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Shifts;
 using Pulaski.Web.Services;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Components.Pages.Equipment;
 
@@ -56,14 +57,14 @@ public sealed class EquipmentDraft
 /// <summary>Builds the property grid rows for equipment and applies edits to it.</summary>
 public static class EquipmentProperties
 {
-    private const string Identity = "Identity";
-    private const string Classification = "Classification";
-    private const string Capabilities = "Capabilities";
-    private const string Site = "Site";
-    private const string Status = "Status";
-    private const string Hierarchy = "Hierarchy";
-    private const string WorkingTime = "Working time";
-    private const string MachineData = "Machine data";
+    private static readonly string Identity = Term.Mark("Identity");
+    private static readonly string Classification = Term.Mark("Classification");
+    private static readonly string Capabilities = Term.Mark("Capabilities");
+    private static readonly string Site = Term.Mark("Site");
+    private static readonly string Status = Term.Mark("Status");
+    private static readonly string Hierarchy = Term.Mark("Hierarchy");
+    private static readonly string WorkingTime = Term.Mark("Working time");
+    private static readonly string MachineData = Term.Mark("Machine data");
 
     public const string CalendarKey = "calendar";
     public const string MachineProfileKey = "machineProfile";
@@ -78,24 +79,20 @@ public static class EquipmentProperties
     private const string AroundTheClock = "around_the_clock";
     private const string SchedulePrefix = "schedule:";
 
-    private const string CodeHelp = "Business key, unique within the site. Fixed once the equipment is created.";
-    private const string NameHelp = "Display name shown on screens and reports.";
-    private const string DescriptionHelp = "Optional notes about this equipment.";
-    private const string LevelHelp = "ISA-95 level. A child sits below its parent's level. Fixed once created.";
-    private const string RoleHelp = "ISA-95 role within the level. Fixed once created.";
-    private const string TracksStateHelp = "Collects PackML machine state, so downtime and OEE are recorded for it.";
-    private const string SchedulableHelp =
-        "Jobs can be planned to it. A schedulable group such as a department, without Can run jobs, takes jobs in a time window and its lines run them.";
+    private static readonly string CodeHelp = Term.Mark("Business key, unique within the site. Fixed once the equipment is created.");
+    private static readonly string NameHelp = Term.Mark("Display name shown on screens and reports.");
+    private static readonly string DescriptionHelp = Term.Mark("Optional notes about this equipment.");
+    private static readonly string LevelHelp = Term.Mark("ISA-95 level. A child sits below its parent's level. Fixed once created.");
+    private static readonly string RoleHelp = Term.Mark("ISA-95 role within the level. Fixed once created.");
+    private static readonly string TracksStateHelp = Term.Mark("Collects PackML machine state, so downtime and OEE are recorded for it.");
+    private static readonly string SchedulableHelp = Term.Mark("Jobs can be planned to it. A schedulable group such as a department, without Can run jobs, takes jobs in a time window and its lines run them.");
 
-    private const string CanRunJobHelp =
-        "Jobs actually run here: a line or cell. Jobs planned to a schedulable group above it can be released to it.";
-    private const string HoldsInventoryHelp = "Material lots can be located here.";
-    private const string ComminglesLotsHelp =
-        "Lots here mix and can't be told apart, like a silo or tank: everything received, moved or produced here joins one balance per material, with no lot number. A numbered lot is kept for its genealogy, then merged in.";
+    private static readonly string CanRunJobHelp = Term.Mark("Jobs actually run here: a line or cell. Jobs planned to a schedulable group above it can be released to it.");
+    private static readonly string HoldsInventoryHelp = Term.Mark("Material lots can be located here.");
+    private static readonly string ComminglesLotsHelp = Term.Mark("Lots here mix and can't be told apart, like a silo or tank: everything received, moved or produced here joins one balance per material, with no lot number. A numbered lot is kept for its genealogy, then merged in.");
 
-    private const string SingleMaterialHelp =
-        "Takes one material at a time, like a silo for one resin: while one material is here, nothing of another can arrive. Once it is empty, any material can go in.";
-    private const string TimeZoneHelp = "IANA time zone the site's shifts and reports use, e.g. America/Chicago.";
+    private static readonly string SingleMaterialHelp = Term.Mark("Takes one material at a time, like a silo for one resin: while one material is here, nothing of another can arrive. Once it is empty, any material can go in.");
+    private static readonly string TimeZoneHelp = Term.Mark("IANA time zone the site's shifts and reports use, e.g. America/Chicago.");
 
     // ---- Existing equipment ----
 
@@ -103,7 +100,7 @@ public static class EquipmentProperties
     /// The rows for existing equipment. Rows the user may not change are shown locked: <paramref name="canEdit"/> for the
     /// equipment itself, <paramref name="canSetShifts"/> for the shift schedule it follows (D-037, D-038).
     /// </summary>
-    public static IReadOnlyList<PropertyItem> ForExisting(
+    public static IReadOnlyList<PropertyItem> ForExisting(Text l,
         EquipmentDto e, EquipmentTree tree, IReadOnlyList<ShiftScheduleDto>? schedules = null, bool canEdit = true, bool canSetShifts = true,
         IReadOnlyList<MachineProfileDto>? profiles = null)
     {
@@ -112,21 +109,21 @@ public static class EquipmentProperties
 
         List<PropertyItem> items =
         [
-            new() { Key = "code", Name = "Code", Category = Identity, Description = CodeHelp, Value = e.Code },
-            new() { Key = "name", Name = "Name", Category = Identity, Description = NameHelp, Value = e.Name, Editor = PropertyEditor.Text, MaxLength = 200 },
-            new() { Key = "description", Name = "Description", Category = Identity, Description = DescriptionHelp, Value = e.Description, Editor = PropertyEditor.Text },
-            new() { Key = "level", Name = "Level", Category = Classification, Description = LevelHelp, Value = Display.Label(e.Level) },
-            new() { Key = "role", Name = "Role", Category = Classification, Description = RoleHelp, Value = Display.Label(e.EquipmentRole) },
-            Bool("tracksState", "Tracks state", Capabilities, TracksStateHelp, e.TracksState),
-            Bool("isSchedulable", "Schedulable", Capabilities, SchedulableHelp, e.IsSchedulable),
-            Bool("canRunJob", "Can run jobs", Capabilities, CanRunJobHelp, e.CanRunJob),
-            Bool("holdsInventory", "Holds inventory", Capabilities, HoldsInventoryHelp, e.HoldsInventory),
+            new() { Key = "code", Name = l["Code"], Category = l[Identity], Description = l[CodeHelp], Value = e.Code },
+            new() { Key = "name", Name = l["Name"], Category = l[Identity], Description = l[NameHelp], Value = e.Name, Editor = PropertyEditor.Text, MaxLength = 200 },
+            new() { Key = "description", Name = l["Description"], Category = l[Identity], Description = l[DescriptionHelp], Value = e.Description, Editor = PropertyEditor.Text },
+            new() { Key = "level", Name = l["Level"], Category = l[Classification], Description = l[LevelHelp], Value = Display.Label(e.Level) },
+            new() { Key = "role", Name = l["Role"], Category = l[Classification], Description = l[RoleHelp], Value = Display.Label(e.EquipmentRole) },
+            Bool("tracksState", l["Tracks state"], l[Capabilities], l[TracksStateHelp], e.TracksState),
+            Bool("isSchedulable", l["Schedulable"], l[Capabilities], l[SchedulableHelp], e.IsSchedulable),
+            Bool("canRunJob", l["Can run jobs"], l[Capabilities], l[CanRunJobHelp], e.CanRunJob),
+            Bool("holdsInventory", l["Holds inventory"], l[Capabilities], l[HoldsInventoryHelp], e.HoldsInventory),
         ];
 
         if (e.HoldsInventory)
         {
-            items.Add(Bool("comminglesLots", "Lots are indistinguishable", Capabilities, ComminglesLotsHelp, e.ComminglesLots));
-            items.Add(Bool("singleMaterial", "One material at a time", Capabilities, SingleMaterialHelp, e.SingleMaterial));
+            items.Add(Bool("comminglesLots", l["Lots are indistinguishable"], l[Capabilities], l[ComminglesLotsHelp], e.ComminglesLots));
+            items.Add(Bool("singleMaterial", l["One material at a time"], l[Capabilities], l[SingleMaterialHelp], e.SingleMaterial));
         }
 
         if (e.Level == "site")
@@ -134,24 +131,24 @@ public static class EquipmentProperties
             items.Add(new()
             {
                 Key = "timeZone",
-                Name = "Time zone",
-                Category = Site,
-                Description = TimeZoneHelp + " Set when the site is created.",
+                Name = l["Time zone"],
+                Category = l[Site],
+                Description = l["IANA time zone the site's shifts and reports use, e.g. America/Chicago. Set when the site is created."],
                 Value = e.TimeZone,
             });
         }
 
-        items.Add(Bool("isActive", "Active", Status,
-            "Inactive equipment stays in the hierarchy and its history, greyed out.", e.IsActive));
+        items.Add(Bool("isActive", l["Active"], l[Status],
+            l["Inactive equipment stays in the hierarchy and its history, greyed out."], e.IsActive));
 
         if (e.TracksState)
         {
-            items.AddRange(MachineDataItems(e, tree, profiles ?? []));
+            items.AddRange(MachineDataItems(l, e, tree, profiles ?? []));
         }
 
         if (e.CanRunJob)
         {
-            items.Add(ProductionCounterItem(e, tree));
+            items.Add(ProductionCounterItem(l, e, tree));
         }
 
         if (!canEdit)
@@ -159,46 +156,44 @@ public static class EquipmentProperties
             items = [.. items.Select(i => i.Editor == PropertyEditor.ReadOnly ? i : i with { Locked = true })];
         }
 
-        items.Add(CalendarItem(e, schedules ?? [], canSetShifts));
+        items.Add(CalendarItem(l, e, schedules ?? [], canSetShifts));
         items.Add(new()
         {
             Key = "calendarInEffect",
-            Name = "Shifts in effect",
-            Category = WorkingTime,
-            Description = "The working time planning uses for this equipment and everything below it that inherits: its own setting, or the nearest one above it.",
-            Value = InEffect(e, tree, schedules ?? []),
+            Name = l["Shifts in effect"],
+            Category = l[WorkingTime],
+            Description = l["The working time planning uses for this equipment and everything below it that inherits: its own setting, or the nearest one above it."],
+            Value = InEffect(l, e, tree, schedules ?? []),
         });
 
-        items.Add(new() { Key = "parent", Name = "Parent", Category = Hierarchy, Description = "The equipment this sits under.", Value = parent is null ? "None" : $"{parent.Code} · {parent.Name}" });
-        items.Add(new() { Key = "site", Name = "Owning site", Category = Hierarchy, Description = "The site whose time zone and codes this equipment uses.", Value = site is null ? "None" : site.Code });
-        items.Add(new() { Key = "children", Name = "Children", Category = Hierarchy, Description = "Equipment directly below this.", Value = tree.ChildrenOf(e.Id).Count.ToString(System.Globalization.CultureInfo.InvariantCulture) });
-        items.Add(new() { Key = "id", Name = "Id", Category = Hierarchy, Description = "Pulaski's internal identifier, for API calls and support.", Value = e.Id.ToString() });
+        items.Add(new() { Key = "parent", Name = l["Parent"], Category = l[Hierarchy], Description = l["The equipment this sits under."], Value = parent is null ? l["None"] : $"{parent.Code} · {parent.Name}" });
+        items.Add(new() { Key = "site", Name = l["Owning site"], Category = l[Hierarchy], Description = l["The site whose time zone and codes this equipment uses."], Value = site is null ? l["None"] : site.Code });
+        items.Add(new() { Key = "children", Name = l["Children"], Category = l[Hierarchy], Description = l["Equipment directly below this."], Value = tree.ChildrenOf(e.Id).Count.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+        items.Add(new() { Key = "id", Name = l["Id"], Category = l[Hierarchy], Description = l["Pulaski's internal identifier, for API calls and support."], Value = e.Id.ToString() });
 
         return items;
     }
 
     /// <summary>The machine data rows (D-050): its profile, where its state comes from, and its micro-stop threshold.</summary>
-    private static IEnumerable<PropertyItem> MachineDataItems(EquipmentDto e, EquipmentTree tree, IReadOnlyList<MachineProfileDto> profiles)
+    private static IEnumerable<PropertyItem> MachineDataItems(Text l, EquipmentDto e, EquipmentTree tree, IReadOnlyList<MachineProfileDto> profiles)
     {
         var own = profiles.Where(p => p.SiteId == e.SiteId && (p.IsActive || p.Id == e.MachineProfileId));
         yield return new()
         {
             Key = MachineProfileKey,
-            Name = "Machine profile",
-            Category = MachineData,
-            Description = "How its controller reports state and stop codes: the profile maps its state values to PackML states and its stop codes to utilization reasons. "
-                + "Profiles are kept on Configure → Machine profiles.",
+            Name = l["Machine profile"],
+            Category = l[MachineData],
+            Description = l["How its controller reports state and stop codes: the profile maps its state values to PackML states and its stop codes to utilization reasons. Profiles are kept on Configure → Machine profiles."],
             Value = e.MachineProfileId?.ToString() ?? "",
             Editor = PropertyEditor.Choice,
-            Choices = [new("", "None"), .. own.Select(p => new PropertyChoice(p.Id.ToString(), $"{p.Code} · {p.Name}{(p.IsActive ? "" : " (switched off)")}"))],
+            Choices = [new("", l["None"]), .. own.Select(p => new PropertyChoice(p.Id.ToString(), $"{p.Code} · {p.Name}{(p.IsActive ? "" : " " + l["(switched off)"])}"))],
         };
         yield return new()
         {
             Key = MicroStopKey,
-            Name = "Micro-stop threshold",
-            Category = MachineData,
-            Description = "Stops shorter than this are micro-stops: logged, but not queued for a reason and not counted against availability; "
-                + "the output they cost shows as lower performance. An extruder may use 2 minutes, a pack cell more.",
+            Name = l["Micro-stop threshold"],
+            Category = l[MachineData],
+            Description = l["Stops shorter than this are micro-stops: logged, but not queued for a reason and not counted against availability; the output they cost shows as lower performance. An extruder may use 2 minutes, a pack cell more."],
             Value = Minutes(e.MicroStopThresholdSeconds),
             Editor = PropertyEditor.Number,
             Min = 0,
@@ -209,18 +204,17 @@ public static class EquipmentProperties
         yield return new()
         {
             Key = StateDerivationKey,
-            Name = "State from",
-            Category = MachineData,
-            Description = "Where its state comes from: its own state tag, or for a line, its machines: the worst of their states when they run one after "
-                + "another (series), the best when they run side by side (parallel), or one constraint machine.",
+            Name = l["State from"],
+            Category = l[MachineData],
+            Description = l["Where its state comes from: its own state tag, or for a line, its machines: the worst of their states when they run one after another (series), the best when they run side by side (parallel), or one constraint machine."],
             Value = e.StateDerivation,
             Editor = PropertyEditor.Choice,
             Choices =
             [
-                new("own_tags", "Its own state tag"),
-                new("series", "Worst of its machines (series)"),
-                new("parallel", "Best of its machines (parallel)"),
-                new("constraint_machine", "Its constraint machine"),
+                new("own_tags", l["Its own state tag"]),
+                new("series", l["Worst of its machines (series)"]),
+                new("parallel", l["Best of its machines (parallel)"]),
+                new("constraint_machine", l["Its constraint machine"]),
             ],
         };
 
@@ -229,9 +223,9 @@ public static class EquipmentProperties
             yield return new()
             {
                 Key = ConstraintKey,
-                Name = "Constraint machine",
-                Category = MachineData,
-                Description = "The machine below it whose state is its own.",
+                Name = l["Constraint machine"],
+                Category = l[MachineData],
+                Description = l["The machine below it whose state is its own."],
                 Value = e.ConstraintEquipmentId?.ToString() ?? "",
                 Editor = PropertyEditor.Choice,
                 Choices = [.. ConstraintCandidates(e, tree).Select(c => new PropertyChoice(c.Id.ToString(), $"{c.Code} · {c.Name}"))],
@@ -243,19 +237,18 @@ public static class EquipmentProperties
     /// Where a line's output is counted for production reports from the machine (#27, D-097): the line itself or a machine below it. Left
     /// blank, the line's own processed counter is used, else the only machine below with one.
     /// </summary>
-    private static PropertyItem ProductionCounterItem(EquipmentDto e, EquipmentTree tree) => new()
+    private static PropertyItem ProductionCounterItem(Text l, EquipmentDto e, EquipmentTree tree) => new()
     {
         Key = ProductionCounterKey,
-        Name = "Production counted at",
-        Category = MachineData,
-        Description = "Whose processed and defective counters a production report from the machine takes, usually the last machine of the line. "
-            + "Found by itself when the line has its own counter or only one machine below it has one.",
+        Name = l["Production counted at"],
+        Category = l[MachineData],
+        Description = l["Whose processed and defective counters a production report from the machine takes, usually the last machine of the line. Found by itself when the line has its own counter or only one machine below it has one."],
         Value = e.ProductionCounterEquipmentId?.ToString() ?? "",
         Editor = PropertyEditor.Choice,
         Choices =
         [
-            new("", "Found from the counter tags"),
-            new(e.Id.ToString(), $"{e.Code} itself"),
+            new("", l["Found from the counter tags"]),
+            new(e.Id.ToString(), l["{0} itself", e.Code]),
             .. Below(e, tree).Select(c => new PropertyChoice(c.Id.ToString(), $"{c.Code} · {c.Name}")),
         ],
     };
@@ -333,25 +326,25 @@ public static class EquipmentProperties
     /// Where the working time of <paramref name="e"/> comes from (D-038): the nearest equipment, itself first, that
     /// doesn't inherit; around the clock when nothing above sets one.
     /// </summary>
-    public static string InEffect(EquipmentDto e, EquipmentTree tree, IReadOnlyList<ShiftScheduleDto> schedules)
+    public static string InEffect(Text l, EquipmentDto e, EquipmentTree tree, IReadOnlyList<ShiftScheduleDto> schedules)
     {
         for (var current = e; current is not null; current = current.ParentId is { } parentId ? tree.Find(parentId) : null)
         {
-            var from = current.Id == e.Id ? "" : $", from {current.Code}";
+            var from = current.Id == e.Id ? "" : l[", from {0}", current.Code];
             switch (current.CalendarMode)
             {
                 case AroundTheClock:
-                    return "Around the clock" + from;
+                    return l["Around the clock"] + from;
                 case "schedule":
                     var schedule = schedules.FirstOrDefault(s => s.Id == current.ShiftScheduleId);
-                    return (schedule is null ? "A shift schedule" : $"{schedule.Code} · {schedule.Name}") + from;
+                    return (schedule is null ? l["A shift schedule"] : $"{schedule.Code} · {schedule.Name}") + from;
             }
         }
 
-        return "Around the clock: no shift schedule is set here or above";
+        return l["Around the clock: no shift schedule is set here or above"];
     }
 
-    private static PropertyItem CalendarItem(EquipmentDto e, IReadOnlyList<ShiftScheduleDto> schedules, bool canSetShifts)
+    private static PropertyItem CalendarItem(Text l, EquipmentDto e, IReadOnlyList<ShiftScheduleDto> schedules, bool canSetShifts)
     {
         var value = e.CalendarMode switch
         {
@@ -366,18 +359,17 @@ public static class EquipmentProperties
             : [];
         List<PropertyChoice> choices =
         [
-            new(Inherit, e.ParentId is null ? "Inherit (nothing above: around the clock)" : "Inherit from parent"),
+            new(Inherit, e.ParentId is null ? l["Inherit (nothing above: around the clock)"] : l["Inherit from parent"]),
             new(AroundTheClock, "Around the clock"),
-            .. own.Select(s => new PropertyChoice(SchedulePrefix + s.Id, $"{s.Code} · {s.Name}{(s.IsActive ? "" : " (switched off)")}")),
+            .. own.Select(s => new PropertyChoice(SchedulePrefix + s.Id, $"{s.Code} · {s.Name}{(s.IsActive ? "" : " " + l["(switched off)"])}")),
         ];
 
         return new()
         {
             Key = CalendarKey,
-            Name = "Shifts",
-            Category = WorkingTime,
-            Description = "When it works, for planning: inherit its parent's shifts, follow one of the site's shift schedules, or run around the clock. "
-                + "Schedules are kept on Configure → Shifts.",
+            Name = l["Shifts"],
+            Category = l[WorkingTime],
+            Description = l["When it works, for planning: inherit its parent's shifts, follow one of the site's shift schedules, or run around the clock. Schedules are kept on Configure → Shifts."],
             Value = value,
             Editor = PropertyEditor.Choice,
             Choices = choices,
@@ -445,35 +437,35 @@ public static class EquipmentProperties
         return parent is null ? [.. levels.Take(1)] : [.. levels.Skip(levels.IndexOf(parent.Level) + 1)];
     }
 
-    public static IReadOnlyList<PropertyItem> ForDraft(EquipmentDraft d, IReadOnlyList<EquipmentTypeDto> types)
+    public static IReadOnlyList<PropertyItem> ForDraft(Text l, EquipmentDraft d, IReadOnlyList<EquipmentTypeDto> types)
     {
         List<PropertyItem> items =
         [
-            new() { Key = "code", Name = "Code", Category = Identity, Description = CodeHelp, Value = d.Code, Editor = PropertyEditor.Text, Placeholder = "Required", MaxLength = 50 },
-            new() { Key = "name", Name = "Name", Category = Identity, Description = NameHelp, Value = d.Name, Editor = PropertyEditor.Text, Placeholder = "Required", MaxLength = 200 },
-            new() { Key = "description", Name = "Description", Category = Identity, Description = DescriptionHelp, Value = d.Description, Editor = PropertyEditor.Text },
+            new() { Key = "code", Name = l["Code"], Category = l[Identity], Description = l[CodeHelp], Value = d.Code, Editor = PropertyEditor.Text, Placeholder = l["Required"], MaxLength = 50 },
+            new() { Key = "name", Name = l["Name"], Category = l[Identity], Description = l[NameHelp], Value = d.Name, Editor = PropertyEditor.Text, Placeholder = l["Required"], MaxLength = 200 },
+            new() { Key = "description", Name = l["Description"], Category = l[Identity], Description = l[DescriptionHelp], Value = d.Description, Editor = PropertyEditor.Text },
             new()
             {
-                Key = "level", Name = "Level", Category = Classification, Description = LevelHelp, Value = d.Level,
+                Key = "level", Name = l["Level"], Category = l[Classification], Description = l[LevelHelp], Value = d.Level,
                 Editor = PropertyEditor.Choice,
                 Choices = [.. LevelsUnder(d.Parent, types).Select(l => new PropertyChoice(l, Display.Label(l)))],
             },
             new()
             {
-                Key = "role", Name = "Role", Category = Classification, Description = RoleHelp + " Changing it resets the capabilities to the role's defaults.", Value = d.Role,
+                Key = "role", Name = l["Role"], Category = l[Classification], Description = l["ISA-95 role within the level. Fixed once created. Changing it resets the capabilities to the role's defaults."], Value = d.Role,
                 Editor = PropertyEditor.Choice,
                 Choices = [.. RolesFor(d.Level, types).Select(r => new PropertyChoice(r, Display.Label(r)))],
             },
-            Bool("tracksState", "Tracks state", Capabilities, TracksStateHelp, d.TracksState),
-            Bool("isSchedulable", "Schedulable", Capabilities, SchedulableHelp, d.IsSchedulable),
-            Bool("canRunJob", "Can run jobs", Capabilities, CanRunJobHelp, d.CanRunJob),
-            Bool("holdsInventory", "Holds inventory", Capabilities, HoldsInventoryHelp, d.HoldsInventory),
+            Bool("tracksState", l["Tracks state"], l[Capabilities], l[TracksStateHelp], d.TracksState),
+            Bool("isSchedulable", l["Schedulable"], l[Capabilities], l[SchedulableHelp], d.IsSchedulable),
+            Bool("canRunJob", l["Can run jobs"], l[Capabilities], l[CanRunJobHelp], d.CanRunJob),
+            Bool("holdsInventory", l["Holds inventory"], l[Capabilities], l[HoldsInventoryHelp], d.HoldsInventory),
         ];
 
         if (d.HoldsInventory)
         {
-            items.Add(Bool("comminglesLots", "Lots are indistinguishable", Capabilities, ComminglesLotsHelp, d.ComminglesLots));
-            items.Add(Bool("singleMaterial", "One material at a time", Capabilities, SingleMaterialHelp, d.SingleMaterial));
+            items.Add(Bool("comminglesLots", l["Lots are indistinguishable"], l[Capabilities], l[ComminglesLotsHelp], d.ComminglesLots));
+            items.Add(Bool("singleMaterial", l["One material at a time"], l[Capabilities], l[SingleMaterialHelp], d.SingleMaterial));
         }
 
         if (d.Level == "site")
@@ -481,16 +473,16 @@ public static class EquipmentProperties
             items.Add(new()
             {
                 Key = "timeZone",
-                Name = "Time zone",
-                Category = Site,
-                Description = TimeZoneHelp,
+                Name = l["Time zone"],
+                Category = l[Site],
+                Description = l[TimeZoneHelp],
                 Value = d.TimeZone,
                 Editor = PropertyEditor.Text,
-                Placeholder = "Required, e.g. America/Chicago",
+                Placeholder = l["Required, e.g. America/Chicago"],
             });
         }
 
-        items.Add(new() { Key = "parent", Name = "Parent", Category = Hierarchy, Description = "The equipment this will sit under.", Value = d.Parent is null ? "None" : $"{d.Parent.Code} · {d.Parent.Name}" });
+        items.Add(new() { Key = "parent", Name = l["Parent"], Category = l[Hierarchy], Description = l["The equipment this will sit under."], Value = d.Parent is null ? l["None"] : $"{d.Parent.Code} · {d.Parent.Name}" });
         return items;
     }
 

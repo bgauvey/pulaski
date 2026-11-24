@@ -1,5 +1,6 @@
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.MachineData;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.MachineData;
 
@@ -20,25 +21,25 @@ public static class MachineProfileView
         "Aborted", "Holding", "Held", "Unholding", "Suspending", "Unsuspending", "Resetting", "Completing", "Complete",
     ];
 
-    public static string KindLabel(string kind) => kind switch
+    public static string KindLabel(Text l, string kind) => kind switch
     {
-        State => "State",
-        "stop_reason" => "Stop reason",
-        "alarm" => "Alarm",
-        "warning" => "Warning",
+        State => l["State"],
+        "stop_reason" => l["Stop reason"],
+        "alarm" => l["Alarm"],
+        "warning" => l["Warning"],
         _ => kind,
     };
 
-    public static string ClassLabel(string? utilizationClass) => utilizationClass switch
+    public static string ClassLabel(Text l, string? utilizationClass) => utilizationClass switch
     {
-        "runtime" => "Runtime",
-        "downtime" => "Downtime",
-        "planned" => "Planned",
+        "runtime" => l["Runtime"],
+        "downtime" => l["Downtime"],
+        "planned" => l["Planned"],
         _ => "",
     };
 
     /// <summary>A reason as a choice shows it: <c>JAM · Jam (downtime)</c>.</summary>
-    public static string ReasonLabel(ReasonCodeDto reason) => $"{reason.Code} · {Display.ReasonLabel(reason)} ({ClassLabel(reason.UtilizationClass).ToLowerInvariant()})";
+    public static string ReasonLabel(Text l, ReasonCodeDto reason) => $"{reason.Code} · {Display.ReasonLabel(reason)} ({ClassLabel(l, reason.UtilizationClass).ToLowerInvariant()})";
 
     /// <summary>The profile's active states and codes as a file the import reads back unchanged.</summary>
     public static string ExportCsv(MachineProfileDetailDto profile) =>

@@ -6,34 +6,33 @@
 @* OEE targets (D-073): the site's default and each piece of equipment's, each in force from a production day until ended. The OEE report
    shows figures against the target of their day. *@
 <section class="inv-facts mb-3" id="oee-targets" aria-labelledby="targets-heading">
-    <h2 class="h6" id="targets-heading">OEE targets</h2>
+    <h2 class="h6" id="targets-heading">@L["OEE targets"]</h2>
     <p class="small text-muted">
-        What availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line with targets of its
-        own uses those instead. A change starts on the day you choose, so earlier days keep the targets they had. Leave a figure blank for no target.
+        @L["What availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line with targets of its own uses those instead. A change starts on the day you choose, so earlier days keep the targets they had. Leave a figure blank for no target."]
     </p>
     <ProblemAlert Error="_error" />
 
     @if (_targets is null)
     {
-        <p class="small text-muted mb-0">Loading…</p>
+        <p class="small text-muted mb-0">@L["Loading…"]</p>
     }
     else
     {
         var shown = _showAll ? _targets : OeeTargetsView.InForce(_targets, Today);
         @if (shown.Count == 0)
         {
-            <p class="small text-muted">No targets@(_showAll ? "" : " in force today").</p>
+            <p class="small text-muted">@(_showAll ? L["No targets."] : L["No targets in force today."])</p>
         }
         else
         {
             <div class="table-panel mb-2">
                 <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>For</th><th>When</th><th class="text-end">Availability</th><th class="text-end">Performance</th><th class="text-end">Quality</th><th class="text-end">OEE</th><th></th></tr></thead>
+                    <thead><tr><th>@L["For"]</th><th>@L["When"]</th><th class="text-end">@L["Availability"]</th><th class="text-end">@L["Performance"]</th><th class="text-end">@L["Quality"]</th><th class="text-end">@L["OEE"]</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var t in shown)
                         {
                             <tr @key="t.Id">
-                                <td class="fw-semibold">@(t.EquipmentId is null ? "Site (default)" : $"{t.EquipmentCode} · {t.EquipmentName}")</td>
+                                <td class="fw-semibold">@(t.EquipmentId is null ? L["Site (default)"] : $"{t.EquipmentCode} · {t.EquipmentName}")</td>
                                 <td class="small">@OeeTargetsView.Period(L, t)</td>
                                 <td class="text-end">@OeeTargetsView.Pct(t.Targets.AvailabilityPct)</td>
                                 <td class="text-end">@OeeTargetsView.Pct(t.Targets.PerformancePct)</td>
@@ -42,9 +41,9 @@
                                 <td class="text-end text-nowrap">
                                     @if (CanManage && t.EffectiveTo is null)
                                     {
-                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(t)">Change</button>
+                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(t)">@L["Change"]</button>
                                         <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => EndAsync(t)"
-                                                title="From today on, @(t.EquipmentId is null ? "the site has no targets" : "it follows the site's")">End today</button>
+                                                title="@(t.EquipmentId is null ? L["From today on, the site has no targets"] : L["From today on, it follows the site's"])">@L["End today"]</button>
                                     }
                                 </td>
                             </tr>
@@ -53,16 +52,16 @@
                 </table>
             </div>
         }
-        <button type="button" class="btn btn-sm btn-link px-0 mb-2" @onclick="() => _showAll = !_showAll">@(_showAll ? "Show only those in force today" : "Show earlier and ended targets")</button>
+        <button type="button" class="btn btn-sm btn-link px-0 mb-2" @onclick="() => _showAll = !_showAll">@(_showAll ? L["Show only those in force today"] : L["Show earlier and ended targets"])</button>
 
         @if (CanManage)
         {
             <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
                 <div class="col-12 col-md-4">
-                    <label class="form-label small fw-semibold" for="target-scope">For</label>
+                    <label class="form-label small fw-semibold" for="target-scope">@L["For"]</label>
                     <select id="target-scope" class="form-select form-select-sm" value="@(_scope?.ToString() ?? "")"
                             @onchange="@(e => _scope = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null)">
-                        <option value="">Site (default)</option>
+                        <option value="">@L["Site (default)"]</option>
                         @foreach (var e in _equipment)
                         {
                             <option value="@e.Id">@e.Code · @e.Name</option>
@@ -70,7 +69,7 @@
                     </select>
                 </div>
                 <div class="col-6 col-md-2">
-                    <label class="form-label small fw-semibold" for="target-from">From</label>
+                    <label class="form-label small fw-semibold" for="target-from">@L["From"]</label>
                     <input id="target-from" type="date" class="form-control form-control-sm" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
                            @onchange="@(e => _from = DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : _from)" />
                 </div>
@@ -83,7 +82,7 @@
                     {
                         <p class="small text-muted mb-1">@problem</p>
                     }
-                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || OeeTargetsView.Problem(L, _availability, _performance, _quality, _oee) is not null)">Save targets</button>
+                    <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || OeeTargetsView.Problem(L, _availability, _performance, _quality, _oee) is not null)">@L["Save targets"]</button>
                 </div>
             </form>
         }
@@ -164,13 +163,13 @@
             OeePct = _oee,
             Version = OeeTargetsView.Latest(_targets!, _scope)?.Version ?? 0,
         });
-        return $"Saved the OEE targets from {_from.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)}.";
+        return L["Saved the OEE targets from {0}.", _from.ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture)];
     });
 
     private async Task EndAsync(OeeTargetDto target) => await RunAsync(async () =>
     {
         _targets = await Api.EndOeeTargetAsync(SiteId, new EndOeeTargetRequest { EquipmentId = target.EquipmentId, EndOn = Today, Version = target.Version });
-        return target.EquipmentId is null ? "Ended the site's OEE targets." : $"Ended {target.EquipmentCode}'s own targets; it follows the site's now.";
+        return target.EquipmentId is null ? L["Ended the site's OEE targets."] : L["Ended {0}'s own targets; it follows the site's now.", target.EquipmentCode];
     });
 
     private async Task RunAsync(Func<Task<string>> action)

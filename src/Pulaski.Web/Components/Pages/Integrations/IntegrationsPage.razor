@@ -4,20 +4,17 @@
 @inject CurrentUser User
 
 @* Outbound deliveries (D-061, #78): the ERP feed and the document system's, how each is doing, what failed, and putting it right. *@
-<PageTitle>Integrations · Pulaski</PageTitle>
+<PageTitle>@L["Integrations"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Integrations</h1>
+        <h1 class="mb-1">@L["Integrations"]</h1>
         <p class="text-muted mb-0">
-            Pulaski sends every inventory movement to the ERP's webhook, and certificates to a document system's, as they happen, in order,
-            and keeps trying while the receiver is unreachable. A delivery that is refused, or runs out of attempts, stops here as failed, and
-            holds back that lot's (or certificate's) later events until someone retries it or skips it. Below, material connections read items
-            from your item master.
+            @L["Pulaski sends every inventory movement to the ERP's webhook, and certificates to a document system's, as they happen, in order, and keeps trying while the receiver is unreachable. A delivery that is refused, or runs out of attempts, stops here as failed, and holds back that lot's (or certificate's) later events until someone retries it or skips it. Below, material connections read items from your item master."]
         </p>
     </div>
     <div class="inv-head-tools">
-        <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="LoadAsync">Refresh</button>
+        <button type="button" class="btn btn-outline-secondary" disabled="@_busy" @onclick="LoadAsync">@L["Refresh"]</button>
     </div>
 </div>
 
@@ -25,18 +22,18 @@
 <ViewOnlyNote Permission="@PermissionCodes.Integrations" What="@L["retry or skip deliveries"]" />
 
 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-    <div class="btn-group flex-wrap" role="group" aria-label="Feed">
+    <div class="btn-group flex-wrap" role="group" aria-label="@L["Feed"]">
         @foreach (var f in _feeds)
         {
             <button type="button" class="btn btn-sm @(_feed == f.Feed ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => SwitchAsync(f.Feed))"
-                    title="@($"{(f.Kind == "mqtt" ? "MQTT broker" : "Webhook")}{(f.Format == "b2mml" ? ", B2MML" : "")}{(f.Enabled ? $" to {f.TargetHost}" : ", off")}")">
-                @(f.Feed == "erp" ? "ERP" : f.Feed == "documents" ? "Document system" : f.Label)
+                    title="@($"{(f.Kind == "mqtt" ? L["MQTT broker"] : L["Webhook"])}{(f.Format == "b2mml" ? ", B2MML" : "")}{(f.Enabled ? " " + L["to {0}", f.TargetHost] : ", " + L["off"])}")">
+                @(f.Feed == "erp" ? "ERP" : f.Feed == "documents" ? L["Document system"] : f.Label)
             </button>
         }
     </div>
     @if (CanManage)
     {
-        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => _adding = !_adding">Add a feed</button>
+        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => _adding = !_adding">@L["Add a feed"]</button>
     }
 </div>
 
@@ -44,34 +41,33 @@
 {
     <form class="inv-facts mb-3 row g-2 align-items-end" @onsubmit="AddFeedAsync" @onsubmit:preventDefault>
         <div class="col-6 col-md-2">
-            <label class="form-label small fw-semibold" for="new-feed-code">Code</label>
+            <label class="form-label small fw-semibold" for="new-feed-code">@L["Code"]</label>
             <input id="new-feed-code" class="form-control form-control-sm" maxlength="30" placeholder="wms" @bind="_newCode" />
         </div>
         <div class="col-6 col-md-4">
-            <label class="form-label small fw-semibold" for="new-feed-name">Name</label>
-            <input id="new-feed-name" class="form-control form-control-sm" maxlength="100" placeholder="Warehouse system" @bind="_newName" />
+            <label class="form-label small fw-semibold" for="new-feed-name">@L["Name"]</label>
+            <input id="new-feed-name" class="form-control form-control-sm" maxlength="100" placeholder="@L["Warehouse system"]" @bind="_newName" />
         </div>
         <div class="col-6 col-md-3">
-            <label class="form-label small fw-semibold" for="new-feed-kind">Sends to</label>
+            <label class="form-label small fw-semibold" for="new-feed-kind">@L["Sends to"]</label>
             <select id="new-feed-kind" class="form-select form-select-sm" @bind="_newKind">
-                <option value="webhook">A webhook (HTTPS)</option>
-                <option value="mqtt">An MQTT broker</option>
+                <option value="webhook">@L["A webhook (HTTPS)"]</option>
+                <option value="mqtt">@L["An MQTT broker"]</option>
             </select>
         </div>
         <div class="col-6 col-md-3">
-            <label class="form-label small fw-semibold" for="new-feed-format">Format</label>
+            <label class="form-label small fw-semibold" for="new-feed-format">@L["Format"]</label>
             <select id="new-feed-format" class="form-select form-select-sm" @bind="_newFormat">
-                <option value="cloudevents">Events (CloudEvents JSON)</option>
-                <option value="b2mml">Production performance (B2MML)</option>
+                <option value="cloudevents">@L["Events (CloudEvents JSON)"]</option>
+                <option value="b2mml">@L["Production performance (B2MML)"]</option>
             </select>
         </div>
         <div class="col-6 col-md-3 d-flex gap-2">
-            <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">Add</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+            <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">@L["Add"]</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _adding = false">@L["Cancel"]</button>
         </div>
         <div class="col-12 small text-muted">
-            The code, what it sends to and its format can't change later. A B2MML feed sends a production job's totals each time they change. It starts switched off: set its address and what it sends under Settings. Its secret
-            (and a broker's username and password) go in the API's configuration under <code>Integrations:Feeds:&lt;code&gt;</code>.
+            @L["The code, what it sends to and its format can't change later. A B2MML feed sends a production job's totals each time they change. It starts switched off: set its address and what it sends under Settings. Its secret (and a broker's username and password) go in the API's configuration under"] <code>Integrations:Feeds:&lt;code&gt;</code>.
         </div>
     </form>
 }
@@ -82,48 +78,48 @@
         <table class="table align-middle mb-0">
             <tbody>
                 <tr>
-                    <th style="width: 14rem">@(s.Feed == "documents" ? "Document system" : s.Feed == "erp" ? "ERP" : s.Label)</th>
+                    <th style="width: 14rem">@(s.Feed == "documents" ? L["Document system"] : s.Feed == "erp" ? "ERP" : s.Label)</th>
                     <td>
                         @if (s.Enabled)
                         {
-                            <span class="chip chip-strong">On</span> <span class="ms-1">to @s.TargetHost</span>
+                            <span class="chip chip-strong">@L["On"]</span> <span class="ms-1">@L["to {0}", s.TargetHost]</span>
                         }
                         else
                         {
-                            <span class="chip chip-muted">Off</span>
-                            <span class="text-muted ms-1">Nothing is queued while it's off. @(CanManage ? "Switch it on under Settings below." : "Whoever manages integrations switches it on.")</span>
+                            <span class="chip chip-muted">@L["Off"]</span>
+                            <span class="text-muted ms-1">@L["Nothing is queued while it's off."] @(CanManage ? L["Switch it on under Settings below."] : L["Whoever manages integrations switches it on."])</span>
                         }
                     </td>
                 </tr>
-                <tr><th>Events sent</th><td>@string.Join(", ", s.EventTypes.Select(t => t.TrimEnd('.') + "…"))</td></tr>
-                <tr><th>Certificate files</th><td>@(s.IncludesFiles ? "Sent with the certificate's event" : "Not sent: the event carries the reference only")</td></tr>
+                <tr><th>@L["Events sent"]</th><td>@string.Join(", ", s.EventTypes.Select(t => t.TrimEnd('.') + "…"))</td></tr>
+                <tr><th>@L["Certificate files"]</th><td>@(s.IncludesFiles ? L["Sent with the certificate's event"] : L["Not sent: the event carries the reference only"])</td></tr>
                 <tr>
-                    <th>Waiting</th>
+                    <th>@L["Waiting"]</th>
                     <td>
-                        @s.Pending queued or retrying@(s.Held > 0 ? $", {s.Held} of them held" : "")
+                        @(s.Held > 0 ? L["{0} queued or retrying, {1} of them held", s.Pending, s.Held] : L["{0} queued or retrying", s.Pending])
                         @if (s.OldestPendingAt is { } oldest)
                         {
-                            <span class="text-muted">· oldest from @Display.SiteTime(oldest, null) UTC</span>
+                            <span class="text-muted">@L["· oldest from {0} UTC", Display.SiteTime(oldest, null)]</span>
                         }
                     </td>
                 </tr>
                 <tr>
-                    <th>Failed</th>
+                    <th>@L["Failed"]</th>
                     <td>
                         <span class="@(s.Failed > 0 ? "chip chip-danger" : "")">@s.Failed</span>
                         @if (s.Failed > 0 && CanManage)
                         {
-                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" disabled="@_busy" @onclick="RetryAllAsync">Retry all failed</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" disabled="@_busy" @onclick="RetryAllAsync">@L["Retry all failed"]</button>
                         }
                     </td>
                 </tr>
                 <tr>
-                    <th>Delivered</th>
+                    <th>@L["Delivered"]</th>
                     <td>
-                        @s.DeliveredLastDay in the last 24 hours
+                        @L["{0} in the last 24 hours", s.DeliveredLastDay]
                         @if (s.LastDeliveredAt is { } last)
                         {
-                            <span class="text-muted">· last at @Display.SiteTime(last, null) UTC</span>
+                            <span class="text-muted">@L["· last at {0} UTC", Display.SiteTime(last, null)]</span>
                         }
                     </td>
                 </tr>
@@ -143,49 +139,56 @@
 }
 
 <div class="inv-toolbar">
-    <select class="form-select w-auto" aria-label="Show" value="@(_filter ?? "")" @onchange="OnFilterChangedAsync">
-        <option value="failed">Failed</option>
-        <option value="pending">Queued, retrying or held</option>
-        <option value="delivered">Delivered</option>
-        <option value="skipped">Skipped</option>
-        <option value="">All</option>
+    <select class="form-select w-auto" aria-label="@L["Show"]" value="@(_filter ?? "")" @onchange="OnFilterChangedAsync">
+        <option value="failed">@L["Failed"]</option>
+        <option value="pending">@L["Queued, retrying or held"]</option>
+        <option value="delivered">@L["Delivered"]</option>
+        <option value="skipped">@L["Skipped"]</option>
+        <option value="">@L["All"]</option>
     </select>
-    <input class="form-control w-auto" placeholder="Lot or job number, or subject id" aria-label="Subject" @bind="_search" />
-    <input class="form-control w-auto" placeholder="Event type, e.g. consumed" aria-label="Event type" @bind="_type" />
-    <input type="date" class="form-control w-auto" aria-label="From" @bind="_from" />
-    <input type="date" class="form-control w-auto" aria-label="To" @bind="_to" />
-    <button type="button" class="btn btn-outline-secondary" @onclick="SearchAsync">Search</button>
-    <span class="text-muted small">Newest first, up to 200. Delivered rows are cleared after @RetentionNote.</span>
+    <input class="form-control w-auto" placeholder="@L["Lot or job number, or subject id"]" aria-label="@L["Subject"]" @bind="_search" />
+    <input class="form-control w-auto" placeholder="@L["Event type, e.g. consumed"]" aria-label="@L["Event type"]" @bind="_type" />
+    <input type="date" class="form-control w-auto" aria-label="@L["From"]" @bind="_from" />
+    <input type="date" class="form-control w-auto" aria-label="@L["To"]" @bind="_to" />
+    <button type="button" class="btn btn-outline-secondary" @onclick="SearchAsync">@L["Search"]</button>
+    <span class="text-muted small">@L["Newest first, up to 200. Delivered rows are cleared after {0}.", RetentionNote]</span>
 </div>
 
 @if (_deliveries is null)
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_deliveries.Count == 0)
 {
-    <div class="empty-panel"><p class="text-muted mb-0">Nothing @(_filter is null ? "" : FilterText) to show.</p></div>
+    <div class="empty-panel"><p class="text-muted mb-0">@(_filter switch
+        {
+            "failed" => L["Nothing failed to show."],
+            "pending" => L["Nothing waiting to show."],
+            "delivered" => L["Nothing delivered to show."],
+            "skipped" => L["Nothing skipped to show."],
+            _ => L["Nothing to show."],
+        })</p></div>
 }
 else
 {
     var now = DateTimeOffset.UtcNow;
     <div class="table-panel">
         <table class="table align-middle">
-            <thead><tr><th>Happened (UTC)</th><th>Event</th><th>Lot or certificate</th><th>Status</th><th class="inv-num">Attempts</th><th>Last answer</th>@if (CanManage) { <th></th> }</tr></thead>
+            <thead><tr><th>@L["Happened (UTC)"]</th><th>@L["Event"]</th><th>@L["Lot or certificate"]</th><th>@L["Status"]</th><th class="inv-num">@L["Attempts"]</th><th>@L["Last answer"]</th>@if (CanManage) { <th></th> }</tr></thead>
             <tbody>
                 @foreach (var d in _deliveries)
                 {
-                    var (text, css) = DeliveryView.Status(d);
+                    var (text, css) = DeliveryView.Status(L, d);
                     <tr @key="d.Id">
                         <td class="text-nowrap">@Display.SiteTime(d.OccurredAt, null)</td>
                         <td>@DeliveryView.EventName(d.EventType)</td>
                         <td>
                             @if (d.JobNumber is { } jobNumber)
                             {
-                                <ScreenLink Href="@($"jobs/{d.Subject}")" Permission="@PermissionCodes.FloorView">Job @jobNumber</ScreenLink>
+                                <ScreenLink Href="@($"jobs/{d.Subject}")" Permission="@PermissionCodes.FloorView">@L["Job {0}", jobNumber]</ScreenLink>
                             }
                             else if (d.EventType.StartsWith("pulaski.lot.", StringComparison.Ordinal))
                             {
@@ -198,7 +201,7 @@ else
                         </td>
                         <td>
                             <span class="@css">@text</span>
-                            <div class="small text-muted">@DeliveryView.Next(d, now)</div>
+                            <div class="small text-muted">@DeliveryView.Next(L, d, now)</div>
                         </td>
                         <td class="inv-num">@d.Attempts</td>
                         <td class="small">
@@ -209,8 +212,8 @@ else
                             @d.LastError
                             @if (d.AckStatus is { } ack)
                             {
-                                <div title="@($"{(d.AckSource == "callback" ? "Posted back" : "In the answer")}{(d.AckAt is { } at ? $" at {Display.SiteTime(at, null)} UTC" : "")}")">
-                                    <span class="chip @(ack == "rejected" ? "chip-warn" : "chip-ok")">@(ack == "rejected" ? "Rejected" : "Accepted")</span>
+                                <div title="@($"{(d.AckSource == "callback" ? L["Posted back"] : L["In the answer"])}{(d.AckAt is { } at ? " " + L["at {0} UTC", Display.SiteTime(at, null)] : "")}")">
+                                    <span class="chip @(ack == "rejected" ? "chip-warn" : "chip-ok")">@(ack == "rejected" ? L["Rejected"] : L["Accepted"])</span>
                                     @(d.AckReference is { } reference ? $" {reference}" : "")@(d.AckMessage is { } m && ack != "rejected" ? $" · {m}" : "")
                                 </div>
                             }
@@ -220,11 +223,11 @@ else
                             <td class="text-end text-nowrap">
                                 @if (d.Status == "failed")
                                 {
-                                    <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_busy" @onclick="() => RetryAsync(d)">Retry</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_busy" @onclick="() => RetryAsync(d)">@L["Retry"]</button>
                                 }
                                 @if (d.Status is "failed" or "pending")
                                 {
-                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" disabled="@_busy" @onclick="() => StartSkip(d)">Skip…</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-1" disabled="@_busy" @onclick="() => StartSkip(d)">@L["Skip…"]</button>
                                 }
                             </td>
                         }
@@ -234,12 +237,12 @@ else
                         <tr>
                             <td colspan="7">
                                 <form class="inv-toolbar mb-0" @onsubmit="SkipAsync" @onsubmit:preventDefault>
-                                    <input class="form-control inv-grow" maxlength="500" placeholder="Why it won't be sent, e.g. booked by hand in the ERP" aria-label="Reason for skipping"
+                                    <input class="form-control inv-grow" maxlength="500" placeholder="@L["Why it won't be sent, e.g. booked by hand in the ERP"]" aria-label="@L["Reason for skipping"]"
                                            @bind="_skipReason" @bind:event="oninput" />
-                                    <button type="submit" class="btn btn-sm btn-danger" disabled="@(_busy || string.IsNullOrWhiteSpace(_skipReason))">Skip it</button>
-                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _skipping = null">Cancel</button>
+                                    <button type="submit" class="btn btn-sm btn-danger" disabled="@(_busy || string.IsNullOrWhiteSpace(_skipReason))">@L["Skip it"]</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _skipping = null">@L["Cancel"]</button>
                                 </form>
-                                <div class="form-text">The receiver won't get this event. Put it right there by hand first; the later events of the same lot or certificate are sent next.</div>
+                                <div class="form-text">@L["The receiver won't get this event. Put it right there by hand first; the later events of the same lot or certificate are sent next."]</div>
                             </td>
                         </tr>
                     }
@@ -276,12 +279,6 @@ else
     private string? _skipReason;
 
     private bool CanManage => User.Can(PermissionCodes.Integrations);
-
-    private string FilterText => _filter switch
-    {
-        "pending" => "waiting",
-        _ => _filter ?? "",
-    };
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -327,7 +324,7 @@ else
         var code = (_newCode ?? "").Trim().ToLowerInvariant();
         await Api.CreateDeliveryFeedAsync(new CreateDeliveryFeedRequest { Code = code, Name = _newName ?? "", Kind = _newKind, Format = _newFormat });
         (_adding, _newCode, _newName, _feed) = (false, null, null, code);
-        _message = $"Added {code}. Set its address and what it sends under Settings, then switch it on.";
+        _message = L["Added {0}. Set its address and what it sends under Settings, then switch it on.", code];
     });
 
     private void StartSkip(DeliveryDto d)
@@ -339,19 +336,19 @@ else
     private Task RetryAsync(DeliveryDto d) => RunAsync(async () =>
     {
         await Api.RetryDeliveryAsync(_feed, d.Id);
-        _message = $"{DeliveryView.EventName(d.EventType)} goes again on the next round.";
+        _message = L["{0} goes again on the next round.", DeliveryView.EventName(d.EventType)];
     });
 
     private Task RetryAllAsync() => RunAsync(async () =>
     {
         var result = await Api.RetryFailedDeliveriesAsync(_feed);
-        _message = result.Retried == 1 ? "1 delivery goes again on the next round." : $"{result.Retried} deliveries go again on the next round.";
+        _message = result.Retried == 1 ? L["1 delivery goes again on the next round."] : L["{0} deliveries go again on the next round.", result.Retried];
     });
 
     private Task SkipAsync() => RunAsync(async () =>
     {
         await Api.SkipDeliveryAsync(_feed, _skipping!.Id, new SkipDeliveryRequest { Reason = _skipReason! });
-        _message = $"{DeliveryView.EventName(_skipping.EventType)} skipped.";
+        _message = L["{0} skipped.", DeliveryView.EventName(_skipping.EventType)];
         _skipping = null;
     });
 

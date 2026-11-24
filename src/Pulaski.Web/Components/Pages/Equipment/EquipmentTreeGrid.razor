@@ -4,7 +4,7 @@
 @inject IJSRuntime JS
 
 <div class="tree-scroll">
-    <table class="tree-grid" role="treegrid" aria-label="Equipment hierarchy" tabindex="0" data-arrow-keys
+    <table class="tree-grid" role="treegrid" aria-label="@L["Equipment hierarchy"]" tabindex="0" data-arrow-keys
            aria-activedescendant="@(SelectedId is { } id ? RowId(id) : null)"
            @onkeydown="OnKeyDownAsync">
         <colgroup>
@@ -16,11 +16,11 @@
         </colgroup>
         <thead>
             <tr>
-                <th scope="col">Code</th>
-                <th scope="col">Name</th>
-                <th scope="col">Level</th>
-                <th scope="col">Role</th>
-                <th scope="col">Capabilities</th>
+                <th scope="col">@L["Code"]</th>
+                <th scope="col">@L["Name"]</th>
+                <th scope="col">@L["Level"]</th>
+                <th scope="col">@L["Role"]</th>
+                <th scope="col">@L["Capabilities"]</th>
             </tr>
         </thead>
         <tbody>
@@ -41,7 +41,7 @@
                             @if (row.HasChildren)
                             {
                                 <button type="button" class="tree-toggle @(row.IsExpanded ? "is-open" : "")" tabindex="-1"
-                                        aria-label="@(row.IsExpanded ? "Collapse" : "Expand") @item.Code"
+                                        aria-label="@(row.IsExpanded ? L["Collapse"] : L["Expand"]) @item.Code"
                                         @onclick="() => ToggleAsync(row)" @onclick:stopPropagation="true">
                                     <Icon Name="chevron-right" Size="16" />
                                 </button>
@@ -50,7 +50,7 @@
                             {
                                 <span class="tree-toggle-spacer"></span>
                             }
-                            <span class="tree-code-text">@(isDraft && string.IsNullOrWhiteSpace(item.Code) ? "New equipment" : item.Code)</span>
+                            <span class="tree-code-text">@(isDraft && string.IsNullOrWhiteSpace(item.Code) ? L["New equipment"] : item.Code)</span>
                         </div>
                     </td>
                     <td role="gridcell" class="cell-text">@item.Name</td>
@@ -59,17 +59,17 @@
                     <td role="gridcell" class="cell-chips">
                         @if (isDraft)
                         {
-                            <span class="chip chip-strong">Unsaved</span>
+                            <span class="chip chip-strong">@L["Unsaved"]</span>
                         }
                         else
                         {
-                            @if (item.TracksState) { <span class="chip">State</span> }
-                            @if (item.IsSchedulable) { <span class="chip">@(item.CanRunJob ? "Schedulable" : "Plans for children")</span> }
-                            @if (item.CanRunJob) { <span class="chip">Runs jobs</span> }
-                            @if (item.HoldsInventory) { <span class="chip">Inventory</span> }
-                            @if (item.ComminglesLots) { <span class="chip" title="Lots here mix into one balance per material">Mixes lots</span> }
-                            @if (item.SingleMaterial) { <span class="chip" title="Takes one material at a time">One material</span> }
-                            @if (!item.IsActive) { <span class="chip chip-muted">Inactive</span> }
+                            @if (item.TracksState) { <span class="chip">@L["State"]</span> }
+                            @if (item.IsSchedulable) { <span class="chip">@(item.CanRunJob ? L["Schedulable"] : L["Plans for children"])</span> }
+                            @if (item.CanRunJob) { <span class="chip">@L["Runs jobs"]</span> }
+                            @if (item.HoldsInventory) { <span class="chip">@L["Inventory"]</span> }
+                            @if (item.ComminglesLots) { <span class="chip" title="@L["Lots here mix into one balance per material"]">@L["Mixes lots"]</span> }
+                            @if (item.SingleMaterial) { <span class="chip" title="@L["Takes one material at a time"]">@L["One material"]</span> }
+                            @if (!item.IsActive) { <span class="chip chip-muted">@L["Inactive"]</span> }
                         }
                     </td>
                 </tr>

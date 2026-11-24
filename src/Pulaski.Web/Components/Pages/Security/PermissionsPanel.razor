@@ -5,9 +5,7 @@
    straight away; Administrator holds them all and can't be changed. *@
 <div class="mb-3">
     <p class="text-muted mb-0">
-        What Pulaski lets people change, and which roles may. Tick a box to give a role a permission, untick it to take it away: it applies to
-        everyone who holds the role, straight away. A role sees only the screens its viewing permissions allow; a permission to
-        change something includes seeing it (shown ticked and locked).
+        @L["What Pulaski lets people change, and which roles may. Tick a box to give a role a permission, untick it to take it away: it applies to everyone who holds the role, straight away. A role sees only the screens its viewing permissions allow; a permission to change something includes seeing it (shown ticked and locked)."]
     </p>
 </div>
 
@@ -18,7 +16,7 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
@@ -28,7 +26,7 @@ else
         <table class="table table-sm align-middle">
             <thead>
                 <tr>
-                    <th scope="col">Permission</th>
+                    <th scope="col">@L["Permission"]</th>
                     @foreach (var r in roles)
                     {
                         <th scope="col" class="text-center permission-role" title="@r.Description">@r.Name</th>
@@ -50,7 +48,7 @@ else
                             {
                                 var held = r.Permissions.Contains(p.Code);
                                 var with = p.ComesWith.Where(c => r.Permissions.Contains(c)).ToList();
-                                <td class="text-center" @key="(p.Code, r.Code)" title="@(!held && with.Count > 0 ? $"Comes with {string.Join(", ", with.Select(Describe))}" : null)">
+                                <td class="text-center" @key="(p.Code, r.Code)" title="@(!held && with.Count > 0 ? L["Comes with {0}", string.Join(", ", with.Select(Describe))] : null)">
                                     <input class="form-check-input" type="checkbox" checked="@(held || with.Count > 0)"
                                            disabled="@(r.IsLocked || !CanManage || _saving.Contains((r.Code, p.Code)) || (!held && with.Count > 0))"
                                            aria-label="@r.Name may @p.Description.ToLowerInvariant()"
@@ -64,7 +62,7 @@ else
         </table>
     </div>
     <p class="small text-muted mt-2">
-        Switched-off roles aren't shown. To add a role or change its name, use <a href="users/roles">Roles</a>; to give roles to people, <a href="users">Users</a>.
+        @L["Switched-off roles aren't shown. To add a role or change its name, use"] <a href="users/roles">@L["Roles"]</a>@L["; to give roles to people,"] <a href="users">@L["Users"]</a>.
     </p>
 }
 

@@ -6,14 +6,14 @@
 <div class="inv-head">
     <div>
         <p class="text-muted mb-0">
-            A role is a set of permissions you give to users at a site. Change a role here, or tick permissions role by role on
-            <a href="users/permissions">Permissions</a>. A change applies to everyone who holds the role, straight away.
+            @L["A role is a set of permissions you give to users at a site. Change a role here, or tick permissions role by role on"]
+            <a href="users/permissions">@L["Permissions"]</a>@L[". A change applies to everyone who holds the role, straight away."]
         </p>
     </div>
     @if (CanManage)
     {
         <div class="inv-head-tools">
-            <button type="button" class="btn btn-primary" @onclick="StartNew">New role</button>
+            <button type="button" class="btn btn-primary" @onclick="StartNew">@L["New role"]</button>
         </div>
     }
 </div>
@@ -25,7 +25,7 @@
 {
     <div class="alert alert-success d-flex align-items-center gap-2" role="status">
         <span>@message</span>
-        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">@L["Dismiss"]</button>
     </div>
 }
 
@@ -33,7 +33,7 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
@@ -41,14 +41,14 @@ else
     @if (_edit is { } edit)
     {
         <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
-            <h2 class="h6">@(edit.IsNew ? "New role" : $"Change {edit.OriginalName}")</h2>
+            <h2 class="h6">@(edit.IsNew ? L["New role"] : $"Change {edit.OriginalName}")</h2>
             <div class="row g-2">
                 <div class="col-sm-3">
-                    <label class="form-label small" for="role-code">Code</label>
+                    <label class="form-label small" for="role-code">@L["Code"]</label>
                     @if (edit.IsNew)
                     {
-                        <input id="role-code" class="form-control" maxlength="50" placeholder="e.g. line_lead" @bind="edit.Code" @bind:event="oninput" />
-                        <div class="form-text">Lower-case letters, digits and _. It can't change later.</div>
+                        <input id="role-code" class="form-control" maxlength="50" placeholder="@L["e.g. line_lead"]" @bind="edit.Code" @bind:event="oninput" />
+                        <div class="form-text">@L["Lower-case letters, digits and _. It can't change later."]</div>
                     }
                     else
                     {
@@ -56,19 +56,18 @@ else
                     }
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label small" for="role-name">Name</label>
-                    <input id="role-name" class="form-control" maxlength="100" placeholder="e.g. Line lead" @bind="edit.Name" @bind:event="oninput" />
+                    <label class="form-label small" for="role-name">@L["Name"]</label>
+                    <input id="role-name" class="form-control" maxlength="100" placeholder="@L["e.g. Line lead"]" @bind="edit.Name" @bind:event="oninput" />
                 </div>
                 <div class="col-sm-6">
-                    <label class="form-label small" for="role-description">What it's for (optional)</label>
+                    <label class="form-label small" for="role-description">@L["What it's for (optional)"]</label>
                     <input id="role-description" class="form-control" maxlength="500" @bind="edit.Description" />
                 </div>
                 <div class="col-12">
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="role-every-site" @bind="edit.AllowsEverySite" />
                         <label class="form-check-label small" for="role-every-site">
-                            May be held at every site: then it can also be given for all sites at once, by someone who may grant roles everywhere.
-                            Leave it off for roles that belong to one plant.
+                            @L["May be held at every site: then it can also be given for all sites at once, by someone who may grant roles everywhere. Leave it off for roles that belong to one plant."]
                         </label>
                     </div>
                 </div>
@@ -78,14 +77,14 @@ else
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="role-active" @bind="edit.IsActive" />
                             <label class="form-check-label small" for="role-active">
-                                Active: can be given to users. A role someone holds can't be switched off.
+                                @L["Active: can be given to users. A role someone holds can't be switched off."]
                             </label>
                         </div>
                     </div>
                 }
             </div>
 
-            <h3 class="h6 mt-3">May change</h3>
+            <h3 class="h6 mt-3">@L["May change"]</h3>
             <div class="role-permissions">
                 @foreach (var area in _permissions.GroupBy(p => p.Area))
                 {
@@ -96,7 +95,7 @@ else
                             <div class="form-check" @key="p.Code">
                                 @{ var comes = !edit.Permissions.Contains(p.Code) && p.ComesWith.Any(edit.Permissions.Contains); }
                                 <input class="form-check-input" type="checkbox" id="perm-@p.Code" checked="@(edit.Permissions.Contains(p.Code) || comes)"
-                                       disabled="@comes" title="@(comes ? "Comes with a permission to change it" : null)"
+                                       disabled="@comes" title="@(comes ? L["Comes with a permission to change it"] : null)"
                                        @onchange="e => Toggle(edit, p.Code, e.Value is true)" />
                                 <label class="form-check-label small" for="perm-@p.Code">@p.Description</label>
                             </div>
@@ -106,8 +105,8 @@ else
             </div>
 
             <div class="d-flex gap-2 mt-3">
-                <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanSave(edit))">@(edit.IsNew ? "Create role" : "Save role")</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="() => _edit = null">Cancel</button>
+                <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanSave(edit))">@(edit.IsNew ? L["Create role"] : L["Save role"])</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="() => _edit = null">@L["Cancel"]</button>
             </div>
         </form>
     }
@@ -116,11 +115,11 @@ else
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Role</th>
-                    <th>What it's for</th>
-                    <th class="inv-num">Permissions</th>
-                    <th class="inv-num">Users</th>
-                    <th>Status</th>
+                    <th>@L["Role"]</th>
+                    <th>@L["What it's for"]</th>
+                    <th class="inv-num">@L["Permissions"]</th>
+                    <th class="inv-num">@L["Users"]</th>
+                    <th>@L["Status"]</th>
                     <th></th>
                 </tr>
             </thead>
@@ -130,16 +129,16 @@ else
                     <tr @key="r.Id" class="@(r.IsActive ? "" : "text-muted")">
                         <td>
                             <div class="fw-semibold">@r.Name</div>
-                            <div class="small text-muted">@r.Code@(r.IsGlobal ? " · everywhere" : r.AllowsEverySite ? $" · at a site or every site{(r.EverywhereHolders > 0 ? $" ({r.EverywhereHolders} everywhere)" : "")}" : " · held at a site")</div>
+                            <div class="small text-muted">@r.Code · @(r.IsGlobal ? L["everywhere"] : r.AllowsEverySite ? (r.EverywhereHolders > 0 ? L["at a site or every site ({0} everywhere)", r.EverywhereHolders] : L["at a site or every site"]) : L["held at a site"])</div>
                         </td>
                         <td class="small">@r.Description</td>
-                        <td class="inv-num">@(r.IsLocked ? "All" : r.Permissions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))</td>
+                        <td class="inv-num">@(r.IsLocked ? L["All"] : r.Permissions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))</td>
                         <td class="inv-num">@r.Holders</td>
-                        <td class="small">@(r.IsLocked ? "Fixed" : r.IsActive ? "Active" : "Switched off")</td>
+                        <td class="small">@(r.IsLocked ? L["Fixed"] : r.IsActive ? L["Active"] : L["Switched off"])</td>
                         <td class="text-end">
                             @if (CanManage && !r.IsLocked)
                             {
-                                <button type="button" class="btn btn-sm btn-link" @onclick="() => StartEdit(r)">Change</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => StartEdit(r)">@L["Change"]</button>
                             }
                         </td>
                     </tr>
@@ -147,7 +146,7 @@ else
             </tbody>
         </table>
     </div>
-    <p class="small text-muted mt-2">Administrator holds every permission at every site and can't be changed, so someone can always manage users.</p>
+    <p class="small text-muted mt-2">@L["Administrator holds every permission at every site and can't be changed, so someone can always manage users."]</p>
 }
 
 @code {
@@ -228,7 +227,7 @@ else
             if (edit.IsNew)
             {
                 await Api.CreateRoleAsync(new CreateRoleRequest { Code = edit.Code, Name = edit.Name, Description = edit.Description, Permissions = [.. edit.Permissions], AllowsEverySite = edit.AllowsEverySite });
-                _message = $"Created {edit.Name.Trim()}. Give it to users on the Users tab.";
+                _message = L["Created {0}. Give it to users on the Users tab.", edit.Name.Trim()];
             }
             else
             {
@@ -241,7 +240,7 @@ else
                     Permissions = [.. edit.Permissions],
                     AllowsEverySite = edit.AllowsEverySite,
                 });
-                _message = $"Saved {edit.Name.Trim()}.";
+                _message = L["Saved {0}.", edit.Name.Trim()];
             }
 
             _edit = null;

@@ -4,7 +4,7 @@
 @* A line's report defaults (#122, D-111): where its good output goes unless a report says otherwise, and the printer its lots' labels print
    on once a lot is closed. *@
 <section class="equipment-quals mt-3" aria-labelledby="output-@Equipment.Id">
-    <h2 class="h6 mb-1" id="output-@Equipment.Id">Production reports</h2>
+    <h2 class="h6 mb-1" id="output-@Equipment.Id">@L["Production reports"]</h2>
     <ProblemAlert Error="_error" />
     @if (_message is { } message)
     {
@@ -12,31 +12,31 @@
     }
     <div class="row g-2 align-items-end">
         <div class="col-12">
-            <label class="form-label small mb-0" for="out-loc-@Equipment.Id">Good output goes to</label>
+            <label class="form-label small mb-0" for="out-loc-@Equipment.Id">@L["Good output goes to"]</label>
             <select id="out-loc-@Equipment.Id" class="form-select form-select-sm" disabled="@(!CanChange || _busy)" @bind="_locationId">
-                <option value="@Guid.Empty">Ask on each report</option>
+                <option value="@Guid.Empty">@L["Ask on each report"]</option>
                 @foreach (var l in _locations)
                 {
                     <option value="@l.Id">@l.Code · @l.Name</option>
                 }
             </select>
-            <div class="form-text">Prefilled on @Equipment.Code's reports; the lot being filled's location comes first.</div>
+            <div class="form-text">@L["Prefilled on {0}'s reports; the lot being filled's location comes first.", Equipment.Code]</div>
         </div>
         <div class="col-12">
-            <label class="form-label small mb-0" for="out-prn-@Equipment.Id">Print lot labels on</label>
+            <label class="form-label small mb-0" for="out-prn-@Equipment.Id">@L["Print lot labels on"]</label>
             <select id="out-prn-@Equipment.Id" class="form-select form-select-sm" disabled="@(!CanChange || _busy)" @bind="_printerId">
-                <option value="@Guid.Empty">Don't print them</option>
+                <option value="@Guid.Empty">@L["Don't print them"]</option>
                 @foreach (var p in _printers)
                 {
                     <option value="@p.Id">@p.Code · @p.Name</option>
                 }
             </select>
-            <div class="form-text">Each lot's label prints once the lot is closed: at once for a lot per report, when it is full or its age or shift ends, at Start a new lot, or when the job completes.</div>
+            <div class="form-text">@L["Each lot's label prints once the lot is closed: at once for a lot per report, when it is full or its age or shift ends, at Start a new lot, or when the job completes."]</div>
         </div>
         @if (CanChange)
         {
             <div class="col-12">
-                <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || !Changed)" @onclick="SaveAsync">Save</button>
+                <button type="button" class="btn btn-sm btn-primary" disabled="@(_busy || !Changed)" @onclick="SaveAsync">@L["Save"]</button>
             </div>
         }
     </div>

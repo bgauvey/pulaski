@@ -4,20 +4,20 @@
 @* What working on the selected equipment requires (D-048): its own requirements, which apply to everything below it, and
    those it inherits from above. Someone put on a line without them is still put on, with a warning. *@
 <section class="equipment-quals mt-3" aria-labelledby="quals-@Equipment.Id">
-    <h2 class="h6 mb-1" id="quals-@Equipment.Id">Required qualifications</h2>
+    <h2 class="h6 mb-1" id="quals-@Equipment.Id">@L["Required qualifications"]</h2>
     <ProblemAlert Error="_error" />
     @if (_requirements is null)
     {
         @if (_error is null)
         {
-            <p class="small text-muted mb-0">Loading…</p>
+            <p class="small text-muted mb-0">@L["Loading…"]</p>
         }
     }
     else
     {
         @if (_requirements.Own.Count == 0 && _requirements.Inherited.Count == 0)
         {
-            <p class="small text-muted mb-2">None. Anyone can be put on @Equipment.Code.</p>
+            <p class="small text-muted mb-2">@L["None. Anyone can be put on {0}.", Equipment.Code]</p>
         }
         <ul class="list-unstyled small mb-2">
             @foreach (var q in _requirements.Own)
@@ -26,8 +26,8 @@
                     <span class="chip">@q.Code</span> @q.Name
                     @if (CanChange)
                     {
-                        <button type="button" class="btn btn-sm btn-link p-0 ms-auto text-danger" disabled="@_busy" title="No longer require it here"
-                                aria-label="Stop requiring @q.Code" @onclick="() => SetAsync(q.QualificationId, false)">×</button>
+                        <button type="button" class="btn btn-sm btn-link p-0 ms-auto text-danger" disabled="@_busy" title="@L["No longer require it here"]"
+                                aria-label="@L["Stop requiring {0}", q.Code]" @onclick="() => SetAsync(q.QualificationId, false)">×</button>
                     }
                 </li>
             }
@@ -41,19 +41,19 @@
         @if (CanChange && Offered.Count > 0)
         {
             <div class="d-flex gap-2">
-                <select class="form-select form-select-sm" aria-label="Qualification to require" @bind="_adding">
-                    <option value="@Guid.Empty">Require a qualification…</option>
+                <select class="form-select form-select-sm" aria-label="@L["Qualification to require"]" @bind="_adding">
+                    <option value="@Guid.Empty">@L["Require a qualification…"]</option>
                     @foreach (var q in Offered)
                     {
                         <option value="@q.Id">@q.Code · @q.Name</option>
                     }
                 </select>
-                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_busy || _adding == Guid.Empty)" @onclick="() => SetAsync(_adding, true)">Require</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(_busy || _adding == Guid.Empty)" @onclick="() => SetAsync(_adding, true)">@L["Require"]</button>
             </div>
         }
         else if (CanChange && _qualifications.Count == 0)
         {
-            <p class="small text-muted mb-0">The site has no qualifications yet; add them on <ScreenLink Href="people" Permission="@PermissionCodes.People">People</ScreenLink>.</p>
+            <p class="small text-muted mb-0">@L["The site has no qualifications yet; add them on"] <ScreenLink Href="people" Permission="@PermissionCodes.People">@L["People"]</ScreenLink>.</p>
         }
     }
 </section>

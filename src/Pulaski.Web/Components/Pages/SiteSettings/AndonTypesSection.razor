@@ -3,28 +3,27 @@
 @* Andon call types (#125, D-108): the kinds of help a line can call for, each with how long a call may wait before it is escalated. Codes are
    fixed once made; a type is switched off rather than deleted, since calls refer to it. *@
 <section class="inv-facts mb-3" id="andon-types" aria-labelledby="andon-heading">
-    <h2 class="h6" id="andon-heading">Andon: calls for help</h2>
+    <h2 class="h6" id="andon-heading">@L["Andon: calls for help"]</h2>
     <p class="small text-muted">
-        The kinds of help an operator can call for from a line, such as maintenance, quality or a supervisor. A call nobody has answered within its
-        escalation time is shown as escalated. Switch a type off to stop offering it; its calls stay in the history.
+        @L["The kinds of help an operator can call for from a line, such as maintenance, quality or a supervisor. A call nobody has answered within its escalation time is shown as escalated. Switch a type off to stop offering it; its calls stay in the history."]
     </p>
     <ProblemAlert Error="_error" />
 
     @if (_types is null)
     {
-        <p class="small text-muted mb-0">Loading…</p>
+        <p class="small text-muted mb-0">@L["Loading…"]</p>
     }
     else
     {
         @if (_types.Count == 0)
         {
-            <p class="small text-muted">No call types yet@(CanManage ? "; add the first below" : "").</p>
+            <p class="small text-muted">@(CanManage ? L["No call types yet; add the first below."] : L["No call types yet."])</p>
         }
         else
         {
             <div class="table-panel mb-2">
                 <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Code</th><th>Name</th><th class="text-end">Escalates after</th><th class="text-end">Order</th><th>Offered</th><th></th></tr></thead>
+                    <thead><tr><th>@L["Code"]</th><th>@L["Name"]</th><th class="text-end">@L["Escalates after"]</th><th class="text-end">@L["Order"]</th><th>@L["Offered"]</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var t in _types)
                         {
@@ -33,12 +32,12 @@
                                 <td>@t.Name</td>
                                 <td class="text-end">@t.EscalateAfterMinutes min</td>
                                 <td class="text-end">@t.SortOrder</td>
-                                <td>@(t.IsActive ? "Yes" : "Switched off")</td>
+                                <td>@(t.IsActive ? L["Yes"] : L["Switched off"])</td>
                                 <td class="text-end text-nowrap">
                                     @if (CanManage)
                                     {
-                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(t)">Change</button>
-                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => SwitchAsync(t)">@(t.IsActive ? "Switch off" : "Switch on")</button>
+                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(t)">@L["Change"]</button>
+                                        <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => SwitchAsync(t)">@(t.IsActive ? L["Switch off"] : L["Switch on"])</button>
                                     }
                                 </td>
                             </tr>
@@ -52,28 +51,28 @@
         {
             <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
                 <div class="col-6 col-md-2">
-                    <label class="form-label small fw-semibold" for="andon-code">Code</label>
+                    <label class="form-label small fw-semibold" for="andon-code">@L["Code"]</label>
                     <input id="andon-code" class="form-control form-control-sm" maxlength="20" disabled="@(_editing is not null)" placeholder="MAINT" @bind="_code" />
                 </div>
                 <div class="col-6 col-md-4">
-                    <label class="form-label small fw-semibold" for="andon-name">Name</label>
-                    <input id="andon-name" class="form-control form-control-sm" maxlength="100" placeholder="Maintenance" @bind="_name" />
+                    <label class="form-label small fw-semibold" for="andon-name">@L["Name"]</label>
+                    <input id="andon-name" class="form-control form-control-sm" maxlength="100" placeholder="@L["Maintenance"]" @bind="_name" />
                 </div>
                 <div class="col-6 col-md-2">
-                    <label class="form-label small fw-semibold" for="andon-escalate">Escalates after (min)</label>
+                    <label class="form-label small fw-semibold" for="andon-escalate">@L["Escalates after (min)"]</label>
                     <input id="andon-escalate" type="number" inputmode="numeric" class="form-control form-control-sm" min="1" max="480" step="1" @bind="_escalate" />
                 </div>
                 <div class="col-6 col-md-1">
-                    <label class="form-label small fw-semibold" for="andon-order">Order</label>
+                    <label class="form-label small fw-semibold" for="andon-order">@L["Order"]</label>
                     <input id="andon-order" type="number" inputmode="numeric" class="form-control form-control-sm" step="1" @bind="_order" />
                 </div>
                 <div class="col-12 col-md-3 form-actions">
                     <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_name) || (_editing is null && string.IsNullOrWhiteSpace(_code)))">
-                        @(_editing is null ? "Add call type" : $"Save {_editing.Code}")
+                        @(_editing is null ? L["Add call type"] : L["Save {0}", _editing.Code])
                     </button>
                     @if (_editing is not null)
                     {
-                        <button type="button" class="btn btn-sm btn-link" @onclick="Clear">Cancel</button>
+                        <button type="button" class="btn btn-sm btn-link" @onclick="Clear">@L["Cancel"]</button>
                     }
                 </div>
             </form>
@@ -140,11 +139,11 @@
                 SortOrder = _order,
                 IsActive = type.IsActive,
             });
-            return $"Saved call type {type.Code}.";
+            return L["Saved call type {0}.", type.Code];
         }
 
         await Api.CreateAndonTypeAsync(new CreateAndonTypeRequest { SiteId = SiteId, Code = _code, Name = _name, EscalateAfterMinutes = _escalate, SortOrder = _order });
-        return $"Added call type {_code.Trim().ToUpperInvariant()}.";
+        return L["Added call type {0}.", _code.Trim().ToUpperInvariant()];
     });
 
     private async Task SwitchAsync(AndonTypeDto type) => await RunAsync(async () =>
@@ -157,7 +156,7 @@
             SortOrder = type.SortOrder,
             IsActive = !type.IsActive,
         });
-        return type.IsActive ? $"Switched off call type {type.Code}; its calls stay in the history." : $"Switched call type {type.Code} back on.";
+        return type.IsActive ? L["Switched off call type {0}; its calls stay in the history.", type.Code] : L["Switched call type {0} back on.", type.Code];
     });
 
     private async Task RunAsync(Func<Task<string>> action)

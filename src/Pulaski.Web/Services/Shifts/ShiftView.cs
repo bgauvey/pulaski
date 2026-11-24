@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Contracts.Shifts;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Shifts;
 
@@ -10,15 +11,15 @@ public static class ShiftView
     /// The heading of a cycle day: its weekday ("Mon") when the cycle is whole weeks, with the week ("W2 Mon") beyond
     /// one; "Day 3" otherwise, since the weekday then changes from one cycle to the next.
     /// </summary>
-    public static string DayLabel(int day, int cycleDays, DateOnly cycleStart)
+    public static string DayLabel(Text l, int day, int cycleDays, DateOnly cycleStart)
     {
         if (cycleDays % 7 != 0)
         {
-            return $"Day {day + 1}";
+            return l["Day {0}", day + 1];
         }
 
-        var weekday = cycleStart.AddDays(day).ToString("ddd", CultureInfo.InvariantCulture);
-        return cycleDays == 7 ? weekday : $"W{day / 7 + 1} {weekday}";
+        var weekday = cycleStart.AddDays(day).ToString("ddd", CultureInfo.CurrentCulture);
+        return cycleDays == 7 ? weekday : l["W{0} {1}", day / 7 + 1, weekday];
     }
 
     /// <summary>"06:00–14:00", with "+1" when it ends the next day.</summary>
@@ -35,8 +36,8 @@ public static class ShiftView
     }
 
     /// <summary>"A 06:00–14:00 · B 14:00–22:00".</summary>
-    public static string Summary(IReadOnlyList<ShiftDto> shifts) =>
-        shifts.Count == 0 ? "No shifts" : string.Join(" · ", shifts.Select(s => $"{s.Code} {Times(s)}{(s.Crew is { } crew ? $" ({crew})" : "")}"));
+    public static string Summary(Text l, IReadOnlyList<ShiftDto> shifts) =>
+        shifts.Count == 0 ? l["No shifts"] : string.Join(" · ", shifts.Select(s => $"{s.Code} {Times(s)}{(s.Crew is { } crew ? $" ({crew})" : "")}"));
 
     public static string Hours(decimal hours) => hours.ToString("0.##", CultureInfo.InvariantCulture);
 
@@ -53,31 +54,31 @@ public static class ShiftOverrideView
         [.. overrides.Where(o => all || o.Date >= today).OrderBy(o => o.Date).ThenBy(o => o.Code, StringComparer.Ordinal)];
 
     /// <summary>"Doesn't run", "Extra shift 06:00–14:00" or "06:00–14:00 instead of 14:00–22:00".</summary>
-    public static string Describe(ShiftOverrideDto change, ShiftScheduleDto schedule)
+    public static string Describe(Text l, ShiftOverrideDto change, ShiftScheduleDto schedule)
     {
         if (!change.IsWorking)
         {
-            return "Doesn't run";
+            return l["Doesn't run"];
         }
 
         var times = ShiftView.Times(new ShiftDto { Start = change.Start, Minutes = change.Minutes });
         return Regular(schedule, change.Date, change.Code) is { } regular
-            ? $"{times} instead of {ShiftView.Times(regular)}"
-            : $"Extra shift {times}";
+            ? l["{0} instead of {1}", times, ShiftView.Times(regular)]
+            : l["Extra shift {0}", times];
     }
 
     /// <summary>What saving would do: change the cycle's shift that day, or add one.</summary>
-    public static string Hint(ShiftScheduleDto schedule, DateOnly date, string code)
+    public static string Hint(Text l, ShiftScheduleDto schedule, DateOnly date, string code)
     {
         code = code.Trim();
         if (code.Length == 0)
         {
-            return "Choose one of the schedule's shifts, or type a new code for an extra shift.";
+            return l["Choose one of the schedule's shifts, or type a new code for an extra shift."];
         }
 
         return Regular(schedule, date, code) is { } regular
-            ? $"{code} normally runs {ShiftView.Times(regular)} that day; this replaces it for that day only."
-            : $"{code} doesn't normally run that day, so this adds it as an extra shift.";
+            ? l["{0} normally runs {1} that day; this replaces it for that day only.", code, ShiftView.Times(regular)]
+            : l["{0} doesn't normally run that day, so this adds it as an extra shift.", code];
     }
 
     /// <summary>The cycle's shift of this code on that date, or null when the cycle has none that day.</summary>

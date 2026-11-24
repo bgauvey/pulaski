@@ -2,6 +2,7 @@ using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Web.Components;
 using Pulaski.Web.Components.Pages.Equipment;
 using Pulaski.Web.Services;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Tests;
 
@@ -49,8 +50,8 @@ public class EquipmentPropertiesTests
         var dropped = EquipmentProperties.ApplyChange(silo, new PropertyChange("holdsInventory", "false"))!;
         Assert.Equal((false, false, false), (dropped.HoldsInventory, dropped.ComminglesLots, dropped.SingleMaterial));
         Assert.False(EquipmentProperties.ApplyChange(silo, new PropertyChange("singleMaterial", "false"))!.SingleMaterial);
-        Assert.Contains(EquipmentProperties.ForExisting(silo, new EquipmentTree([silo])), i => i.Key == "singleMaterial");
-        Assert.DoesNotContain(EquipmentProperties.ForExisting(Line, new EquipmentTree([Line])), i => i.Key == "singleMaterial");
+        Assert.Contains(EquipmentProperties.ForExisting(Text.English, silo, new EquipmentTree([silo])), i => i.Key == "singleMaterial");
+        Assert.DoesNotContain(EquipmentProperties.ForExisting(Text.English, Line, new EquipmentTree([Line])), i => i.Key == "singleMaterial");
         Assert.Equal(true, EquipmentProperties.ApplyChange(silo, new PropertyChange("name", "Silo"))!.ComminglesLots);
     }
 
@@ -90,7 +91,7 @@ public class EquipmentPropertiesTests
     [Fact]
     public void Existing_equipment_only_edits_name_description_capabilities_active_and_shifts()
     {
-        var items = EquipmentProperties.ForExisting(Line, new EquipmentTree([Line]));
+        var items = EquipmentProperties.ForExisting(Text.English, Line, new EquipmentTree([Line]));
 
         var editable = items.Where(i => i.Editor != PropertyEditor.ReadOnly).Select(i => i.Key);
         Assert.Equal(["name", "description", "tracksState", "isSchedulable", "canRunJob", "holdsInventory", "isActive",
@@ -104,9 +105,9 @@ public class EquipmentPropertiesTests
         var saw = new EquipmentDto { Id = Guid.CreateVersion7(), ParentId = line.Id, Code = "EXT-01-SAW", Name = "Saw", Level = "work_unit", EquipmentRole = "machine", IsActive = true };
         var tree = new EquipmentTree([line, saw]);
 
-        var row = Assert.Single(EquipmentProperties.ForExisting(line, tree), i => i.Key == EquipmentProperties.ProductionCounterKey);
+        var row = Assert.Single(EquipmentProperties.ForExisting(Text.English, line, tree), i => i.Key == EquipmentProperties.ProductionCounterKey);
         Assert.Equal(["", line.Id.ToString(), saw.Id.ToString()], row.Choices!.Select(c => c.Value));
-        Assert.DoesNotContain(EquipmentProperties.ForExisting(Line, new EquipmentTree([Line])), i => i.Key == EquipmentProperties.ProductionCounterKey);
+        Assert.DoesNotContain(EquipmentProperties.ForExisting(Text.English, Line, new EquipmentTree([Line])), i => i.Key == EquipmentProperties.ProductionCounterKey);
 
         var request = EquipmentProperties.MachineDataChange(line, new PropertyChange(EquipmentProperties.ProductionCounterKey, saw.Id.ToString()), tree)!;
         Assert.Equal(saw.Id, request.ProductionCounterEquipmentId);
