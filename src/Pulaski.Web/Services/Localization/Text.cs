@@ -64,6 +64,36 @@ public sealed class Text(TranslationCache? cache)
     /// <summary>A status or kind code as words in the reader's language: 'in_progress' → 'In progress' (<see cref="LabelTerms"/>).</summary>
     public string Label(string? code) => this[Display.Label(code)];
 
+    /// <summary>
+    /// A refusal's field errors in the reader's language (#189): each message's template translated and filled in their region, else the English
+    /// as sent. Keyed by field, in the API's order.
+    /// </summary>
+    public IReadOnlyDictionary<string, string[]> FieldErrors(ApiException error) =>
+        error.Errors.ToDictionary(
+            e => e.Key,
+            e => e.Value.Select((english, i) =>
+                error.FieldMessages.TryGetValue(e.Key, out var messages) && i < messages.Count && messages[i].Template.Length > 0
+                    ? Fill(messages[i].Template, messages[i].Values) ?? english
+                    : english).ToArray(),
+            StringComparer.Ordinal);
+
+    /// <summary>A refusal's field errors as one line, in the reader's language; null when there are none.</summary>
+    public string? FieldErrorLine(ApiException error) =>
+        error.Errors.Count == 0 ? null : string.Join(" ", FieldErrors(error).Values.SelectMany(v => v));
+
+    private string? Fill(string template, IReadOnlyList<object?> values)
+    {
+        try
+        {
+            return string.Format(CultureInfo.CurrentCulture, this[template], [.. values]);
+        }
+        catch (FormatException)
+        {
+            // A translation or values that don't fit: the English as sent.
+            return null;
+        }
+    }
+
     /// <summary>A refusal in one line: its message, else its title, in the reader's language.</summary>
     public string Problem(ApiException error) => Message(error) ?? Title(error);
 

@@ -373,10 +373,7 @@ internal sealed class MoveLotHandler(
         // A balance sends a quantity to the destination's balance, made on its first transfer in: mixed stock stays mixed.
         if (command.Quantity is not { } entered)
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                [nameof(command.Quantity)] = ["Required: a balance moves by quantity."],
-            });
+            throw ValidationException.Field(nameof(command.Quantity), "Required: a balance moves by quantity.");
         }
 
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
@@ -687,10 +684,7 @@ internal static class ProductionOutput
         {
             if (lotNumber is not null && !material.IsLotTracked)
             {
-                throw new ValidationException(new Dictionary<string, string[]>
-                {
-                    ["LotNumber"] = [$"Leave blank: {material.Code} isn't lot-tracked, so it is kept as one balance per location."],
-                });
+                throw ValidationException.Field("LotNumber", $"Leave blank: {material.Code} isn't lot-tracked, so it is kept as one balance per location.");
             }
 
             var (balance, isNew) = await Commingling.BalanceAsync(

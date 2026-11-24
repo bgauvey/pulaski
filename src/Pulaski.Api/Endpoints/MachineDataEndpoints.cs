@@ -70,7 +70,7 @@ internal static class MachineDataEndpoints
             var text = http.ContentLength > MaxCsvBytes ? null : await reader.ReadToEndAsync(ct);
             if (text is null || text.Length > MaxCsvBytes)
             {
-                throw new ValidationException(new Dictionary<string, string[]> { ["file"] = [$"The file is larger than {MaxCsvBytes / 1024 / 1024} MB; split it."] });
+                throw ValidationException.Field("file", $"The file is larger than {MaxCsvBytes / 1024 / 1024} MB; split it.");
             }
 
             return TypedResults.Ok(await handler.HandleAsync(new ImportMachineProfileCommand(id, version, MachineProfileCsv.Parse(text), dryRun ?? false), ct));

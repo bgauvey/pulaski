@@ -265,10 +265,7 @@ internal sealed class StartJobHandler(
     {
         if (lineId is not { } target)
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                ["LineId"] = [$"Job {job.JobNumber} is waiting on its department; choose the line it runs on."],
-            });
+            throw ValidationException.Field("LineId", $"Job {job.JobNumber} is waiting on its department; choose the line it runs on.");
         }
 
         var line = lines.FirstOrDefault(l => l.Id == target) ?? throw new DomainRuleException($"Line {target} not found.");

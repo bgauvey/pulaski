@@ -62,31 +62,65 @@ public sealed class ConflictException : Exception, IHasUserMessage
     public UserMessage UserMessage { get; }
 }
 
-/// <summary>The request is malformed. <see cref="Errors"/> is keyed by field name.</summary>
-public sealed class ValidationException(IReadOnlyDictionary<string, string[]> errors)
-    : Exception("One or more fields are invalid.")
+/// <summary>
+/// The request is malformed. <see cref="Errors"/> is keyed by field name; <see cref="Messages"/> holds the same messages with their templates and
+/// values, so a screen can show them in its reader's language (#128, #189).
+/// </summary>
+public sealed class ValidationException : Exception
 {
-    public IReadOnlyDictionary<string, string[]> Errors { get; } = errors;
+    public ValidationException(IReadOnlyDictionary<string, string[]> errors)
+        : this(errors.ToDictionary(e => e.Key, e => e.Value.Select(UserMessage.Of).ToArray(), StringComparer.Ordinal))
+    {
+    }
+
+    public ValidationException(IReadOnlyDictionary<string, UserMessage[]> messages)
+        : base("One or more fields are invalid.")
+    {
+        Messages = messages;
+        Errors = messages.ToDictionary(m => m.Key, m => m.Value.Select(v => v.Text).ToArray(), StringComparer.Ordinal);
+    }
+
+    public IReadOnlyDictionary<string, string[]> Errors { get; }
+
+    public IReadOnlyDictionary<string, UserMessage[]> Messages { get; }
+
+    /// <summary>One field's message: <c>throw ValidationException.Field("Body", $"At most {max} characters.")</c>.</summary>
+    public static ValidationException Field(string field, string message) => Field(field, UserMessage.Of(message));
+
+    /// <inheritdoc cref="Field(string, string)"/>
+    public static ValidationException Field(string field, ref MessageBuilder message) => Field(field, message.Build());
+
+    /// <summary>One field's messages, worked out elsewhere (a list of problems).</summary>
+    public static ValidationException Field(string field, IEnumerable<string> messages) =>
+        new(new Dictionary<string, UserMessage[]>(StringComparer.Ordinal) { [field] = [.. messages.Select(UserMessage.Of)] });
+
+    private static ValidationException Field(string field, UserMessage message) =>
+        new(new Dictionary<string, UserMessage[]>(StringComparer.Ordinal) { [field] = [message] });
 }
 
 /// <summary>Collects field errors and throws them together.</summary>
 internal sealed class Validator
 {
-    private readonly Dictionary<string, List<string>> _errors = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<UserMessage>> _errors = new(StringComparer.Ordinal);
 
-    public Validator Require(bool condition, string field, string message)
+    /// <summary>Adds <paramref name="message"/> for <paramref name="field"/> unless <paramref name="condition"/> holds.</summary>
+    public Validator Require(bool condition, string field, string message) => condition ? this : Add(field, UserMessage.Of(message));
+
+    /// <summary>
+    /// The same with values (#189): <c>$"At most {max} characters."</c> keeps its template and values, so a screen shows it in its reader's
+    /// language.
+    /// </summary>
+    public Validator Require(bool condition, string field, ref MessageBuilder message) => condition ? this : Add(field, message.Build());
+
+    private Validator Add(string field, UserMessage message)
     {
-        if (!condition)
+        if (!_errors.TryGetValue(field, out var list))
         {
-            if (!_errors.TryGetValue(field, out var list))
-            {
-                list = [];
-                _errors[field] = list;
-            }
-
-            list.Add(message);
+            list = [];
+            _errors[field] = list;
         }
 
+        list.Add(message);
         return this;
     }
 
@@ -98,7 +132,7 @@ internal sealed class Validator
     {
         if (_errors.Count > 0)
         {
-            throw new ValidationException(_errors.ToDictionary(e => e.Key, e => e.Value.ToArray()));
+            throw new ValidationException(_errors.ToDictionary(e => e.Key, e => e.Value.ToArray(), StringComparer.Ordinal));
         }
     }
 }

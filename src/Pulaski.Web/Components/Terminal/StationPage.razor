@@ -579,7 +579,7 @@ else
                 }
                 catch (ApiException ex)
                 {
-                    _actionError = StationView.Problem(L.Problem(ex), ex.Errors);
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
                     (_calling, _resolvingCall) = ex.Status == 401 ? (false, null) : (action == "call", action == "resolve" ? Input.CallId : null);
                     if (ex.Status == 401)
                     {
@@ -609,7 +609,7 @@ else
                 }
                 catch (ApiException ex)
                 {
-                    _actionError = StationView.Problem(L.Problem(ex), ex.Errors);
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
                     _codingStop = ex.Status == 401 ? null : stopId;
                     if (ex.Status == 401)
                     {
@@ -657,7 +657,7 @@ else
                 }
                 catch (ApiException ex)
                 {
-                    _actionError = StationView.Problem(L.Problem(ex), ex.Errors);
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
                     _reporting = ex.Status != 401;
                     if (ex.Status == 401)
                     {
@@ -685,7 +685,7 @@ else
                 }
                 catch (ApiException ex)
                 {
-                    _actionError = StationView.Problem(L.Problem(ex), ex.Errors);
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
                     _stopping = action is "pause" or "complete" ? action : null;
                     if (ex.Status == 401)
                     {

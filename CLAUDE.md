@@ -290,7 +290,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `core.translation` on Configure → Languages (`languages.manage`; CSV, placeholders kept); shipped `Application/Localization/Shipped/es.csv`
   applied at start. User/terminal `language` + `region` → culture cookie (invariant without a choice); `/api/translations/{code}` open.
   Refusals carry `UserMessage` (`MessageBuilder` interpolated handler on the exceptions) → problem `template`/`values` → `L.Message`/`L.Problem`;
-  the catalog includes them (`TermExtractor.Messages`). Helpers take `Text l` and use `l["…"]` (tests: `Text.English`); plain labels are
+  the catalog includes them (`TermExtractor.Messages`). Field checks too (#189): `Validator.Require`/`ValidationException.Field` take
+  `MessageBuilder` → problem `fieldMessages` → `L.FieldErrors`. Helpers take `Text l` and use `l["…"]` (tests: `Text.English`); plain labels are
   `Term.Mark` shown with `L[…]`/`L.Of`; codes via `L.Label(code)` (`LabelTerms`, checked against the schema). CSV exports stay English.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.

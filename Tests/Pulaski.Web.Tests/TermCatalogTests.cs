@@ -67,6 +67,24 @@ public class TermCatalogTests
     }
 
     [Fact]
+    public void Field_checks_are_read_from_their_message_argument()
+    {
+        const string Source = """
+            new Validator()
+                .Require(command.Lines.All(l => l.Qty is > 0 and < 1_000), nameof(command.Lines), "Each line needs a quantity.")
+                .Require(Pick(a, "x, y", 'z') != null, "Name", $"At most {max} characters, not {Len(s, 2):N0}.")
+                .Require(ok, "Note", problem)
+                .RequireText(command.Code, nameof(command.Code), 50);
+            throw ValidationException.Field("Body", "Write what the next shift should know.");
+            throw ValidationException.Field(nameof(query.Status), $"Unknown status '{query.Status}'.");
+            throw ValidationException.Field("Settings", problems);
+            """;
+        Assert.Equal(
+            ["Each line needs a quantity.", "At most {0} characters, not {1:N0}.", "Write what the next shift should know.", "Unknown status '{0}'."],
+            TermExtractor.Messages(Source));
+    }
+
+    [Fact]
     public void Every_status_and_kind_code_in_the_schema_has_its_label_as_a_term()
     {
         // Every CHECK of the form "column IN (...)" or "(a, b) IN ((...), ...)", as LabelTerms was made from.

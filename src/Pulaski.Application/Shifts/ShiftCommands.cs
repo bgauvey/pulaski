@@ -47,7 +47,7 @@ internal static class ShiftRules
         var unknown = named.Except(active, StringComparer.Ordinal).ToList();
         if (unknown.Count > 0)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Shifts"] = [$"Not an active crew of the site: {string.Join(", ", unknown)}."] });
+            throw ValidationException.Field("Shifts", $"Not an active crew of the site: {string.Join(", ", unknown)}.");
         }
     }
 
@@ -134,7 +134,7 @@ internal sealed class SetShiftOverrideHandler(
         var minutes = command.Minutes ?? (int?)template?.Length.TotalMinutes;
         if (command.IsWorking && (start is null || minutes is null))
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Start"] = [$"{code} isn't one of the schedule's shifts; give its start and length."] });
+            throw ValidationException.Field("Start", $"{code} isn't one of the schedule's shifts; give its start and length.");
         }
 
         var crew = command.IsWorking ? (string.IsNullOrWhiteSpace(command.Crew) ? null : command.Crew.Trim().ToUpperInvariant()) : null;

@@ -83,7 +83,7 @@ internal sealed class CodeDowntimeHandler(IUnitOfWork unitOfWork, IStopRepositor
             ?? throw new DomainRuleException($"Choose one of the reasons offered for {stop.EquipmentCode}.");
         if (reason.RequiresComment && comment is null)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Comment"] = ["This reason needs a comment."] });
+            throw ValidationException.Field("Comment", "This reason needs a comment.");
         }
 
         if (stop.OperatorReasonCodeId == command.ReasonCodeId && stop.Comment == comment)
@@ -149,7 +149,7 @@ public sealed record StopCursor(DateTimeOffset StartedAt, bool IsCurrent, Guid I
         {
         }
 
-        throw new ValidationException(new Dictionary<string, string[]> { ["After"] = ["Not a page of this list: start again from the first page."] });
+        throw ValidationException.Field("After", "Not a page of this list: start again from the first page.");
     }
 }
 

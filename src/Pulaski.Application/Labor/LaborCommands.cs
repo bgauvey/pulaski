@@ -153,7 +153,7 @@ internal sealed class ClockOnHandler(
     {
         if (command.PersonId == Guid.Empty)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["PersonId"] = ["Choose who."] });
+            throw ValidationException.Field("PersonId", "Choose who.");
         }
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -178,7 +178,7 @@ internal sealed class CheckInHandler(
     {
         if (command.PersonIds.Count == 0)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["PersonIds"] = ["Choose who to check in."] });
+            throw ValidationException.Field("PersonIds", "Choose who to check in.");
         }
 
         var now = timeProvider.GetUtcNow();
@@ -250,7 +250,7 @@ internal sealed class ClockOffHandler(
         var end = command.EndedAt ?? now;
         if (end < current.Value.StartedAt || end > now + LaborRules.ClockSkew)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["EndedAt"] = ["Between when it started and now."] });
+            throw ValidationException.Field("EndedAt", "Between when it started and now.");
         }
 
         var ended = current.Value with { EndedAt = end };
@@ -271,7 +271,7 @@ internal sealed class CheckOutHandler(IUnitOfWork unitOfWork, ILaborRepository l
         var end = command.EndedAt ?? now;
         if (end > now + LaborRules.ClockSkew)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["EndedAt"] = ["Not ahead of now."] });
+            throw ValidationException.Field("EndedAt", "Not ahead of now.");
         }
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -357,7 +357,7 @@ internal sealed class CorrectLaborSessionHandler(
     public async Task<LaborResponse> HandleAsync(CorrectLaborSessionCommand command, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var note = LaborWriter.Clean(command.Note) ?? throw new ValidationException(new Dictionary<string, string[]> { ["Note"] = ["Say why: the shift was approved already."] });
+        var note = LaborWriter.Clean(command.Note) ?? throw ValidationException.Field("Note", "Say why: the shift was approved already.");
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var original = (await labor.GetSessionForUpdateAsync(command.SessionId, cancellationToken))?.Value ?? throw new NotFoundException($"Session {command.SessionId} not found.");
         if (!await labor.IsApprovedAsync(original.Shift, cancellationToken))

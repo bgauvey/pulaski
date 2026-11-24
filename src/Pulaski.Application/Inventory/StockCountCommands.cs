@@ -272,10 +272,7 @@ internal sealed class UpdateReasonCodeHandler(
 
         if (after.IsGroup && after.RequiresComment)
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                [nameof(command.RequiresComment)] = ["A group is never chosen, so it never needs a comment."],
-            });
+            throw ValidationException.Field(nameof(command.RequiresComment), "A group is never chosen, so it never needs a comment.");
         }
 
         if (ReasonTree.WhyNotActive(tree, current, after.IsActive) is { } why)

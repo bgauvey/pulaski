@@ -38,10 +38,7 @@ internal sealed class IdentityProviderClient(IHttpClientFactory clients, IOption
         var provider = Provider(name);
         if (!IsAllowedRedirect(redirectUri))
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                ["RedirectUri"] = [$"An https address ending in {CallbackPath} (http only on this machine)."],
-            });
+            throw ValidationException.Field("RedirectUri", $"An https address ending in {CallbackPath} (http only on this machine).");
         }
 
         var metadata = await MetadataAsync(name, provider, cancellationToken);

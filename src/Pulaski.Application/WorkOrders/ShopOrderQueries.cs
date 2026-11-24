@@ -92,10 +92,7 @@ internal sealed class GetShopOrderHandler(
     {
         if (value.Any(c => c is < ' ' or > '~') || value.Count(c => c == '|') != 1)
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                ["orderNumber"] = ["The order number must use printable ASCII characters and cannot contain '|' for a Code 128 shop-order barcode."],
-            });
+            throw ValidationException.Field("orderNumber", "The order number must use printable ASCII characters and cannot contain '|' for a Code 128 shop-order barcode.");
         }
     }
 }

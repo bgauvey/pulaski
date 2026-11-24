@@ -166,13 +166,13 @@ internal sealed class ChangePasswordHandler(
             ?? throw new DomainRuleException($"{user.Value.DisplayName} signs in through {user.Value.Issuer}; change the password there.");
         if (!hasher.Verify(command.CurrentPassword, credential.PasswordHash))
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["CurrentPassword"] = ["That isn't the current password."] });
+            throw ValidationException.Field("CurrentPassword", "That isn't the current password.");
         }
 
         SecurityRules.EnsurePassword(command.NewPassword, user.Value.Username ?? "", "NewPassword");
         if (hasher.Verify(command.NewPassword, credential.PasswordHash))
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["NewPassword"] = ["Choose a password you haven't just used."] });
+            throw ValidationException.Field("NewPassword", "Choose a password you haven't just used.");
         }
 
         var now = timeProvider.GetUtcNow();

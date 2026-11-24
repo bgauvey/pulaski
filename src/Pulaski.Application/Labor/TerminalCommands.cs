@@ -275,7 +275,7 @@ internal sealed class EnrolTerminalHandler(IUnitOfWork unitOfWork, ITerminalRepo
         var code = TerminalRules.NormalizeCode(command.Code);
         if (code.Length != 10)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Code"] = ["Type the ten-character code, such as K7QM2-XW9PD."] });
+            throw ValidationException.Field("Code", "Type the ten-character code, such as K7QM2-XW9PD.");
         }
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);

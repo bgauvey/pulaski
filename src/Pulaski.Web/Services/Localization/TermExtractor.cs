@@ -14,15 +14,26 @@ public static partial class TermExtractor
 
     /// <summary>
     /// The templates of the server's messages for people (#128): every <c>new DomainRuleException("…")</c> (and the not found, conflict and
-    /// not allowed ones) whose one argument is a string, read as <c>MessageBuilder</c> builds them: each hole a numbered placeholder with its
-    /// alignment and format. A message put together otherwise isn't found, and shows in English.
+    /// not allowed ones) whose one argument is a string, and the field checks (#189): the message of <c>.Require(condition, field, "…")</c> and
+    /// of <c>ValidationException.Field(field, "…")</c>. Each is read as <c>MessageBuilder</c> builds it: each hole a numbered placeholder with
+    /// its alignment and format. A message put together otherwise isn't found, and shows in English.
     /// </summary>
     public static IEnumerable<string> Messages(string source)
     {
-        foreach (Match match in ThrowPattern().Matches(source))
+        var calls = ThrowPattern().Matches(source).Select(m => (m.Index + m.Length, Skip: 0))
+            .Concat(RequirePattern().Matches(source).Select(m => (m.Index + m.Length, Skip: 2)))
+            .Concat(FieldPattern().Matches(source).Select(m => (m.Index + m.Length, Skip: 1)))
+            .OrderBy(c => c.Item1);
+        foreach (var (start, skip) in calls)
         {
+            // The message is the argument after the ones skipped (a field check's condition and field).
+            var at = start;
+            if (!SkipArguments(source, ref at, skip))
+            {
+                continue;
+            }
+
             // Literals joined with '+' are one message when all are interpolated, or all plain: C# builds them as one.
-            var at = match.Index + match.Length;
             var holes = 0;
             var template = new System.Text.StringBuilder();
             bool? interpolated = null;
@@ -48,6 +59,59 @@ public static partial class TermExtractor
     /// <summary>The catalog's text for these terms: distinct, in ordinal order, one per line.</summary>
     public static string Catalog(IEnumerable<string> terms) =>
         string.Join("\n", terms.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)) + "\n";
+
+    /// <summary>
+    /// Moves <paramref name="at"/> past <paramref name="count"/> arguments and their commas, skipping strings (and their holes), characters and
+    /// brackets; false when the call's arguments end first.
+    /// </summary>
+    private static bool SkipArguments(string source, ref int at, int count)
+    {
+        var depth = 0;
+        while (count > 0 && at < source.Length)
+        {
+            var c = source[at];
+            if (c == '"' || (c == '$' && at + 1 < source.Length && source[at + 1] == '"'))
+            {
+                var holes = 0;
+                if (ReadMessage(source, ref at, ref holes, out _) is null)
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (c == '\'')
+            {
+                at++;
+                while (at < source.Length && source[at] != '\'')
+                {
+                    at += source[at] == '\\' ? 2 : 1;
+                }
+            }
+            else if (c is '(' or '[' or '{')
+            {
+                depth++;
+            }
+            else if (c is ')' or ']' or '}')
+            {
+                if (depth == 0)
+                {
+                    return false;
+                }
+
+                depth--;
+            }
+            else if (c == ',' && depth == 0)
+            {
+                count--;
+            }
+
+            at++;
+        }
+
+        return count == 0;
+    }
 
     private static char Next(string source, int at)
     {
@@ -175,6 +239,12 @@ public static partial class TermExtractor
 
     [GeneratedRegex(@"\bnew\s+(?:DomainRuleException|NotFoundException|ConflictException|ForbiddenException)\s*\(")]
     private static partial Regex ThrowPattern();
+
+    [GeneratedRegex(@"\.Require\s*\(")]
+    private static partial Regex RequirePattern();
+
+    [GeneratedRegex(@"\bValidationException\.Field\s*\(")]
+    private static partial Regex FieldPattern();
 
     [GeneratedRegex(@"\b[Ll]\[""(?<indexer>(?:[^""\\]|\\.)+)""|\bTerm\.Mark\(""(?<mark>(?:[^""\\]|\\.)+)""\)")]
     private static partial Regex Pattern();
