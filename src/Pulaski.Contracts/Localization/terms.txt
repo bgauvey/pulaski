@@ -203,6 +203,8 @@ Accepted
 Accepted without review
 Accepting sets the calculated rate. The modified rate stays in force for planning until you clear it.
 Accepting works the rate out again over the same days and basis; if runs ended since and it changed, Pulaski says so and nothing changes until it is proposed again or reviewed on the material. Decided proposals stay listed for 30 days.
+Account menu
+Account menu for {0}
 Acknowledged
 Actions
 Active
@@ -635,6 +637,7 @@ Choose an active unit for the rate.
 Choose an active unit.
 Choose an active utilization reason of the profile's site.
 Choose an active, measured quality characteristic.
+Choose another language or region first.
 Choose at least two stops to merge.
 Choose equipment…
 Choose one of the alerts offered.
@@ -704,6 +707,7 @@ Code, name, base unit and type come from {0}
 Collapse
 Collapse all
 Collects PackML machine state, so downtime and OEE are recorded for it.
+Colour theme
 Columns:
 Comes with a permission to change it
 Comes with {0}
@@ -833,6 +837,7 @@ Current-shift OEE {0}; availability {1}, performance {2}, quality {3}
 Cycle starts on
 Daily at set times
 Daily at {0} UTC
+Dark
 Database
 Date
 Dates and numbers look like this: {0} · {1}
@@ -1425,6 +1430,8 @@ Keep them
 Kept
 Kept as
 Kept at {0}: change them there.
+Kept on this device.
+Kept on your user, so it follows you to any computer. Saving reloads the page in the new language.
 Key
 Kind
 Kind of time
@@ -1442,8 +1449,10 @@ Lag
 Lands later →
 Language
 Language and region
+Language, theme, touch
 Languages
 Languages and their translations
+Larger buttons and fields for a touch screen. Automatic switches it on where the screen is touched with a finger; many industrial panels work like a mouse, so switch it on there. Kept on this device.
 Last 24 hours
 Last 7 days
 Last 8 hours
@@ -1489,6 +1498,8 @@ Level (silo or tank)
 Level reading at or below which it is empty
 Level tolerance
 Level {0} cannot be placed under level {1}.
+Light
+Like the device
 Limits
 Limits for one line name equipment that runs jobs.
 Limits must end after they start.
@@ -1707,7 +1718,6 @@ Moving a work order from '{0}' to '{1}' also changes its jobs; use the dispatch,
 Moving range
 Mqtt
 My alerts
-My alerts: e-mails when something needs you
 Name
 Name of state {0}
 Name of {0}
@@ -2277,7 +2287,9 @@ PostgreSQL query
 PostgreSQL query: {0}
 Pp · Ppk (overall)
 Pre-alpha
+Preferences
 Preferences, in order
+Preferences…
 Preferred line for {0}
 Prefilled on {0}'s reports; the lot being filled's location comes first.
 Preparing PDF…
@@ -2642,6 +2654,7 @@ Save details
 Save draft
 Save exception
 Save format
+Save language and region
 Save offered reasons
 Save planning rate settings
 Save printer
@@ -2947,11 +2960,9 @@ Supplier format {0} saved.
 Supplier lot
 Supplier or lab
 Switch it on under Settings below.
-Switch light or dark theme
 Switch off
 Switch off people the source no longer has
 Switch on
-Switch the touch layout on or off
 Switched call type {0} back on.
 Switched off
 Switched off call type {0}; its calls stay in the history.
@@ -3337,7 +3348,7 @@ Topic
 Total
 Total worked
 Tote
-Touch layout: larger buttons and fields for a touch screen
+Touch layout
 Trace back
 Trace forward
 Tracking

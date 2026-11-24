@@ -54,41 +54,6 @@
     gap: var(--space-2);
 }
 
-.header-user {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-right: var(--space-2);
-    color: var(--text-muted);
-    min-width: 0;
-}
-
-.header-user-text {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.15;
-    min-width: 0;
-}
-
-.header-user-name {
-    color: var(--text);
-    font-weight: 500;
-}
-
-.header-user-roles {
-    font-size: 12px;
-    max-width: 22rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-@media (max-width: 640px) {
-    .header-user-text {
-        display: none;
-    }
-}
-
 .icon-button {
     display: grid;
     place-items: center;
@@ -105,18 +70,6 @@
         background: var(--surface-2);
         color: var(--text);
     }
-
-.when-dark {
-    display: none;
-}
-
-:root[data-bs-theme="dark"] .when-light {
-    display: none;
-}
-
-:root[data-bs-theme="dark"] .when-dark {
-    display: contents;
-}
 
 .app-sidebar {
     grid-area: sidebar;

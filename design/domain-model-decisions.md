@@ -2863,8 +2863,9 @@ keeps each part, a blank size or age clears it.
 
 The floor screens were built for a desk and a mouse; operators at a line use tablets and touch panels (#119, from the gap analysis of
 2026-11-19). Decided: **one app with a touch layout**, not a separate set of pages, so every floor action keeps one implementation.
-- `data-touch` on `<html>` (`js/theme.js`) turns it on: by itself where `(pointer: coarse)`, and switched per device from the header (the
-  hand button, stored as `pulaski.touch` on|off), since many industrial panels report a mouse. The button carries `aria-pressed`.
+- `data-touch` on `<html>` (`js/theme.js`) turns it on: by itself where `(pointer: coarse)`, and switched per device, since many industrial
+  panels report a mouse: Preferences in the header's user menu (`UserMenu`, a native popover; its dialog also holds the colour theme and
+  language and region), stored as `pulaski.touch` auto|on|off (`pulaski.setTouch`; the theme `pulaski.theme` system|light|dark).
 - `css/touch.css` holds every rule, under `:root[data-touch]`: targets at least `--touch-target` (44 px), fields 48 px, quantities larger,
   `.form-actions` sticky at the foot, `.floor-actions` filling the card, a card with a form open spanning the board, a page's primary
   action first. Nothing changes without `data-touch`.

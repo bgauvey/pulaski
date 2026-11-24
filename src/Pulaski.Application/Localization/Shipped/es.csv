@@ -204,6 +204,8 @@ Accepted,Aceptado
 Accepted without review,Aceptada sin revisión
 Accepting sets the calculated rate. The modified rate stays in force for planning until you clear it.,Aceptar fija la tasa calculada. La tasa modificada sigue vigente para la planeación hasta que la borre.
 "Accepting works the rate out again over the same days and basis; if runs ended since and it changed, Pulaski says so and nothing changes until it is proposed again or reviewed on the material. Decided proposals stay listed for 30 days.","Aceptar calcula la tasa de nuevo sobre los mismos días y base; si terminaron corridas desde entonces y cambió, Pulaski lo dice y nada cambia hasta que se proponga de nuevo o se revise en el material. Las propuestas decididas siguen en la lista 30 días."
+Account menu,Menú de la cuenta
+Account menu for {0},Menú de la cuenta de {0}
 Acknowledged,Atendida
 Actions,Acciones
 Active,Activo
@@ -636,6 +638,7 @@ Choose an active unit for the rate.,Elija una unidad activa para la tasa.
 Choose an active unit.,Elija una unidad activa.
 Choose an active utilization reason of the profile's site.,Elija un motivo de utilización activo del sitio del perfil.
 "Choose an active, measured quality characteristic.",Elija una característica de calidad activa y medida.
+Choose another language or region first.,Elija primero otro idioma o región.
 Choose at least two stops to merge.,Elija al menos dos paros para unir.
 Choose equipment…,Elija equipo…
 Choose one of the alerts offered.,Elija una de las alertas ofrecidas.
@@ -705,6 +708,7 @@ Code and kind can't change once created; switch one off instead.,El código y el
 Collapse,Contraer
 Collapse all,Contraer todo
 "Collects PackML machine state, so downtime and OEE are recorded for it.","Recolecta el estado PackML de la máquina, así que se registran su tiempo parado y su OEE."
+Colour theme,Tema de color
 Columns:,Columnas:
 Comes with a permission to change it,Viene con un permiso para cambiarlo
 Comes with {0},Viene con {0}
@@ -834,6 +838,7 @@ Current-shift OEE from reported machine data · refreshes every 30 seconds,OEE d
 Cycle starts on,El ciclo empieza el
 Daily at set times,Diario a horas fijas
 Daily at {0} UTC,Diario a las {0} UTC
+Dark,Oscuro
 Database,Base de datos
 Date,Fecha
 Dates and numbers look like this: {0} · {1},Las fechas y los números se ven así: {0} · {1}
@@ -1426,6 +1431,8 @@ Keep them,Conservarlos
 Kept,Guardado
 Kept as,Guardado como
 Kept at {0}: change them there.,Se mantienen en {0}: cámbielos allá.
+Kept on this device.,Se guarda en este dispositivo.
+"Kept on your user, so it follows you to any computer. Saving reloads the page in the new language.","Se guarda en su usuario, así que lo sigue a cualquier computadora. Al guardar, la página se recarga en el nuevo idioma."
 Key,Clave
 Kind,Tipo
 Kind of time,Tipo de tiempo
@@ -1443,8 +1450,10 @@ Lag,Retraso
 Lands later →,Queda después →
 Language,Idioma
 Language and region,Idioma y región
+"Language, theme, touch","Idioma, tema, táctil"
 Languages,Idiomas
 Languages and their translations,Idiomas y sus traducciones
+"Larger buttons and fields for a touch screen. Automatic switches it on where the screen is touched with a finger; many industrial panels work like a mouse, so switch it on there. Kept on this device.","Botones y campos más grandes para una pantalla táctil. Automático lo activa donde la pantalla se toca con el dedo; muchos paneles industriales funcionan como un mouse, así que actívelo ahí. Se guarda en este dispositivo."
 Last 24 hours,Últimas 24 horas
 Last 7 days,Últimos 7 días
 Last 8 hours,Últimas 8 horas
@@ -1490,6 +1499,8 @@ Level (silo or tank),Nivel (silo o tanque)
 Level reading at or below which it is empty,Lectura de nivel igual o menor a la cual está vacío
 Level tolerance,Tolerancia de nivel
 Level {0} cannot be placed under level {1}.,El nivel {0} no puede ir bajo el nivel {1}.
+Light,Claro
+Like the device,Como el dispositivo
 Limits,Límites
 Limits for one line name equipment that runs jobs.,Los límites para una línea nombran equipo que ejecuta trabajos.
 Limits must end after they start.,Los límites deben terminar después de empezar.
@@ -1708,7 +1719,6 @@ Move…,Mover…
 Moving range,Rango móvil
 Mqtt,MQTT
 My alerts,Mis alertas
-My alerts: e-mails when something needs you,Mis alertas: correos cuando algo lo necesita
 Name,Nombre
 Name of state {0},Nombre del estado {0}
 Name of {0},Nombre de {0}
@@ -2278,7 +2288,9 @@ PostgreSQL query,Consulta PostgreSQL
 PostgreSQL query: {0},Consulta PostgreSQL: {0}
 Pp · Ppk (overall),Pp · Ppk (general)
 Pre-alpha,Pre-alfa
+Preferences,Preferencias
 "Preferences, in order","Preferencias, en orden"
+Preferences…,Preferencias…
 Preferred line for {0},Línea preferida para {0}
 Prefilled on {0}'s reports; the lot being filled's location comes first.,Se prellena en los reportes de {0}; la ubicación del lote que se está llenando va primero.
 Preparing PDF…,Preparando PDF…
@@ -2643,6 +2655,7 @@ Save details,Guardar datos
 Save draft,Guardar borrador
 Save exception,Guardar excepción
 Save format,Guardar formato
+Save language and region,Guardar idioma y región
 Save offered reasons,Guardar motivos ofrecidos
 Save planning rate settings,Guardar ajustes de tasas de planeación
 Save printer,Guardar impresora
@@ -2948,11 +2961,9 @@ Supplier format {0} saved.,Se guardó el formato de proveedor {0}.
 Supplier lot,Lote del proveedor
 Supplier or lab,Proveedor o laboratorio
 Switch it on under Settings below.,Actívelo en Ajustes abajo.
-Switch light or dark theme,Cambiar entre tema claro y oscuro
 Switch off,Desactivar
 Switch off people the source no longer has,Desactivar a las personas que la fuente ya no tiene
 Switch on,Activar
-Switch the touch layout on or off,Activar o desactivar el diseño táctil
 Switched call type {0} back on.,Se volvió a activar el tipo de llamada {0}.
 Switched off,Desactivado
 Switched off call type {0}; its calls stay in the history.,Se desactivó el tipo de llamada {0}; sus llamadas quedan en el historial.
@@ -3338,7 +3349,7 @@ Topic,Tópico
 Total,Total
 Total worked,Total trabajado
 Tote,Caja de transporte
-Touch layout: larger buttons and fields for a touch screen,Diseño táctil: botones y campos más grandes para pantalla táctil
+Touch layout,Diseño táctil
 Trace back,Rastrear hacia atrás
 Trace forward,Rastrear hacia adelante
 Tracking,Rastreo
