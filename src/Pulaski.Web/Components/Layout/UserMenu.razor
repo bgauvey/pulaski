@@ -5,7 +5,7 @@
 @* The header's user menu: who is signed in, then Preferences (a dialog with language and region, colour theme and touch layout), My alerts,
    changing the password and signing out. The menu is a native popover (closes on Escape or a click outside); theme and touch layout are kept
    per device in the browser (js/theme.js), language and region on the user. *@
-@if (User.Me is { } me)
+@if (Me is { } me)
 {
     <button type="button" class="user-button" popovertarget="user-menu" aria-haspopup="menu" title="@User.RoleSummary"
             aria-label="@L["Account menu for {0}", me.DisplayName]">
@@ -79,6 +79,9 @@
 }
 
 @code {
+    /// <summary>The signed-in user, from the layout once it has loaded them.</summary>
+    [Parameter, EditorRequired] public MeDto? Me { get; set; }
+
     // The language form loads the languages from the API, so only once the dialog is first opened.
     private bool _preferencesOpened;
 
