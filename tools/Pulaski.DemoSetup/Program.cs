@@ -187,6 +187,27 @@ async Task<(Guid EdgeNodeId, string EdgePassword)> SetUpEdgeAsync(PulaskiApi api
         }
     }
 
+    foreach (var (lineCode, constraintCode) in DemoPlan.ConstraintMachines)
+    {
+        var line = equipment.SingleOrDefault(e => e.SiteId == site.Id && e.Code == lineCode)
+            ?? throw new InvalidOperationException($"There is no equipment {lineCode} at {siteCode}.");
+        var constraint = equipment.SingleOrDefault(e => e.SiteId == site.Id && e.Code == constraintCode)
+            ?? throw new InvalidOperationException($"There is no equipment {constraintCode} at {siteCode}.");
+        if (line.StateDerivation != "constraint_machine" || line.ConstraintEquipmentId != constraint.Id)
+        {
+            await api.SetMachineDataAsync(line.Id, new SetEquipmentMachineDataRequest
+            {
+                Version = line.Version,
+                MachineProfileId = line.MachineProfileId,
+                StateDerivation = "constraint_machine",
+                ConstraintEquipmentId = constraint.Id,
+                MicroStopThresholdSeconds = line.MicroStopThresholdSeconds,
+                ProductionCounterEquipmentId = line.ProductionCounterEquipmentId,
+            }, ct);
+            Console.WriteLine($"{lineCode} takes its state from {constraintCode}.");
+        }
+    }
+
     foreach (var tag in DemoPlan.Tags)
     {
         if (detail.Tags.Any(t => t.Address == tag.Address && t.Role == tag.Role))

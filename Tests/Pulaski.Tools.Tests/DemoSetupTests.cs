@@ -27,6 +27,15 @@ public class DemoSetupTests
     }
 
     [Fact]
+    public void The_line_takes_its_state_from_a_simulated_machine()
+    {
+        // A constraint without a state tag (EXT-01's puller has no simulator) would leave the line with no signal.
+        var (line, constraint) = Assert.Single(DemoPlan.ConstraintMachines);
+        Assert.Equal(DemoPlan.LineCode, line);
+        Assert.Contains(DemoPlan.Tags, t => t.EquipmentCode == constraint && t.Role == "state");
+    }
+
+    [Fact]
     public void A_new_password_meets_the_rules()
     {
         var password = DemoPlan.NewPassword();

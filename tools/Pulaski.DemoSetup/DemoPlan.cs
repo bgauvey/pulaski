@@ -31,6 +31,12 @@ public static class DemoPlan
         new("Packer", "PACK1"),
     ];
 
+    /// <summary>
+    /// Lines whose state is one machine's (D-050): EXT-01's comes from its extruder. Its puller has no simulator, so "worst of its machines"
+    /// would read no signal; without this the line has no state of its own, no OEE, and counts as a line with no signal.
+    /// </summary>
+    public static IReadOnlyList<(string Line, string Constraint)> ConstraintMachines { get; } = [("EXT-01", "EXT-01-EXT")];
+
     /// <summary>The process-value simulator's Sparkplug node (tools/Pulaski.ProcessSimulator), publishing for the extruder.</summary>
     public const string ProcessNode = "ExtruderProcess";
 
