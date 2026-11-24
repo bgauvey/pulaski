@@ -33,7 +33,7 @@ public sealed class EdgeHostTests : IDisposable
         Assert.Contains(workers, w => w is ConnectorHost);
         Assert.Contains(workers, w => w is Forwarder);
         Assert.True(File.Exists(Path.Combine(_root, "buffer.db")));
-        Assert.False(EdgeHost.Failed(host.Services));
+        Assert.False(EdgeHost.Failed(EdgeHost.Workers(host.Services)));
     }
 
     [Fact]
@@ -47,7 +47,28 @@ public sealed class EdgeHostTests : IDisposable
         await Task.Delay(100);
         await host.StopAsync();
 
-        Assert.True(EdgeHost.Failed(host.Services));
+        Assert.True(EdgeHost.Failed(EdgeHost.Workers(host.Services)));
+    }
+
+    [Fact]
+    public async Task Whether_it_failed_can_be_told_after_the_run_has_disposed_the_host()
+    {
+        // As Program does: RunAsync disposes the host, so asking its services afterwards threw ObjectDisposedException on every stop.
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { ContentRootPath = _root });
+        builder.Services.AddHostedService<Failing>();
+        using var host = builder.Build();
+        var workers = EdgeHost.Workers(host.Services);
+
+        try
+        {
+            await host.RunAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        catch (InvalidOperationException)
+        {
+            // The failing worker's own exception, when the host rethrows it.
+        }
+
+        Assert.True(EdgeHost.Failed(workers));
     }
 
     private sealed class Failing : BackgroundService

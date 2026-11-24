@@ -55,9 +55,12 @@ public static class EdgeHost
         return builder;
     }
 
+    /// <summary>The host's workers. Take them before running it: <c>RunAsync</c> disposes the host, and its services with it.</summary>
+    public static IReadOnlyList<BackgroundService> Workers(IServiceProvider services) =>
+        [.. services.GetServices<IHostedService>().OfType<BackgroundService>()];
+
     /// <summary>Whether a worker ended by failing rather than by being stopped.</summary>
-    public static bool Failed(IServiceProvider services) =>
-        services.GetServices<IHostedService>().OfType<BackgroundService>().Any(s => s.ExecuteTask?.IsFaulted == true);
+    public static bool Failed(IEnumerable<BackgroundService> workers) => workers.Any(s => s.ExecuteTask?.IsFaulted == true);
 
     /// <summary>A relative path from the configuration, against the program's content root; an absolute one as it is.</summary>
     public static string ResolvePath(string contentRoot, string path) => Path.IsPathRooted(path) ? path : Path.GetFullPath(Path.Combine(contentRoot, path));
