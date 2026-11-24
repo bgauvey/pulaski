@@ -461,7 +461,7 @@ else if (_error is null)
         _error = null;
         try
         {
-            _notes = (await action()).Notes;
+            _notes = L.Notes((await action()).Notes);
             await LoadAsync();
         }
         catch (ApiException ex)
@@ -489,7 +489,7 @@ else if (_error is null)
     private async Task OnStoppedAsync(ExecutionResponse result)
     {
         _stop = null;
-        _notes = result.Notes;
+        _notes = L.Notes(result.Notes);
         await LoadAsync();
     }
 
@@ -577,7 +577,7 @@ else if (_error is null)
         _error = null;
         try
         {
-            _notes = (await decide()).Notes;
+            _notes = L.Notes((await decide()).Notes);
             _rejecting = null;
             _rejectReason = Guid.Empty;
             _decisionComment = null;
@@ -597,7 +597,7 @@ else if (_error is null)
     {
         _reporting = false;
         _notes = [L["Reported: run now has {0} good and {1} scrap{2}.", FloorView.Qty(result.RunGoodQty), FloorView.Qty(result.RunScrapQty), (result.Lots.Count > 1 ? L["; good output in lots {0}", string.Join(", ", result.Lots.Select(l => l.LotNumber ?? L["balance"]))] : result.Lot is { } lot ? L["; good output in lot {0}", lot.LotNumber ?? L["balance"]] : "")],
-            .. result.Warnings.Select(w => w.Message)];
+            .. result.Warnings.Select(L.Of)];
         await LoadAsync();
     }
 }

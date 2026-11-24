@@ -55,7 +55,21 @@ public sealed record BomItem(
 public sealed record BomItemAlternate(Guid MaterialId, decimal Ratio, int Priority);
 
 /// <summary>Something wrong with a BOM, pinned to the item it concerns when there is one.</summary>
-public sealed record BomProblem(string Code, string Message, Guid? ItemId = null);
+public sealed record BomProblem(string Code, UserMessage Text, Guid? ItemId = null)
+{
+    public BomProblem(string code, string message, Guid? itemId = null)
+        : this(code, UserMessage.Of(message), itemId)
+    {
+    }
+
+    public BomProblem(string code, ref MessageBuilder message, Guid? itemId = null)
+        : this(code, message.Build(), itemId)
+    {
+    }
+
+    /// <summary>The English message; <see cref="Text"/> has its template and values for the reader's language (#189).</summary>
+    public string Message => Text.Text;
+}
 
 /// <summary>
 /// What <see cref="BaseQty"/> of a material (in <see cref="BaseUomId"/>) is made from, one level

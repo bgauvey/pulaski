@@ -99,10 +99,7 @@ internal static class MaterialEndpoints
             var text = http.ContentLength > MaxFileBytes ? null : await reader.ReadToEndAsync(ct);
             if (text is null || text.Length > MaxFileBytes)
             {
-                throw new ValidationException(new Dictionary<string, string[]>
-                {
-                    ["file"] = [$"The file is larger than {MaxFileBytes / 1024 / 1024} MB; split it."],
-                });
+                throw ValidationException.Field("file", $"The file is larger than {MaxFileBytes / 1024 / 1024} MB; split it.");
             }
 
             return TypedResults.Ok(await handler.HandleAsync(new ImportMaterialFileCommand(source, text, externalSystem, dryRun ?? false, createClasses ?? false), ct));
@@ -171,10 +168,7 @@ internal static class MaterialEndpoints
             var text = http.Request.ContentLength > MaxFileBytes ? null : await reader.ReadToEndAsync(ct);
             if (text is null || text.Length > MaxFileBytes)
             {
-                throw new ValidationException(new Dictionary<string, string[]>
-                {
-                    ["file"] = [$"The file is larger than {MaxFileBytes / 1024 / 1024} MB; split it."],
-                });
+                throw ValidationException.Field("file", $"The file is larger than {MaxFileBytes / 1024 / 1024} MB; split it.");
             }
 
             var sites = await Visible.SitesAsync(http, Permissions.Processes);

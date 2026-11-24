@@ -1,4 +1,5 @@
 using Pulaski.Contracts.ReferenceData;
+using Pulaski.Contracts.Common;
 
 namespace Pulaski.Contracts.Materials;
 
@@ -151,7 +152,7 @@ public sealed record EndCapabilityRequest
 }
 
 /// <summary>The capability as it is now, and notes on what the change did: a new or recalculated planning rate, open jobs left without one.</summary>
-public sealed record CapabilityResponse(Guid Id, long Version, IReadOnlyList<string> Notes);
+public sealed record CapabilityResponse(Guid Id, long Version, IReadOnlyList<MessageDto> Notes);
 
 /// <summary>A material with what uses it and where it can run.</summary>
 public sealed record MaterialDetailDto
@@ -262,7 +263,7 @@ public sealed record ImportRowResultDto
     public string? Message { get; init; }
 
     /// <summary>What else it did, such as setting a line's planning rate from a capability's ideal rate.</summary>
-    public IReadOnlyList<string> Notes { get; init; } = [];
+    public IReadOnlyList<MessageDto> Notes { get; init; } = [];
 }
 
 /// <summary>

@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Quality;
@@ -143,7 +144,7 @@ internal sealed class GetLimitBaselineHandler(IQualityReadStore store, TimeProvi
             DispersionUcl = limits?.DispersionUcl,
             DispersionLcl = limits?.DispersionLcl,
             NotEnough = result.NotEnough,
-            Warnings = result.Warnings,
+            Warnings = [.. result.Warnings.Select(w => Notes.Of(w))],
             Current = current,
             Points = [.. subgroups.Select(s =>
             {

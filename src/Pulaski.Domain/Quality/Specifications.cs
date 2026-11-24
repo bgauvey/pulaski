@@ -76,7 +76,21 @@ public sealed record SpecItem(
     int SortOrder);
 
 /// <summary>Something wrong with a specification, pinned to the item it concerns when there is one.</summary>
-public sealed record SpecProblem(string Code, string Message, Guid? ItemId = null);
+public sealed record SpecProblem(string Code, UserMessage Text, Guid? ItemId = null)
+{
+    public SpecProblem(string code, string message, Guid? itemId = null)
+        : this(code, UserMessage.Of(message), itemId)
+    {
+    }
+
+    public SpecProblem(string code, ref MessageBuilder message, Guid? itemId = null)
+        : this(code, message.Build(), itemId)
+    {
+    }
+
+    /// <summary>The English message; <see cref="Text"/> has its template and values for the reader's language (#189).</summary>
+    public string Message => Text.Text;
+}
 
 /// <summary>A specification's characteristics and limits. A draft may be incomplete but never malformed; a release must be complete.</summary>
 public sealed record SpecDefinition(IReadOnlyList<SpecItem> Items)

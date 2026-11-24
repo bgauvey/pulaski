@@ -53,6 +53,20 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
     }
 
     [Fact]
+    public async Task Field_errors_carry_their_templates_and_values_for_the_screens_to_translate()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/equipment", new CreateEquipmentRequest { Code = new string('X', 51), Name = "Plant", Level = "site", EquipmentRole = "site" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var problem = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("At most 50 characters.", problem.RootElement.GetProperty("errors").GetProperty("code")[0].GetString());
+        var message = problem.RootElement.GetProperty("fieldMessages").GetProperty("code")[0];
+        Assert.Equal("At most {0} characters.", message.GetProperty("template").GetString());
+        Assert.Equal(50, message.GetProperty("values")[0].GetInt32());
+    }
+
+    [Fact]
     public async Task Status_change_maps_rule_conflict_and_success()
     {
         var wo = factory.Stores.WorkOrders.Add("planned", version: 5);

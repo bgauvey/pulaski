@@ -55,7 +55,7 @@ public class ExecutionHandlerTests
         var run = Assert.Single(Execution.RunsOf(job.Id));
         Assert.Equal((started.RunId, 1, line.Id, HandlerFixture.Now), (run.Id, run.RunNo, run.EquipmentId, run.StartedAt));
         Assert.Equal(WorkOrderStatus.InProgress, _f.Stores.WorkOrders.Find(order.Id)!.Value.Status);
-        Assert.Contains($"Work order {order.OrderNumber} is now in progress.", started.Notes);
+        Assert.Contains($"Work order {order.OrderNumber} is now in progress.", started.Notes.Select(n => n.Text));
         Assert.Equal(
             [EventTypes.WorkOrderFirmed, EventTypes.JobStarted, EventTypes.WorkOrderStatusChanged],
             _f.Stores.Events.Appended.Select(e => e.Type));
@@ -98,7 +98,7 @@ public class ExecutionHandlerTests
         var co = Scheduling.FindJob(changeover.JobId)!.Value;
         Assert.Equal((JobType.Changeover, JobStatus.Running, job.JobNumber + "-CO"), (co.JobType, co.Status, co.JobNumber));
         Assert.Equal(JobStatus.Firmed, Scheduling.FindJob(job.Id)!.Value.Status);
-        Assert.Contains("changes from PRF-WHITE", Assert.Single(changeover.Notes), StringComparison.Ordinal);
+        Assert.Contains("changes from PRF-WHITE", Assert.Single(changeover.Notes).Text, StringComparison.Ordinal);
 
         await Complete().HandleAsync(new CompleteJobCommand(co.Id, Version(co.Id)), CancellationToken.None);
         var skipped = await Start().HandleAsync(new StartJobCommand(job.Id, Version(job.Id), SkipChangeover: true), CancellationToken.None);
@@ -135,7 +135,7 @@ public class ExecutionHandlerTests
         _f.Time.Advance(TimeSpan.FromHours(2));
 
         var paused = await Pause().HandleAsync(new PauseJobCommand(job.Id, Version(job.Id), reason.Id), CancellationToken.None);
-        Assert.Contains("ended after 2 h 00 min", Assert.Single(paused.Notes), StringComparison.Ordinal);
+        Assert.Contains("ended after 2 h 00 min", Assert.Single(paused.Notes).Text, StringComparison.Ordinal);
         Assert.Equal((false, reason.Id), (Execution.RunsOf(job.Id)[0].IsOpen, Execution.RunsOf(job.Id)[0].EndReasonCodeId));
 
         await Start().HandleAsync(new StartJobCommand(job.Id, Version(job.Id)), CancellationToken.None);
@@ -145,13 +145,13 @@ public class ExecutionHandlerTests
         Assert.Equal((JobStatus.Completed, HandlerFixture.Now.AddHours(2)), (Scheduling.FindJob(job.Id)!.Value.Status, Scheduling.FindJob(job.Id)!.Value.CompletedAt));
         Assert.All(Execution.RunsOf(job.Id), r => Assert.False(r.IsOpen));
         Assert.Equal(WorkOrderStatus.Completed, _f.Stores.WorkOrders.Find(order.Id)!.Value.Status);
-        Assert.Contains(done.Notes, n => n.Contains("Nothing was reported", StringComparison.Ordinal));
-        Assert.Contains(done.Notes, n => n.Contains("is complete", StringComparison.Ordinal));
+        Assert.Contains(done.Notes, n => n.Text.Contains("Nothing was reported", StringComparison.Ordinal));
+        Assert.Contains(done.Notes, n => n.Text.Contains("is complete", StringComparison.Ordinal));
 
         var reopened = await Reopen().HandleAsync(new ReopenJobCommand(job.Id, Version(job.Id)), CancellationToken.None);
         Assert.Equal(JobStatus.Paused, Scheduling.FindJob(job.Id)!.Value.Status);
         Assert.Equal(WorkOrderStatus.InProgress, _f.Stores.WorkOrders.Find(order.Id)!.Value.Status);
-        Assert.Contains($"Work order {order.OrderNumber} is in progress again.", reopened.Notes);
+        Assert.Contains($"Work order {order.OrderNumber} is in progress again.", reopened.Notes.Select(n => n.Text));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public class ExecutionHandlerTests
 
         var done = await Complete().HandleAsync(new CompleteJobCommand(job.Id, Version(job.Id)), CancellationToken.None);
 
-        Assert.Contains("J-PACK on PACK1 can start now.", done.Notes);
+        Assert.Contains("J-PACK on PACK1 can start now.", done.Notes.Select(n => n.Text));
     }
 
     [Fact]

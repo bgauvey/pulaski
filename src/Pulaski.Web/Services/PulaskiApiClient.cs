@@ -1762,6 +1762,12 @@ public sealed class ApiException(
     /// <summary>The values that fill <see cref="Template"/>.</summary>
     public IReadOnlyList<object?> Values { get; init; } = [];
 
+    /// <summary>
+    /// Each field's messages as templates and values (#189), keyed and ordered as <see cref="Errors"/>; a field the API sent none for is missing.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<(string Template, IReadOnlyList<object?> Values)>> FieldMessages { get; init; } =
+        new Dictionary<string, IReadOnlyList<(string Template, IReadOnlyList<object?> Values)>>();
+
     internal static async Task<ApiException> FromResponseAsync(HttpResponseMessage response, CancellationToken ct)
     {
         var status = (int)response.StatusCode;
@@ -1774,6 +1780,10 @@ public sealed class ApiException(
                 {
                     Template = problem.Template,
                     Values = ValuesOf(problem.Values),
+                    FieldMessages = problem.FieldMessages?.ToDictionary(
+                        f => f.Key,
+                        f => (IReadOnlyList<(string, IReadOnlyList<object?>)>)[.. f.Value.Select(m => (m.Template ?? "", (IReadOnlyList<object?>)ValuesOf(m.Values)))])
+                        ?? [],
                 };
             }
         }
@@ -1786,7 +1796,10 @@ public sealed class ApiException(
     }
 
     private sealed record Problem(
-        string? Title, string? Detail, Dictionary<string, string[]>? Errors, string? Template = null, JsonElement[]? Values = null);
+        string? Title, string? Detail, Dictionary<string, string[]>? Errors, string? Template = null, JsonElement[]? Values = null,
+        Dictionary<string, FieldMessage[]>? FieldMessages = null);
+
+    private sealed record FieldMessage(string? Template, JsonElement[]? Values);
 
     /// <summary>A message's values as sent (#128): numbers as numbers, for the reader's region; the rest as text.</summary>
     private static object?[] ValuesOf(JsonElement[]? values) =>

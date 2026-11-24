@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+using Pulaski.Application.Localization;
 using System.Globalization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
@@ -82,7 +84,7 @@ internal sealed class QualityRecorder(
         await quality.InsertResultAsync(row, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         var (spcRules, alertId, isNewAlert) = await new SpcSignals(quality, eventLog, events, ids).CheckAsync(characteristic, row, cancellationToken);
         if (spcRules.Count > 0)
         {
@@ -93,16 +95,16 @@ internal sealed class QualityRecorder(
         if (inForce is { Item: var item } && conforms == false)
         {
             var failure = QualityCheck.Failure(measurement, item);
-            notes.Add($"{characteristic.Code} is out of specification: {failure} (version {inForce.Value.VersionNumber}: {QualityCheck.Limits(item)}).");
+            notes.Add(Notes.Of($"{characteristic.Code} is out of specification: {failure} (version {inForce.Value.VersionNumber}: {QualityCheck.Limits(item)})."));
             if (item.HoldOnFail && lot is not null)
             {
                 held = await HoldAsync(lot, characteristic, failure, cancellationToken);
-                notes.Add(held ? $"{lot.Name} was put on hold." : $"{lot.Name} is {Display(lot)}, so it wasn't put on hold.");
+                notes.Add(held ? Notes.Of($"{lot.Name} was put on hold.") : Notes.Of($"{lot.Name} is {Display(lot)}, so it wasn't put on hold."));
             }
         }
         else if (inForce is null)
         {
-            notes.Add($"{characteristic.Code} has no limits in the material's released specification, so the result wasn't checked.");
+            notes.Add(Notes.Of($"{characteristic.Code} has no limits in the material's released specification, so the result wasn't checked."));
         }
 
         return new QualityResultResponse
@@ -296,17 +298,17 @@ internal sealed class RejectLotHandler(
                     new ProductionCountRow(ids.NewId(), made.EffectiveAt, run.EquipmentId, run.Id, job.Id, CountKind.Defective, defective, jobUom,
                         command.ScrapReasonCodeId, envelope.ActorId, comment ?? "Rejected on quality", timeProvider.GetUtcNow()),
                     cancellationToken);
-                warnings.Add(new("counted_as_scrap",
+                warnings.Add(Notes.Inventory("counted_as_scrap",
                     $"{Qty(defective)} now counts as scrap of {job.JobNumber}'s run {run.RunNo}, so it is taken off its good output and OEE quality."));
             }
             else
             {
-                warnings.Add(new("not_counted", $"{material.BaseUomCode} doesn't convert to the job's unit, so the run's good output wasn't changed."));
+                warnings.Add(Notes.Inventory("not_counted", $"{material.BaseUomCode} doesn't convert to the job's unit, so the run's good output wasn't changed."));
             }
         }
         else
         {
-            warnings.Add(new("not_made_here", $"{lot.Name} wasn't made in a run, so only the stock was written off."));
+            warnings.Add(Notes.Inventory("not_made_here", $"{lot.Name} wasn't made in a run, so only the stock was written off."));
         }
 
         await transaction.CommitAsync(cancellationToken);

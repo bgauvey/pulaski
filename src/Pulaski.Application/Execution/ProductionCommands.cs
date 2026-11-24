@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
@@ -106,12 +107,12 @@ internal static class RunReporting
     {
         if (await execution.GetIdealRateAsync(run.EquipmentId, materialId, run.StartedAt, cancellationToken) is not { } ideal)
         {
-            return (null, new("not_checked", $"{lineCode} had no capability for the material when the run started, so the rate wasn't checked."));
+            return (null, Notes.Inventory("not_checked", $"{lineCode} had no capability for the material when the run started, so the rate wasn't checked."));
         }
 
         if (!converter.CanConvert(ideal.UomId, jobUomId))
         {
-            return (null, new("not_checked", $"The ideal rate is in {converter.Code(ideal.UomId)}, which doesn't convert to {converter.Code(jobUomId)}; the rate wasn't checked."));
+            return (null, Notes.Inventory("not_checked", $"The ideal rate is in {converter.Code(ideal.UomId)}, which doesn't convert to {converter.Code(jobUomId)}; the rate wasn't checked."));
         }
 
         return (converter.Convert(ideal.RatePerHour, ideal.UomId, jobUomId), null);
@@ -427,7 +428,7 @@ internal sealed class ProductionReporter(
         var label = $"{Batching.Qty(quantity)} {material.BaseUomCode} of a {Batching.Qty(batching.Size)} {material.BaseUomCode} batch";
         if (!batching.IsExact)
         {
-            return new("partial_batch", $"Partial batch recorded: {label}, in lot {lot.LotNumber ?? "its balance"}.");
+            return Notes.Inventory("partial_batch", $"Partial batch recorded: {label}, in lot {lot.LotNumber ?? "its balance"}.");
         }
 
         var current = await InventoryRules.LotAsync(inventory, lot.LotId, null, cancellationToken);
@@ -441,7 +442,7 @@ internal sealed class ProductionReporter(
             new LotEventRow(ids.NewId(), held.Id, movement, held.UomId, holdEvent.ActorId, JobId: job.Id, ReasonCodeId: reasonId, RunId: run.Id),
             holdEvent.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(holdEvent, cancellationToken);
-        return new("partial_batch_pending", $"Partial batch on hold for approval: {label}, in lot {held.LotNumber}. {material.Code} is sold in whole batches only.");
+        return Notes.Inventory("partial_batch_pending", $"Partial batch on hold for approval: {label}, in lot {held.LotNumber}. {material.Code} is sold in whole batches only.");
     }
 }
 

@@ -82,11 +82,11 @@ public class LaborHandlerTests
         var checkIn = new CheckInHandler(_f.Stores.UnitOfWork, Labor, Supervisor, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
 
         var first = await checkIn.HandleAsync(new CheckInCommand(_line, [a, b], null), CancellationToken.None);
-        Assert.Equal("Checked 2 people in.", first.Notes[0]);
+        Assert.Equal("Checked 2 people in.", first.Notes[0].Text);
         Assert.All(Labor.Sessions(), s => Assert.Equal(LaborSources.Crew, s.Source));
 
         var again = await checkIn.HandleAsync(new CheckInCommand(_line, [a], null), CancellationToken.None);
-        Assert.Contains("Ann was already on.", again.Notes);
+        Assert.Contains("Ann was already on.", again.Notes.Select(n => n.Text));
 
         var checkOut = new CheckOutHandler(_f.Stores.UnitOfWork, Labor, _f.Stores.Events, _f.Events, _f.Time);
         await checkOut.HandleAsync(new CheckOutCommand(_line, null), CancellationToken.None);

@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Units;
@@ -77,7 +79,7 @@ internal sealed class ImportB2mmlLotsHandler(
                     state.Action = Unchanged;
                     if (row.Quantity is not null)
                     {
-                        state.Notes.Add("Pulaski has this lot; its quantity stays as it is.");
+                        state.Notes.Add(Notes.Of("Pulaski has this lot; its quantity stays as it is."));
                     }
 
                     continue;
@@ -133,7 +135,7 @@ internal sealed class ImportB2mmlLotsHandler(
         // Where lots mix, the receipt joins the location's balance (D-031) and has no lot of its own to record attributes on.
         if (!string.Equals(received.LotNumber, row.LotNumber, StringComparison.OrdinalIgnoreCase))
         {
-            state.Notes.Add($"It joined the balance at {row.LocationCode}, where lots mix; its properties aren't recorded.");
+            state.Notes.Add(Notes.Of($"It joined the balance at {row.LocationCode}, where lots mix; its properties aren't recorded."));
             state.SkipAttributes = true;
         }
     }
@@ -167,7 +169,7 @@ internal sealed class ImportB2mmlLotsHandler(
                 {
                     if (!attributes.TryGetValue(id, out var attribute))
                     {
-                        state.Notes.Add($"Property {id} isn't a lot attribute here; left out.");
+                        state.Notes.Add(Notes.Of($"Property {id} isn't a lot attribute here; left out."));
                         continue;
                     }
 
@@ -222,7 +224,7 @@ internal sealed class ImportB2mmlLotsHandler(
 
         public List<string> Changes { get; } = [];
 
-        public List<string> Notes { get; } = [];
+        public List<MessageDto> Notes { get; } = [];
 
         public void Fail(Exception ex)
         {

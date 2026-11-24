@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Units;
@@ -61,7 +63,7 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IOeeRollupStore r
         }
 
         var shownIds = shown.Select(e => e.Id).ToList();
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         IReadOnlyList<OeeWindowFigures> figures;
         IReadOnlyList<DateOnly> leftOut = [];
         if (!fromRollups)
@@ -85,7 +87,7 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IOeeRollupStore r
             figures = all;
             if (leftOut.Count > 0)
             {
-                notes.Add($"{leftOut.Count} days aren't included because their rollups are being worked out again: {DayRanges(leftOut)}. Try again shortly.");
+                notes.Add(Notes.Of($"{leftOut.Count} days aren't included because their rollups are being worked out again: {DayRanges(leftOut)}. Try again shortly."));
             }
         }
 
@@ -220,11 +222,11 @@ internal sealed class GetOeeReportHandler(IOeeReadStore store, IOeeRollupStore r
         var unitList = products.Count == 0 ? [] : await units.GetUnitsAsync(cancellationToken);
 
         var notes = unrated.Values.Take(MaxNotes)
-            .Select(u => $"{u.Run.JobNumber} on {u.EquipmentCode} had no ideal rate for {materials.GetValueOrDefault(u.Run.MaterialId)?.Code} in its unit when it started, so its output isn't in performance or quality.")
+            .Select(u => Notes.Of($"{u.Run.JobNumber} on {u.EquipmentCode} had no ideal rate for {materials.GetValueOrDefault(u.Run.MaterialId)?.Code} in its unit when it started, so its output isn't in performance or quality."))
             .ToList();
         if (unrated.Count > MaxNotes)
         {
-            notes.Add($"…and {unrated.Count - MaxNotes} more runs without an ideal rate.");
+            notes.Add(Notes.Of($"…and {unrated.Count - MaxNotes} more runs without an ideal rate."));
         }
 
         return new OeeReportDto

@@ -76,7 +76,7 @@ else
 
     @foreach (var problem in _report.Problems)
     {
-        <div class="drawer-alert is-warning"><Icon Name="alert" Size="18" /><span>@problem.Message</span></div>
+        <div class="drawer-alert is-warning"><Icon Name="alert" Size="18" /><span>@L.Of(problem)</span></div>
     }
 
     @if (shown.Count == 0)
@@ -260,7 +260,7 @@ else
         try
         {
             var result = await Api.RefreshSiteAllocationsAsync(Sites.SiteId!.Value);
-            _allocationNotes = [AllocationView.Summary(L, result), .. result.Notes];
+            _allocationNotes = [AllocationView.Summary(L, result), .. L.Notes(result.Notes)];
             await LoadAsync();
         }
         catch (ApiException ex)

@@ -160,7 +160,7 @@ else
                     }
                     @foreach (var warning in r.Warnings)
                     {
-                        <p class="small text-warning-strong mb-1">@warning</p>
+                        <p class="small text-warning-strong mb-1">@L.Of(warning)</p>
                     }
 
                     @if (r.Points.Count > 0)

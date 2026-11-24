@@ -1,3 +1,4 @@
+using Pulaski.Contracts.Common;
 namespace Pulaski.Contracts.Inventory;
 
 /// <summary>Stock of a lot set aside for a job (D-064).</summary>
@@ -131,7 +132,7 @@ public sealed record AllocationChangeResponse
     public int Released { get; init; }
     public int Trimmed { get; init; }
     public int Jobs { get; init; }
-    public IReadOnlyList<string> Notes { get; init; } = [];
+    public IReadOnlyList<MessageDto> Notes { get; init; } = [];
 }
 
 /// <summary>How a site allocates (#82): keep allocations current, refuse consuming another job's allocation, and the lot preferences in order.</summary>

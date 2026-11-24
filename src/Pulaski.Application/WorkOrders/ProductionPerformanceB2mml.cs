@@ -61,10 +61,7 @@ internal sealed class GetJobProductionPerformanceHandler(
         var job = await execution.GetJobAsync(query.JobId, now, cancellationToken) ?? throw new NotFoundException($"Job {query.JobId} not found.");
         if (job.JobType != "production")
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                ["jobId"] = [$"Job {job.JobNumber} is a {job.JobType} job; only production jobs have production performance."],
-            });
+            throw ValidationException.Field("jobId", $"Job {job.JobNumber} is a {job.JobType} job; only production jobs have production performance.");
         }
 
         var facts = await store.GetJobFactsAsync(query.JobId, cancellationToken) ?? throw new NotFoundException($"Job {query.JobId} not found.");

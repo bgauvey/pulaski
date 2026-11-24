@@ -242,7 +242,7 @@ internal sealed class RevokeQualificationGrantHandler(
 {
     public async Task<VersionResponse> HandleAsync(RevokeQualificationGrantCommand command, CancellationToken cancellationToken)
     {
-        var reason = LaborWriter.Clean(command.Reason) ?? throw new ValidationException(new Dictionary<string, string[]> { ["Reason"] = ["Say why it is revoked."] });
+        var reason = LaborWriter.Clean(command.Reason) ?? throw ValidationException.Field("Reason", "Say why it is revoked.");
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var current = await QualificationWriter.AtVersionAsync(qualifications.GetGrantForUpdateAsync(command.GrantId, cancellationToken), command.ExpectedVersion, "Grant");
         if (current.Value.RevokedAt is not null)

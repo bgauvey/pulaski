@@ -83,10 +83,7 @@ internal static class LaborEndpoints
             var text = http.ContentLength > MaxImportBytes ? null : await reader.ReadToEndAsync(ct);
             if (text is null || text.Length > MaxImportBytes)
             {
-                throw new ValidationException(new Dictionary<string, string[]>
-                {
-                    ["file"] = [$"The file is larger than {MaxImportBytes / 1024 / 1024} MB; split it."],
-                });
+                throw ValidationException.Field("file", $"The file is larger than {MaxImportBytes / 1024 / 1024} MB; split it.");
             }
 
             return TypedResults.Ok(await handler.HandleAsync(

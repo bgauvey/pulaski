@@ -57,7 +57,7 @@ public sealed class LaborTests(DatabaseFixture db)
         // Yesterday's shift: checked in at 01:00, one out at 05:00; the line shows today's shift and crew.
         var yesterday = new DateTimeOffset(today.AddDays(-1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
         var checkIn = await db.SendAsync(new CheckInCommand(line.Id, [ann.Id, bob.Id], yesterday.AddHours(1)));
-        Assert.Equal("Checked 2 people in.", checkIn.Notes[0]);
+        Assert.Equal("Checked 2 people in.", checkIn.Notes[0].Text);
         var lines = await QueryAsync<ListLineLaborQuery, IReadOnlyList<LineLaborDto>>(new ListLineLaborQuery(site.Id));
         var onLine = Assert.Single(lines);
         Assert.Equal(("D", "RED", "Red crew", 2), (onLine.Shift!.ShiftCode, onLine.Shift.CrewCode, onLine.Shift.CrewName, onLine.Sessions.Count));
@@ -114,7 +114,7 @@ public sealed class LaborTests(DatabaseFixture db)
 
         var started = TestTime.Now.AddHours(-3);
         var checkIn = await db.SendAsync(new CheckInCommand(line.Id, [ann.Id, bob.Id], started));
-        Assert.Contains(checkIn.Notes, n => n == $"Bob isn't qualified for QL-{_s}: FORK Forklift (not held).");
+        Assert.Contains(checkIn.Notes, n => n.Text == $"Bob isn't qualified for QL-{_s}: FORK Forklift (not held).");
 
         // A 30-minute unpaid break an hour in; then an open paid one.
         await db.SendAsync(new StartBreakCommand(ann.Id, false, started.AddHours(1), started.AddHours(1.5), "Lunch"));

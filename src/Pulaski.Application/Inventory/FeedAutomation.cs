@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Units;
 using Pulaski.Contracts.Inventory;
@@ -250,7 +251,7 @@ internal sealed class FeedAutomation(
             var envelope = events.Create(EventTypes.FeedShortfallRecorded, "feed_shortfall", shortfall.Id, shortfall);
             await feeds.InsertShortfallAsync(shortfall, envelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
-            warnings.Add(new("feed_shortfall", $"{InventoryRules.Qty(shortfall.Quantity)} wasn't consumed automatically: {shortfall.Reason} It is listed under Inventory → Feed points."));
+            warnings.Add(Notes.Inventory("feed_shortfall", $"{InventoryRules.Qty(shortfall.Quantity)} wasn't consumed automatically: {shortfall.Reason} It is listed under Inventory → Feed points."));
         }
 
         return warnings;

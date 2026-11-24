@@ -112,7 +112,7 @@ public class OeeReportHandlerTests
         Oee.AddRun(new(Guid.CreateVersion7(), _capper, At(7), At(8), _material, "M-1", "Widget", _kg, null, null, "J-2"));
         report = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, _capper), CancellationToken.None);
         Assert.Equal((decimal?)null, report.Equipment[0].Figures.PerformancePct);
-        Assert.Contains("J-2", Assert.Single(report.Notes), StringComparison.Ordinal);
+        Assert.Contains("J-2", Assert.Single(report.Notes).Text, StringComparison.Ordinal);
 
         await Assert.ThrowsAsync<NotFoundException>(() => Handler().HandleAsync(new GetOeeReportQuery(_site, Day, Day, Guid.CreateVersion7()), CancellationToken.None));
     }
@@ -200,7 +200,7 @@ public class OeeReportHandlerTests
         // 40 days and none current: the newest 31 are worked out now, the 9 before are left out and named.
         var report = await Handler().HandleAsync(new GetOeeReportQuery(_site, Day.AddDays(-37), Day.AddDays(2), null), CancellationToken.None);
         Assert.Equal([.. Enumerable.Range(0, 9).Select(d => Day.AddDays(-37 + d))], report.LeftOutDays);
-        Assert.Contains(report.Notes, n => n.StartsWith("9 days aren't included", StringComparison.Ordinal));
+        Assert.Contains(report.Notes, n => n.Text.StartsWith("9 days aren't included", StringComparison.Ordinal));
         Assert.Equal(6.5m, report.Shifts.Single(s => s.ProductionDate == Day && s.EquipmentId == _line).Figures.RunHours);
     }
 

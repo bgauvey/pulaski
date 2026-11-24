@@ -88,7 +88,7 @@
                     <td>
                         @foreach (var warning in s.Warnings)
                         {
-                            <span class="chip @(warning.Code == "late" ? "chip-warning" : "chip-muted")" title="@warning.Message">@L.Label(warning.Code)</span>
+                            <span class="chip @(warning.Code == "late" ? "chip-warning" : "chip-muted")" title="@L.Of(warning)">@L.Label(warning.Code)</span>
                         }
                         @if (overlap)
                         {

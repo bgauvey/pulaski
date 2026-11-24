@@ -896,7 +896,7 @@ public sealed class InventoryTests(DatabaseFixture db)
             new Application.Quality.GetLimitBaselineQuery(wall.Id, plant.Profile, null, start.AddMinutes(-1), end, []));
         Assert.Equal((24, "xbar_r"), (review.Subgroups, review.ChartType));
         Assert.True(review.Points.Single(p => p.SampleId == samples[10]).IsBeyondLimits);
-        Assert.Contains(review.Warnings, w => w.StartsWith("24 subgroups", StringComparison.Ordinal));
+        Assert.Contains(review.Warnings, w => w.Text.StartsWith("24 subgroups", StringComparison.Ordinal));
 
         // Leaving the unusual one out tightens the limits: 3.08 ± 0.577 × 0.2.
         var reviewed = await QueryAsync<Application.Quality.GetLimitBaselineQuery, Contracts.Quality.LimitBaselineDto>(
@@ -1057,12 +1057,12 @@ public sealed class InventoryTests(DatabaseFixture db)
         // Beyond the limits: an alert is raised and the recorder is told.
         var high = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [20m], null, null, "manual", null));
         Assert.Contains(1, high.SpcRules);
-        Assert.Contains(high.Notes, n => n.Contains("an SPC alert was raised", StringComparison.Ordinal));
+        Assert.Contains(high.Notes, n => n.Text.Contains("an SPC alert was raised", StringComparison.Ordinal));
 
         // Another break goes to the same open alert.
         var again = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [19m], null, null, "manual", null));
         Assert.Equal(high.SpcAlertId, again.SpcAlertId);
-        Assert.Contains(again.Notes, n => n.Contains("added to its open SPC alert", StringComparison.Ordinal));
+        Assert.Contains(again.Notes, n => n.Text.Contains("added to its open SPC alert", StringComparison.Ordinal));
 
         var alerts = await QueryAsync<Application.Quality.ListSpcAlertsQuery, IReadOnlyList<Contracts.Quality.SpcAlertDto>>(new Application.Quality.ListSpcAlertsQuery(plant.Site));
         var alert = Assert.Single(alerts);
@@ -1595,7 +1595,7 @@ public sealed class InventoryTests(DatabaseFixture db)
 
         var added = await db.SendAsync(new AllocateRecommendedCommand(plant.Job));
         Assert.Equal(2, added.Allocated);
-        Assert.Contains(added.Notes, n => n.Contains("still 150 kg", StringComparison.Ordinal));
+        Assert.Contains(added.Notes, n => n.Text.Contains("still 150 kg", StringComparison.Ordinal));
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new AllocateLotCommand(plant.Job, held.LotId, 10m, plant.Kg)));
         Assert.Equal(1000m, Assert.Single((await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(old.LotId))).Allocations).Quantity);
 
@@ -1737,7 +1737,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var failed = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
             plant.Site, wall.Id, lotId, plant.Job, null, [3.31m, 3.45m], null, null, "manual", "Caliper"));
         Assert.Equal((false, true), (failed.Conforms, failed.LotHeld));
-        Assert.Contains(failed.Notes, n => n.Contains("the value is", StringComparison.Ordinal) || n.Contains("above 3.4", StringComparison.Ordinal));
+        Assert.Contains(failed.Notes, n => n.Text.Contains("the value is", StringComparison.Ordinal) || n.Text.Contains("above 3.4", StringComparison.Ordinal));
         Assert.Equal(LotStatus.OnHold, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lotId))).Lot.Status);
         var passed = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, surface.Id, lotId, null, null, null, 50, 1, "lab", null));
         Assert.True(passed.Conforms);
@@ -1883,8 +1883,8 @@ public sealed class InventoryTests(DatabaseFixture db)
         // The known lot keeps its quantity and gets its attribute; a property that isn't an attribute is reported as left out.
         var a = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(known.LotId))).Lot;
         Assert.Equal(100m, a.Quantity);
-        Assert.Contains(applied.Rows[0].Notes, n => n.Contains("quantity stays", StringComparison.Ordinal));
-        Assert.Contains(applied.Rows[0].Notes, n => n.Contains("Colour", StringComparison.Ordinal));
+        Assert.Contains(applied.Rows[0].Notes, n => n.Text.Contains("quantity stays", StringComparison.Ordinal));
+        Assert.Contains(applied.Rows[0].Notes, n => n.Text.Contains("Colour", StringComparison.Ordinal));
 
         // The new lot is received with its supplier lot and expiry, and its attribute too.
         var values = await QueryAsync<ListLotAttributeValuesQuery, IReadOnlyList<LotAttributeExportDto>>(new ListLotAttributeValuesQuery(plant.Site));

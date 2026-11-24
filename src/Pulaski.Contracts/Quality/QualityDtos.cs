@@ -1,3 +1,4 @@
+using Pulaski.Contracts.Common;
 namespace Pulaski.Contracts.Quality;
 
 /// <summary>Something measured or inspected (#65): <c>variable</c> takes values, <c>attribute</c> inspected and defective counts.</summary>
@@ -110,7 +111,7 @@ public sealed record LimitBaselineDto
     public double? DispersionUcl { get; init; }
     public double? DispersionLcl { get; init; }
     public string? NotEnough { get; init; }
-    public IReadOnlyList<string> Warnings { get; init; } = [];
+    public IReadOnlyList<MessageDto> Warnings { get; init; } = [];
 
     /// <summary>Every result in the window, in time order, with its plotted value and whether it was used.</summary>
     public IReadOnlyList<BaselinePointDto> Points { get; init; } = [];
@@ -348,7 +349,13 @@ public sealed record SpecItemDto
     public int SortOrder { get; init; }
 }
 
-public sealed record SpecProblemDto(string Code, string Message, Guid? ItemId);
+public sealed record SpecProblemDto(string Code, string Message, Guid? ItemId)
+{
+    /// <summary><see cref="Message"/>'s English template and values (#189), for the reader's language; null template: show the message.</summary>
+    public string? Template { get; init; }
+
+    public IReadOnlyList<object?> Values { get; init; } = [];
+}
 
 public sealed record CreateSpecRequest
 {
@@ -422,7 +429,7 @@ public sealed record QualityResultResponse
     public bool? Conforms { get; init; }
     public string? Limits { get; init; }
     public bool LotHeld { get; init; }
-    public IReadOnlyList<string> Notes { get; init; } = [];
+    public IReadOnlyList<MessageDto> Notes { get; init; } = [];
 
     /// <summary>The run rules this result broke on its control chart (D-099); empty when none, or the chart has no limits.</summary>
     public IReadOnlyList<int> SpcRules { get; init; } = [];

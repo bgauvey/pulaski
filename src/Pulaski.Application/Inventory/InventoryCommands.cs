@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Errors;
@@ -373,10 +374,7 @@ internal sealed class MoveLotHandler(
         // A balance sends a quantity to the destination's balance, made on its first transfer in: mixed stock stays mixed.
         if (command.Quantity is not { } entered)
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                [nameof(command.Quantity)] = ["Required: a balance moves by quantity."],
-            });
+            throw ValidationException.Field(nameof(command.Quantity), "Required: a balance moves by quantity.");
         }
 
         var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
@@ -521,12 +519,12 @@ internal sealed class ConsumeLotHandler(
         {
             // An approved alternate on the job's BOM (#82) is a substitution the BOM allows.
             warnings.Add(await inventory.AlternateForAsync(job.Id, material.Id, cancellationToken) is { } component
-                ? new("approved_alternate", $"{material.Code} was used in place of {component}, as {job.JobNumber}'s BOM allows.")
-                : new("not_planned", $"{job.JobNumber} has no planned component of {material.Code}; it was recorded as a substitution."));
+                ? Notes.Inventory("approved_alternate", $"{material.Code} was used in place of {component}, as {job.JobNumber}'s BOM allows.")
+                : Notes.Inventory("not_planned", $"{job.JobNumber} has no planned component of {material.Code}; it was recorded as a substitution."));
         }
         else if (await OverPlannedAsync(job, material, quantity, cancellationToken) is { } over)
         {
-            warnings.Add(new("over_planned", over));
+            warnings.Add(Notes.Inventory("over_planned", over));
         }
 
         var edges = InventoryRules.Edges(ids, [lot.Id], await inventory.ListLotsProducedByJobAsync(job.Id, cancellationToken), job.Id);
@@ -687,10 +685,7 @@ internal static class ProductionOutput
         {
             if (lotNumber is not null && !material.IsLotTracked)
             {
-                throw new ValidationException(new Dictionary<string, string[]>
-                {
-                    ["LotNumber"] = [$"Leave blank: {material.Code} isn't lot-tracked, so it is kept as one balance per location."],
-                });
+                throw ValidationException.Field("LotNumber", $"Leave blank: {material.Code} isn't lot-tracked, so it is kept as one balance per location.");
             }
 
             var (balance, isNew) = await Commingling.BalanceAsync(

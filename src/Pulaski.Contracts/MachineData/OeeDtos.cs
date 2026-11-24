@@ -1,3 +1,4 @@
+using Pulaski.Contracts.Common;
 namespace Pulaski.Contracts.MachineData;
 
 // ---- Utilization and OEE reports (D-052) ----
@@ -33,7 +34,7 @@ public sealed record OeeReportDto
     public IReadOnlyList<UtilizationRowDto> Utilization { get; init; } = [];
 
     /// <summary>What the figures leave out, in words: runs without an ideal rate, for example.</summary>
-    public IReadOnlyList<string> Notes { get; init; } = [];
+    public IReadOnlyList<MessageDto> Notes { get; init; } = [];
 }
 
 /// <summary>The time and OEE of some working time. Percentages are null when there is nothing to measure them against.</summary>

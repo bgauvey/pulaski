@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
@@ -103,7 +105,7 @@ internal sealed class ExecutionWrites(
     }
 
     /// <summary>The work order's status follows its jobs once execution starts (D-035).</summary>
-    public async Task<string?> RollUpAsync(WorkOrder? workOrder, string to, string why, CancellationToken cancellationToken)
+    public async Task<MessageDto?> RollUpAsync(WorkOrder? workOrder, string to, string why, CancellationToken cancellationToken)
     {
         if (workOrder is null || workOrder.Status == to || !WorkOrderStatus.CanTransition(workOrder.Status, to))
         {
@@ -117,28 +119,28 @@ internal sealed class ExecutionWrites(
         await eventLog.AppendAsync(envelope, cancellationToken);
         return to switch
         {
-            WorkOrderStatus.InProgress when workOrder.Status == WorkOrderStatus.Completed => $"Work order {workOrder.OrderNumber} is in progress again.",
-            WorkOrderStatus.InProgress => $"Work order {workOrder.OrderNumber} is now in progress.",
-            WorkOrderStatus.Completed => $"Work order {workOrder.OrderNumber} is complete: all its jobs are done.",
+            WorkOrderStatus.InProgress when workOrder.Status == WorkOrderStatus.Completed => Notes.Of($"Work order {workOrder.OrderNumber} is in progress again."),
+            WorkOrderStatus.InProgress => Notes.Of($"Work order {workOrder.OrderNumber} is now in progress."),
+            WorkOrderStatus.Completed => Notes.Of($"Work order {workOrder.OrderNumber} is complete: all its jobs are done."),
             _ => null,
         };
     }
 
     /// <summary>Reports the partial batch of a run that is being ended (D-036); returns the notes for the operator.</summary>
     /// <returns>Its notes, and the lot it made, whose label prints once the stop commits (#122).</returns>
-    public static async Task<(IReadOnlyList<string> Notes, IReadOnlyList<Guid> ClosedLotIds)> ReportPartialAsync(
+    public static async Task<(IReadOnlyList<MessageDto> Notes, IReadOnlyList<Guid> ClosedLotIds)> ReportPartialAsync(
         ProductionReporter reporter, Job job, JobRun run, PartialBatchInput partial, string? comment, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var result = await reporter.ReportAsync(
             new ReportProductionCommand(job.Id, run.Id, 0m, 0m, null, null, partial.LocationId, partial.LotNumber, Comment: comment) { PartialQty = partial.Quantity },
             onStop: true, now, cancellationToken);
-        return ([.. result.Warnings.Select(w => w.Message)], result.ClosedLotIds);
+        return ([.. result.Warnings.Select(Notes.Of)], result.ClosedLotIds);
     }
 
     /// <summary>Notes on the jobs that wait for this one: which can start now, and which in how long.</summary>
-    public async Task<IReadOnlyList<string>> DownstreamNotesAsync(Guid jobId, DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<MessageDto>> DownstreamNotesAsync(Guid jobId, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         foreach (var downstream in await execution.GetDownstreamJobsAsync(jobId, cancellationToken))
         {
             if (!JobStatus.Open.Contains(downstream.Status) || JobStatus.Started.Contains(downstream.Status))
@@ -150,11 +152,11 @@ internal sealed class ExecutionWrites(
             var readiness = JobReadiness.For(links, upstream, now);
             if (readiness.IsReady)
             {
-                notes.Add($"{downstream.JobNumber} on {downstream.LineCode} can start now.");
+                notes.Add(Notes.Of($"{downstream.JobNumber} on {downstream.LineCode} can start now."));
             }
             else if (readiness.ReadyAt is { } at)
             {
-                notes.Add($"{downstream.JobNumber} on {downstream.LineCode} can start in {RateCap.Duration(at - now)}.");
+                notes.Add(Notes.Of($"{downstream.JobNumber} on {downstream.LineCode} can start in {RateCap.Duration(at - now)}."));
             }
         }
 
@@ -183,7 +185,7 @@ internal sealed class StartJobHandler(
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var locked = await writes.LockAsync(command.JobId, command.ExpectedVersion, command.LineId, withOrder: true, cancellationToken);
         var job = locked.Job.Value;
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
 
         // A job waiting on a department starts on the line the floor picks (D-022).
         if (job.IsOnGroup)
@@ -231,8 +233,8 @@ internal sealed class StartJobHandler(
                 && last.MaterialId != job.MaterialId)
             {
                 var changeover = await StartChangeoverAsync(job, line, now, cancellationToken);
-                notes.Add($"The material changes from {last.MaterialCode} on {line.Code}, so changeover {changeover.Job.JobNumber} started first. " +
-                    $"Complete it when the line is ready, then start {job.JobNumber}; if no changeover is needed, complete it straight away.");
+                notes.Add(Notes.Of($"The material changes from {last.MaterialCode} on {line.Code}, so changeover {changeover.Job.JobNumber} started first. " +
+                    $"Complete it when the line is ready, then start {job.JobNumber}; if no changeover is needed, complete it straight away."));
                 await transaction.CommitAsync(cancellationToken);
                 return new ExecutionResponse(changeover.Job.Id, changeover.Version, changeover.RunId, notes);
             }
@@ -265,10 +267,7 @@ internal sealed class StartJobHandler(
     {
         if (lineId is not { } target)
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                ["LineId"] = [$"Job {job.JobNumber} is waiting on its department; choose the line it runs on."],
-            });
+            throw ValidationException.Field("LineId", $"Job {job.JobNumber} is waiting on its department; choose the line it runs on.");
         }
 
         var line = lines.FirstOrDefault(l => l.Id == target) ?? throw new DomainRuleException($"Line {target} not found.");
@@ -375,7 +374,7 @@ internal sealed class PauseJobHandler(
 
         var run = await execution.GetOpenRunForUpdateAsync(job.Id, cancellationToken)
             ?? throw new DomainRuleException($"Job {job.JobNumber} has no open run.");
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         IReadOnlyList<Guid> closed = [];
         if (command.PartialBatch is { } partial)
         {
@@ -393,10 +392,10 @@ internal sealed class PauseJobHandler(
         var version = await writes.SaveJobAsync(job, paused, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        notes.Insert(0, $"Run {run.RunNo} of {job.JobNumber} ended after {RateCap.Duration(ended.Elapsed(now))}. Start the job again to resume it.");
+        notes.Insert(0, Notes.Of($"Run {run.RunNo} of {job.JobNumber} ended after {RateCap.Duration(ended.Elapsed(now))}. Start the job again to resume it."));
         if (labels is not null && closed.Count > 0)
         {
-            notes.AddRange((await labels.PrintClosedLotsAsync(job.EquipmentId, closed, cancellationToken)).Select(n => n.Message));
+            notes.AddRange((await labels.PrintClosedLotsAsync(job.EquipmentId, closed, cancellationToken)).Select(Notes.Of));
         }
 
         return new ExecutionResponse(job.Id, version, run.Id, notes);
@@ -439,7 +438,7 @@ internal sealed class CompleteJobHandler(
             await InventoryRules.ReasonAsync(inventory, reasonId, ReasonKinds.RunEnd, job.SiteId, comment, cancellationToken);
         }
 
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         var closed = new List<Guid>();
         var run = await execution.GetOpenRunForUpdateAsync(job.Id, cancellationToken);
         if (command.PartialBatch is { } partial)
@@ -476,7 +475,7 @@ internal sealed class CompleteJobHandler(
 
         if (job.JobType == JobType.Production && made == 0)
         {
-            notes.Add($"Nothing was reported for {job.JobNumber}; you can still report into its runs until its work order is closed.");
+            notes.Add(Notes.Of($"Nothing was reported for {job.JobNumber}; you can still report into its runs until its work order is closed."));
         }
 
         if (locked.WorkOrder is { } order && !await workOrders.HasOpenJobsAsync(order.Id, cancellationToken))
@@ -488,7 +487,7 @@ internal sealed class CompleteJobHandler(
         await transaction.CommitAsync(cancellationToken);
         if (labels is not null && closed.Count > 0)
         {
-            notes.AddRange((await labels.PrintClosedLotsAsync(job.EquipmentId, closed, cancellationToken)).Select(n => n.Message));
+            notes.AddRange((await labels.PrintClosedLotsAsync(job.EquipmentId, closed, cancellationToken)).Select(Notes.Of));
         }
 
         return new ExecutionResponse(job.Id, version, run?.Id, notes);
@@ -519,7 +518,7 @@ internal sealed class ReopenJobHandler(
         var envelope = events.Create(EventTypes.JobReopened, "job", job.Id, new { Before = new { job.Status }, After = new { reopened.Status } });
         var version = await writes.SaveJobAsync(job, reopened, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        var notes = new List<string> { $"{job.JobNumber} is paused; start it to run it again." };
+        var notes = new List<MessageDto> { Notes.Of($"{job.JobNumber} is paused; start it to run it again.") };
         notes.AddIfSet(await writes.RollUpAsync(locked.WorkOrder, WorkOrderStatus.InProgress, "A job was reopened.", cancellationToken));
         await transaction.CommitAsync(cancellationToken);
         return new ExecutionResponse(job.Id, version, null, notes);

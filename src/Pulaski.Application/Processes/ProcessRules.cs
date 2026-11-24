@@ -63,5 +63,6 @@ internal static class ProcessRules
         return problems;
     }
 
-    public static ProcessProblemDto ToDto(ProcessProblem problem) => new(problem.Code, problem.Message, problem.OperationId, problem.DependencyId);
+    public static ProcessProblemDto ToDto(ProcessProblem problem) =>
+        new(problem.Code, problem.Message, problem.OperationId, problem.DependencyId) { Template = problem.Text.Template, Values = problem.Text.Values };
 }

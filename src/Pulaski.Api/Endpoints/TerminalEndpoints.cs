@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
@@ -178,7 +179,7 @@ internal static class TerminalEndpoints
             var result = await report.HandleAsync(command, ct);
             return TypedResults.Ok(new StationActionResponse
             {
-                Notes = [StationReporting.Done(good, scrap, request.FromMachine ? form.Machine?.UomCode : form.Job.UomCode, result), .. result.Warnings.Select(w => w.Message)],
+                Notes = [StationReporting.Done(good, scrap, request.FromMachine ? form.Machine?.UomCode : form.Job.UomCode, result), .. result.Warnings.Select(Notes.Of)],
                 Ticket = ticket,
                 TicketExpiresAt = expires,
                 Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
@@ -200,7 +201,7 @@ internal static class TerminalEndpoints
             var reason = before.CodingReasons.GetValueOrDefault(stop.EquipmentId)?.FirstOrDefault(r => r.Id == request.ReasonCodeId)?.Name;
             return TypedResults.Ok(new StationActionResponse
             {
-                Notes = [$"{stop.EquipmentCode}'s stop is coded{(reason is null ? "" : $" as {reason}")}."],
+                Notes = [reason is null ? Notes.Of($"{stop.EquipmentCode}'s stop is coded.") : Notes.Of($"{stop.EquipmentCode}'s stop is coded as {reason}.")],
                 Ticket = ticket,
                 TicketExpiresAt = expires,
                 Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
@@ -232,7 +233,7 @@ internal static class TerminalEndpoints
         {
             var (terminal, personId, call, ticket, expires) = await StationCallAsync(http, station, request, "answer calls for help", ct);
             await acknowledge.HandleAsync(new AcknowledgeAndonCallCommand(call.Id), ct);
-            return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, $"You're on the {call.TypeName} call.", ct);
+            return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, Notes.Of($"You're on the {call.TypeName} call."), ct);
         });
 
         terminal.MapPost("/station/andon/resolve", async Task<Ok<StationActionResponse>> (
@@ -241,7 +242,7 @@ internal static class TerminalEndpoints
         {
             var (terminal, personId, call, ticket, expires) = await StationCallAsync(http, station, request, "answer calls for help", ct);
             await resolve.HandleAsync(new ResolveAndonCallCommand(call.Id, Text(request.Text)), ct);
-            return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, $"The {call.TypeName} call is resolved.", ct);
+            return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, Notes.Of($"The {call.TypeName} call is resolved."), ct);
         });
 
         terminal.MapPost("/identify", async Task<Ok<BadgeIdentityResponse>> (
@@ -330,7 +331,7 @@ internal static class TerminalEndpoints
     }
 
     private static async Task<Ok<StationActionResponse>> StationAndonAsync(
-        StationServices services, TerminalRecord terminal, Guid personId, string? line, string ticket, DateTimeOffset expires, string note, CancellationToken ct) =>
+        StationServices services, TerminalRecord terminal, Guid personId, string? line, string ticket, DateTimeOffset expires, MessageDto note, CancellationToken ct) =>
         TypedResults.Ok(new StationActionResponse
         {
             Notes = [note],

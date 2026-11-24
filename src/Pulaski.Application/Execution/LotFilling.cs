@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using System.Globalization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
@@ -66,16 +67,16 @@ internal static class LotFilling
         Guid? cut = null;
         if (open is not null && LotCutting.WhyCut(rule, open, at, lotShift, shiftNow) is { } why)
         {
-            notes.Add(new("lot_cut", $"A new lot was started: {why}."));
+            notes.Add(Notes.Inventory("lot_cut", $"A new lot was started: {why}."));
             cut = open.LotId;
         }
         else if (open is not null && started > 0)
         {
-            notes.Add(new("lot_cut", $"Lot {open.LotNumber} is full ({Qty(rule.Size!.Value)} {material.BaseUomCode}); the rest went into {Lots(started)}."));
+            notes.Add(Notes.Inventory("lot_cut", $"Lot {open.LotNumber} is full ({Qty(rule.Size!.Value)} {material.BaseUomCode}); the rest went into {Lots(started)}."));
         }
         else if (open is null && started > 1)
         {
-            notes.Add(new("lot_cut", $"It filled {Lots(started)} of {Qty(rule.Size!.Value)} {material.BaseUomCode}."));
+            notes.Add(Notes.Inventory("lot_cut", $"It filled {Lots(started)} of {Qty(rule.Size!.Value)} {material.BaseUomCode}."));
         }
 
         return new FillPlan(parts, notes, cut, rule.Size);
@@ -130,6 +131,6 @@ internal sealed class StartNewLotHandler(
 
         // Their labels (#122), once they are closed.
         var printed = await labels.PrintClosedLotsAsync(job.EquipmentId, [.. closed.Select(l => l.LotId)], cancellationToken);
-        return new StartNewLotResponse(job.Id, numbers) { Notes = [.. printed.Select(n => n.Message)] };
+        return new StartNewLotResponse(job.Id, numbers) { Notes = [.. printed.Select(Notes.Of)] };
     }
 }

@@ -202,14 +202,14 @@ public static class HandoverShifts
 internal static class HandoverText
 {
     public static string Required(string? text) =>
-        Optional(text) ?? throw new ValidationException(new Dictionary<string, string[]> { ["Body"] = ["Write what the next shift should know."] });
+        Optional(text) ?? throw ValidationException.Field("Body", "Write what the next shift should know.");
 
     public static string? Optional(string? text)
     {
         var trimmed = text?.Trim();
         if (trimmed is { Length: > HandoverKinds.MaxText })
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Body"] = [$"At most {HandoverKinds.MaxText} characters."] });
+            throw ValidationException.Field("Body", $"At most {HandoverKinds.MaxText} characters.");
         }
 
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;

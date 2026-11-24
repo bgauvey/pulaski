@@ -3077,6 +3077,19 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   (`TermExtractor.Messages`: one literal argument, or literals joined with `+`); a message chosen by a conditional, or built elsewhere, falls back
   to the English as sent. Helpers that word sentences take the `Text` (`l[…]`; `Text.English` in tests); each combination is its own term rather
   than joined lists.
+- **Field checks (#189):** `Validator.Require` and `ValidationException.Field(field, …)` take a `MessageBuilder` as well as a string, so each field
+  message keeps its template and values (`ValidationException.Messages`). The problem document adds `fieldMessages` (field → `template`/`values`,
+  in the order of `errors`); the web reads them into `ApiException.FieldMessages` and shows `L.FieldErrors(error)` (`ProblemAlert`, the station,
+  the password pages), falling back to the English for a message without one. The catalog takes the third argument of `.Require(…)` and the
+  second of `ValidationException.Field(…)`.
+- **Notes, warnings and check problems (#189):** a note returned after an action is a `MessageDto` (Contracts: English `Text`, `Template`,
+  `Values`); the responses' `Notes` and string `Warnings` lists are lists of it. `InventoryWarningDto`, `ScheduleWarningDto` and the draft checks'
+  problems (`SpecProblemDto`, `ProcessProblemDto`, `BomProblemDto`, `ProcessOrderProblemDto`) keep `Code` and `Message` and add `Template`/`Values`.
+  The server builds them with `Notes.Of($"…")`, `Notes.Inventory`/`Schedule`/`OrderProblem(code, $"…")`; the Domain's records
+  (`ScheduleWarning`, `SpecProblem`, `ProcessProblem`, `BomProblem`) take a `MessageBuilder` as well as a string (their `Text` is a
+  `UserMessage`), so `new("code", $"…", id)` keeps its template; Domain code that words a message returns `UserMessage.From($"…")`. The web
+  shows `L.Of(note)` / `L.Notes(notes)`. A note worded from parts is one template per case (the station's report note, plurals). Screens compare
+  codes, never messages.
 - **Labels and helpers (#178):** status and kind codes read as words through `L.Label(code)` (`Display.Label` translated); the words of every
   code in the schema's CHECK lists are terms in `LabelTerms` (a test keeps it in step with `db/schema-draft.sql`). A helper's plain label is a
   `Term.Mark` the page shows with `L[…]` (`L.Of` when it may be null); a helper that words a sentence takes the `Text`. Values a page compares
@@ -3089,7 +3102,9 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   of labels (`EdgeView.Roles`, connection settings, calendar exception kinds, ERP batch rules) are `Term.Mark`s shown with `L[…]`. Code
   literals in help (`<code>` column names, addresses, SQL and URL placeholders) stay untranslated (#181).
 - **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens, terminals and server messages; #175 office screens,
-  split by area: #178 Overview, Inbox, Machines, Quality, Labor; #179 inventory and lots; #180 planning; #181 configuration, My alerts and the password reset pages. With #181 every screen is translated.
+  split by area: #178 Overview, Inbox, Machines, Quality, Labor; #179 inventory and lots; #180 planning; #181 configuration, My alerts and the password reset pages. With #181 every screen is translated. Then the server's own text: #189 field
+  checks (then notes, warnings and draft-check problems), #188 refusals worded in parts, words inside messages, other server text and the
+  reconnect banner.
 
 ## Application architecture
 

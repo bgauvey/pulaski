@@ -1,3 +1,5 @@
+using Pulaski.Application.Localization;
+using Pulaski.Contracts.Common;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
@@ -73,9 +75,9 @@ internal sealed class SpcSignals(IQualityRepository quality, IEventLog eventLog,
     }
 
     /// <summary>What the person recording sees.</summary>
-    public static string Note(Characteristic characteristic, IReadOnlyList<int> rules, bool isNew) =>
-        $"{characteristic.Code}'s control chart signalled (rule {string.Join(", ", rules)}): "
-        + (isNew ? "an SPC alert was raised." : "added to its open SPC alert.");
+    public static MessageDto Note(Characteristic characteristic, IReadOnlyList<int> rules, bool isNew) => isNew
+        ? Notes.Of($"{characteristic.Code}'s control chart signalled (rule {string.Join(", ", rules)}): an SPC alert was raised.")
+        : Notes.Of($"{characteristic.Code}'s control chart signalled (rule {string.Join(", ", rules)}): added to its open SPC alert.");
 }
 
 internal sealed class ListSpcAlertsHandler(IQualityReadStore store, TimeProvider timeProvider) : IQueryHandler<ListSpcAlertsQuery, IReadOnlyList<SpcAlertDto>>

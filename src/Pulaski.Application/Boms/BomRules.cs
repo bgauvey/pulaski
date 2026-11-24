@@ -133,5 +133,6 @@ internal static class BomRules
         return problems;
     }
 
-    public static BomProblemDto ToDto(BomProblem problem) => new(problem.Code, problem.Message, problem.ItemId);
+    public static BomProblemDto ToDto(BomProblem problem) =>
+        new(problem.Code, problem.Message, problem.ItemId) { Template = problem.Text.Template, Values = problem.Text.Values };
 }

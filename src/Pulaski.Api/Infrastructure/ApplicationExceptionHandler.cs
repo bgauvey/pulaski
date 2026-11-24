@@ -39,6 +39,14 @@ internal sealed class ApplicationExceptionHandler(IProblemDetailsService problem
             problem.Extensions["values"] = message.Values;
         }
 
+        // Each field message's too (#189), keyed as the errors are, in the same order.
+        if (exception is ValidationException validation)
+        {
+            problem.Extensions["fieldMessages"] = validation.Messages.ToDictionary(
+                m => JsonNamingPolicy.CamelCase.ConvertName(m.Key),
+                m => m.Value.Select(v => new { template = v.Template, values = v.Values }).ToArray());
+        }
+
         httpContext.Response.StatusCode = problem.Status!.Value;
         return await problemDetails.TryWriteAsync(new ProblemDetailsContext
         {

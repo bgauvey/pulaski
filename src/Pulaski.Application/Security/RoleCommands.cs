@@ -34,7 +34,7 @@ internal static class RoleRules
         var unknown = permissions.Where(p => !Permissions.Exists(p)).Distinct().ToList();
         if (unknown.Count > 0)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { [field] = [$"Not a permission: {string.Join(", ", unknown)}."] });
+            throw ValidationException.Field(field, $"Not a permission: {string.Join(", ", unknown)}.");
         }
 
         return [.. permissions.Distinct(StringComparer.Ordinal)];

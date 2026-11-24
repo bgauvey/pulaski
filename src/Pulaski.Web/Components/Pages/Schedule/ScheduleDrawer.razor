@@ -33,7 +33,7 @@
                 @foreach (var warning in s.Warnings)
                 {
                     <div class="drawer-alert @(warning.Code is "late" or "firmed_conflict" or "link_not_met" or "link_cycle" ? "is-warning" : "")">
-                        <Icon Name="alert" Size="18" /><span>@warning.Message</span>
+                        <Icon Name="alert" Size="18" /><span>@L.Of(warning)</span>
                     </div>
                 }
 

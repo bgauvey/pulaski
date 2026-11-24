@@ -16,10 +16,7 @@ internal sealed class ListWorkOrdersHandler(IWorkOrderReadStore store)
     {
         if (query.Status is not null && !WorkOrderStatus.All.Contains(query.Status))
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                [nameof(query.Status)] = [$"Unknown status '{query.Status}'."],
-            });
+            throw ValidationException.Field(nameof(query.Status), $"Unknown status '{query.Status}'.");
         }
 
         var rows = await store.ListAsync(query.SiteId, query.Status, cancellationToken);

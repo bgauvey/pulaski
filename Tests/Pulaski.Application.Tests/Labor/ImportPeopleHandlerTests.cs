@@ -45,7 +45,7 @@ public class ImportPeopleHandlerTests
         Assert.True(full.Applied);
         Assert.False(ByNumber("1002").Value.IsActive);
         Assert.True(ByNumber("1003").Value.IsActive);
-        Assert.Contains("clocked on", Assert.Single(full.Rows, r => r.Code == "1003").Notes[0], StringComparison.Ordinal);
+        Assert.Contains("clocked on", Assert.Single(full.Rows, r => r.Code == "1003").Notes[0].Text, StringComparison.Ordinal);
         Assert.Equal(["active"], Assert.Single(full.Rows, r => r.Code == "1002").Changes);
         Assert.True((await Labor.GetPersonForUpdateAsync(local, CancellationToken.None))!.Value.IsActive);
 
@@ -64,7 +64,7 @@ public class ImportPeopleHandlerTests
         Assert.Contains("no qualification WELD", Assert.Single(bad.Rows).Message, StringComparison.Ordinal);
 
         var first = await RunAsync("employee_number,name,external_key,qualifications\n1001,Ana Ng,W-1,fork\n");
-        Assert.Contains("Granted qualification FORK until 2027-10-11.", Assert.Single(first.Rows).Notes);
+        Assert.Contains("Granted qualification FORK until 2027-10-11.", Assert.Single(first.Rows).Notes.Select(n => n.Text));
         var ana = ByNumber("1001").Value;
         var grant = Assert.Single(await Labor.ListGrantsOfPersonAsync(ana.Id, CancellationToken.None));
         Assert.Equal((new DateOnly(2026, 10, 12), (DateOnly?)new DateOnly(2027, 10, 11)), (grant.ValidFrom, grant.ExpiresOn));

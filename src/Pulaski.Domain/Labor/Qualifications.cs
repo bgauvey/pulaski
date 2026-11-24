@@ -94,6 +94,6 @@ public static class QualificationRules
     }
 
     /// <summary>"Lee Park isn't qualified for EXT-01: FORK Forklift (expired 2026-10-01)."</summary>
-    public static string Describe(string personName, string lineCode, IReadOnlyList<MissingQualification> missing) =>
-        $"{personName} isn't qualified for {lineCode}: {string.Join("; ", missing.Select(m => $"{m.Qualification.Code} {m.Qualification.Name} ({m.Why})"))}.";
+    public static UserMessage Describe(string personName, string lineCode, IReadOnlyList<MissingQualification> missing) =>
+        UserMessage.From($"{personName} isn't qualified for {lineCode}: {string.Join("; ", missing.Select(m => $"{m.Qualification.Code} {m.Qualification.Name} ({m.Why})"))}.");
 }

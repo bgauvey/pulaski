@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
@@ -207,14 +208,14 @@ internal sealed class ReleaseProcessVersionHandler(
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return new ReleaseProcessVersionResponse(version, [.. broken.Select(b =>
-            $"The BOM for {b.MaterialCode} (version {b.VersionNumber}) names {Operations(b.Operations)}, which version {released.Number} of {process.Code} doesn't have. " +
-            $"Orders for {b.MaterialCode} made with {process.Code} are refused until a new BOM version is released.")]);
+        return new ReleaseProcessVersionResponse(version, [.. broken.Select(b => b.Operations.Length == 1
+            ? Notes.Of(
+                $"The BOM for {b.MaterialCode} (version {b.VersionNumber}) names operation {b.Operations[0]}, which version {released.Number} of {process.Code} doesn't have. " +
+                $"Orders for {b.MaterialCode} made with {process.Code} are refused until a new BOM version is released.")
+            : Notes.Of(
+                $"The BOM for {b.MaterialCode} (version {b.VersionNumber}) names operations {string.Join(", ", b.Operations)}, which version {released.Number} of {process.Code} doesn't have. " +
+                $"Orders for {b.MaterialCode} made with {process.Code} are refused until a new BOM version is released."))]);
     }
-
-    private static string Operations(int[] numbers) =>
-        numbers.Length == 1 ? $"operation {numbers[0]}" : $"operations {string.Join(", ", numbers)}";
-
 }
 
 internal sealed class StartProcessDraftHandler(

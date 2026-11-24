@@ -87,7 +87,7 @@ internal sealed class StartBreakHandler(
     {
         if (command.PersonId == Guid.Empty)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["PersonId"] = ["Choose who."] });
+            throw ValidationException.Field("PersonId", "Choose who.");
         }
 
         var now = timeProvider.GetUtcNow();
@@ -205,7 +205,7 @@ internal sealed class CorrectBreakHandler(
     public async Task<LaborResponse> HandleAsync(CorrectBreakCommand command, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
-        var note = LaborWriter.Clean(command.Note) ?? throw new ValidationException(new Dictionary<string, string[]> { ["Note"] = ["Say why: the shift was approved already."] });
+        var note = LaborWriter.Clean(command.Note) ?? throw ValidationException.Field("Note", "Say why: the shift was approved already.");
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var original = (await labor.GetBreakForUpdateAsync(command.BreakId, cancellationToken))?.Value ?? throw new NotFoundException($"Break {command.BreakId} not found.");
         if (!await labor.IsApprovedAsync(original.Shift, cancellationToken))

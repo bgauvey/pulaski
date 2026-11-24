@@ -382,7 +382,13 @@ public sealed record ReasonCodeDto
 }
 
 /// <summary>Something worth knowing about a movement that didn't stop it.</summary>
-public sealed record InventoryWarningDto(string Code, string Message);
+public sealed record InventoryWarningDto(string Code, string Message)
+{
+    /// <summary><see cref="Message"/>'s English template and values (#189), for the reader's language; null template: show the message.</summary>
+    public string? Template { get; init; }
+
+    public IReadOnlyList<object?> Values { get; init; } = [];
+}
 
 /// <summary>The lot a movement changed, as it is now.</summary>
 public sealed record LotTransactionResponse

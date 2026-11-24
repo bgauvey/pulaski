@@ -40,7 +40,7 @@ public sealed class CapabilityAndImportTests(DatabaseFixture db)
 
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new AddCapabilityCommand(material.Id, department, 500m, db.UomId, null, null, false, null, null)));
         var added = await db.SendAsync(new AddCapabilityCommand(material.Id, line, 500m, db.UomId, 30, 2m, true, null, null));
-        Assert.Contains("Planning rate set to 500", Assert.Single(added.Notes), StringComparison.Ordinal);
+        Assert.Contains("Planning rate set to 500", Assert.Single(added.Notes).Text, StringComparison.Ordinal);
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new AddCapabilityCommand(material.Id, line, 600m, db.UomId, null, null, false, null, null)));
 
         var standardId = await ScalarAsync<Guid>("SELECT id FROM core.run_standard WHERE equipment_id = @Line AND material_id = @M", new { Line = line, M = material.Id });
@@ -49,7 +49,7 @@ public sealed class CapabilityAndImportTests(DatabaseFixture db)
 
         var from = await ScalarAsync<DateTimeOffset>("SELECT effective_from FROM core.equipment_capability WHERE id = @Id", new { Id = added.Id });
         var changed = await db.SendAsync(new UpdateCapabilityCommand(added.Id, added.Version, 550m, db.UomId, 30, 2m, true, from, null));
-        Assert.Contains("modified rate of 450", Assert.Single(changed.Notes), StringComparison.Ordinal);
+        Assert.Contains("modified rate of 450", Assert.Single(changed.Notes).Text, StringComparison.Ordinal);
         Assert.Equal((550m, 450m), (
             await ScalarAsync<decimal>("SELECT calculated_rate_per_hour FROM core.run_standard WHERE id = @Id", new { Id = standardId }),
             await ScalarAsync<decimal>("SELECT effective_rate_per_hour FROM core.run_standard WHERE id = @Id", new { Id = standardId })));
@@ -60,7 +60,7 @@ public sealed class CapabilityAndImportTests(DatabaseFixture db)
             "SELECT count(*)::int FROM core.equipment_capability WHERE id = @Id AND effective_to IS NOT NULL", new { Id = added.Id }));
         await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new EndCapabilityCommand(added.Id, await CapabilityVersionAsync(added.Id))));
         var again = await db.SendAsync(new AddCapabilityCommand(material.Id, line, 520m, db.UomId, null, null, false, null, null));
-        Assert.Contains("Calculated rate now 520", Assert.Single(again.Notes), StringComparison.Ordinal);
+        Assert.Contains("Calculated rate now 520", Assert.Single(again.Notes).Text, StringComparison.Ordinal);
     }
 
     [Fact]

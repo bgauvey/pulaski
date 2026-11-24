@@ -1,4 +1,5 @@
 using Pulaski.Contracts.Inventory;
+using Pulaski.Contracts.Common;
 
 namespace Pulaski.Contracts.Execution;
 
@@ -368,7 +369,7 @@ public sealed record ReportProductionRequest
 public sealed record StartNewLotResponse(Guid JobId, IReadOnlyList<string> ClosedLots)
 {
     /// <summary>What printing their labels on the line's printer did (#122).</summary>
-    public IReadOnlyList<string> Notes { get; init; } = [];
+    public IReadOnlyList<MessageDto> Notes { get; init; } = [];
 }
 
 /// <summary>Start a new lot (D-104): closes the one the job is filling.</summary>
@@ -382,7 +383,7 @@ public sealed record StartNewLotRequest
 /// <param name="Version">That job's new version.</param>
 /// <param name="RunId">The run opened, for a start.</param>
 /// <param name="Notes">Plain-language notes for the operator.</param>
-public sealed record ExecutionResponse(Guid JobId, long Version, Guid? RunId, IReadOnlyList<string> Notes);
+public sealed record ExecutionResponse(Guid JobId, long Version, Guid? RunId, IReadOnlyList<MessageDto> Notes);
 
 /// <summary>A report's result: the run's totals and the lot the good output went into.</summary>
 /// <summary>Reverses a production report whole (D-063), for an adjustment reason and a comment.</summary>
@@ -481,7 +482,7 @@ public sealed record SetExecutionPolicyRequest
 }
 
 /// <summary>A partial batch's decision (D-036) and what it did.</summary>
-public sealed record PartialBatchDecisionResponse(Guid Id, string Status, IReadOnlyList<string> Notes);
+public sealed record PartialBatchDecisionResponse(Guid Id, string Status, IReadOnlyList<MessageDto> Notes);
 
 /// <summary>
 /// Good and scrap by shift (D-044) for a site's production days <see cref="From"/> to <see cref="To"/>: one row per production

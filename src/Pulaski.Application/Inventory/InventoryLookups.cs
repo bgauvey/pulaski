@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Units;
@@ -80,7 +81,7 @@ internal sealed class GetShortagesHandler(
                 }
                 else
                 {
-                    problems.Add(new("uom_mismatch",
+                    problems.Add(Notes.Inventory("uom_mismatch",
                         $"{row.JobNumber}: {row.MaterialCode} is planned in {row.UomCode}, which doesn't convert to {row.BaseUomCode}; it was left out."));
                 }
             }
@@ -103,7 +104,7 @@ internal sealed class GetShortagesHandler(
             }
             else
             {
-                problems.Add(new("uom_mismatch", $"{receipt.Reference ?? "An expected receipt"} of {receipt.MaterialCode} is in {receipt.UomCode}, which doesn't convert; it was left out."));
+                problems.Add(Notes.Inventory("uom_mismatch", $"{receipt.Reference ?? "An expected receipt"} of {receipt.MaterialCode} is in {receipt.UomCode}, which doesn't convert; it was left out."));
             }
         }
 

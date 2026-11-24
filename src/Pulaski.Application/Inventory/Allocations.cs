@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Microsoft.Extensions.Logging;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
@@ -406,7 +407,7 @@ internal sealed class AllocationWriter(
     {
         source = await LockLotsAsync(source, cancellationToken);
         int released = 0, trimmed = 0, allocated = 0;
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         if (release)
         {
             foreach (var plan in await PlanAsync(source, cancellationToken))
@@ -426,7 +427,7 @@ internal sealed class AllocationWriter(
                         released++;
                     }
 
-                    notes.Add($"{source.Job.JobNumber}, {lot?.Candidate.Label ?? "a lot"}: {problem}");
+                    notes.Add(Notes.Of($"{source.Job.JobNumber}, {lot?.Candidate.Label ?? "a lot"}: {problem}"));
                 }
             }
 
@@ -446,7 +447,7 @@ internal sealed class AllocationWriter(
 
                 if (plan.Need is not null && plan.Remaining > plan.Suggested)
                 {
-                    notes.Add($"{source.Job.JobNumber}: {plan.Material.MaterialCode} is still {Qty(plan.Remaining - plan.Suggested)} {plan.Material.BaseUomCode} short of free stock.");
+                    notes.Add(Notes.Of($"{source.Job.JobNumber}: {plan.Material.MaterialCode} is still {Qty(plan.Remaining - plan.Suggested)} {plan.Material.BaseUomCode} short of free stock."));
                 }
             }
         }
@@ -557,7 +558,7 @@ internal sealed class RefreshSiteAllocationsHandler(
         }
 
         int allocated = 0, released = 0, trimmed = 0;
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
 
         // Earliest need first, so the jobs that start soonest get the lots that expire soonest.
         var now = time.GetUtcNow();

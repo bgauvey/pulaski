@@ -101,11 +101,11 @@
                     <li>
                         @if (problem.OperationId is { } opId)
                         {
-                            <button type="button" class="link-button" @onclick="() => SelectOperation(opId)">@problem.Message</button>
+                            <button type="button" class="link-button" @onclick="() => SelectOperation(opId)">@L.Of(problem)</button>
                         }
                         else
                         {
-                            @problem.Message
+                            @L.Of(problem)
                         }
                     </li>
                 }
@@ -205,7 +205,7 @@
                             <span class="op-name">@op.Name</span>
                             @if (problems > 0)
                             {
-                                <span class="op-flag" title="@string.Join("\n", _problems.Where(p => p.OperationId == op.Id).Select(p => p.Message))"><Icon Name="alert" Size="16" /></span>
+                                <span class="op-flag" title="@string.Join("\n", _problems.Where(p => p.OperationId == op.Id).Select(p => L.Of(p)))"><Icon Name="alert" Size="16" /></span>
                             }
                         </div>
                         <div class="op-body">
@@ -896,7 +896,7 @@ else if (_error is null)
             var released = await Api.ReleaseProcessVersionAsync(Id, _version!.Id, new ReleaseProcessVersionRequest { Version = _token, Note = _releaseNote });
             _releaseNote = null;
             await LoadAsync(_version.Id);
-            _releaseWarnings = released.Warnings;
+            _releaseWarnings = L.Notes(released.Warnings);
             _saveMessage = L["Version {0} released", _version.Number];
         }
         catch (ApiException ex)

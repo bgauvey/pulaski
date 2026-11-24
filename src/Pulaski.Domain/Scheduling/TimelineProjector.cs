@@ -74,7 +74,22 @@ public static class ScheduleWarningCode
     public const string LinkCycle = "link_cycle";
 }
 
-public sealed record ScheduleWarning(string Code, string Message);
+/// <summary>A schedule warning: its code (what screens compare) and its message with template and values, for the reader's language (#189).</summary>
+public sealed record ScheduleWarning(string Code, UserMessage Text)
+{
+    public ScheduleWarning(string code, string message)
+        : this(code, UserMessage.Of(message))
+    {
+    }
+
+    public ScheduleWarning(string code, ref MessageBuilder message)
+        : this(code, message.Build())
+    {
+    }
+
+    /// <summary>The English message.</summary>
+    public string Message => Text.Text;
+}
 
 /// <summary>
 /// A span on the line's timeline. For a placeholder, <see cref="JobId"/> is the production job it

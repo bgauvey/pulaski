@@ -397,7 +397,7 @@ public sealed class ProcessTests(DatabaseFixture db)
         var saved = await db.SendAsync(new SaveProcessDraftCommand(processId, v2.Id, draft.Version, renumbered));
         var released = await db.SendAsync(new ReleaseProcessVersionCommand(processId, v2.Id, saved.Version, null));
 
-        Assert.Contains("operation 30", Assert.Single(released.Warnings), StringComparison.Ordinal);
+        Assert.Contains("operation 30", Assert.Single(released.Warnings).Text, StringComparison.Ordinal);
         var broken = await QueryAsync<GetBomQuery, BomDto>(new GetBomQuery(bom.Id));
         Assert.Equal(30, Assert.Single(broken.MissingOperations));
         var check = await QueryAsync<CheckProcessForOrderQuery, ProcessOrderCheckDto>(new CheckProcessForOrderQuery(processId, db.MaterialId));

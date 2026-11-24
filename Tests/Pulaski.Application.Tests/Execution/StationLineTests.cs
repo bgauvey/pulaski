@@ -46,19 +46,19 @@ public class StationLineTests
             Lots = [.. lots.Select(l => new Pulaski.Contracts.Inventory.LotTransactionResponse { LotId = Guid.NewGuid(), LotNumber = l, Status = "available" })],
         };
 
-        Assert.Equal("Reported 1,200 m good and 12 m scrap; good output in lot J-03.", StationReporting.Done(1200m, 12m, "m", Result("J-03")));
-        Assert.Equal("Reported 250 m good; good output in lots J-03, J-04.", StationReporting.Done(250m, 0m, "m", Result("J-03", "J-04")));
-        Assert.Equal("Reported 5 m scrap.", StationReporting.Done(0m, 5m, "m", Result()));
+        Assert.Equal("Reported 1,200 m good and 12 m scrap; good output in lot J-03.", StationReporting.Done(1200m, 12m, "m", Result("J-03")).Text);
+        Assert.Equal("Reported 250 m good; good output in lots J-03, J-04.", StationReporting.Done(250m, 0m, "m", Result("J-03", "J-04")).Text);
+        Assert.Equal("Reported 5 m scrap.", StationReporting.Done(0m, 5m, "m", Result()).Text);
     }
 
     [Fact]
     public void A_call_at_the_station_says_whether_it_was_already_waiting()
     {
         var id = Guid.NewGuid();
-        Assert.Equal("Maintenance is called.", StationAndon.Called("Maintenance", new Pulaski.Contracts.Andon.AndonCallResponse(id, "open")));
+        Assert.Equal("Maintenance is called.", StationAndon.Called("Maintenance", new Pulaski.Contracts.Andon.AndonCallResponse(id, "open")).Text);
         Assert.Equal("Maintenance was called already; that call is still waiting.",
-            StationAndon.Called("Maintenance", new Pulaski.Contracts.Andon.AndonCallResponse(id, "open", AlreadyOpen: true)));
+            StationAndon.Called("Maintenance", new Pulaski.Contracts.Andon.AndonCallResponse(id, "open", AlreadyOpen: true)).Text);
         Assert.Equal("Maintenance was called already; that call is still being answered.",
-            StationAndon.Called("Maintenance", new Pulaski.Contracts.Andon.AndonCallResponse(id, "acknowledged", AlreadyOpen: true)));
+            StationAndon.Called("Maintenance", new Pulaski.Contracts.Andon.AndonCallResponse(id, "acknowledged", AlreadyOpen: true)).Text);
     }
 }

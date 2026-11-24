@@ -159,7 +159,7 @@ public sealed class ExecutionTests(DatabaseFixture db)
 
         // Complete Extrude, then add what was found afterwards into its ended run.
         var done = await db.SendAsync(new CompleteJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
-        Assert.Contains(done.Notes, n => n.Contains("can start now", StringComparison.Ordinal));
+        Assert.Contains(done.Notes, n => n.Text.Contains("can start now", StringComparison.Ordinal));
         var late = await db.SendAsync(new ReportProductionCommand(plant.Extrude, started.RunId, 9m, 0m, null, null, plant.Staging));
         Assert.Equal(104m, late.RunGoodQty);
         await Assert.ThrowsAsync<DomainRuleException>(() =>
@@ -910,7 +910,7 @@ public sealed class ExecutionTests(DatabaseFixture db)
         await Assert.ThrowsAsync<Application.Errors.ValidationException>(async () =>
             await db.SendAsync(new PauseJobCommand(job, await VersionAsync(job), PartialBatch: new PartialBatchInput(30m, staging.Id, null))));
         var paused = await db.SendAsync(new PauseJobCommand(job, await VersionAsync(job), breakdown, "Mixer tripped", new PartialBatchInput(30m, staging.Id, null)));
-        Assert.Contains(paused.Notes, n => n.Contains("on hold for approval", StringComparison.Ordinal));
+        Assert.Contains(paused.Notes, n => n.Text.Contains("on hold for approval", StringComparison.Ordinal));
 
         var pending = Assert.Single(await QueryAsync<ListPendingPartialBatchesQuery, IReadOnlyList<PartialBatchDto>>(new ListPendingPartialBatchesQuery(site.Id)));
         Assert.Equal(("pending", 30m), (pending.Status, pending.Quantity));
@@ -942,7 +942,7 @@ public sealed class ExecutionTests(DatabaseFixture db)
         var from = TestTime.Now.AddDays(-1);
         var capability = await db.SendAsync(
             new AddCapabilityCommand(material.Id, big.Id, 400m, db.UomId, null, null, false, from, null, BatchSize: 200m));
-        Assert.Contains(capability.Notes, n => n.Contains("batches of 200", StringComparison.Ordinal));
+        Assert.Contains(capability.Notes, n => n.Text.Contains("batches of 200", StringComparison.Ordinal));
 
         Guid order = Guid.CreateVersion7(), job = Guid.CreateVersion7();
         await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
@@ -975,7 +975,7 @@ public sealed class ExecutionTests(DatabaseFixture db)
             db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [190m] }));
         var loosened = await db.SendAsync(new UpdateCapabilityCommand(
             capability.Id, capability.Version, 400m, db.UomId, null, null, false, from, null, BatchSize: 200m, BatchTolerancePct: 10m));
-        Assert.Contains(loosened.Notes, n => n.Contains("10% from its size", StringComparison.Ordinal));
+        Assert.Contains(loosened.Notes, n => n.Text.Contains("10% from its size", StringComparison.Ordinal));
         await db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [190m] });
         Assert.Equal(10m, (await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(job))).BatchTolerancePct);
     }

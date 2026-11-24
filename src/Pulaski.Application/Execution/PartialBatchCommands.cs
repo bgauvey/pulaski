@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Inventory;
@@ -73,7 +75,7 @@ internal sealed class ApprovePartialBatchHandler(
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return new PartialBatchDecisionResponse(partial.Id, approved.Status, [$"Partial batch of {job.JobNumber} approved: lot {lot.LotNumber} is available."]);
+        return new PartialBatchDecisionResponse(partial.Id, approved.Status, [Notes.Of($"Partial batch of {job.JobNumber} approved: lot {lot.LotNumber} is available.")]);
     }
 }
 
@@ -107,7 +109,7 @@ internal sealed class RejectPartialBatchHandler(
         await eventLog.AppendAsync(envelope, cancellationToken);
 
         // Whatever is left of the lot is written off, and counts as scrap of the run it was made in.
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         if (lot.Quantity > 0)
         {
             var material = await InventoryRules.MaterialAsync(inventory, lot.MaterialId, cancellationToken);
@@ -136,10 +138,10 @@ internal sealed class RejectPartialBatchHandler(
                 }
             }
 
-            notes.Add($"Lot {lot.LotNumber} written off: {Batching.Qty(lot.Quantity)} {material.BaseUomCode} now counts as scrap of run {run?.RunNo}.");
+            notes.Add(Notes.Of($"Lot {lot.LotNumber} written off: {Batching.Qty(lot.Quantity)} {material.BaseUomCode} now counts as scrap of run {run?.RunNo}."));
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return new PartialBatchDecisionResponse(partial.Id, rejected.Status, [$"Partial batch of {job.JobNumber} rejected.", .. notes]);
+        return new PartialBatchDecisionResponse(partial.Id, rejected.Status, [Notes.Of($"Partial batch of {job.JobNumber} rejected."), .. notes]);
     }
 }

@@ -103,10 +103,7 @@ internal static class InventoryRules
 
         if (reason.RequiresComment && comment is null)
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                ["Comment"] = [$"Reason {reason.Name} needs a comment."],
-            });
+            throw ValidationException.Field("Comment", $"Reason {reason.Name} needs a comment.");
         }
 
         return reason;

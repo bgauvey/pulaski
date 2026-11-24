@@ -100,10 +100,10 @@ public class ControlLimitsTests
         var result = ControlLimits.Compute(ChartTypes.XbarR, mixed, 5);
         Assert.Equal(22, result.Subgroups);
         Assert.Equal("Holds 3, not 5", Assert.Single(result.LeftOut).Reason);
-        Assert.StartsWith("22 subgroups give rough limits", Assert.Single(result.Warnings), StringComparison.Ordinal);
+        Assert.StartsWith("22 subgroups give rough limits", Assert.Single(result.Warnings).Text, StringComparison.Ordinal);
 
         var clean = ControlLimits.Compute(ChartTypes.C, Counted(25, 1, 0), 1);
-        Assert.StartsWith("No defects at all", Assert.Single(clean.Warnings), StringComparison.Ordinal);
+        Assert.StartsWith("No defects at all", Assert.Single(clean.Warnings).Text, StringComparison.Ordinal);
     }
 
     [Fact]
