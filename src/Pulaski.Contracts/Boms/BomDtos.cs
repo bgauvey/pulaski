@@ -109,7 +109,13 @@ public sealed record BomItemAlternateDto
     public int Priority { get; init; } = 1;
 }
 
-public sealed record BomProblemDto(string Code, string Message, Guid? ItemId);
+public sealed record BomProblemDto(string Code, string Message, Guid? ItemId)
+{
+    /// <summary><see cref="Message"/>'s English template and values (#189), for the reader's language; null template: show the message.</summary>
+    public string? Template { get; init; }
+
+    public IReadOnlyList<object?> Values { get; init; } = [];
+}
 
 public sealed record SaveBomDraftResponse(long Version, IReadOnlyList<BomProblemDto> Problems);
 

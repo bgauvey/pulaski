@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Labor;
@@ -84,7 +86,7 @@ internal static class LaborWriter
     /// when there is one, says which qualifications the line requires that they don't hold that day (D-048): Pulaski warns,
     /// never refuses.
     /// </summary>
-    public static async Task<(SessionRecord Session, long Version, string? Warning)> StartAsync(
+    public static async Task<(SessionRecord Session, long Version, MessageDto? Warning)> StartAsync(
         ILaborRepository labor, PersonRecord person, LaborInput input, string source, string actor, DateTimeOffset now, Guid id, CancellationToken cancellationToken)
     {
         if (!person.IsActive)
@@ -122,7 +124,7 @@ internal static class LaborWriter
     }
 
     /// <summary>What the person lacks for the equipment on the day the session starts (D-048); null when nothing is missing.</summary>
-    public static async Task<string?> QualificationWarningAsync(
+    public static async Task<MessageDto?> QualificationWarningAsync(
         ILaborRepository labor, PersonRecord person, EquipmentShifts equipment, DateTimeOffset at, CancellationToken cancellationToken)
     {
         var required = await labor.ListRequiredQualificationsAsync(equipment.EquipmentId, cancellationToken);
@@ -133,7 +135,7 @@ internal static class LaborWriter
 
         var day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, equipment.Zone).DateTime);
         var missing = QualificationRules.Missing(required, await labor.ListGrantsOfPersonAsync(person.Id, cancellationToken), day, at);
-        return missing.Count == 0 ? null : QualificationRules.Describe(person.DisplayName, equipment.Code, missing);
+        return missing.Count == 0 ? null : Notes.Of(QualificationRules.Describe(person.DisplayName, equipment.Code, missing));
     }
 
     /// <summary>The person's own site, or one they are also listed at (#84).</summary>
@@ -182,7 +184,7 @@ internal sealed class CheckInHandler(
         }
 
         var now = timeProvider.GetUtcNow();
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         var started = 0;
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
 
@@ -197,7 +199,7 @@ internal sealed class CheckInHandler(
         {
             if ((await labor.ListOpenSessionsOfPersonForUpdateAsync(person.Id, cancellationToken)).Any(s => s.EquipmentId == command.EquipmentId))
             {
-                notes.Add($"{person.DisplayName} was already on.");
+                notes.Add(Notes.Of($"{person.DisplayName} was already on."));
                 continue;
             }
 
@@ -214,7 +216,7 @@ internal sealed class CheckInHandler(
         }
 
         await transaction.CommitAsync(cancellationToken);
-        notes.Insert(0, $"Checked {started} {(started == 1 ? "person" : "people")} in.");
+        notes.Insert(0, started == 1 ? Notes.Of("Checked 1 person in.") : Notes.Of($"Checked {started} people in."));
         return new LaborResponse(command.EquipmentId, 0, notes);
     }
 }
@@ -285,7 +287,7 @@ internal sealed class CheckOutHandler(IUnitOfWork unitOfWork, ILaborRepository l
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return new LaborResponse(command.EquipmentId, 0, [$"Checked {open.Count} {(open.Count == 1 ? "person" : "people")} out."]);
+        return new LaborResponse(command.EquipmentId, 0, [open.Count == 1 ? Notes.Of("Checked 1 person out.") : Notes.Of($"Checked {open.Count} people out.")]);
     }
 }
 
@@ -462,6 +464,11 @@ internal sealed class ApproveShiftHandler(
         await labor.InsertApprovalAsync(approvalId, key, request.ActorId, request.UserId, now, LaborWriter.Clean(command.Note), cancellationToken);
         await eventLog.AppendAsync(events.Create(EventTypes.LaborShiftApproved, "labor_approval", approvalId, new { Shift = key, Sessions = sessions.Count, Ended = closed }), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new LaborResponse(approvalId, 0, closed > 0 ? [$"{closed} open {(closed == 1 ? "session was" : "sessions were")} ended at the end of the shift."] : []);
+        return new LaborResponse(approvalId, 0, closed switch
+        {
+            0 => [],
+            1 => [Notes.Of("1 open session was ended at the end of the shift.")],
+            _ => [Notes.Of($"{closed} open sessions were ended at the end of the shift.")],
+        });
     }
 }

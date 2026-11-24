@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Units;
@@ -166,7 +168,7 @@ internal sealed class ImportCapabilitiesHandler(
             }
 
             var added = Capability.Create(ids.NewId(), line.Line.Id, material.Id, change);
-            var addedNotes = new List<string>();
+            var addedNotes = new List<MessageDto>();
             if (from is not null)
             {
                 addedNotes.AddRange(await EndOpenBeforeAsync(added, all, line.Line, material, command.Source, writes, now, cancellationToken));
@@ -201,7 +203,7 @@ internal sealed class ImportCapabilitiesHandler(
         var changed = events.Create(EventTypes.CapabilityChanged, "equipment_capability", updated.Id, new { Before = current, After = updated }, command.Source);
         await capabilities.UpdateAsync(updated, cancellationToken);
         await eventLog.AppendAsync(changed, cancellationToken);
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         if ((updated.IdealRatePerHour != current.IdealRatePerHour || updated.RateUomId != current.RateUomId) && updated.IsInEffect(now))
         {
             notes.AddIfSet(await writes.FollowIdealRateAsync(updated, unitCode, now, cancellationToken));
@@ -216,7 +218,7 @@ internal sealed class ImportCapabilitiesHandler(
     {
         if (current is null)
         {
-            return new ImportRowResultDto { Line = row.Line, Code = label, Action = Unchanged, Notes = ["No capability in effect to end."] };
+            return new ImportRowResultDto { Line = row.Line, Code = label, Action = Unchanged, Notes = [Notes.Of("No capability in effect to end.")] };
         }
 
         var ended = current.End(now);
@@ -239,18 +241,18 @@ internal sealed class ImportCapabilitiesHandler(
     /// A new period from a date (#72) ends the open-ended capability running before it, the day it starts, as a change from that date; it
     /// never touches any other, which the overlap check then refuses.
     /// </summary>
-    private async Task<IReadOnlyList<string>> EndOpenBeforeAsync(
+    private async Task<IReadOnlyList<MessageDto>> EndOpenBeforeAsync(
         Capability added, IReadOnlyList<Capability> all, CapabilityLine line, Material material, string source, CapabilityWrites writes, DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         foreach (var open in all.Where(c => c.EffectiveTo is null && c.EffectiveFrom < added.EffectiveFrom))
         {
             var ended = open.End(added.EffectiveFrom);
             var envelope = events.Create(EventTypes.CapabilityEnded, "equipment_capability", ended.Id, new { Before = open, After = ended }, source);
             await capabilities.UpdateAsync(ended, cancellationToken);
             await eventLog.AppendAsync(envelope, cancellationToken);
-            notes.Add($"The capability from {open.EffectiveFrom:yyyy-MM-dd} now ends where this one starts.");
+            notes.Add(Notes.Of($"The capability from {open.EffectiveFrom:yyyy-MM-dd} now ends where this one starts."));
             notes.AddIfSet(await writes.OpenJobsLeftAsync(open, ended, line.Code, material.Code, now, cancellationToken));
         }
 

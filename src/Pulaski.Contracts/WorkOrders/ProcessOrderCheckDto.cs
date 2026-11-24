@@ -32,4 +32,10 @@ public sealed record OrderEquipmentBatchDto(int OperationNumber, string Equipmen
 /// <c>no_released_version</c>, <c>inactive</c>, <c>not_covered</c>, <c>cannot_take_jobs</c> or
 /// <c>no_capability</c>; the operation fields are empty for problems with the whole process.
 /// </summary>
-public sealed record ProcessOrderProblemDto(string Code, string Message, int? OperationNumber = null, string? EquipmentCode = null);
+public sealed record ProcessOrderProblemDto(string Code, string Message, int? OperationNumber = null, string? EquipmentCode = null)
+{
+    /// <summary><see cref="Message"/>'s English template and values (#189), for the reader's language; null template: show the message.</summary>
+    public string? Template { get; init; }
+
+    public IReadOnlyList<object?> Values { get; init; } = [];
+}

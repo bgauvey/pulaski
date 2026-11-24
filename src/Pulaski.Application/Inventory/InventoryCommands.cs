@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Errors;
@@ -518,12 +519,12 @@ internal sealed class ConsumeLotHandler(
         {
             // An approved alternate on the job's BOM (#82) is a substitution the BOM allows.
             warnings.Add(await inventory.AlternateForAsync(job.Id, material.Id, cancellationToken) is { } component
-                ? new("approved_alternate", $"{material.Code} was used in place of {component}, as {job.JobNumber}'s BOM allows.")
-                : new("not_planned", $"{job.JobNumber} has no planned component of {material.Code}; it was recorded as a substitution."));
+                ? Notes.Inventory("approved_alternate", $"{material.Code} was used in place of {component}, as {job.JobNumber}'s BOM allows.")
+                : Notes.Inventory("not_planned", $"{job.JobNumber} has no planned component of {material.Code}; it was recorded as a substitution."));
         }
         else if (await OverPlannedAsync(job, material, quantity, cancellationToken) is { } over)
         {
-            warnings.Add(new("over_planned", over));
+            warnings.Add(Notes.Inventory("over_planned", over));
         }
 
         var edges = InventoryRules.Edges(ids, [lot.Id], await inventory.ListLotsProducedByJobAsync(job.Id, cancellationToken), job.Id);

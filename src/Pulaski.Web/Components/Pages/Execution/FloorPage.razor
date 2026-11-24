@@ -269,7 +269,7 @@ else
         IReadOnlyList<string> notes = [];
         try
         {
-            notes = (await action()).Notes;
+            notes = L.Notes((await action()).Notes);
         }
         catch (ApiException ex)
         {
@@ -372,7 +372,7 @@ else
     {
         var result = await Api.StartJobAsync(job.JobId, new StartJobRequest { Version = job.Version, LineId = lineId });
         _groupLine = Guid.Empty;
-        return result.Notes.Count > 0 ? result.Notes : [$"{job.JobNumber} started."];
+        return result.Notes.Count > 0 ? L.Notes(result.Notes) : [L["{0} started.", job.JobNumber]];
     });
 
     /// <summary>A batch job may have a partial batch to report, so it asks first (D-036); any other completes at once.</summary>
@@ -397,14 +397,14 @@ else
     private async Task OnStoppedAsync(ExecutionResponse result)
     {
         _stopFor = null;
-        _notes = result.Notes;
+        _notes = L.Notes(result.Notes);
         await LoadAsync();
     }
 
     private Task CompleteAsync(RunningJobDto job) => RunAsync(async () =>
     {
         var result = await Api.CompleteJobAsync(job.JobId, job.Version);
-        return [$"{job.JobNumber} completed.", .. result.Notes];
+        return [L["{0} completed.", job.JobNumber], .. L.Notes(result.Notes)];
     });
 
     private async Task OpenReportAsync(Guid jobId)
@@ -425,7 +425,7 @@ else
         var job = _reportJob!;
         _reportJob = null;
         _notes = [L["{0}: this run now has {1} good and {2} scrap.", job.JobNumber, FloorView.Qty(result.RunGoodQty), FloorView.Qty(result.RunScrapQty)],
-            .. result.Warnings.Select(w => w.Message)];
+            .. result.Warnings.Select(L.Of)];
         await LoadAsync();
     }
 

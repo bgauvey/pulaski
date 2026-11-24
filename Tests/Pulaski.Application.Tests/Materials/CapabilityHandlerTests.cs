@@ -61,7 +61,7 @@ public class CapabilityHandlerTests
         var standard = Capabilities.StandardFor(_line.Id, material)!;
         Assert.Equal((900m, _m, CalculationBasis.IdealRate), (standard.CalculatedRatePerHour, standard.UomId, standard.CalculationBasis));
         Assert.Equal(HandlerFixture.Now, Capabilities.Find(added.Id)!.Value.EffectiveFrom);
-        Assert.Contains("Planning rate set to 900 m/h", Assert.Single(added.Notes), StringComparison.Ordinal);
+        Assert.Contains("Planning rate set to 900 m/h", Assert.Single(added.Notes).Text, StringComparison.Ordinal);
         Assert.Equal(
             [EventTypes.CapabilityAdded, EventTypes.RunStandardCreated],
             _f.Stores.Events.Appended.Select(e => e.Type));
@@ -101,7 +101,7 @@ public class CapabilityHandlerTests
 
         var after = Capabilities.StandardFor(_line.Id, material)!;
         Assert.Equal((1000m, 800m), (after.CalculatedRatePerHour, after.EffectiveRatePerHour));
-        Assert.Contains("modified rate of 800 m/h stays", Assert.Single(changed.Notes), StringComparison.Ordinal);
+        Assert.Contains("modified rate of 800 m/h stays", Assert.Single(changed.Notes).Text, StringComparison.Ordinal);
         await Assert.ThrowsAsync<ConflictException>(() => Update().HandleAsync(
             new UpdateCapabilityCommand(added.Id, capability.Version, 1100m, _m, 45, 2m, true, capability.Value.EffectiveFrom, null), CancellationToken.None));
 
@@ -120,7 +120,7 @@ public class CapabilityHandlerTests
         var ended = await End().HandleAsync(new EndCapabilityCommand(added.Id, Capabilities.Find(added.Id)!.Version), CancellationToken.None);
 
         Assert.Equal(HandlerFixture.Now, Capabilities.Find(added.Id)!.Value.EffectiveTo);
-        Assert.Contains("2 open jobs", Assert.Single(ended.Notes), StringComparison.Ordinal);
+        Assert.Contains("2 open jobs", Assert.Single(ended.Notes).Text, StringComparison.Ordinal);
         Assert.Equal(EventTypes.CapabilityEnded, _f.Stores.Events.Appended[^1].Type);
     }
 }

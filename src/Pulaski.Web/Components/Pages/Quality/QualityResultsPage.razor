@@ -39,7 +39,7 @@
         <strong>@(response.Conforms switch { true => L["In specification."], false => L["Out of specification."], _ => L["Recorded."] })</strong>
         @foreach (var note in response.Notes)
         {
-            <div>@note</div>
+            <div>@L.Of(note)</div>
         }
     </div>
 }

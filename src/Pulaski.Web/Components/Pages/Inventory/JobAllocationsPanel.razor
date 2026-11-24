@@ -201,7 +201,7 @@
         try
         {
             var result = await action();
-            _notes = [AllocationView.Summary(L, result), .. result.Notes];
+            _notes = [AllocationView.Summary(L, result), .. L.Notes(result.Notes)];
             await LoadAsync();
         }
         catch (ApiException ex)

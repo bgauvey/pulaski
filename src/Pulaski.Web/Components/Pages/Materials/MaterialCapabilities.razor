@@ -339,14 +339,14 @@
         var result = form.IsNew
             ? await Api.AddCapabilityAsync(Material.Id, form.ToAdd(zone, Clock.GetUtcNow()))
             : await Api.UpdateCapabilityAsync(form.CapabilityId!.Value, form.ToUpdate(zone));
-        _notes = result.Notes;
+        _notes = L.Notes(result.Notes);
         _form = null;
     });
 
     private Task EndAsync(MaterialCapabilityDto c) => RunAsync(async () =>
     {
         var result = await Api.EndCapabilityAsync(c.Id, c.Version);
-        _notes = [L["{0} no longer runs {1}.", c.EquipmentCode, Material.Code], .. result.Notes];
+        _notes = [L["{0} no longer runs {1}.", c.EquipmentCode, Material.Code], .. L.Notes(result.Notes)];
     });
 
     private Task SetRateAsync() => RunAsync(async () =>

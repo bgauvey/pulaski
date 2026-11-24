@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Andon;
 using Pulaski.Application.Inventory;
@@ -143,16 +145,22 @@ public static class StationJobs
 public static class StationReporting
 {
     /// <summary>"Reported 1,200 m good and 12 m scrap; good output in lot WO-1-10-03."</summary>
-    public static string Done(decimal good, decimal scrap, string? unit, ReportProductionResponse result)
+    public static MessageDto Done(decimal good, decimal scrap, string? unit, ReportProductionResponse result)
     {
         string Qty(decimal value) => value.ToString("#,0.###", System.Globalization.CultureInfo.InvariantCulture) + (unit is null ? "" : " " + unit);
-        var made = good > 0 && scrap > 0 ? $"{Qty(good)} good and {Qty(scrap)} scrap" : good > 0 ? $"{Qty(good)} good" : $"{Qty(scrap)} scrap";
-        var lots = result.Lots.Select(l => l.LotNumber ?? "the balance").ToList();
-        return lots.Count switch
+        var (g, s) = (Qty(good), Qty(scrap));
+        var lots = string.Join(", ", result.Lots.Select(l => l.LotNumber ?? "the balance"));
+
+        // Whole sentences, one per case, so each translates as a sentence (#189).
+        return (good > 0 && scrap > 0, good > 0, result.Lots.Count) switch
         {
-            0 => $"Reported {made}.",
-            1 => $"Reported {made}; good output in lot {lots[0]}.",
-            _ => $"Reported {made}; good output in lots {string.Join(", ", lots)}.",
+            (true, _, 0) => Notes.Of($"Reported {g} good and {s} scrap."),
+            (true, _, 1) => Notes.Of($"Reported {g} good and {s} scrap; good output in lot {lots}."),
+            (true, _, _) => Notes.Of($"Reported {g} good and {s} scrap; good output in lots {lots}."),
+            (false, true, 0) => Notes.Of($"Reported {g} good."),
+            (false, true, 1) => Notes.Of($"Reported {g} good; good output in lot {lots}."),
+            (false, true, _) => Notes.Of($"Reported {g} good; good output in lots {lots}."),
+            _ => Notes.Of($"Reported {s} scrap."),
         };
     }
 }
@@ -171,7 +179,10 @@ public static class StationStops
 public static class StationAndon
 {
     /// <summary>"Maintenance is called." or, when one was waiting already, "Maintenance was called already; that call is still waiting."</summary>
-    public static string Called(string typeName, AndonCallResponse result) => result.AlreadyOpen
-        ? $"{typeName} was called already; that call is still {(result.Status == Domain.Andon.AndonStatuses.Open ? "waiting" : "being answered")}."
-        : $"{typeName} is called.";
+    public static MessageDto Called(string typeName, AndonCallResponse result) => (result.AlreadyOpen, result.Status == Domain.Andon.AndonStatuses.Open) switch
+    {
+        (true, true) => Notes.Of($"{typeName} was called already; that call is still waiting."),
+        (true, false) => Notes.Of($"{typeName} was called already; that call is still being answered."),
+        _ => Notes.Of($"{typeName} is called."),
+    };
 }

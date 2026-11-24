@@ -14,6 +14,9 @@ public sealed record UserMessage(string Template, IReadOnlyList<object?> Values,
     /// <summary>A message without values: its text, braces doubled so it reads as a template.</summary>
     public static UserMessage Of(string text) =>
         new(text.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal), [], text);
+
+    /// <summary>A message from an interpolated string, for code that words one to return (#189).</summary>
+    public static UserMessage From(ref MessageBuilder message) => message.Build();
 }
 
 /// <summary>An exception whose message is for a person, with its template and values (#128).</summary>

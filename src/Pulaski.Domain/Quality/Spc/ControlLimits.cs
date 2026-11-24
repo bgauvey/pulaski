@@ -31,7 +31,7 @@ public sealed record LimitResult(
     int Subgroups,
     int? SubgroupSize,
     IReadOnlyList<(SpcSubgroup Subgroup, string Reason)> LeftOut,
-    IReadOnlyList<string> Warnings,
+    IReadOnlyList<UserMessage> Warnings,
     string? NotEnough);
 
 /// <summary>
@@ -106,7 +106,7 @@ public static class ControlLimits
             }
         }
 
-        var warnings = new List<string>();
+        var warnings = new List<UserMessage>();
         if (used.Count < MinSubgroups)
         {
             return new(chartType, null, used.Count, Size(chartType, subgroupSize), leftOut, warnings,
@@ -115,7 +115,7 @@ public static class ControlLimits
 
         if (used.Count < RecommendedSubgroups)
         {
-            warnings.Add($"{used.Count} subgroups give rough limits; {RecommendedSubgroups} or more are better.");
+            warnings.Add(UserMessage.From($"{used.Count} subgroups give rough limits; {RecommendedSubgroups} or more are better."));
         }
 
         var limits = chartType switch
@@ -131,7 +131,7 @@ public static class ControlLimits
 
         if (limits.Center == 0 && ChartTypes.IsAttribute(chartType))
         {
-            warnings.Add("No defects at all in the baseline: every limit is zero, so any defect will signal.");
+            warnings.Add(UserMessage.Of("No defects at all in the baseline: every limit is zero, so any defect will signal."));
         }
 
         return new(chartType, limits, used.Count, Size(chartType, subgroupSize), leftOut, warnings, null);

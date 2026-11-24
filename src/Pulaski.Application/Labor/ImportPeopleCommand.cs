@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Labor;
@@ -243,7 +244,7 @@ internal sealed class ImportPeopleHandler(
         }
 
         return result.Action == Create
-            ? result with { Notes = [.. result.Notes, .. granted.Select(g => $"Granted {g}.")] }
+            ? result with { Notes = [.. result.Notes, .. granted.Select(g => Notes.Of($"Granted {g}."))] }
             : result with { Action = Update, Changes = [.. result.Changes, .. granted] };
     }
 
@@ -269,7 +270,7 @@ internal sealed class ImportPeopleHandler(
                 {
                     Code = person.EmployeeNumber,
                     Action = Unchanged,
-                    Notes = [$"{person.DisplayName} isn't in the source but is clocked on, so stays on until a later import."],
+                    Notes = [Notes.Of($"{person.DisplayName} isn't in the source but is clocked on, so stays on until a later import.")],
                 });
                 continue;
             }
@@ -283,7 +284,7 @@ internal sealed class ImportPeopleHandler(
                 Code = person.EmployeeNumber,
                 Action = Update,
                 Changes = ["active"],
-                Notes = [$"{person.DisplayName} isn't in the source any more, so is switched off."],
+                Notes = [Notes.Of($"{person.DisplayName} isn't in the source any more, so is switched off.")],
             });
         }
 

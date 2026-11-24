@@ -45,4 +45,17 @@ public class MessageTextTests
         Assert.Equal("At most 1,500 characters. Required. Say why.", Text.English.FieldErrorLine(error));
         Assert.Null(Text.English.FieldErrorLine(new ApiException(400, "One or more fields are invalid.", null, null)));
     }
+
+    [Fact]
+    public void A_note_is_filled_in_from_its_template_with_values_as_they_arrive_from_the_api()
+    {
+        // Values come back from JSON as elements: numbers stay numbers, for the reader's region.
+        var values = System.Text.Json.JsonSerializer.Deserialize<object?[]>("""["J-0042", 1234.5]""")!;
+        var note = new Pulaski.Contracts.Common.MessageDto("J-0042 has 1234.5 left.") { Template = "{0} has {1:N1} left.", Values = values };
+        Assert.Equal("J-0042 has 1,234.5 left.", Text.English.Of(note));
+
+        Assert.Equal("As sent.", Text.English.Of(new Pulaski.Contracts.Common.MessageDto("As sent.")));
+        Assert.Equal("As sent.", Text.English.Of(new Pulaski.Contracts.Common.MessageDto("As sent.") { Template = "{0} {1}", Values = values[..1] }));
+        Assert.Equal(["J-0042 has 1,234.5 left.", "As sent."], Text.English.Notes([note, new Pulaski.Contracts.Common.MessageDto("As sent.")]));
+    }
 }

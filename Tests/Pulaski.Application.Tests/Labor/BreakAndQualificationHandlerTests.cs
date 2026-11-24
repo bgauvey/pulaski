@@ -123,8 +123,8 @@ public class BreakAndQualificationHandlerTests
         var checkIn = new CheckInHandler(_f.Stores.UnitOfWork, Labor, Supervisor, _f.Stores.Events, _f.Events, _f.Ids, _f.Time);
         var result = await checkIn.HandleAsync(new CheckInCommand(_line, [ann, bob], null), CancellationToken.None);
         Assert.Equal(2, Labor.Sessions().Count);
-        Assert.Contains(result.Notes, n => n == "Bob isn't qualified for EXT-01: FORK Forklift (not held).");
-        Assert.DoesNotContain(result.Notes, n => n.StartsWith("Ann", StringComparison.Ordinal));
+        Assert.Contains(result.Notes, n => n.Text == "Bob isn't qualified for EXT-01: FORK Forklift (not held).");
+        Assert.DoesNotContain(result.Notes, n => n.Text.StartsWith("Ann", StringComparison.Ordinal));
 
         var onNow = await new ListLineLaborHandler(Labor, _f.Time).HandleAsync(new ListLineLaborQuery(_site), CancellationToken.None);
         var sessions = onNow.Single(l => l.LineId == _line).Sessions;

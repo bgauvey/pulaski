@@ -10,7 +10,7 @@
             <div>@result.Message <a href="inventory/lots/@result.Response.LotId">@L["Open the lot"]</a></div>
             @foreach (var warning in result.Response.Warnings)
             {
-                <div class="small @(warning.Code == "commingled" ? "text-muted" : "text-warning-strong")">@warning.Message</div>
+                <div class="small @(warning.Code == "commingled" ? "text-muted" : "text-warning-strong")">@L.Of(warning)</div>
             }
         </div>
         <button type="button" class="btn btn-sm btn-link p-0" aria-label="@L["Dismiss"]" @onclick="OnDismiss"><Icon Name="close" Size="16" /></button>

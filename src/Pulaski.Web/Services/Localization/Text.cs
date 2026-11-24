@@ -1,5 +1,12 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using Pulaski.Contracts.Common;
+using Pulaski.Contracts.Inventory;
+using Pulaski.Contracts.Scheduling;
+using Pulaski.Contracts.WorkOrders;
+using Pulaski.Contracts.Quality;
+using Pulaski.Contracts.Processes;
+using Pulaski.Contracts.Boms;
 
 namespace Pulaski.Web.Services.Localization;
 
@@ -93,6 +100,48 @@ public sealed class Text(TranslationCache? cache)
             return null;
         }
     }
+
+    /// <summary>A note or warning from the API in the reader's language (#189): its template translated and filled, else its English text.</summary>
+    public string Of(MessageDto message) => message.Template is { Length: > 0 } template ? Fill(template, Values(message.Values)) ?? message.Text : message.Text;
+
+    /// <inheritdoc cref="Of(MessageDto)"/>
+    public string Of(InventoryWarningDto warning) =>
+        warning.Template is { Length: > 0 } template ? Fill(template, Values(warning.Values)) ?? warning.Message : warning.Message;
+
+    /// <inheritdoc cref="Of(MessageDto)"/>
+    public string Of(ScheduleWarningDto warning) =>
+        warning.Template is { Length: > 0 } template ? Fill(template, Values(warning.Values)) ?? warning.Message : warning.Message;
+
+    /// <inheritdoc cref="Of(MessageDto)"/>
+    public string Of(SpecProblemDto problem) => Of(problem.Message, problem.Template, problem.Values);
+
+    /// <inheritdoc cref="Of(MessageDto)"/>
+    public string Of(ProcessProblemDto problem) => Of(problem.Message, problem.Template, problem.Values);
+
+    /// <inheritdoc cref="Of(MessageDto)"/>
+    public string Of(BomProblemDto problem) => Of(problem.Message, problem.Template, problem.Values);
+
+    /// <inheritdoc cref="Of(MessageDto)"/>
+    public string Of(ProcessOrderProblemDto problem) => Of(problem.Message, problem.Template, problem.Values);
+
+    private string Of(string english, string? template, IReadOnlyList<object?> values) =>
+        template is { Length: > 0 } ? Fill(template, Values(values)) ?? english : english;
+
+    /// <summary>Notes from the API in the reader's language, in order.</summary>
+    public IReadOnlyList<string> Notes(IEnumerable<MessageDto> messages) => [.. messages.Select(Of)];
+
+    /// <summary>A message's values as sent: JSON numbers as numbers (for the reader's region), the rest as text.</summary>
+    private static IReadOnlyList<object?> Values(IReadOnlyList<object?> values) =>
+        [.. values.Select(v => v is System.Text.Json.JsonElement e
+            ? e.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.Number when e.TryGetDecimal(out var number) => number,
+                System.Text.Json.JsonValueKind.Number => e.GetDouble(),
+                System.Text.Json.JsonValueKind.String => e.GetString(),
+                System.Text.Json.JsonValueKind.Null => null,
+                _ => (object?)e.ToString(),
+            }
+            : v)];
 
     /// <summary>A refusal in one line: its message, else its title, in the reader's language.</summary>
     public string Problem(ApiException error) => Message(error) ?? Title(error);

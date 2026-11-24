@@ -666,7 +666,7 @@
 
         var overlaps = timeline.Overlaps.Count;
         var warnings = timeline.Segments
-            .SelectMany(s => s.Warnings.Select(w => $"{s.JobNumber}: {w.Message}"))
+            .SelectMany(s => s.Warnings.Select(w => $"{s.JobNumber}: {L.Of(w)}"))
             .Distinct()
             .Take(5)
             .ToList();

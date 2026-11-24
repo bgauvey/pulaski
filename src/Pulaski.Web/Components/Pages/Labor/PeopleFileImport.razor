@@ -119,7 +119,7 @@
                                     @(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? L["Changed {0}", string.Join(", ", row.Changes)] : L["Changes {0}", string.Join(", ", row.Changes)]) : ""))
                                     @foreach (var note in row.Notes)
                                     {
-                                        <div class="text-muted">@note</div>
+                                        <div class="text-muted">@L.Of(note)</div>
                                     }
                                 </td>
                             </tr>

@@ -43,7 +43,21 @@ public sealed record ProcessOperation(
 public sealed record ProcessDependency(Guid Id, Guid FromOperationId, Guid ToOperationId, string Type, TimeSpan Lag);
 
 /// <summary>Something wrong with a definition, pinned to the operation or link it concerns when there is one.</summary>
-public sealed record ProcessProblem(string Code, string Message, Guid? OperationId = null, Guid? DependencyId = null);
+public sealed record ProcessProblem(string Code, UserMessage Text, Guid? OperationId = null, Guid? DependencyId = null)
+{
+    public ProcessProblem(string code, string message, Guid? operationId = null, Guid? dependencyId = null)
+        : this(code, UserMessage.Of(message), operationId, dependencyId)
+    {
+    }
+
+    public ProcessProblem(string code, ref MessageBuilder message, Guid? operationId = null, Guid? dependencyId = null)
+        : this(code, message.Build(), operationId, dependencyId)
+    {
+    }
+
+    /// <summary>The English message; <see cref="Text"/> has its template and values for the reader's language (#189).</summary>
+    public string Message => Text.Text;
+}
 
 /// <summary>
 /// A process route (ISA-95 operations definition, D-023): operations and the links between them.
@@ -99,7 +113,7 @@ public sealed record ProcessDefinition(IReadOnlyList<ProcessOperation> Operation
         {
             if (!ids.Contains(link.FromOperationId) || !ids.Contains(link.ToOperationId))
             {
-                problems.Add(new("unknown_operation", "A link points to an operation that isn't in the process.", DependencyId: link.Id));
+                problems.Add(new("unknown_operation", "A link points to an operation that isn't in the process.", dependencyId: link.Id));
             }
             else if (link.FromOperationId == link.ToOperationId)
             {
@@ -112,12 +126,12 @@ public sealed record ProcessDefinition(IReadOnlyList<ProcessOperation> Operation
 
             if (!DependencyType.All.Contains(link.Type))
             {
-                problems.Add(new("link_type", $"'{link.Type}' is not a link type.", DependencyId: link.Id));
+                problems.Add(new("link_type", $"'{link.Type}' is not a link type.", dependencyId: link.Id));
             }
 
             if (link.Lag < TimeSpan.Zero)
             {
-                problems.Add(new("link_lag", "A link's lag can't be negative.", DependencyId: link.Id));
+                problems.Add(new("link_lag", "A link's lag can't be negative.", dependencyId: link.Id));
             }
         }
 

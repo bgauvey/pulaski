@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
@@ -47,20 +48,27 @@ public static class ProcessOrderRules
         var problems = new List<ProcessOrderProblemDto>();
         foreach (var row in rows.OrderBy(r => r.OperationNumber).ThenBy(r => r.EquipmentCode, StringComparer.Ordinal))
         {
-            var op = $"Operation {row.OperationNumber} ({row.OperationName}):";
             if (!row.IsSchedulable || !row.IsActive || row.SiteId != siteId)
             {
-                problems.Add(new(
-                    "cannot_take_jobs", $"{op} {row.EquipmentCode} can't take jobs; change the process.", row.OperationNumber, row.EquipmentCode));
+                problems.Add(Notes.OrderProblem(
+                    "cannot_take_jobs",
+                    $"Operation {row.OperationNumber} ({row.OperationName}): {row.EquipmentCode} can't take jobs; change the process.",
+                    row.OperationNumber,
+                    row.EquipmentCode));
             }
             else if (!row.CanRunMaterial)
             {
-                var where = row.IsDepartment ? $"no line in {row.EquipmentCode} is" : $"{row.EquipmentCode} is not";
-                problems.Add(new(
-                    "no_capability",
-                    $"{op} {where} set up to run {row.MaterialCode}; add a capability for it first.",
-                    row.OperationNumber,
-                    row.EquipmentCode));
+                problems.Add(row.IsDepartment
+                    ? Notes.OrderProblem(
+                        "no_capability",
+                        $"Operation {row.OperationNumber} ({row.OperationName}): no line in {row.EquipmentCode} is set up to run {row.MaterialCode}; add a capability for it first.",
+                        row.OperationNumber,
+                        row.EquipmentCode)
+                    : Notes.OrderProblem(
+                        "no_capability",
+                        $"Operation {row.OperationNumber} ({row.OperationName}): {row.EquipmentCode} is not set up to run {row.MaterialCode}; add a capability for it first.",
+                        row.OperationNumber,
+                        row.EquipmentCode));
             }
         }
 
@@ -86,7 +94,7 @@ internal sealed class CheckProcessForOrderHandler(IProcessReadStore processes, I
         var released = process.Versions.FirstOrDefault(v => v.Status == ProcessVersionStatus.Released);
         if (released is null)
         {
-            return result with { Problems = [new("no_released_version", $"Process {process.Code} has no released version.")] };
+            return result with { Problems = [Notes.OrderProblem("no_released_version", $"Process {process.Code} has no released version.")] };
         }
 
         var rows = await processes.GetOrderEquipmentAsync(released.Id, query.MaterialId, timeProvider.GetUtcNow(), cancellationToken);
@@ -98,13 +106,13 @@ internal sealed class CheckProcessForOrderHandler(IProcessReadStore processes, I
         var problems = new List<ProcessOrderProblemDto>();
         if (!process.IsActive)
         {
-            problems.Add(new("inactive", $"Process {process.Code} is inactive."));
+            problems.Add(Notes.OrderProblem("inactive", $"Process {process.Code} is inactive."));
         }
 
         var offered = await processes.ListAsync(process.SiteId, query.MaterialId, cancellationToken);
         if (!offered.Any(p => p.Id == process.Id))
         {
-            problems.Add(new("not_covered", $"Process {process.Code} doesn't make {rows[0].MaterialCode}."));
+            problems.Add(Notes.OrderProblem("not_covered", $"Process {process.Code} doesn't make {rows[0].MaterialCode}."));
         }
 
         problems.AddRange(ProcessOrderRules.Problems(rows, process.SiteId));
@@ -116,7 +124,7 @@ internal sealed class CheckProcessForOrderHandler(IProcessReadStore processes, I
             .FirstOrDefault();
         if (bom is { MissingOperations.Length: > 0 })
         {
-            problems.Add(new(
+            problems.Add(Notes.OrderProblem(
                 "bom_operation",
                 $"The BOM for {bom.MaterialCode} (version {bom.ReleasedVersion}) names operation {string.Join(", ", bom.MissingOperations)}, which {process.Code}'s released version doesn't have; release a new BOM version first."));
         }

@@ -1,3 +1,4 @@
+using Pulaski.Contracts.Common;
 namespace Pulaski.Contracts.Processes;
 
 /// <summary>A process in a list: which version is released and whether a draft is open.</summary>
@@ -106,7 +107,13 @@ public sealed record OperationEquipmentDto(Guid EquipmentId, decimal SharePercen
 /// <summary><see cref="ToOperationId"/> starts after <see cref="FromOperationId"/> starts (<c>after_start</c>) or ends (<c>after_end</c>), plus the lag.</summary>
 public sealed record ProcessDependencyDto(Guid Id, Guid FromOperationId, Guid ToOperationId, string Type, TimeSpan Lag);
 
-public sealed record ProcessProblemDto(string Code, string Message, Guid? OperationId, Guid? DependencyId);
+public sealed record ProcessProblemDto(string Code, string Message, Guid? OperationId, Guid? DependencyId)
+{
+    /// <summary><see cref="Message"/>'s English template and values (#189), for the reader's language; null template: show the message.</summary>
+    public string? Template { get; init; }
+
+    public IReadOnlyList<object?> Values { get; init; } = [];
+}
 
 /// <summary>The draft's new concurrency token and what still stops its release.</summary>
 public sealed record SaveProcessDraftResponse(long Version, IReadOnlyList<ProcessProblemDto> Problems);
@@ -116,4 +123,4 @@ public sealed record SaveProcessDraftResponse(long Version, IReadOnlyList<Proces
 /// new version doesn't have (D-025). The release still happens; orders using those BOMs are
 /// refused until a new BOM version is released.
 /// </summary>
-public sealed record ReleaseProcessVersionResponse(long Version, IReadOnlyList<string> Warnings);
+public sealed record ReleaseProcessVersionResponse(long Version, IReadOnlyList<MessageDto> Warnings);

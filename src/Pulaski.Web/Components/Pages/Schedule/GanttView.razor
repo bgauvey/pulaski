@@ -502,7 +502,7 @@
         var s = window.Segment;
         var fastest = s.Candidates.Where(c => c.Work is not null).OrderBy(c => c.Work).FirstOrDefault();
         var estimate = fastest is null ? L["no line has a rate"] : L["~{0} on {1}", ScheduleFormat.Duration(fastest.Work!.Value), fastest.LineCode];
-        return s.Warnings.Count > 0 ? $"{estimate} · {s.Warnings[0].Message}" : $"{estimate} · {L["window {0}", ScheduleFormat.Duration(s.End - s.Start)]}";
+        return s.Warnings.Count > 0 ? $"{estimate} · {L.Of(s.Warnings[0])}" : $"{estimate} · {L["window {0}", ScheduleFormat.Duration(s.End - s.Start)]}";
     }
 
     private string GhostTitle(BoardItem window, CandidateLineDto candidate, BoardLine line)
@@ -605,7 +605,7 @@
         };
         if (s.WorkOrderNumber is not null) lines.Add(L["Work order {0}", s.WorkOrderNumber]);
         if (s.RemainingQty is not null) lines.Add(L["{0} to make", ScheduleFormat.Qty(s.RemainingQty, s.UomCode)]);
-        lines.AddRange(s.Warnings.Select(w => "⚠ " + w.Message));
+        lines.AddRange(s.Warnings.Select(w => "⚠ " + L.Of(w)));
         lines.AddRange(Controller.Board.OverlapsFor(item).Select(o => "⚠ " + o.Describe(L)));
         return string.Join('\n', lines);
     }

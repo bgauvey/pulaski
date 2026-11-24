@@ -15,7 +15,9 @@ public static partial class TermExtractor
     /// <summary>
     /// The templates of the server's messages for people (#128): every <c>new DomainRuleException("…")</c> (and the not found, conflict and
     /// not allowed ones) whose one argument is a string, and the field checks (#189): the message of <c>.Require(condition, field, "…")</c> and
-    /// of <c>ValidationException.Field(field, "…")</c>. Each is read as <c>MessageBuilder</c> builds it: each hole a numbered placeholder with
+    /// of <c>ValidationException.Field(field, "…")</c>; and notes and warnings (#189): <c>Notes.Of("…")</c>, <c>UserMessage.From("…")</c>,
+    /// <c>Notes.Inventory(code, "…")</c> (and Schedule, OrderProblem), <c>new ScheduleWarning(code, "…")</c> and a coded record made with
+    /// <c>new("code", "…")</c>. Each is read as <c>MessageBuilder</c> builds it: each hole a numbered placeholder with
     /// its alignment and format. A message put together otherwise isn't found, and shows in English.
     /// </summary>
     public static IEnumerable<string> Messages(string source)
@@ -23,6 +25,8 @@ public static partial class TermExtractor
         var calls = ThrowPattern().Matches(source).Select(m => (m.Index + m.Length, Skip: 0))
             .Concat(RequirePattern().Matches(source).Select(m => (m.Index + m.Length, Skip: 2)))
             .Concat(FieldPattern().Matches(source).Select(m => (m.Index + m.Length, Skip: 1)))
+            .Concat(NotePattern().Matches(source).Select(m => (m.Index + m.Length, Skip: 0)))
+            .Concat(CodedPattern().Matches(source).Select(m => (m.Index + m.Length, Skip: 1)))
             .OrderBy(c => c.Item1);
         foreach (var (start, skip) in calls)
         {
@@ -40,7 +44,8 @@ public static partial class TermExtractor
             while (ReadMessage(source, ref at, ref holes, out var isInterpolated) is { } part && (interpolated ?? isInterpolated) == isInterpolated)
             {
                 (interpolated, _) = (isInterpolated, template.Append(part));
-                if (Next(source, at) == ')')
+                // The message ends the call, or other arguments follow it (an id after a coded record's message).
+                if (Next(source, at) is ')' or ',')
                 {
                     yield return template.ToString();
                     break;
@@ -245,6 +250,12 @@ public static partial class TermExtractor
 
     [GeneratedRegex(@"\bValidationException\.Field\s*\(")]
     private static partial Regex FieldPattern();
+
+    [GeneratedRegex(@"\b(?:Notes\.Of|UserMessage\.(?:From|Of))\s*\(")]
+    private static partial Regex NotePattern();
+
+    [GeneratedRegex(@"\bNotes\.(?:Inventory|Schedule|OrderProblem)\s*\(|\bnew\s+ScheduleWarning\s*\(|\bnew\s*\((?=""[a-z_]+""\s*,)")]
+    private static partial Regex CodedPattern();
 
     [GeneratedRegex(@"\b[Ll]\[""(?<indexer>(?:[^""\\]|\\.)+)""|\bTerm\.Mark\(""(?<mark>(?:[^""\\]|\\.)+)""\)")]
     private static partial Regex Pattern();

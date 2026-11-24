@@ -38,7 +38,7 @@ public class ImportCapabilitiesHandlerTests
 
         var row = Assert.Single(added.Rows);
         Assert.Equal(("create", "PRF-1 on ext-01"), (row.Action, row.Code));
-        Assert.Contains("Planning rate set to 900 m/h", Assert.Single(row.Notes), StringComparison.Ordinal);
+        Assert.Contains("Planning rate set to 900 m/h", Assert.Single(row.Notes).Text, StringComparison.Ordinal);
         var capability = Assert.Single(Capabilities.On(_line.Id, _profile.Id));
         Assert.Equal((900m, TimeSpan.FromMinutes(45), 2m, true, HandlerFixture.Now), (capability.IdealRatePerHour, capability.StandardChangeover, capability.StandardCrewSize, capability.IsPreferred, capability.EffectiveFrom));
         Assert.Equal([EventTypes.CapabilityAdded, EventTypes.RunStandardCreated], _f.Stores.Events.Appended.Select(e => e.Type));
@@ -60,7 +60,7 @@ public class ImportCapabilitiesHandlerTests
         var later = await RunAsync(Dated + "PRF-1,EXT-01,1100,m,2026-11-01,\n");
         var row = Assert.Single(later.Rows);
         Assert.Equal("create", row.Action);
-        Assert.Contains(row.Notes, n => n.Contains("now ends where this one starts", StringComparison.Ordinal));
+        Assert.Contains(row.Notes, n => n.Text.Contains("now ends where this one starts", StringComparison.Ordinal));
         var periods = Capabilities.On(_line.Id, _profile.Id).OrderBy(c => c.EffectiveFrom).ToList();
         Assert.Equal([(HandlerFixture.Now, (DateTimeOffset?)nov, 900m), (nov, null, 1100m)], periods.Select(c => (c.EffectiveFrom, c.EffectiveTo, c.IdealRatePerHour)));
         Assert.Equal(900m, Capabilities.StandardFor(_line.Id, _profile.Id)!.CalculatedRatePerHour);
@@ -85,7 +85,7 @@ public class ImportCapabilitiesHandlerTests
         var changed = await RunAsync("material,line,ideal_rate,rate_unit\nPRF-1,EXT-01,1000,m\n");
         var row = Assert.Single(changed.Rows);
         Assert.Equal(["ideal_rate"], row.Changes);
-        Assert.Contains("Planning rate now 1,000 m/h", Assert.Single(row.Notes), StringComparison.Ordinal);
+        Assert.Contains("Planning rate now 1,000 m/h", Assert.Single(row.Notes).Text, StringComparison.Ordinal);
         var capability = Assert.Single(Capabilities.On(_line.Id, _profile.Id));
         Assert.Equal((1000m, TimeSpan.FromMinutes(45), true), (capability.IdealRatePerHour, capability.StandardChangeover, capability.IsPreferred));
         Assert.Equal(1000m, Capabilities.StandardFor(_line.Id, _profile.Id)!.CalculatedRatePerHour);
@@ -97,7 +97,7 @@ public class ImportCapabilitiesHandlerTests
         Assert.Equal(EventTypes.CapabilityEnded, _f.Stores.Events.Appended[^1].Type);
 
         var nothing = await RunAsync(Header + "PRF-1,EXT-01,,,,,,no\n");
-        Assert.Equal(("unchanged", "No capability in effect to end."), (Assert.Single(nothing.Rows).Action, nothing.Rows[0].Notes[0]));
+        Assert.Equal(("unchanged", "No capability in effect to end."), (Assert.Single(nothing.Rows).Action, nothing.Rows[0].Notes[0].Text));
     }
 
     [Fact]

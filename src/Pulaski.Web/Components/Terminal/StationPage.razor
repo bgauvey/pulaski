@@ -575,7 +575,7 @@ else
                     });
                     TerminalCookie.SetStation(HttpContext, answered.Ticket, answered.TicketExpiresAt);
                     _station = answered.Station;
-                    _notes = answered.Notes;
+                    _notes = L.Notes(answered.Notes);
                 }
                 catch (ApiException ex)
                 {
@@ -605,7 +605,7 @@ else
                     });
                     TerminalCookie.SetStation(HttpContext, coded.Ticket, coded.TicketExpiresAt);
                     _station = coded.Station;
-                    _notes = coded.Notes;
+                    _notes = L.Notes(coded.Notes);
                 }
                 catch (ApiException ex)
                 {
@@ -653,7 +653,7 @@ else
                     });
                     TerminalCookie.SetStation(HttpContext, result.Ticket, result.TicketExpiresAt);
                     _station = result.Station;
-                    _notes = result.Notes;
+                    _notes = L.Notes(result.Notes);
                 }
                 catch (ApiException ex)
                 {
@@ -681,7 +681,7 @@ else
                     });
                     TerminalCookie.SetStation(HttpContext, result.Ticket, result.TicketExpiresAt);
                     _station = result.Station;
-                    _notes = [StationView.Done(L, action, _station), .. result.Notes];
+                    _notes = [StationView.Done(L, action, _station), .. L.Notes(result.Notes)];
                 }
                 catch (ApiException ex)
                 {

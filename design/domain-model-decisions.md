@@ -3081,7 +3081,15 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   message keeps its template and values (`ValidationException.Messages`). The problem document adds `fieldMessages` (field → `template`/`values`,
   in the order of `errors`); the web reads them into `ApiException.FieldMessages` and shows `L.FieldErrors(error)` (`ProblemAlert`, the station,
   the password pages), falling back to the English for a message without one. The catalog takes the third argument of `.Require(…)` and the
-  second of `ValidationException.Field(…)`. Notes and warnings returned after an action, and draft checks' problems, follow in the next piece.
+  second of `ValidationException.Field(…)`.
+- **Notes, warnings and check problems (#189):** a note returned after an action is a `MessageDto` (Contracts: English `Text`, `Template`,
+  `Values`); the responses' `Notes` and string `Warnings` lists are lists of it. `InventoryWarningDto`, `ScheduleWarningDto` and the draft checks'
+  problems (`SpecProblemDto`, `ProcessProblemDto`, `BomProblemDto`, `ProcessOrderProblemDto`) keep `Code` and `Message` and add `Template`/`Values`.
+  The server builds them with `Notes.Of($"…")`, `Notes.Inventory`/`Schedule`/`OrderProblem(code, $"…")`; the Domain's records
+  (`ScheduleWarning`, `SpecProblem`, `ProcessProblem`, `BomProblem`) take a `MessageBuilder` as well as a string (their `Text` is a
+  `UserMessage`), so `new("code", $"…", id)` keeps its template; Domain code that words a message returns `UserMessage.From($"…")`. The web
+  shows `L.Of(note)` / `L.Notes(notes)`. A note worded from parts is one template per case (the station's report note, plurals). Screens compare
+  codes, never messages.
 - **Labels and helpers (#178):** status and kind codes read as words through `L.Label(code)` (`Display.Label` translated); the words of every
   code in the schema's CHECK lists are terms in `LabelTerms` (a test keeps it in step with `db/schema-draft.sql`). A helper's plain label is a
   `Term.Mark` the page shows with `L[…]` (`L.Of` when it may be null); a helper that words a sentence takes the `Text`. Values a page compares

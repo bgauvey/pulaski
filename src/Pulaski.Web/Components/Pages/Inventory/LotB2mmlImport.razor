@@ -24,7 +24,7 @@
         @foreach (var row in c.Rows.Where(r => c.Errors == 0 || r.Action == "error").Take(50))
         {
             <div class="small @(row.Action == "error" ? "text-danger" : "text-muted")">
-                @L["Line {0}, {1}: {2}", row.Line, row.Code, row.Message ?? string.Join("; ", row.Changes.Concat(row.Notes))]
+                @L["Line {0}, {1}: {2}", row.Line, row.Code, row.Message ?? string.Join("; ", row.Changes.Concat(L.Notes(row.Notes)))]
             </div>
         }
     }

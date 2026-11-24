@@ -84,7 +84,8 @@ internal static class SpecRules
         return problems;
     }
 
-    public static SpecProblemDto ToDto(SpecProblem problem) => new(problem.Code, problem.Message, problem.ItemId);
+    public static SpecProblemDto ToDto(SpecProblem problem) =>
+        new(problem.Code, problem.Message, problem.ItemId) { Template = problem.Text.Template, Values = problem.Text.Values };
 
     public static Characteristic Validate(Characteristic characteristic)
     {

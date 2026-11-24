@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+using Pulaski.Application.Localization;
 using System.Globalization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
@@ -112,19 +114,19 @@ internal sealed class CapabilityWrites(
     /// A line's own batch size and tolerance only for a material made in batches (D-065, #85); the rule stays the material's. A note says
     /// what they mean, and that open jobs keep their quantity.
     /// </summary>
-    public async Task<string?> CheckBatchSizeAsync(Capability capability, Capability? before, Material material, string lineCode, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<MessageDto>> CheckBatchSizeAsync(Capability capability, Capability? before, Material material, string lineCode, CancellationToken cancellationToken)
     {
         // Lots are cut by size, age or shift only where a report's output goes into lots by quantity (D-104).
         if (capability.LotCuts.IsOn && (!material.IsLotTracked || (await materials.GetBatchingAsync(material.Id, cancellationToken)).Size is not null))
         {
-            throw new DomainRuleException(material.IsLotTracked
-                ? $"{material.Code} is made in batches, and each good batch is its own lot; leave {lineCode}'s lot size, age and shift blank."
-                : $"{material.Code} isn't lot-tracked, so it is kept as one balance per location; leave {lineCode}'s lot size, age and shift blank.");
+            throw material.IsLotTracked
+                ? new DomainRuleException($"{material.Code} is made in batches, and each good batch is its own lot; leave {lineCode}'s lot size, age and shift blank.")
+                : new DomainRuleException($"{material.Code} isn't lot-tracked, so it is kept as one balance per location; leave {lineCode}'s lot size, age and shift blank.");
         }
 
         if (capability.BatchSize is null && capability.BatchTolerancePct is null)
         {
-            return before is { BatchSize: null, BatchTolerancePct: null } or null ? null : $"{lineCode} now uses {material.Code}'s own batch size and tolerance.";
+            return before is { BatchSize: null, BatchTolerancePct: null } or null ? [] : [Notes.Of($"{lineCode} now uses {material.Code}'s own batch size and tolerance.")];
         }
 
         var batching = await materials.GetBatchingAsync(material.Id, cancellationToken);
@@ -133,20 +135,20 @@ internal sealed class CapabilityWrites(
             throw new DomainRuleException($"{material.Code} isn't made in batches; give it a batch size before giving {lineCode} a batch size or tolerance of its own.");
         }
 
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         if (capability.BatchSize is { } size && before?.BatchSize != size)
         {
-            notes.Add($"{lineCode} makes {material.Code} in batches of {Qty(size)} (the material's are {Qty(batching.Size.Value)}). Open jobs keep their quantity; new jobs, moves and reports use the new size.");
+            notes.Add(Notes.Of($"{lineCode} makes {material.Code} in batches of {Qty(size)} (the material's are {Qty(batching.Size.Value)}). Open jobs keep their quantity; new jobs, moves and reports use the new size."));
         }
 
         if (capability.BatchTolerancePct is { } tolerance && before?.BatchTolerancePct != tolerance)
         {
             notes.Add(batching.Rule == BatchRule.Exact
-                ? $"{material.Code} is made to the exact rule, so every batch is exactly its size and the tolerance on {lineCode} counts only if the rule changes to near."
-                : $"On {lineCode} a batch of {material.Code} may be {Qty(tolerance)}% from its size (the material's tolerance is {Qty(batching.TolerancePct)}%).");
+                ? Notes.Of($"{material.Code} is made to the exact rule, so every batch is exactly its size and the tolerance on {lineCode} counts only if the rule changes to near.")
+                : Notes.Of($"On {lineCode} a batch of {material.Code} may be {Qty(tolerance)}% from its size (the material's tolerance is {Qty(batching.TolerancePct)}%)."));
         }
 
-        return notes.Count == 0 ? null : string.Join(" ", notes);
+        return notes;
     }
 
     /// <summary>Two periods of the same material on the same line can't overlap, so eligibility always has one answer.</summary>
@@ -166,7 +168,7 @@ internal sealed class CapabilityWrites(
     /// none, recalculated while it is still based on it. A modified rate is never touched.
     /// </summary>
     /// <returns>A note saying what happened to the planning rate, or null when nothing did.</returns>
-    public async Task<string?> FollowIdealRateAsync(Capability capability, string unitCode, DateTimeOffset at, CancellationToken cancellationToken)
+    public async Task<MessageDto?> FollowIdealRateAsync(Capability capability, string unitCode, DateTimeOffset at, CancellationToken cancellationToken)
     {
         var current = await capabilities.GetRunStandardForUpdateAsync(capability.EquipmentId, capability.MaterialId, cancellationToken);
         var rate = $"{Qty(capability.IdealRatePerHour)} {unitCode}/h";
@@ -177,7 +179,7 @@ internal sealed class CapabilityWrites(
             var made = events.Create(EventTypes.RunStandardCreated, "run_standard", created.Id, new { After = created });
             await capabilities.InsertRunStandardAsync(created, made.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(made, cancellationToken);
-            return $"Planning rate set to {rate}, from the ideal rate.";
+            return Notes.Of($"Planning rate set to {rate}, from the ideal rate.");
         }
 
         var followed = current.Value.FollowIdealRate(capability.IdealRatePerHour, capability.RateUomId, at);
@@ -185,19 +187,19 @@ internal sealed class CapabilityWrites(
         {
             return current.Value.CalculationBasis == CalculationBasis.IdealRate
                 ? null
-                : "The planning rate is calculated from run history, so the ideal rate doesn't change it.";
+                : Notes.Of("The planning rate is calculated from run history, so the ideal rate doesn't change it.");
         }
 
         var envelope = events.Create(EventTypes.RunStandardRecalculated, "run_standard", followed.Id, new { Before = current.Value, After = followed });
         await capabilities.UpdateRunStandardCalculationAsync(followed, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         return followed.ModifiedRatePerHour is { } modified
-            ? $"Calculated rate now {rate}; the modified rate of {Qty(modified)} {unitCode}/h stays in force."
-            : $"Planning rate now {rate}.";
+            ? Notes.Of($"Calculated rate now {rate}; the modified rate of {Qty(modified)} {unitCode}/h stays in force.")
+            : Notes.Of($"Planning rate now {rate}.");
     }
 
     /// <summary>A note when open jobs for the material on the line just lost the capability they need to move or dispatch there.</summary>
-    public async Task<string?> OpenJobsLeftAsync(Capability before, Capability after, string lineCode, string materialCode, DateTimeOffset at, CancellationToken cancellationToken)
+    public async Task<MessageDto?> OpenJobsLeftAsync(Capability before, Capability after, string lineCode, string materialCode, DateTimeOffset at, CancellationToken cancellationToken)
     {
         if (!before.IsInEffect(at) || after.IsInEffect(at))
         {
@@ -207,7 +209,9 @@ internal sealed class CapabilityWrites(
         var open = await capabilities.CountOpenJobsAsync(after.EquipmentId, after.MaterialId, cancellationToken);
         return open == 0
             ? null
-            : $"{open} open {(open == 1 ? "job" : "jobs")} for {materialCode} on {lineCode} stay{(open == 1 ? "s" : "")} there, but can't be moved to it or dispatched on it until it has a capability again.";
+            : open == 1
+                ? Notes.Of($"1 open job for {materialCode} on {lineCode} stays there, but can't be moved to it or dispatched on it until it has a capability again.")
+                : Notes.Of($"{open} open jobs for {materialCode} on {lineCode} stay there, but can't be moved to it or dispatched on it until it has a capability again.");
     }
 
     private static string Qty(decimal value) => value.ToString("#,0.######", CultureInfo.InvariantCulture);
@@ -252,9 +256,9 @@ internal sealed class AddCapabilityHandler(
         var envelope = events.Create(EventTypes.CapabilityAdded, "equipment_capability", capability.Id, new { After = capability });
         var version = await capabilities.InsertAsync(capability, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         notes.AddIfSet(await writes.FollowIdealRateAsync(capability, await UnitCodeAsync(units, capability.RateUomId, cancellationToken), now, cancellationToken));
-        notes.AddIfSet(batchNote);
+        notes.AddRange(batchNote);
         await transaction.CommitAsync(cancellationToken);
 
         return new CapabilityResponse(capability.Id, version, notes);
@@ -297,7 +301,7 @@ internal sealed class UpdateCapabilityHandler(
         var version = await capabilities.UpdateAsync(updated, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         if (updated.IdealRatePerHour != current.Value.IdealRatePerHour || updated.RateUomId != current.Value.RateUomId)
         {
             notes.AddIfSet(await writes.FollowIdealRateAsync(
@@ -305,7 +309,7 @@ internal sealed class UpdateCapabilityHandler(
         }
 
         notes.AddIfSet(await writes.OpenJobsLeftAsync(current.Value, updated, line.Code, material.Code, now, cancellationToken));
-        notes.AddIfSet(batchNote);
+        notes.AddRange(batchNote);
         await transaction.CommitAsync(cancellationToken);
 
         return new CapabilityResponse(updated.Id, version, notes);

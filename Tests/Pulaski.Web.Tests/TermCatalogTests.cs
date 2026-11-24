@@ -85,6 +85,23 @@ public class TermCatalogTests
     }
 
     [Fact]
+    public void Notes_and_coded_warnings_are_read_from_their_message_argument()
+    {
+        const string Source = """
+            notes.Add(Notes.Of($"{job.JobNumber} on {line} can start now."));
+            warnings.Add(Notes.Inventory("feed_shortfall", $"{qty:N0} wasn't consumed."));
+            problems.Add(new("unknown_component", $"Line {item.LineNo} names a material that doesn't exist.", item.Id));
+            warnings.Add(new ScheduleWarning(ScheduleWarningCode.Late, $"Projected to finish {late} after the due date."));
+            return UserMessage.From($"{name} isn't qualified for {line}.");
+            list.Add(new("x", 1));
+            notes.Add(Notes.Of(text));
+            """;
+        Assert.Equal(
+            ["{0} on {1} can start now.", "{0:N0} wasn't consumed.", "Line {0} names a material that doesn't exist.", "Projected to finish {0} after the due date.", "{0} isn't qualified for {1}."],
+            TermExtractor.Messages(Source));
+    }
+
+    [Fact]
     public void Every_status_and_kind_code_in_the_schema_has_its_label_as_a_term()
     {
         // Every CHECK of the form "column IN (...)" or "(a, b) IN ((...), ...)", as LabelTerms was made from.

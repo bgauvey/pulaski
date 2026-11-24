@@ -268,7 +268,7 @@ else
         var result = await Api.TerminalActAsync(Secret!, action.ApiAction!, request);
 
         _done = action.Confirmation(L, string.IsNullOrWhiteSpace(Input.Name) ? L["Done"] : Input.Name, _status!.Lines.FirstOrDefault(l => l.Id == action.Id)?.Code, Kind);
-        _notes = result.Notes;
+        _notes = L.Notes(result.Notes);
         _reset = DoneSeconds + (result.Notes.Count > 0 ? 6 : 0);
     }
 

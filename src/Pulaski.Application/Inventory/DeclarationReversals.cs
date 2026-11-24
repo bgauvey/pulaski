@@ -1,3 +1,4 @@
+using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Inventory;
@@ -160,7 +161,7 @@ internal sealed class ReverseMovementHandler(
         }
 
         return InventoryRules.Response(after, version,
-            [new("counts_unchanged", $"This production was recorded before reports could be reversed whole, so {job.JobNumber}'s reported output still counts it.")]);
+            [Notes.Inventory("counts_unchanged", $"This production was recorded before reports could be reversed whole, so {job.JobNumber}'s reported output still counts it.")]);
     }
 
     // Split, merge or a transfer between balances: both lots, locked in id order, put back as they were.

@@ -120,7 +120,13 @@ public sealed record TimelineSegmentDto
     public IReadOnlyList<ScheduleWarningDto> Warnings { get; init; } = [];
 }
 
-public sealed record ScheduleWarningDto(string Code, string Message);
+public sealed record ScheduleWarningDto(string Code, string Message)
+{
+    /// <summary><see cref="Message"/>'s English template and values (#189), for the reader's language; null template: show the message.</summary>
+    public string? Template { get; init; }
+
+    public IReadOnlyList<object?> Values { get; init; } = [];
+}
 
 /// <summary>A line that could run a group's job; <see cref="Work"/> is null without a run standard.</summary>
 public sealed record CandidateLineDto(Guid LineId, string LineCode, TimeSpan? Work, bool FitsWindow);

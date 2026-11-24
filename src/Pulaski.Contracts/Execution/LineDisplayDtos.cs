@@ -1,3 +1,4 @@
+using Pulaski.Contracts.Common;
 namespace Pulaski.Contracts.Execution;
 
 /// <summary>
@@ -193,7 +194,7 @@ public sealed record StationJobRequest
 /// <summary>What a station action did: its notes (a downstream job now ready, a changeover started), the renewed ticket and the station now.</summary>
 public sealed record StationActionResponse
 {
-    public IReadOnlyList<string> Notes { get; init; } = [];
+    public IReadOnlyList<MessageDto> Notes { get; init; } = [];
     public required string Ticket { get; init; }
     public DateTimeOffset TicketExpiresAt { get; init; }
     public required StationDto Station { get; init; }

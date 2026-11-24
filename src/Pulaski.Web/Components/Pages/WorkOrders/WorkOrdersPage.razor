@@ -372,7 +372,7 @@
                                     }
                                     @foreach (var warning in p.Warnings)
                                     {
-                                        <div class="small wo-warning"><Icon Name="alert" Size="14" /> @warning.Message</div>
+                                        <div class="small wo-warning"><Icon Name="alert" Size="14" /> @L.Of(warning)</div>
                                     }
                                     @if (p.HasOverlap)
                                     {
@@ -601,7 +601,7 @@
             flags.Add("A job overlaps other work on its line.");
         }
 
-        flags.AddRange(p.Warnings.Where(w => w.Code != "late").Select(w => w.Message));
+        flags.AddRange(p.Warnings.Where(w => w.Code != "late").Select(L.Of));
         return flags;
     }
 

@@ -1,3 +1,4 @@
+using Pulaski.Contracts.Common;
 namespace Pulaski.Contracts.Labor;
 
 // ---- People and crews (D-040) ----
@@ -202,7 +203,7 @@ public sealed record CorrectLaborSessionRequest
 }
 
 /// <summary>The time a session was recorded or changed, and any notes for the person doing it.</summary>
-public sealed record LaborResponse(Guid Id, long Version, IReadOnlyList<string> Notes);
+public sealed record LaborResponse(Guid Id, long Version, IReadOnlyList<MessageDto> Notes);
 
 /// <summary>The signed-in user's own labor (D-040): who they are as a person, their open sessions and the break they are on.</summary>
 public sealed record MyLaborDto(PersonDto? Person, IReadOnlyList<LaborSessionDto> Sessions, BreakDto? OpenBreak = null);
