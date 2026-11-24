@@ -6,7 +6,8 @@
 # It builds the images from this clone (deploy/images), starts PostgreSQL 18, creates the database with the demo site, lines and
 # materials (pulaski-db), then the API and the UI. The machine simulators (deploy/simulator/compose.yaml: an MQTT broker, three PackML
 # simulators publishing Sparkplug B, an OPC UA server) start beside them; demo-setup connects an edge node to them and starts the
-# simulated machines, and the edge forwards their states to Pulaski.
+# simulated machines, and the edge forwards their states to Pulaski. demo-history then records the previous shift and the current one so
+# far, so the screens have something to show from the start.
 #
 # Every password and key below is for this demo only. Each can be overridden from the environment or a .env file beside this one, as can
 # the ports, if something on this machine already uses them.
@@ -96,6 +97,20 @@ services:
       PULASKI_MQTT_PORT: "1883"
     volumes:
       - edge-config:/shared
+    restart: "no"
+
+  # Gives the demo plant its previous shift and the current one so far (tools/Pulaski.DemoHistory): orders run, reports, lots, stops, quality
+  # results and SPC alerts, andon calls, labor and handover notes, recorded through the application's own handlers. Once only; then exits.
+  demo-history:
+    build:
+      context: .
+      dockerfile: deploy/images/demo-history/Dockerfile
+    image: pulaski-demo-history:demo
+    depends_on:
+      demo-setup:
+        condition: service_completed_successfully
+    environment:
+      PULASKI_CONNECTION: Host=db;Database=pulaski;Username=pulaski_api;Password=${PULASKI_APP_PASSWORD:-pulaski-demo-api}
     restart: "no"
 
   # The edge node, signed in with what demo-setup writes; it starts as soon as that is there, so it sees the machines start. Its buffer

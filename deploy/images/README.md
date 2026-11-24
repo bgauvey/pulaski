@@ -1,6 +1,6 @@
 # Container images
 
-Six images, each built from the repository root (D-101). Nothing is published yet: build them from a clone.
+Seven images, each built from the repository root (D-101). Nothing is published yet: build them from a clone.
 
 ```sh
 docker build -f deploy/images/db/Dockerfile   -t pulaski-db .
@@ -8,10 +8,11 @@ docker build -f deploy/images/api/Dockerfile  -t pulaski-api .
 docker build -f deploy/images/web/Dockerfile  -t pulaski-web .
 docker build -f deploy/images/edge/Dockerfile -t pulaski-edge .
 docker build -f deploy/images/demo-setup/Dockerfile -t pulaski-demo-setup .
+docker build -f deploy/images/demo-history/Dockerfile -t pulaski-demo-history .
 docker build -f deploy/images/process-simulator/Dockerfile -t pulaski-process-simulator .
 ```
 
-They build with the SDK `global.json` pins and run on the matching .NET runtime, as the image's non-root `app` user. CI builds all six
+They build with the SDK `global.json` pins and run on the matching .NET runtime, as the image's non-root `app` user. CI builds all seven
 on every pull request.
 
 ## `pulaski-db`: create or upgrade the database
@@ -69,6 +70,23 @@ for a moment and gives the temporary one back; if the administrator no longer ha
 | `PULASKI_SITE` | The demo site's code, default `PLT1`. |
 | `PULASKI_MQTT_HOST`, `PULASKI_MQTT_PORT` | The simulators' broker, default `broker:1883`. |
 | `PULASKI_EDGE_FILE` | Where the edge's sign-in goes, default `/shared/edge.env`. |
+
+## `pulaski-demo-history`: the demo only
+
+`tools/Pulaski.DemoHistory`, run once by the root `compose.yaml` after the demo setup. It gives the demo plant its previous shift and the
+current one so far, as if people and machines had recorded them: it runs the application's own command handlers against the database (as
+the API's login, with the clock set to each moment), so the rows and events are what the API would write. It adds a shift schedule
+`DEMO-3X8` (day 06:00, evening 14:00, night 22:00, crews A, B and C) that the site follows, users and people for each crew (temporary password
+`Pulaski-demo-2`), andon call types, edge node `LINE2-EDGE` with EXT-02's tags, process `DEMO-PROFILE` (EXT-02 then PACK1) with BOMs, and
+EXT-02's control limits; then work orders `HIST-1001`…`HIST-1006`, production and scrap reports (one corrected, one reversed), resin lots
+received, consumed, split, spilled, held, released, rejected and shipped, EXT-02's machine states, stops, counts and alarms, quality results
+with SPC alerts, andon calls, labor with breaks, an approval and a correction, and handover notes. EXT-01 runs the live job `DEMO-0001`, so it
+only gets people, calls and notes. A plant that has `DEMO-3X8` already is left alone; a failure ends it with exit code 1.
+
+| Variable | Meaning |
+| --- | --- |
+| `PULASKI_CONNECTION` | The database as the API's login, such as `Host=db;Database=pulaski;Username=pulaski_api;Password=…` (required). |
+| `PULASKI_SITE_ZONE` | The demo site's time zone, default `America/Chicago` (as `db/seed-demo.sql`). |
 
 ## `pulaski-process-simulator`: the demo only
 

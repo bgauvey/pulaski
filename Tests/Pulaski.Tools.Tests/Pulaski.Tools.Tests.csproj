@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The demo's tools (D-101): the process simulator and the demo setup. -->
+  <!-- The demo's tools (D-101): the process simulator, the demo setup and the demo history. -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\tools\Pulaski.ProcessSimulator\Pulaski.ProcessSimulator.csproj" />
     <ProjectReference Include="..\..\tools\Pulaski.DemoSetup\Pulaski.DemoSetup.csproj" />
+    <ProjectReference Include="..\..\tools\Pulaski.DemoHistory\Pulaski.DemoHistory.csproj" />
   </ItemGroup>
 
   <ItemGroup>

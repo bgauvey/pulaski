@@ -493,6 +493,8 @@ Treat these as working assumptions; confirm with Bill before building anything t
   `demo-setup` = `tools/Pulaski.DemoSetup`, which connects edge node DEMO-EDGE to them through the API and starts the machines, and the edge;
   `tools/Pulaski.ProcessSimulator` publishes EXT-01-EXT's melt temperature and profile width, with a shift every 30 min; the setup also
   charts them, MELT-TEMP and PROFILE-WIDTH with a spec and manual limits, and runs work order DEMO-0001 on EXT-01 so they are sampled);
+  then `demo-history` = `tools/Pulaski.DemoHistory` records the previous and current shift (orders on EXT-02/PACK1, reports, lots, stops, SPC, andon,
+  labor, handover) through the real command handlers with a moved clock, once (skipped when schedule `DEMO-3X8` exists);
   sign in as `admin` / `Pulaski-demo-1` once the setup has finished. `docker compose down -v` drops its data.
 - Network-outage test (D-103): `deploy/outage-test/run.sh` (`OUTAGE_MINUTES`, default 10; `KEEP_UP=1`) runs the demo with Toxiproxy between edge and
   API, cuts that link and checks nothing was lost; CI runs it nightly and by hand (`.github/workflows/outage.yml`), not on every push.

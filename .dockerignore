@@ -1,4 +1,4 @@
-# Only what the images build from: sources, build settings, the database scripts and the demo setup tool.
+# Only what the images build from: sources, build settings, the database scripts and the demo tools.
 .git/
 .github/
 .vs/
@@ -10,6 +10,7 @@ Tests/
 tools/*
 !tools/Pulaski.DemoSetup/
 !tools/Pulaski.ProcessSimulator/
+!tools/Pulaski.DemoHistory/
 
 # Build output and local files, wherever they are (after the exception above, so they stay out of it too).
 **/bin/

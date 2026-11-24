@@ -135,7 +135,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [api, web, edge, db, demo-setup, process-simulator]
+        image: [api, web, edge, db, demo-setup, demo-history, process-simulator]
 
     steps:
       - uses: actions/checkout@v5
