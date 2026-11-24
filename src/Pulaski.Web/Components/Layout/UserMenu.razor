@@ -1,0 +1,99 @@
+@inject CurrentUser User
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@* The header's user menu: who is signed in, then Preferences (a dialog with language and region, colour theme and touch layout), My alerts,
+   changing the password and signing out. The menu is a native popover (closes on Escape or a click outside); theme and touch layout are kept
+   per device in the browser (js/theme.js), language and region on the user. *@
+@if (User.Me is { } me)
+{
+    <button type="button" class="user-button" popovertarget="user-menu" aria-haspopup="menu" title="@User.RoleSummary"
+            aria-label="@L["Account menu for {0}", me.DisplayName]">
+        <span class="user-avatar" aria-hidden="true">@UserMenuView.Initials(me.DisplayName)</span>
+        <span class="user-text">
+            <span class="user-name">@me.DisplayName</span>
+            <span class="user-roles">@User.RoleSummary</span>
+        </span>
+        <Icon Name="chevron-down" Size="16" />
+    </button>
+
+    <div id="user-menu" class="user-menu" popover role="menu" aria-label="@L["Account menu"]">
+        <div class="user-menu-head">
+            <span class="user-avatar user-avatar-lg" aria-hidden="true">@UserMenuView.Initials(me.DisplayName)</span>
+            <span class="user-menu-who">
+                <span class="user-name">@me.DisplayName</span>
+                <span class="user-menu-detail">@me.Username</span>
+                @if (User.RoleSummary.Length > 0)
+                {
+                    <span class="user-menu-detail">@User.RoleSummary</span>
+                }
+            </span>
+        </div>
+        <button type="button" role="menuitem" class="user-menu-item" @onclick="OpenPreferencesAsync">
+            <Icon Name="categorized" Size="18" /><span>@L["Preferences…"]</span>
+            <span class="user-menu-hint">@L["Language, theme, touch"]</span>
+        </button>
+        <a role="menuitem" class="user-menu-item" href="my-alerts"><Icon Name="alert" Size="18" /><span>@L["My alerts"]</span></a>
+        <a role="menuitem" class="user-menu-item" href="account/password"><Icon Name="lock" Size="18" /><span>@L["Change your password"]</span></a>
+        <div class="user-menu-rule" role="separator"></div>
+        <form method="post" action="account/logout" class="m-0">
+            <button type="submit" role="menuitem" class="user-menu-item"><Icon Name="sign-out" Size="18" /><span>@L["Sign out"]</span></button>
+        </form>
+    </div>
+
+    <dialog id="preferences-dialog" class="prefs-dialog" aria-labelledby="prefs-title">
+        <div class="prefs-head">
+            <h2 class="h5 mb-0" id="prefs-title">@L["Preferences"]</h2>
+            <button type="button" class="prefs-close" aria-label="@L["Close"]" onclick="this.closest('dialog').close()"><Icon Name="close" Size="18" /></button>
+        </div>
+
+        <section class="prefs-section" aria-labelledby="prefs-theme">
+            <h3 class="prefs-title" id="prefs-theme">@L["Colour theme"]</h3>
+            <p class="prefs-help">@L["Kept on this device."]</p>
+            <div class="prefs-choices" role="radiogroup" aria-labelledby="prefs-theme">
+                @Choice("pulaski-theme", "system", L["Like the device"])
+                @Choice("pulaski-theme", "light", L["Light"])
+                @Choice("pulaski-theme", "dark", L["Dark"])
+            </div>
+        </section>
+
+        <section class="prefs-section" aria-labelledby="prefs-touch">
+            <h3 class="prefs-title" id="prefs-touch">@L["Touch layout"]</h3>
+            <p class="prefs-help">@L["Larger buttons and fields for a touch screen. Automatic switches it on where the screen is touched with a finger; many industrial panels work like a mouse, so switch it on there. Kept on this device."]</p>
+            <div class="prefs-choices" role="radiogroup" aria-labelledby="prefs-touch">
+                @Choice("pulaski-touch", "auto", L["Automatic"])
+                @Choice("pulaski-touch", "on", L["On"])
+                @Choice("pulaski-touch", "off", L["Off"])
+            </div>
+        </section>
+
+        <section class="prefs-section" aria-labelledby="prefs-language">
+            <h3 class="prefs-title" id="prefs-language">@L["Language and region"]</h3>
+            <p class="prefs-help">@L["Kept on your user, so it follows you to any computer. Saving reloads the page in the new language."]</p>
+            @if (_preferencesOpened)
+            {
+                <PreferencesForm ReturnUrl="@ReturnUrl" IdPrefix="dialog-pref" />
+            }
+        </section>
+    </dialog>
+}
+
+@code {
+    // The language form loads the languages from the API, so only once the dialog is first opened.
+    private bool _preferencesOpened;
+
+    private string ReturnUrl => "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+
+    private async Task OpenPreferencesAsync()
+    {
+        _preferencesOpened = true;
+        await JS.InvokeVoidAsync("pulaski.openDialog", "preferences-dialog");
+    }
+
+    // Plain radios: js/theme.js applies a change at once and ticks the stored choice when the dialog opens.
+    private static RenderFragment Choice(string name, string value, string label) =>
+        @<label class="prefs-choice">
+            <input type="radio" name="@name" value="@value" data-pref="@name" />
+            <span>@label</span>
+        </label>;
+}

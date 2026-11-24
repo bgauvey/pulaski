@@ -88,19 +88,21 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
   - **Operate:** **Overview**, **Work orders**, **Schedule**, **Floor**, **Inventory**, **Labor**: the pages you use day to day.
   - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons**, **Shifts**, **Site settings**, **Integrations**, **People** (and **Users**, for administrators, with tabs for users, roles and permissions): the setup you do once and change now and then.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
-- **You (top right).** Your name and roles; the warning sign opens **My alerts** (e-mails when something needs you), the padlock changes your
-  password, and the door signs you out.
-- **Touch layout (top right).** The hand button switches to larger buttons and fields for a touch screen; see [Use a touch screen](#use-a-touch-screen).
-- **Theme (top right).** The sun/moon button switches between light and dark.
+- **You (top right).** Your initials, name and roles. Click them for your menu:
+  - **Preferences…** opens a dialog with your [language and region](#your-language-and-region), the **colour theme** (*Like the device*,
+    *Light* or *Dark*) and the [touch layout](#use-a-touch-screen) (*Automatic*, *On* or *Off*).
+  - **My alerts** (e-mails when something needs you), **Change your password** and **Sign out**.
+
+  Press Esc or click elsewhere to close the menu. Theme and touch layout are kept on that device; language and region on your user.
 - **Main area.** The page you picked.
 
 ### Your language and region
 
 Pulaski's screens can show another language than English, and write dates and numbers the way your region does.
 
-1. Click the button with the list icon at the top right (**Language and region**).
+1. Click your name at the top right, then **Preferences…**.
 2. Choose your **Language** and, if you like, your **Region** (such as *Español (México)*); the page shows how dates and numbers will look.
-3. Click **Save**. The page reloads in your language.
+3. Click **Save language and region**. The page reloads in your language.
 
 In detail:
 
@@ -1008,10 +1010,10 @@ In detail:
 On a tablet or a touch panel at the line, the floor screens switch to a **touch layout**: larger buttons and fields, a number keypad for
 quantities, and reasons as buttons instead of a list.
 
-1. On a tablet the touch layout comes on by itself. On a touch panel that works like a mouse (many industrial screens do), click the hand
-   button at the top right to switch it on; it is highlighted while on.
+1. On a tablet the touch layout comes on by itself. On a touch panel that works like a mouse (many industrial screens do), click your name at
+   the top right, then **Preferences…**, and under **Touch layout** choose **On**. It applies at once.
 2. The choice is kept on that device, so a line's panel stays in touch layout and a desk computer stays as it was.
-3. Click the hand button again to switch back.
+3. Choose **Automatic** (or **Off**) to switch back.
 
 In detail:
 

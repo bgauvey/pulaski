@@ -1,12 +1,6 @@
-/* Touch layout (#119): on where the main pointer is a finger, or switched on from the header (data-touch on <html>, js/theme.js).
+/* Touch layout (#119): on where the main pointer is a finger, or switched on in Preferences (data-touch on <html>, js/theme.js).
    Every control a finger presses is at least --touch-target high, quantities get room for gloved fingers, and a form's actions
    stay in reach at the foot of the screen. Nothing changes for a mouse. */
-
-/* The header switch shows its state. */
-:root[data-touch] .touch-toggle {
-    color: var(--accent);
-    background: var(--accent-soft);
-}
 
 /* Shown only in one layout: a reason dropdown for the mouse, a grid of buttons for the finger. */
 :root[data-touch] .mouse-only,

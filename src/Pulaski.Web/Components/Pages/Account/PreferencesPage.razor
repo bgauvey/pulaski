@@ -1,14 +1,8 @@
 @page "/preferences"
-@using System.Globalization
-@inject PulaskiApiClient Api
-@inject CurrentUser User
-@inject NavigationManager Navigation
-@inject TimeProvider Clock
 
 <PageTitle>@L["Language and region"] · Pulaski</PageTitle>
 
-@* A user's language and region (#128, D-114): the screens' text, and how dates and numbers are written. Kept on their user; this browser
-   follows once saved. *@
+@* A user's language and region (#128, D-114), also in the Preferences dialog of the header's user menu. *@
 <div class="inv-head">
     <div>
         <h1 class="mb-1">@L["Language and region"]</h1>
@@ -16,107 +10,6 @@
     </div>
 </div>
 
-<ProblemAlert Error="_error" />
-
-@if (_languages is null)
-{
-    @if (_error is null)
-    {
-        <p class="text-muted">@L["Loading…"]</p>
-    }
-}
-else
-{
-    <section class="inv-facts" style="max-width: 40rem">
-        <div class="mb-3">
-            <label class="form-label fw-semibold" for="pref-language">@L["Language"]</label>
-            <select id="pref-language" class="form-select" @bind="_language">
-                <option value="en">English</option>
-                @foreach (var language in _languages.Where(l => l.IsActive))
-                {
-                    <option value="@language.Code">@language.Name</option>
-                }
-            </select>
-            <div class="form-text">@L["Where a screen has no translation yet, it shows in English."]</div>
-        </div>
-        <div class="mb-3">
-            <label class="form-label fw-semibold" for="pref-region">@L["Region"]</label>
-            <select id="pref-region" class="form-select" @bind="_region">
-                <option value="">@L["The language's usual"]</option>
-                @foreach (var culture in Regions)
-                {
-                    <option value="@culture.Name">@culture.NativeName (@culture.Name)</option>
-                }
-            </select>
-            <div class="form-text">@L["Dates and numbers look like this: {0} · {1}", Sample(_region).Date, Sample(_region).Number]</div>
-        </div>
-        <ActionButton Class="btn btn-primary" Busy="_busy" OnClick="SaveAsync">@L["Save"]</ActionButton>
-    </section>
-}
-
-@code {
-    private static readonly IReadOnlyList<CultureInfo> Regions =
-        [.. CultureInfo.GetCultures(CultureTypes.SpecificCultures).OrderBy(c => c.NativeName, StringComparer.CurrentCulture)];
-
-    private IReadOnlyList<LanguageDto>? _languages;
-    private string _language = "en";
-    private string _region = "";
-    private bool _busy;
-    private ApiException? _error;
-
-    protected override async Task OnInitializedAsync()
-    {
-        (_language, _region) = (User.Me?.Language ?? "en", User.Me?.Region ?? "");
-        try
-        {
-            _languages = await Api.ListLanguagesAsync();
-        }
-        catch (ApiException ex)
-        {
-            _error = ex;
-        }
-    }
-
-    private (string Date, string Number) Sample(string region)
-    {
-        var culture = region.Length > 0 ? CultureInfo.GetCultureInfo(region) : _language == "en" ? CultureInfo.GetCultureInfo(Cultures.Default) : TryCulture(_language);
-        var now = Clock.GetUtcNow();
-        return (now.ToString("g", culture), 1234567.891m.ToString("N2", culture));
-    }
-
-    private static CultureInfo TryCulture(string name)
-    {
-        try
-        {
-            return CultureInfo.GetCultureInfo(name);
-        }
-        catch (CultureNotFoundException)
-        {
-            return CultureInfo.GetCultureInfo(Cultures.Default);
-        }
-    }
-
-    private async Task SaveAsync()
-    {
-        (_busy, _error) = (true, null);
-        try
-        {
-            var language = _language == "en" ? null : _language;
-            var region = _region.Length == 0 ? null : _region;
-            await Api.SetPreferencesAsync(new PreferencesRequest { Language = language, Region = region });
-
-            // This browser follows: the culture cookie is set by a real request, then back here in the new language.
-            Navigation.NavigateTo(
-                $"account/culture?language={Uri.EscapeDataString(language ?? "")}&region={Uri.EscapeDataString(region ?? "")}&returnUrl={Uri.EscapeDataString("/preferences")}",
-                forceLoad: true);
-        }
-        catch (ApiException ex)
-        {
-            _error = ex;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-}
+<section class="inv-facts" style="max-width: 40rem">
+    <PreferencesForm ReturnUrl="/preferences" />
+</section>
