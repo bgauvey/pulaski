@@ -8,20 +8,19 @@
 
 @* Shift schedules (D-038): each site's schedules, edited as a grid of shifts against the days of the cycle, with a
    preview of the coming week. Equipment chooses one on Configure → Equipment, or inherits its parent's. *@
-<PageTitle>Shifts · Pulaski</PageTitle>
+<PageTitle>@L["Shifts"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Shift schedules</h1>
+        <h1 class="mb-1">@L["Shift schedules"]</h1>
         <p class="text-muted mb-0">
-            When each site works. Planning places jobs only inside shifts. Equipment follows a schedule of its own or inherits its
-            parent's (choose on <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink>); with none set anywhere above it, it runs around the clock.
+            @L["When each site works. Planning places jobs only inside shifts. Equipment follows a schedule of its own or inherits its parent's (choose on"] <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">@L["Equipment"]</ScreenLink>@L["); with none set anywhere above it, it runs around the clock."]
         </p>
     </div>
     <div class="inv-head-tools">
         @if (Sites.Sites.Count > 1)
         {
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -30,7 +29,7 @@
         }
         @if (CanManage && _edit is null)
         {
-            <ActionButton Class="btn btn-primary" Reason="@(Sites.SiteId is null ? "Choose a site first: a schedule belongs to one." : null)" OnClick="StartNew">New schedule</ActionButton>
+            <ActionButton Class="btn btn-primary" Reason="@(Sites.SiteId is null ? L["Choose a site first: a schedule belongs to one."] : null)" OnClick="StartNew">@L["New schedule"]</ActionButton>
         }
     </div>
 </div>
@@ -42,17 +41,17 @@
 {
     <div class="alert alert-success d-flex align-items-center gap-2" role="status">
         <span>@message</span>
-        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">@L["Dismiss"]</button>
     </div>
 }
 
 @if (_edit is { } edit)
 {
     <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
-        <h2 class="h6">@(edit.IsNew ? "New shift schedule" : $"Change {edit.Code}")</h2>
+        <h2 class="h6">@(edit.IsNew ? L["New shift schedule"] : $"Change {edit.Code}")</h2>
         <div class="row g-2">
             <div class="col-sm-2">
-                <label class="form-label small" for="sch-code">Code</label>
+                <label class="form-label small" for="sch-code">@L["Code"]</label>
                 @if (edit.IsNew)
                 {
                     <input id="sch-code" class="form-control" maxlength="30" placeholder="e.g. 2X8" @bind="edit.Code" @bind:event="oninput" />
@@ -63,25 +62,25 @@
                 }
             </div>
             <div class="col-sm-3">
-                <label class="form-label small" for="sch-name">Name</label>
-                <input id="sch-name" class="form-control" maxlength="100" placeholder="e.g. Two shifts, weekdays" @bind="edit.Name" @bind:event="oninput" />
+                <label class="form-label small" for="sch-name">@L["Name"]</label>
+                <input id="sch-name" class="form-control" maxlength="100" placeholder="@L["e.g. Two shifts, weekdays"]" @bind="edit.Name" @bind:event="oninput" />
             </div>
             <div class="col-sm-3">
-                <label class="form-label small" for="sch-description">Notes (optional)</label>
+                <label class="form-label small" for="sch-description">@L["Notes (optional)"]</label>
                 <input id="sch-description" class="form-control" maxlength="500" @bind="edit.Description" />
             </div>
             <div class="col-sm-2">
-                <label class="form-label small" for="sch-cycle">Repeats every (days)</label>
+                <label class="form-label small" for="sch-cycle">@L["Repeats every (days)"]</label>
                 <input id="sch-cycle" type="number" class="form-control" min="1" max="56" value="@edit.CycleDays" @onchange="e => SetCycleAsync(edit, e)" />
             </div>
             <div class="col-sm-2">
-                <label class="form-label small" for="sch-start">Cycle starts on</label>
+                <label class="form-label small" for="sch-start">@L["Cycle starts on"]</label>
                 <input id="sch-start" type="date" class="form-control" value="@edit.CycleStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
                        @onchange="e => SetStartAsync(edit, e)" />
             </div>
             <div class="col-12 small text-muted">
-                Times are in the site's time zone@(_preview?.TimeZone is { Length: > 0 } zone ? $" ({zone})" : ""). A weekly schedule repeats every 7 days; a
-                rotation such as four crews on 12-hour shifts repeats every 28. A shift belongs to the day it starts on.
+                @(_preview?.TimeZone is { Length: > 0 } zone ? L["Times are in the site's time zone ({0}).", zone] : L["Times are in the site's time zone."])
+                @L["A weekly schedule repeats every 7 days; a rotation such as four crews on 12-hour shifts repeats every 28. A shift belongs to the day it starts on."]
             </div>
         </div>
 
@@ -89,14 +88,14 @@
             <table class="table table-sm align-middle shift-grid mb-2">
                 <thead>
                     <tr>
-                        <th style="width: 6rem">Shift</th>
-                        <th style="width: 10rem">Name</th>
-                        <th style="width: 7rem">Starts</th>
-                        <th style="width: 6rem">Hours</th>
-                        <th style="width: 8rem">Crew</th>
+                        <th style="width: 6rem">@L["Shift"]</th>
+                        <th style="width: 10rem">@L["Name"]</th>
+                        <th style="width: 7rem">@L["Starts"]</th>
+                        <th style="width: 6rem">@L["Hours"]</th>
+                        <th style="width: 8rem">@L["Crew"]</th>
                         @for (var d = 0; d < edit.CycleDays; d++)
                         {
-                            <th class="text-center shift-day">@ShiftView.DayLabel(d, edit.CycleDays, edit.CycleStart)</th>
+                            <th class="text-center shift-day">@ShiftView.DayLabel(L, d, edit.CycleDays, edit.CycleStart)</th>
                         }
                         <th></th>
                     </tr>
@@ -105,13 +104,13 @@
                     @foreach (var row in edit.Rows)
                     {
                         <tr @key="row">
-                            <td><input class="form-control form-control-sm" maxlength="10" aria-label="Shift code" @bind="row.Code" @bind:after="PreviewAsync" /></td>
-                            <td><input class="form-control form-control-sm" maxlength="50" aria-label="Shift name" @bind="row.Name" /></td>
-                            <td><input type="time" class="form-control form-control-sm" aria-label="Starts at" @bind="row.Start" @bind:after="PreviewAsync" /></td>
-                            <td><input type="number" class="form-control form-control-sm" min="0.25" max="24" step="0.25" aria-label="Length in hours" @bind="row.Hours" @bind:after="PreviewAsync" /></td>
+                            <td><input class="form-control form-control-sm" maxlength="10" aria-label="@L["Shift code"]" @bind="row.Code" @bind:after="PreviewAsync" /></td>
+                            <td><input class="form-control form-control-sm" maxlength="50" aria-label="@L["Shift name"]" @bind="row.Name" /></td>
+                            <td><input type="time" class="form-control form-control-sm" aria-label="@L["Starts at"]" @bind="row.Start" @bind:after="PreviewAsync" /></td>
+                            <td><input type="number" class="form-control form-control-sm" min="0.25" max="24" step="0.25" aria-label="@L["Length in hours"]" @bind="row.Hours" @bind:after="PreviewAsync" /></td>
                             <td>
-                                <select class="form-select form-select-sm" aria-label="Crew working shift @row.Code" @bind="row.Crew">
-                                    <option value="">No crew</option>
+                                <select class="form-select form-select-sm" aria-label="@L["Crew working shift {0}", row.Code]" @bind="row.Crew">
+                                    <option value="">@L["No crew"]</option>
                                     @foreach (var c in _crews.Where(c => c.IsActive || c.Code == row.Crew))
                                     {
                                         <option value="@c.Code">@c.Code</option>
@@ -123,12 +122,12 @@
                                 var day = d;
                                 <td class="text-center">
                                     <input class="form-check-input" type="checkbox" checked="@row.Days.Contains(day)"
-                                           aria-label="@($"{row.Code} on {ShiftView.DayLabel(day, edit.CycleDays, edit.CycleStart)}")"
+                                           aria-label="@L["{0} on {1}", row.Code, ShiftView.DayLabel(L, day, edit.CycleDays, edit.CycleStart)]"
                                            @onchange="e => ToggleDayAsync(row, day, e.Value is true)" />
                                 </td>
                             }
                             <td class="text-end">
-                                <button type="button" class="btn btn-sm btn-link text-danger p-0" title="Remove shift" aria-label="Remove shift @row.Code"
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0" title="@L["Remove shift"]" aria-label="@L["Remove shift {0}", row.Code]"
                                         @onclick="() => RemoveRowAsync(edit, row)">×</button>
                             </td>
                         </tr>
@@ -136,22 +135,22 @@
                         <tr @key="(row, true)" class="shift-breaks">
                             <td colspan="@(6 + edit.CycleDays)" class="small">
                                 <div class="d-flex flex-wrap align-items-center gap-2">
-                                    <span class="text-muted">Planned breaks:</span>
+                                    <span class="text-muted">@L["Planned breaks:"]</span>
                                     @foreach (var b in row.Breaks)
                                     {
                                         <span class="d-inline-flex align-items-center gap-1" @key="b">
-                                            <input class="form-control form-control-sm" style="width: 7rem" maxlength="40" aria-label="Break name in @row.Code" @bind="b.Name" />
-                                            <input type="time" class="form-control form-control-sm" style="width: 7rem" aria-label="Break starts at" @bind="b.Start" />
-                                            <input type="number" class="form-control form-control-sm" style="width: 5rem" min="5" max="240" aria-label="Break minutes" @bind="b.Minutes" />
-                                            <span>min</span>
+                                            <input class="form-control form-control-sm" style="width: 7rem" maxlength="40" aria-label="@L["Break name in {0}", row.Code]" @bind="b.Name" />
+                                            <input type="time" class="form-control form-control-sm" style="width: 7rem" aria-label="@L["Break starts at"]" @bind="b.Start" />
+                                            <input type="number" class="form-control form-control-sm" style="width: 5rem" min="5" max="240" aria-label="@L["Break minutes"]" @bind="b.Minutes" />
+                                            <span>@L["min"]</span>
                                             <input class="form-check-input" type="checkbox" id="paid-@b.GetHashCode()" @bind="b.IsPaid" />
-                                            <label class="form-check-label" for="paid-@b.GetHashCode()">paid</label>
-                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" aria-label="Remove break @b.Name" @onclick="() => row.Breaks.Remove(b)">×</button>
+                                            <label class="form-check-label" for="paid-@b.GetHashCode()">@L["paid"]</label>
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0" aria-label="@L["Remove break {0}", b.Name]" @onclick="() => row.Breaks.Remove(b)">×</button>
                                         </span>
                                     }
                                     @if (row.Breaks.Count < 6)
                                     {
-                                        <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => row.Breaks.Add(new BreakRow { Start = row.Start.AddHours(4) })">+ Break</button>
+                                        <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => row.Breaks.Add(new BreakRow { Start = row.Start.AddHours(4) })">@L["+ Break"]</button>
                                     }
                                 </div>
                             </td>
@@ -160,21 +159,21 @@
                 </tbody>
             </table>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary btn-with-icon" @onclick="() => AddRowAsync(edit)"><Icon Name="plus" Size="16" /> Add shift</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary btn-with-icon" @onclick="() => AddRowAsync(edit)"><Icon Name="plus" Size="16" /> @L["Add shift"]</button>
 
         @if (!edit.IsNew)
         {
             <div class="form-check mt-3">
                 <input class="form-check-input" type="checkbox" id="sch-active" @bind="edit.IsActive" />
-                <label class="form-check-label small" for="sch-active">Active: equipment can follow it. One that equipment follows can't be switched off.</label>
+                <label class="form-check-label small" for="sch-active">@L["Active: equipment can follow it. One that equipment follows can't be switched off."]</label>
             </div>
         }
 
         <div class="shift-preview mt-3">
-            <h3 class="h6 mb-1">The next 7 days</h3>
+            <h3 class="h6 mb-1">@L["The next 7 days"]</h3>
             @if (_preview is null)
             {
-                <p class="small text-muted mb-0">Working it out…</p>
+                <p class="small text-muted mb-0">@L["Working it out…"]</p>
             }
             else if (_preview.Problems.Count > 0)
             {
@@ -192,21 +191,21 @@
                     @foreach (var day in _preview.Shifts.GroupBy(s => s.ProductionDate))
                     {
                         <li>
-                            <span class="fw-semibold">@day.Key.ToString("ddd d MMM", CultureInfo.InvariantCulture)</span>
-                            @string.Join(" · ", day.Select(s => $"{s.Code} {s.Start:HH\\:mm}–{s.End:HH\\:mm}{(s.Crew is { } crew ? $" ({crew})" : "")}{(s.IsOverride ? " (one-off)" : "")}"))
+                            <span class="fw-semibold">@day.Key.ToString("ddd d MMM", CultureInfo.CurrentCulture)</span>
+                            @string.Join(" · ", day.Select(s => $"{s.Code} {s.Start:HH\\:mm}–{s.End:HH\\:mm}{(s.Crew is { } crew ? $" ({crew})" : "")}{(s.IsOverride ? " " + L["(one-off)"] : "")}"))
                         </li>
                     }
                     @if (_preview.Shifts.Count == 0)
                     {
-                        <li class="text-muted">No shifts in the next 7 days.</li>
+                        <li class="text-muted">@L["No shifts in the next 7 days."]</li>
                     }
                 </ul>
             }
         </div>
 
         <div class="d-flex gap-2 mt-3">
-            <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanSave(edit))">@(edit.IsNew ? "Create schedule" : "Save schedule")</button>
-            <button type="button" class="btn btn-outline-secondary" @onclick="() => _edit = null">Cancel</button>
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanSave(edit))">@(edit.IsNew ? L["Create schedule"] : L["Save schedule"])</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _edit = null">@L["Cancel"]</button>
         </div>
     </form>
 }
@@ -221,14 +220,15 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_schedules.Count == 0)
 {
     <div class="empty-panel">
         <p class="text-muted mb-0">
-            No shift schedules at @(Sites.Site?.Code ?? "this site") yet, so its lines are planned around the clock.@(CanManage ? " Click New schedule to add one." : "")
+            @(CanManage ? L["No shift schedules at {0} yet, so its lines are planned around the clock. Click New schedule to add one.", Sites.Site?.Code ?? L["this site"]]
+                : L["No shift schedules at {0} yet, so its lines are planned around the clock.", Sites.Site?.Code ?? L["this site"]])
         </p>
     </div>
 }
@@ -238,12 +238,12 @@ else
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Schedule</th>
-                    <th>Repeats</th>
-                    <th>Shifts</th>
-                    <th class="inv-num">Hours a cycle</th>
-                    <th>Followed by</th>
-                    <th>Status</th>
+                    <th>@L["Schedule"]</th>
+                    <th>@L["Repeats"]</th>
+                    <th>@L["Shifts"]</th>
+                    <th class="inv-num">@L["Hours a cycle"]</th>
+                    <th>@L["Followed by"]</th>
+                    <th>@L["Status"]</th>
                     <th></th>
                 </tr>
             </thead>
@@ -255,22 +255,22 @@ else
                             <div class="fw-semibold">@s.Code</div>
                             <div class="small text-muted">@s.Name@(s.Description is { } d ? $" · {d}" : "")</div>
                         </td>
-                        <td class="small">Every @s.CycleDays @(s.CycleDays == 1 ? "day" : "days") from @s.CycleStart.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)</td>
+                        <td class="small">@(s.CycleDays == 1 ? L["Every day from {0}", s.CycleStart.ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture)] : L["Every {0} days from {1}", s.CycleDays, s.CycleStart.ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture)])</td>
                         <td class="small">
-                            @ShiftView.Summary(s.Shifts)
+                            @ShiftView.Summary(L, s.Shifts)
                             @if (ShiftOverrideView.Upcoming(s.Overrides, DateOnly.FromDateTime(DateTime.Today), all: false).Count is > 0 and var upcoming)
                             {
                                 <div class="text-muted">@upcoming one-off @(upcoming == 1 ? "change" : "changes") coming up</div>
                             }
                         </td>
                         <td class="inv-num">@ShiftView.Hours(s.HoursPerCycle)</td>
-                        <td class="small">@(s.UsedBy.Count == 0 ? "Nothing yet" : string.Join(", ", s.UsedBy))</td>
-                        <td class="small">@(s.IsActive ? "Active" : "Switched off")</td>
+                        <td class="small">@(s.UsedBy.Count == 0 ? L["Nothing yet"] : string.Join(", ", s.UsedBy))</td>
+                        <td class="small">@(s.IsActive ? L["Active"] : L["Switched off"])</td>
                         <td class="text-end text-nowrap">
-                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _overridesFor = s.Id">One-off changes</button>
+                            <button type="button" class="btn btn-sm btn-link" @onclick="() => _overridesFor = s.Id">@L["One-off changes"]</button>
                             @if (CanManage && _edit is null)
                             {
-                                <button type="button" class="btn btn-sm btn-link" @onclick="() => StartEditAsync(s)">Change</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => StartEditAsync(s)">@L["Change"]</button>
                             }
                         </td>
                     </tr>
@@ -278,7 +278,7 @@ else
             </tbody>
         </table>
     </div>
-    <p class="small text-muted mt-2">"Followed by" lists equipment that has the schedule as its own; equipment below it inherits it unless it has its own.</p>
+    <p class="small text-muted mt-2">@L["\"Followed by\" lists equipment that has the schedule as its own; equipment below it inherits it unless it has its own."]</p>
 }
 
 @code {
@@ -488,7 +488,7 @@ else
                     CycleStart = edit.CycleStart,
                     Shifts = edit.ToShifts(),
                 });
-                _message = $"Created {edit.Code.Trim().ToUpperInvariant()}. Choose it for a site, area or line on Equipment.";
+                _message = L["Created {0}. Choose it for a site, area or line on Equipment.", edit.Code.Trim().ToUpperInvariant()];
             }
             else
             {
@@ -502,7 +502,7 @@ else
                     Shifts = edit.ToShifts(),
                     IsActive = edit.IsActive,
                 });
-                _message = $"Saved {edit.Code}. The schedule shows the new times straight away.";
+                _message = L["Saved {0}. The schedule shows the new times straight away.", edit.Code];
             }
 
             _edit = null;

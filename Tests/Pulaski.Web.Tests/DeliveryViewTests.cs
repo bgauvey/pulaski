@@ -1,5 +1,6 @@
 using Pulaski.Contracts.Integrations;
 using Pulaski.Web.Services.Integrations;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Tests;
 
@@ -26,15 +27,15 @@ public class DeliveryViewTests
     [Fact]
     public void A_delivery_says_where_it_stands_and_what_happens_next()
     {
-        Assert.Equal(("Failed", "chip chip-danger"), DeliveryView.Status(D("failed")));
-        Assert.Equal("Held", DeliveryView.Status(D("pending", held: true)).Text);
-        Assert.Equal("Retrying", DeliveryView.Status(D("pending", attempts: 2)).Text);
-        Assert.Equal("Queued", DeliveryView.Status(D("pending")).Text);
+        Assert.Equal(("Failed", "chip chip-danger"), DeliveryView.Status(Text.English, D("failed")));
+        Assert.Equal("Held", DeliveryView.Status(Text.English, D("pending", held: true)).Text);
+        Assert.Equal("Retrying", DeliveryView.Status(Text.English, D("pending", attempts: 2)).Text);
+        Assert.Equal("Queued", DeliveryView.Status(Text.English, D("pending")).Text);
 
-        Assert.Equal("Next try in 3 min.", DeliveryView.Next(D("pending", attempts: 4, next: Now.AddSeconds(150)), Now));
-        Assert.Equal("Next try in 20 s.", DeliveryView.Next(D("pending", attempts: 1, next: Now.AddSeconds(20)), Now));
-        Assert.Equal("Skipped by ops: Booked by hand", DeliveryView.Next(D("skipped", note: "Booked by hand"), Now));
-        Assert.StartsWith("Waits behind", DeliveryView.Next(D("pending", held: true), Now), StringComparison.Ordinal);
+        Assert.Equal("Next try in 3 min.", DeliveryView.Next(Text.English, D("pending", attempts: 4, next: Now.AddSeconds(150)), Now));
+        Assert.Equal("Next try in 20 s.", DeliveryView.Next(Text.English, D("pending", attempts: 1, next: Now.AddSeconds(20)), Now));
+        Assert.Equal("Skipped by ops: Booked by hand", DeliveryView.Next(Text.English, D("skipped", note: "Booked by hand"), Now));
+        Assert.StartsWith("Waits behind", DeliveryView.Next(Text.English, D("pending", held: true), Now), StringComparison.Ordinal);
     }
 
     [Fact]

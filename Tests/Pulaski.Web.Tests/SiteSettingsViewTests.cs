@@ -1,6 +1,7 @@
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Shifts;
 using Pulaski.Web.Services;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Tests;
 
@@ -12,17 +13,17 @@ public class SiteSettingsViewTests
     [InlineData(99.9, "At least 100%")]
     [InlineData(1000.1, "At most 1000%.")]
     public void Tolerances_outside_100_to_1000_percent_are_refused(double? value, string problem) =>
-        Assert.StartsWith(problem, SiteSettingsView.ToleranceProblem((decimal?)value), StringComparison.Ordinal);
+        Assert.StartsWith(problem, SiteSettingsView.ToleranceProblem(Text.English, (decimal?)value), StringComparison.Ordinal);
 
     [Fact]
     public void The_examples_show_what_the_tolerance_allows()
     {
-        Assert.Null(SiteSettingsView.ToleranceProblem(110m));
-        Assert.Contains("up to 2,200 m", SiteSettingsView.RateExample(110m), StringComparison.Ordinal);
-        Assert.Contains("more is refused", SiteSettingsView.RateExample(110m), StringComparison.Ordinal);
-        Assert.Contains("up to 625 kg", SiteSettingsView.ConsumptionExample(125m), StringComparison.Ordinal);
-        Assert.Contains("with a warning", SiteSettingsView.ConsumptionExample(125m), StringComparison.Ordinal);
-        Assert.Equal("", SiteSettingsView.RateExample(50m));
+        Assert.Null(SiteSettingsView.ToleranceProblem(Text.English, 110m));
+        Assert.Contains("up to 2,200 m", SiteSettingsView.RateExample(Text.English, 110m), StringComparison.Ordinal);
+        Assert.Contains("more is refused", SiteSettingsView.RateExample(Text.English, 110m), StringComparison.Ordinal);
+        Assert.Contains("up to 625 kg", SiteSettingsView.ConsumptionExample(Text.English, 125m), StringComparison.Ordinal);
+        Assert.Contains("with a warning", SiteSettingsView.ConsumptionExample(Text.English, 125m), StringComparison.Ordinal);
+        Assert.Equal("", SiteSettingsView.RateExample(Text.English, 50m));
     }
 
     [Fact]
@@ -65,8 +66,8 @@ public class SiteSettingsViewTests
             IsActive = true,
         };
 
-        Assert.Equal("Fri 25 Dec 2026 06:00 – Mon 28 Dec 2026 06:00 (3 days)", SiteSettingsView.Window(holiday, "America/Chicago"));
-        Assert.Equal(("Coming", "Now", "Past"), (SiteSettingsView.When(holiday, start.AddHours(-1)), SiteSettingsView.When(holiday, start), SiteSettingsView.When(holiday, start.AddDays(3))));
+        Assert.Equal("Fri 25 Dec 2026 06:00 – Mon 28 Dec 2026 06:00 (3 days)", SiteSettingsView.Window(Text.English, holiday, "America/Chicago"));
+        Assert.Equal(("Coming", "Now", "Past"), (SiteSettingsView.When(Text.English, holiday, start.AddHours(-1)), SiteSettingsView.When(Text.English, holiday, start), SiteSettingsView.When(Text.English, holiday, start.AddDays(3))));
         Assert.Equal("Planned shutdown", SiteSettingsView.KindLabel("planned_shutdown"));
     }
 }

@@ -27,6 +27,8 @@
  · lot {0}
  · next at {0}
  · version {0}
+"A whole lot" and "part lots first" pull opposite ways; the earlier one decides.
+"Followed by" lists equipment that has the schedule as its own; equipment below it inherits it unless it has its own.
 '{0}' is not a non-production job type.
 '{0}' is not a valid role for level '{1}'.
 '{0}' isn't a batch rule; use exact or near.
@@ -34,32 +36,66 @@
 '{0}' isn't a material type; use {1}.
 '{0}' isn't a role.
 '{0}' isn't an attribute type; use {1}.
+(0 to 17, or a name such as Execute).
+(dates, numbers)
+(else
+(every label value as a named data source),
+(inactive)
+(one SELECT, run read-only; the connection string is
+(one-off)
 (optional)
+(optional, {0})
+(or
 (reasons marked * need one)
 (required)
 (scrap)
+(setup, teardown, cleaning, planned maintenance) is left out of planned time. A machine profile maps the machine's own stop codes to these reasons.
+(switched off)
+(the document),
+(the printer and copies),
 (when there is scrap)
 ({0} {1} a count)
+) and give it the
+) as the key. No fields to map.
+), an EtherNet/IP address a tag name with its type (
+); the easiest way to bind one is from
+); with none set anywhere above it, it runs around the clock.
+); without one, on their employee number. Nothing is saved until every person is valid.
++ Break
 +{0} more
 , across {0} jobs.
+, add a user for this edge (such as
+, an OPC UA address a node id
+, and
+, and any label value by name, such as
 , and it appears here.
 , at least {0} min
+, each optionally
 , empty at ≤ {0}
+, from {0}
 , ideal {0}
 , level ± {0}
 , modified {0} (in force)
 , operation {0}
+, or as a service). It reads this page's connections and tags every minute, so changes here reach it without a restart. If Pulaski can't be reached it keeps collecting into its buffer and forwards everything once it can.
+, or later by posting the event id with that to
 , out of {0}
 , released {0:yyyy-MM-dd}
+, signed like Pulaski's messages.
 , {0} failed. {1}
 , {0} on breaks
 , {0} open
 , {0} scrap
 , {0} skipped (not allowed from their status)
 , {0} to come
+. A change applies to everyone who holds the role, straight away.
 . A failure of a characteristic that holds the lot puts the lot on hold.
+. Counts and process values are multiplied by the scale; a counter that wraps needs its rollover value; a process value is recorded when it moves by more than its deadband (in scaled units), and at least once a minute while it holds. An alarm or warning tag carries the number of the active one (0 for none); a machine may have several.
+. The whole scan must match; formats are tried in order.
 1 BarTender document
+1 delivery goes again on the next round.
 1 lot is still to count; enter 0 for a lot that isn't there.
+1 month
 1 of it is how many {0}
 1 open item
 1 overlap on this line
@@ -68,8 +104,11 @@
 1 session, oldest {0}
 1 stop chosen
 1 stop to code
+1,0 for a ControlLogix in slot 0
+100 to 1000%. {0}
 14 in a row alternating up and down
 15 in a row within 1 sigma
+1883, or 8883 with TLS
 2 of 3 beyond 2 sigma on one side
 2 weeks
 3 days
@@ -77,9 +116,14 @@
 6 in a row rising or falling
 8 in a row beyond 1 sigma, either side
 9 in a row on one side of the centre line
+: the lines this terminal offers, read only.
+; any they aren't already granted are granted (an import never revokes one). Nothing is saved until every row is valid.
 ; good output in lot {0}
 ; good output in lots {0}
+; to give roles to people,
 ; {0} centre {1}, up to {2}
+A Pulaski Edge node runs on plant hardware, close to the machines. It reads them through its connections (an MQTT Sparkplug B broker), keeps what it reads in a local buffer, and forwards it here, so a network drop loses nothing. Add a node here, then its connections and the tags that bind what it reads to your equipment.
+A TV enrolled the same way shows a line display board at
 A balance has no lot number; it is named by its location.
 A balance of a material that isn't lot-tracked can't be {0}; it is already one quantity per location.
 A balance of a material that isn't lot-tracked moves by quantity; give the quantity to move.
@@ -89,12 +133,16 @@ A call escalates after 1 to {0} minutes without an answer.
 A call for help
 A call type's code is 1 to 20 letters, digits, '-' and '_', such as MAINT.
 A capability must end after it starts.
+A change applies to the next report on the site's lines; reports already made aren't checked again.
+A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's configuration, never here.
 A connection's code is fixed once made: it names its credentials in the configuration ({0}).
 A connection's kind is fixed once made ({0}); add another connection instead.
 A conversion needs two different units.
 A count can't go below zero, so neither can its lower limit.
 A crew belongs to a site; choose one.
 A failing result for a lot puts the lot on hold
+A grant is valid from its first day to its last, both included, in the site's time zone. A renewal is a new grant: the old one stays in the list. Someone put on a line that requires a qualification they don't hold is still put on, with a warning.
+A grant lasts
 A handover entry is a note or an open item.
 A job has a schedule warning or overlaps other work.
 A job of {0} has started, so it can't be cancelled as a whole.
@@ -104,9 +152,11 @@ A job planned to a group needs a finish-by time: its window must have an end.
 A label from the item master, such as its MRP class; it drives no rules.
 A label to scan when moving stock here
 A language code is two or three letters, optionally with a region, such as es or pt-BR.
+A limit:
 A line's batch size changed while the order was being made. Try again.
 A lot attribute belongs to a site; choose one.
 A lot can be set to available, on hold or quarantine, not {0}.
+A lot that covers what is needed alone
 A machine profile belongs to a site; choose one.
 A material class of the rule doesn't exist.
 A material of the rule doesn't exist.
@@ -120,18 +170,27 @@ A partial batch is less than a batch: more than 0 and less than {0} {1}. Report 
 A partial batch of a finished good waits on hold until approved: approving releases its lot; rejecting writes it off and counts it as scrap.
 A partial batch of {0} waits for approval in a lot of its own; choose a location that keeps lots apart.
 A partial batch waits for approval:
+A path BarTender can open. A kind without its own document uses the default.
 A people connection's site is fixed once made; add another connection for another site.
 A person belongs to a site; choose one.
+A proposal for a rate already from run history is accepted at once when it is within the limit below. The first rate from run history, and larger changes, always wait for a planner.
 A qualification belongs to a site; choose one.
 A receipt against it must be of more than zero.
 A referenced record does not exist.
 A released version never changes; start a new draft to change the BOM.
 A released version never changes; start a new draft to change the specification.
+A role is a set of permissions you give to users at a site. Change a role here, or tick permissions role by role on
 A rule with the same line and sides is already on ({0} min). Change that one, or switch it off first.
+A shift schedule
 A shift schedule belongs to a site; choose one.
+A short while after stock, jobs or orders change, every open job's allocations are refreshed, as Refresh on the Shortages page does.
 A stop entered by hand must have ended: it can't end in the future.
 A stop must end after it starts.
 A stop needs its reason
+A utilization reason's class says what the time means for OEE:
+A warning:
+A webhook (HTTPS)
+A weekly schedule repeats every 7 days; a rotation such as four crews on 12-hour shifts repeats every 28. A shift belongs to the day it starts on.
 A work order cannot move from '{0}' to '{1}'.
 A {0} movement can't be reversed; put it right with another movement.
 A {0} needs a parent.
@@ -139,6 +198,7 @@ Accept
 Accept changes of more than 0 and at most 100 percent without review.
 Accept or reject
 Accept proposal
+Accept small changes without review
 Accepted
 Accepted without review
 Accepting sets the calculated rate. The modified rate stays in force for planning until you clear it.
@@ -146,9 +206,13 @@ Accepting works the rate out again over the same days and basis; if runs ended s
 Acknowledged
 Actions
 Active
+Active: can be given to users. A role someone holds can't be switched off.
+Active: equipment can follow it. One that equipment follows can't be switched off.
 Add
+Add a calendar exception
 Add a characteristic
 Add a default material
+Add a feed
 Add a language
 Add a line
 Add a line or department
@@ -158,33 +222,60 @@ Add a lot attribute
 Add a material
 Add a material class
 Add a note
+Add a printer
+Add a role…
 Add a rule
 Add a second line or department to share the work between.
+Add a supplier format
 Add a work center that can run jobs on
+Add an alert
 Add an approved alternate
 Add an open item
 Add attribute
 Add batch
 Add break
+Add call type
 Add characteristic
+Add child
 Add class
 Add component
+Add connection
 Add container
+Add crew
 Add delivery
+Add edge node
+Add enterprise
+Add exception
 Add job at the end of the line
 Add line
 Add lines that run jobs on the
 Add one
 Add operation
+Add person
+Add profile
+Add qualification
 Add rejected batch
 Add rule
+Add shift
 Add someone
+Add state
 Add the
+Add {0}
+Add {0} group
+Add {0} reason
 Added
+Added call type {0}.
+Added the calendar exception. The schedule shows it on its next refresh.
 Added the rule. The schedule uses it on its next refresh.
 Added {0}.
+Added {0}. Require it on a site, area or line on Equipment.
+Added {0}. Set its address and what it sends under Settings, then switch it on.
 Added {0}. Translate its terms, or import them from a file.
+Added: {0}.
+Address
+Address of {0} {1}
 Adjusted
+Administrator holds every permission at every site and can't be changed, so someone can always manage users.
 Administrators and service accounts:
 After
 After end
@@ -197,8 +288,11 @@ Against the jobs' runs
 Against {0}. {1} subgroups; mean {2}, sigma {3} within subgroups and {4} overall.
 Aging
 Alarm
+Alarm (active number, 0 = none)
 Alarms
+Alert
 Alert {0} not found.
+Alerts go to
 All
 All calls
 All changes saved
@@ -222,8 +316,12 @@ Allocated to jobs
 Allocation {0} of that job wasn't found.
 Allocations and suggested lots
 Alphabetical
+Already at the job's line (picked from nearest)
+Already in the list
+Also works at
 Alternate
 Alternate material
+An MQTT broker
 An edge node belongs to a site; choose one.
 An expected receipt belongs to a site; choose one.
 An inactive material can't be received, ordered or added to BOMs. What already uses it carries on.
@@ -234,6 +332,7 @@ And back
 Andon
 Andon call {0} not found.
 Andon escalated
+Andon: calls for help
 Andon: calls for help from the lines
 Another capability for this material on this line was changed at the same moment, and the periods now overlap. Reload and try again.
 Another material already has the code {0}{1}.
@@ -250,6 +349,7 @@ Any unit that converts to {0}'s base unit.
 Any value
 Anything
 Applied
+Applies to
 Approval note
 Approve
 Approve these limits
@@ -260,19 +360,30 @@ Approved the limits for {0}{1}.
 Approving ends the open sessions when the shift ended.
 Area
 Around the clock
+Around the clock: no shift schedule is set here or above
 Arrange
 As it was
 Ask a supervisor to enrol it.
+Ask for a new one.
+Ask on each report
 At
+At (UTC, up to 4)
 At least 10 characters, with two of: lower case, upper case, digits, symbols. Not your user name.
+At least 10 characters, with two of: lower case, upper case, digits, symbols; not your user name.
+At least 100%: reports are never held below what the line can do or what was planned.
+At most 1000%.
 At most {0} choices of up to {1} characters.
+At site
+At site…
 At the end
 At the end of
 At the line
+At the top
 At {0} it goes into lot {1} ({2}).
 At {0} it starts a new lot.
 Attach
 Attached
+Attempts
 Attribute
 Attributes
 Attributes and certificates
@@ -286,6 +397,7 @@ Availability = run ÷ planned; performance = output at the ideal rate ÷ run tim
 Availability {0}, performance {1}, quality {2}
 Available
 Available stock covers every open job's remaining components. Clear Short only to see them.
+Awaiting a role
 B2MML lots file
 B2mml
 BOM
@@ -295,9 +407,11 @@ BOM line {0} is consumed by operation {1}, which the process doesn't have.
 BOM unit
 BOM {0} not found.
 BOMs
+BTXML template
 Back
 Back to Pulaski
 Back to calculated
+Back to sign in
 Back to the Floor
 Back to the ideal rate
 Back to {0}
@@ -307,6 +421,8 @@ Back-dated; recorded {0}
 Backflush
 Backflush on count
 Badge
+Badge and PIN
+Badge and PIN suits terminals anyone could walk up to with a found badge. Switching a terminal off stops it working at once.
 Badge in
 Badge in to answer it.
 Badge in to answer them.
@@ -320,10 +436,13 @@ Badged at {0}
 Balance
 Balance at {0}
 Balances
+BarTender (web service)
 BarTender at {0}
 BarTender couldn't print the label on {0}: {1}{2}
+BarTender document (.btw) for each kind of label
 BarTender documents: {0}
 BarTender refused the label for {0}: {1} {2}{3}.
+BarTender web service address
 Bartender
 Base unit
 Base unit: {0} ({1}).
@@ -340,10 +459,13 @@ Before this version can be released:
 Before {0}
 Behind
 Best of its machines
+Best of its machines (parallel)
 Beyond the control limits
 Beyond the limits
 Bills of materials
 Bin
+Bind
+Bind tag
 Bind tags to equipment of {0}'s site that tracks state (a consumed counter or a level may go on one that holds inventory); {1} doesn't qualify.
 Binding {0} not found.
 Blank: straight into the balance
@@ -355,9 +477,17 @@ Both parts keep the stop's reason; code each one afterwards.
 Both parts of the split are replaced by the stop they came from, with its reason and coding. Only if neither part was adjusted since.
 Box
 Break
+Break minutes
+Break name in {0}
+Break starts at
 Break {0} not found.
 Breaks
 Breaks a run rule (numbered)
+Broker host
+Broker's address
+Browse depth
+Browse from
+Business key, unique within the site. Fixed once the equipment is created.
 By
 By day
 By equipment
@@ -369,12 +499,15 @@ By product
 By shift
 By {0}
 C
+CIP path
 CODE
+CSV file
 Calculated now
 Calculated {0}, with jobs {1}.
 Calculated: {0} {1}/h
 Calendar
 Calendar exception {0} not found.
+Calendar exceptions: holidays and shutdowns
 Call
 Call for help
 Call type {0} not found.
@@ -383,6 +516,9 @@ Called
 Calls
 Calls for help from the lines. Say you're on a call when you go to it, and resolve it with what was done. A call nobody has answered within its time is escalated.
 Calls for help: {0}
+Can run jobs
+Can sign in
+Can sign in (you can't switch yourself off)
 Can start from {0}
 Can't arrive in time
 Can't be used: {0}
@@ -403,16 +539,21 @@ Capable
 Capable at 1.33 or more, marginal from 1.00. Cp and Pp need both limits.
 Carried from
 Categorized
+Category
+Category of {0}
 Cause
 Centre
 Centre line
+Certificate files
 Certificates and documents
 Change
+Change a single day without changing the repeating cycle: an extra Saturday, a shift that starts late, or a shift that doesn't run. Times are in the site's time zone; a shift belongs to the day it starts on.
 Change a translation first.
 Change hold…
 Change how it flows on the Locations tab.
 Change month
 Change password
+Change the calendar exception
 Change the capability on {0}
 Change those lines in the draft and release it.
 Change times
@@ -421,6 +562,8 @@ Change your password
 Change your temporary password first.
 Change {0}
 Change: start version {0}
+Changed
+Changed {0}
 Changed: {0}
 Changeover
 Changeover mode, reporting tolerances, OEE targets, planning rates, holidays and shutdowns
@@ -430,7 +573,10 @@ Changeover rules: how long each change of material takes
 Changeover {0} → {1}
 Changeover {0} → {1}: {2}
 Changeovers
+Changeovers are now added automatically.
+Changeovers are now placed by planners.
 Changes save as you go
+Changes {0}
 Changes: {0}
 Changing a material's conversions needs permission to maintain materials.
 Characteristic
@@ -439,9 +585,12 @@ Characteristics
 Chart
 Check
 Check crew in
+Check every (s)
 Check everyone out
+Check first: Import is ready once a check finds no errors and something to change.
 Check {0} in
 Checking {0}…
+Children
 Choice
 Choice: {0}
 Choices, one per line
@@ -460,13 +609,17 @@ Choose a material above first.
 Choose a material first
 Choose a material first.
 Choose a material…
+Choose a new password
 Choose a period of at most {0:0} days.
 Choose a piece of equipment to see its process values.
 Choose a process…
 Choose a reason…
 Choose a region, such as {0}-US, not only a language.
+Choose a role…
+Choose a site first: a schedule belongs to one.
 Choose a site to view OEE
 Choose a site: you may only see some sites.
+Choose a site…
 Choose a tag.
 Choose a unit…
 Choose active material classes.
@@ -486,6 +639,7 @@ Choose at least two stops to merge.
 Choose equipment…
 Choose one of the alerts offered.
 Choose one of the reasons offered for {0}.
+Choose one of the schedule's shifts, or type a new code for an extra shift.
 Choose sites only.
 Choose the cause.
 Choose the line it runs on first.
@@ -498,6 +652,8 @@ Choose why first.
 Choose…
 Chosen
 Class
+Class of {0}
+Class of {0} as a reason
 Class {0}
 Class {0} appears earlier in the file.
 Class {0} is inactive; choose another.
@@ -516,7 +672,9 @@ Clear In stock only to see materials with no stock.
 Clear finish-by
 Clear hold
 Clear selection
+Clear the search first: while searching, every match is shown open.
 Cleared
+Client id
 Clock off (since {0})
 Clock off {0}
 Clock on
@@ -543,7 +701,13 @@ Code
 Code (optional)
 Code and kind can't change once created; switch one off instead.
 Code, name, base unit and type come from {0}
+Collapse
 Collapse all
+Collects PackML machine state, so downtime and OEE are recorded for it.
+Columns:
+Comes with a permission to change it
+Comes with {0}
+Coming
 Comment
 Comment (needed for this reason)
 Comment (optional)
@@ -560,12 +724,18 @@ Components are planned when a work order is made from a BOM. Jobs with nothing l
 Components marked backflush or time window in a BOM are consumed from here as production is reported, and a feed point's consumed counter takes what it counts.
 Computed
 Configure
+Configure → Users
+Configured
 Confirm cancellation
 Confirm {0}
 Confirmed
 Conflict
 Connecting…
+Connection
+Connection code
+Connection name
 Connection {0} not found.
+Connections
 Constraint machine
 Consumable
 Consume
@@ -576,6 +746,8 @@ Consumed automatically, not declared by hand
 Consumed by
 Consumed count
 Consume…
+Consuming stock allocated to another job is refused, naming that job, until its allocation is released or moved. Automated feed-point consumption leaves it alone too. Off, it is consumed with a warning.
+Consumption, % of the planned components
 Container
 Container or location code
 Container {0} isn't at this site.
@@ -635,24 +807,41 @@ Create missing classes
 Create one
 Create one to describe how an order is made, for example extrude on two lines, then pack.
 Create one to plan an order's components, for example the blend and capstock a profile is extruded from.
+Create role
+Create schedule
+Create user
 Created
 Created in Pulaski.
+Created {0}. Choose it for a site, area or line on Equipment.
+Created {0}. Give it to users on the Users tab.
+Credentials
 Crew
 Crew check-in by {0}
+Crew code
+Crew name
+Crew of {0}
 Crew size
+Crew working shift {0}
 Crew {0} is on shift; tick who is here.
 Crew {0} not found.
+Crews
 Cumulative
 Current
 Current password
 Current-shift OEE from reported machine data · refreshes every 30 seconds
 Current-shift OEE {0}; availability {1}, performance {2}, quality {3}
+Cycle starts on
+Daily at set times
 Daily at {0} UTC
 Database
 Date
 Dates and numbers look like this: {0} · {1}
 Dates are days at the line's site; it stops applying at the start of its end day.
 Day
+Day {0}
+Days before expiry to send a notice (empty: 30)
+Deadband
+Deadband of {0} {1}
 Decimals
 Decision
 Declare against a job
@@ -663,11 +852,14 @@ Declared by operator
 Default (any label)
 Default for
 Default for a material…
+Default printer
 Defective
 Defective count
 Defects
 Defects per unit
 Define lot attributes
+Delete
+Delete edge node {0}? This will deactivate the node and all its connections and tags. Historical data will be kept.
 Delete link
 Delete operation
 Delivered
@@ -676,6 +868,7 @@ Delivery {0} not found.
 Department
 Department window
 Description
+Description (optional)
 Details
 Device
 Difference
@@ -687,11 +880,16 @@ Dispatch
 Dispatched
 Dispatched or firmed
 Dispersion
+Display name shown on screens and reports.
 Display name, e.g. Extrude and Pack.
+Divide good output by running time: down time, planned stops and time out of production inside each run come off its hours (micro-stops stay). Reviews open with it ticked, and the scheduled recalculation uses it. Lines that don't record machine state keep run time.
 Document
 Document no.
+Document system
 Document {0} has no stored file.
 Document {0} not found.
+Doesn't run
+Don't print them
 Done
 Down
 Down h
@@ -716,11 +914,17 @@ Due
 Due {0}
 Due{0}
 Duration
+E-mail
+E-mail (optional)
+E-mail the person and whoever maintains people this many days before a grant expires
+E-mails Pulaski sends you when something needs you: one for each stop or call, with a link to it.
 ERP
 ERP change
 ERP changes to accept
 ERP changes to work orders
 ERP orders not whole batches
+ERP orders that aren't whole batches
+ERP orders that aren't whole batches: {0}.
 EXT-PACK
 Each MaterialDefinition is one material: its ID is the code, its Description the name and its MaterialClassID the class. Type, base unit, lot tracking, shelf life and active come from properties with those IDs, such as MaterialType and BaseUnit. Each MaterialClass (its ID the code, its Description the name) is added if it is new and renamed if its name differs, whatever Create missing classes says. Export B2MML on this page writes this format.
 Each MaterialLot is one lot: ID the lot number, MaterialDefinitionID the material. A lot this site doesn't have is received: its Quantity (with UnitOfMeasure) at the StorageLocation with that code, expiring at ExpirationTime, with a SupplierLot property as its supplier lot. A lot the site has keeps its quantity. Other MaterialLotProperty values whose ID is a lot attribute code set that attribute. Nothing is saved until every lot is valid.
@@ -731,16 +935,23 @@ Each job's good and scrap in these days next to its totals on its job page. They
 Each line plans whole batches of its own size, so the order must share into them exactly:
 Each lot as it was then: its quantity, where it was and whether it was on hold, from its movements in the order they count (back-dated ones at their time), so it agrees with the journal.
 Each lot whose count differs from what it holds now is written up or off, for the reason below, with the count number as its reference.
+Each lot's label prints once the lot is closed: at once for a lot per report, when it is full or its age or shift ends, at Start a new lot, or when the job completes.
 Each receipt is its own numbered lot; otherwise one balance per location.
 Each target is a percentage above 0 and at most 100, with one decimal at most.
+Each user is one person: the enterprise extension's
 Earlier
 Edge gap
+Edge node
+Edge node code
+Edge node name
 Edge node {0} not found.
 Edge nodes
 Edge nodes: connections and tags that collect machine data
 Edge quiet
+Edit
 Efficiency
 Employee no.
+Employee number
 Employee number {0} appears earlier in the file.
 Employee number {0} is already {1}'s.
 Employee number {0} is {1}, from {2} (key {3}).
@@ -752,8 +963,12 @@ End
 End break
 End break (since {0})
 End now
+End today
 Ended
 Ended the limits for {0}{1}; its chart has none until new ones are approved.
+Ended the site's OEE targets.
+Ended {0}'s own targets; it follows the site's now.
+Endpoint
 Ends on
 English
 English is the language the screens are written in; add another language to translate into.
@@ -762,7 +977,9 @@ Enrol it
 Enrol it as a terminal, then open this page again.
 Enrol terminal
 Enrol this terminal
+Enrolled
 Enrolment code
+Enter a percentage.
 Enter a stop
 Enter by hand instead
 Enter limits by hand
@@ -772,72 +989,110 @@ Entered
 Entered after the run ended; counted at the run's end
 Entered by hand
 Enterprise
+Entity set
 Equipment
+Equipment directly below this.
 Equipment for the trend
 Equipment for where the time went
+Equipment hierarchy
 Equipment module
 Equipment that doesn't run jobs has availability only.
 Equipment that holds inventory: stores, staging areas and the feed points on a line. Mark more on the Equipment page with Holds inventory.
+Equipment to bind to
 Equipment {0} isn't equipment of this site that tracks state.
 Equipment {0} not found.
 Equipment {0} was changed by someone else. Reload and try again.
 Equipment: {0}
+Equipment…
 Erp
 Erp issue
 Error
 Escalated
+Escalates after
+Escalates after (min)
 Estimated
+Event
+Event type
+Event type, e.g. consumed
+Events (CloudEvents JSON)
+Events sent
+Every (hours)
 Every characteristic
 Every class and material as B2MML, which the B2MML import reads back
+Every day from {0}
 Every hour
 Every item and part, grouped by class. Materials imported from the ERP keep their code, name, base unit and type there; Pulaski owns the rest.
 Every later movement of this lot, and of lots split off it since, is reversed first, latest first. Check shows the list before anything is done.
 Every line
 Every material
 Every movement
+Every qualification
 Every receipt, adjustment, move, hold, consumption and production in the site, newest first.
+Every site
+Every so many hours
 Every term is translated.
+Every user needs a role: add another first, or switch them off.
+Every {0} days from {1}
 Every {0} h
 Every {0} h {1} min
 Every {0} hours
 Every {0} min
+Every, days
 Every, minutes
+Everyone whose time is recorded, the crews they work in and the qualifications they hold. A shift schedule names the crew on each shift, so a supervisor can check the whole crew onto a line at once. People don't need a Pulaski sign-in; link one to let them clock themselves on. People from an HR or ERP system are imported from a file; their name and whether they are active change there.
 Everything is covered
 Everything it was made from
 Everything made from it
 Everything placed
+Everything the edge's connections have announced (Sparkplug birth certificates) or sent, with its last value. Pick one to bind it to equipment. The edge reports what it sees every 30 seconds.
 Exact
 Exact batches; partials need approval
 Exact: every batch is exactly the batch size, and a partial batch waits on hold until approved (finished goods can't be sold as partials). Near: a batch may differ by the tolerance, and a partial batch is accepted because it will be used.
 Exactly what is left, even a partial batch
+Expand
 Expand all
 Expect a delivery
 Expected
 Expected receipt {0} not found.
 Expired
+Expired 1 day ago
 Expired on {0}: it can't be consumed, shipped or merged. If quality has extended it, use Correct… to set the new expiry.
+Expired {0} days ago
 Expires
+Expires in 1 day
+Expires in {0} days
+Expires today
+Expiring in 30 days
 Expiring within 30 days
 Expiring within 7 days
 Expiring within 90 days
 Expiry
+Expiry format
 Export B2MML
 Export CSV
 Export values
 External system
+Extra shift {0}
 Extra wait after the start or end before the next operation begins.
 Extrude and Pack
 Failed
 False
+Feed
 Feed point
 Feed points
 Feed points · Inventory
+Fields: Pulaski's field ← the item's property (use / for a property of a property, such as Unit/Code)
+Fields: Pulaski's field ← the query's column
 Fifo
 Figure for the trend
 File
 File (PDF, PNG or JPEG, up to 10 MB)
 Files to the '{0}' drop folder
+Filter
+Filter addresses
 Filter by
+Filter by code or name
+Filter equipment by code or name
 Find
 Find a job
 Find a lot
@@ -860,6 +1115,8 @@ Firm
 Firmed
 Firmed: it keeps its start, so it takes its place on the new line by time.
 First in, first out
+First line
+First line offered
 First operation
 First short
 Fits the window
@@ -880,9 +1137,13 @@ For limits agreed with a customer or carried over from another system. Uses the 
 For process
 For this material {0} already converts to {1} (1 {2} = {3:0.######} {4}) through its other conversions; change one of those instead.
 For time the machine didn't report, such as an outage with no signal. It may not overlap the machine's other stops.
+For {0}: open
+Forgotten password
 Forgotten your password?
 Forgotten your password? Ask an administrator to reset it.
 Format
+Forwarding
+Found from the counter tags
 From
 From a material to itself is no changeover.
 From process values
@@ -893,23 +1154,33 @@ From the machine
 From the machine: its counts up to {0}
 From the stop code; confirm it or give another
 From the {0} barcode
+From today on, it follows the site's
+From today on, the site has no targets
 From {0}
 From {0} results: centre {1}, limits {2} to {3}
+From {0}, key {1}: its name and whether they are active change there
+GS1 DataMatrix
+GS1 barcodes are always read. For a supplier's own barcodes, add a pattern (a regular expression) naming its parts:
+GS1 company prefix
+GS1-128
 GTIN
 Gantt
 Genealogy
 Give at least one target.
 Give the call type a name of at most {0} characters, such as Maintenance.
+Give the daily times as hours and minutes in UTC, such as 02:00, 14:30.
 Give the language a name of at most 100 characters, as its speakers write it, such as Español.
 Give the language a name of at most 100 characters.
 Give the language's code and name.
 Give the reason
 Give the time in whole minutes, from 0 to {0} (7 days).
 Give the {0} as 1 to {1} (a week).
+Give them a new temporary password, which they must change when they sign in. It also unlocks them.
 Give them a reason
 Giving or taking away a role at every site needs permission to grant roles everywhere.
 Go
 Go to the start
+Goes on the next round.
 Goes to
 Good
 Good and scrap each shift made, by line, job and material. A report counts in the shift running on its line when it was made (or, for a report after the run, when the run ended).
@@ -923,70 +1194,106 @@ Good output
 Good output goes to
 Good, {0}
 Good, {0} · {1}%
+Grant
+Group
+Group id
+Group of {0}
 Groups similar materials. Processes and changeover rules can name a class instead of each material.
 Gs1 128
 Gs1 datamatrix
 Hand on to the next shift
 Handover
 Handover entry {0} not found.
+Happened (UTC)
+Hard reservation
 Held
+Held at every site
+Held at {0}
 Held internal
 Held stock isn't counted until it is released. Incoming deliveries aren't stock: they count only for jobs that need the material after they are due, and a late one counts as arriving now.
 Hello, {0}
 Hide
+Hide history
 Hide lines and departments
 Hide properties
+Hierarchy
 Highest
 History
 Hold
+Hold it
 Hold or quarantine
 Hold until
 Hold your badge to the reader, or type its number and press Enter.
 Hold {0} until
+Holders
 Holds
+Holds inventory
 Holds the lot
 Holds the lot on failure
 Hold…
 Holiday
 Hoppers, feeders and unwinds where lots enter a line. A lot loaded here feeds the line until the next lot of its material is loaded, it leaves or it runs out.
 Horizon
+Host
+Host id
 Hours
+Hours a cycle
 Hours worked
 How
 How a characteristic's results vary over time against their control limits. A point beyond the limits is a sign something changed; limits are set on the characteristic's
+How a site plans changeovers, how far production reports may go, what OEE it aims for, how it labels and allocates lots, and when it doesn't work.
+How each kind of machine reports itself: the values its state tag takes and the PackML state each one means, and its own stop, alarm and warning codes with the utilization reason each one counts as. Identical machines share a profile; give each machine its profile on the Equipment screen, under Machine data.
 How far a batch may be from the batch size: a {0} batch is accepted from {1} to {2} {3}.
 How far the level may differ from declared stock
 How it flows
 How it is made
+How its controller reports state and stop codes: the profile maps its state values to PackML states and its stop codes to utilization reasons. Profiles are kept on Configure → Machine profiles.
 How long a line needs to change from one material to another. The schedule uses the most specific rule that fits.
 How long supply of it takes to come. The shortage check flags shortages needed sooner than this from now: asked for today, supply wouldn't arrive in time. Nothing is ordered.
+How lot and container labels are printed. A GS1 format adds a GS1 barcode for lots whose material has a GTIN and for containers with an SSCC; every label keeps Pulaski's own code, so a scan in Pulaski always finds exactly that one.
+How lots are set aside for jobs' components. Suggestions always take the lot that expires first; the preferences below decide among lots expiring the same day (or never), in the order given, and the oldest receipt decides after that.
 How sure
 Hr
 I mr
 I'm here
 I'm on it
+IANA time zone the site's shifts and reports use, e.g. America/Chicago.
+IANA time zone the site's shifts and reports use, e.g. America/Chicago. Set when the site is created.
+ISA-95 level. A child sits below its parent's level. Fixed once created.
+ISA-95 role within the level. Fixed once created.
+ISA-95 role within the level. Fixed once created. Changing it resets the capabilities to the role's defaults.
+Id
 Ideal rate
 Ideal rate {0} {1}/h; a run can hold up to {2}% of it.
 Ideal rate, per hour
+Identify with
 Identity
 Idle
 Idle is direct time on a line while nothing ran on it. Every kind of time is worked time: breaks are left out of it and shown on their own, paid and unpaid.
 If the line has no planning rate for {0} yet, the ideal rate becomes it.
 Import
+Import 1 person
+Import CSV
 Import capabilities: {0}
+Import definitions from a CSV file
 Import file
 Import from a file
 Import from the ERP
 Import it held for a planner
+Import it held until a planner sets whole batches
 Import materials: {0}
+Import people from a file
 Import work orders from a B2MML file
+Import {0} people
 Imported
 Imported from an external item master, which owns the code, name, base unit and type.
 Imported from {0}: {1} created, {2} updated, {3} unchanged.
 Imported {0}: {1} created, {2} updated, {3} unchanged.
+Imported {0}: {1}.
 Imported: {0} added, {1} changed, {2} unchanged.
 In
 In BOM of
+In a container (one move fetches it)
 In force
 In force now: centre {0}, limits {1} to {2}. Approving ends them where the new ones start.
 In production
@@ -994,12 +1301,14 @@ In progress
 In spec
 In specification.
 In stock only
+In the answer
 In the level tag's unit: a reading at or below this means empty
 In the level tag's unit; blank: the level isn't compared with declared stock
 In use, so its code and base unit are fixed.
 In use. Its code, name, base unit and type come from {0}.
 In {0}'s specification (version {1})
 Inactive
+Inactive equipment stays in the hierarchy and its history, greyed out.
 Inbox
 Inbox: what waits for you to decide
 Incoming
@@ -1010,8 +1319,11 @@ Indirect labor
 Indirect time needs a reason: choose it.
 Individuals and moving range
 Inherit
+Inherit (nothing above: around the clock)
+Inherit from parent
 Inspected
 Inspected (defects)
+Install Pulaski Edge on a machine that can reach both the broker and Pulaski, and put this in its
 Integrations
 Integrations: events sent to the ERP and failed deliveries
 Intermediate
@@ -1037,12 +1349,17 @@ It keeps its reason and coding; the new times may not overlap another stop of th
 It makes every material in the {0} class.
 It makes nothing yet, so order creation won't offer it. Add a class or a material below.
 It makes {0}.
+It must end after it starts.
 It reverses 1 movement:
 It reverses these movements, latest first: {0}
 It starts on {0:yyyy-MM-dd}; end it on a later day, or set new targets from that day.
 It stays in the list as removed, with why; nothing replaces it.
 It waits on {0} until one of its lines takes it; the floor decides which.
 It works once, within 15 minutes.
+It works once; this is the only time it is shown. Enrolling again later replaces the terminal's credential.
+Item
+Item element
+Items at
 Items inspected a sample
 Its BOMs
 Its GS1 trade item number (8, 12, 13 or 14 digits). Lots of it get GS1 labels when the site prints them, and a scanned GS1 or supplier barcode with it finds this material.
@@ -1052,6 +1369,7 @@ Its control limits were worked out for this chart; end them to change it.
 Its conversions
 Its good and scrap come off the run, and every lot it made gives the quantity back. A lot that has been used, split or moved into a silo since must be put right first; Pulaski says which.
 Its own conversions
+Its own state tag
 Its place in the route: 10, 20, 30… Unique within the version.
 Its quantity, place and status then, in the order its movements count (back-dated ones at their time).
 Its shift isn't approved yet: change the break instead.
@@ -1060,6 +1378,7 @@ Its stops have been adjusted since: undo that first.
 Its tag was deleted; bind another tag instead.
 Job
 Job status
+Job {0}
 Job {0} can only go back to the group it was planned to.
 Job {0} has made its quantity; there is nothing left to replace.
 Job {0} has no open run.
@@ -1085,8 +1404,10 @@ Job {0} was planned to a line, not a group; move it with the sequence instead.
 Job · lot
 Job, order or material
 Jobs
+Jobs actually run here: a line or cell. Jobs planned to a schedulable group above it can be released to it.
 Jobs as the schedule has them now
 Jobs at their published times
+Jobs can be planned to it. A schedulable group such as a department, without Can run jobs, takes jobs in a time window and its lines run them.
 Jobs planned here wait in a window until one of its lines takes them.
 Jobs running this day
 Jobs this order will create
@@ -1096,17 +1417,22 @@ Journal
 Journal · Inventory
 Kanban
 Keep a translation to {0} characters.
+Keep allocations current
 Keep it
 Keep it to {0} characters.
 Keep the placeholders {0}, {1}… of the English where they are: they stand for the values shown.
 Keep them
 Kept
 Kept as
+Kept at {0}: change them there.
 Key
 Kind
 Kind of time
 Lab
 Label
+Label format
+Label settings saved.
+Labels
 Labor
 Labor for shift {0} on {1:yyyy-MM-dd} is approved, so its times are locked.
 Labor to approve
@@ -1121,9 +1447,19 @@ Languages and their translations
 Last 24 hours
 Last 7 days
 Last 8 hours
+Last answer
+Last badge
 Last change
+Last heard from
 Last hour
+Last import
+Last recalculated {0}.
+Last refreshed {0}.
 Last shift
+Last sign-in
+Last signal
+Last valid day
+Last value
 Last {0} days
 Late
 Late or slipping
@@ -1136,6 +1472,7 @@ Leave it out
 Leave out
 Leave out the result of {0}
 Leave out…
+Leave uncoded
 Left blank, each production report makes its own lot. Set any of these and reports fill one lot until it is full, then start the next.
 Left blank, it goes into lot {0} ({1}).
 Left blank, it goes into lot {0} ({1}); what doesn't fit starts the next lot.
@@ -1144,9 +1481,11 @@ Left out
 Left out: {0}
 Legend
 Length
+Length in hours
 Less than a batch of {0} is left ({1}), so rounding down leaves nothing to replace. Replace exactly what is left (a partial batch), round up, or cancel it without a replacement.
 Less than a batch of {0} {1}.
 Level
+Level (silo or tank)
 Level reading at or below which it is empty
 Level tolerance
 Level {0} cannot be placed under level {1}.
@@ -1173,6 +1512,7 @@ Lines with no signal
 Lines without shifts
 Line…
 Link
+Live
 Live · updated {0} site time
 Live, updated {0}
 Load
@@ -1193,6 +1533,7 @@ Locations · Inventory
 Lock
 Lock this shift's labor
 Lock {0}
+Locked
 Locked: it keeps its place when others move
 Long stop
 Longest
@@ -1201,6 +1542,7 @@ Look back {0} to {1} days.
 Loose
 Lot
 Lot age, hours
+Lot allocations
 Lot attribute
 Lot attribute values file
 Lot attribute {0} not found at {1}'s site.
@@ -1210,7 +1552,9 @@ Lot attributes are the properties recorded on each lot, such as melt index or mo
 Lot hold
 Lot number
 Lot number (optional)
+Lot or certificate
 Lot or job
+Lot or job number, or subject id
 Lot or supplier lot
 Lot size, {0}
 Lot to consume from
@@ -1224,7 +1568,9 @@ Lot {0} of {1} already exists in this site. Use another number.
 Lot, supplier lot or material code
 Lot-tracked
 Lots
+Lots are indistinguishable
 Lots being filled
+Lots here mix and can't be told apart, like a silo or tank: everything received, moved or produced here joins one balance per material, with no lot number. A numbered lot is kept for its genealogy, then merged in.
 Lots here mix into one balance per material
 Lots it made
 Lots mix at {0}, so a move there can't count from earlier: it joins the balance as it is now.
@@ -1250,9 +1596,13 @@ Lots with stock on hold or in quarantine at this site.
 Lots · Inventory
 Lower
 Lower limit
+Lower-case letters, digits and _. It can't change later.
 Lowest
+MQTT broker
 Machine
 Machine counts are reported from inside their run.
+Machine data
+Machine profile
 Machine profile {0} not found.
 Machine profiles
 Machine profiles: state values and stop codes
@@ -1273,6 +1623,8 @@ Maintained in Pulaski
 Maintenance
 Make a material class…
 Make a single material…
+Make group
+Make reason
 Make this version the one orders are made from.
 Makes
 Makes {0} · {1} on {2}
@@ -1287,9 +1639,11 @@ Material class
 Material class {0} not found.
 Material classes
 Material code
+Material connections
 Material conversions
 Material flow
 Material is used and made while a job runs. Start a job on the Floor first; jobs come from work orders on the Schedule.
+Material lots can be located here.
 Material or class
 Material produced
 Material shortages
@@ -1302,6 +1656,8 @@ Materials and classes
 Materials and lots
 Materials from the ERP arrive through its import, not this form.
 Materials: {0} · in stock: {1} · lots: {2}
+May be held at every site: then it can also be given for all sites at once, by someone who may grant roles everywhere. Leave it off for roles that belong to one plant.
+May change
 Mean
 Measured
 Merge
@@ -1313,19 +1669,26 @@ Merge lots: {0}
 Merged
 Merge…
 Message
+Message of {0}
 Micro-stop
+Micro-stop threshold
 Micro-stops
 Min. minutes
 Minimum residence in minutes
 Minutes
+Missing changeover
 Missing what {0} requires: {1}
 Mixed
 Mixed or first in, first out (fifo).
 Mixed: everything blends
 Mixes lots
 Mixing…
+Mode
+Model
 Modified rate, {0}/h
 Module
+Months a grant is valid (empty: no expiry)
+Months valid
 Most defects
 Most defects allowed
 Move
@@ -1346,8 +1709,16 @@ Mqtt
 My alerts
 My alerts: e-mails when something needs you
 Name
+Name of state {0}
 Name of {0}
+Name on the controller
+Name, e.g. Case packer, vendor A
+Name, e.g. Damaged in handling
 Name, e.g. Extruded profiles
+Name, e.g. Forklift
+Name, e.g. Line broker
+Name, e.g. Packaging hall gateway
+Name, e.g. Red crew
 Named in the file
 Names operation {0}, which {1} no longer has
 Near
@@ -1359,12 +1730,20 @@ Needed
 Needed in the next 24 hours
 Needed sooner than its {0}-day lead time from now
 Needed sooner than the material's {0}-day lead time from now
+Needs a comment
 Needs attention
 Needs machine data
 Needs machine data: no line reports its state
 Needs permission to see labor
+Never
 New BOM
+New code category
+New code message
+New code value
+New code's reason
+New containers get SSCCs from serial {0}.
 New draft
+New equipment
 New lot each shift
 New lot number
 New material
@@ -1372,9 +1751,17 @@ New overlap. {0}.
 New password
 New password again
 New process
+New role
+New schedule
+New shift schedule
 New specification
+New state name
+New state value
+New state's PackML state
 New unit
+New user
 New work order
+Newest first, up to 200. Delivered rows are cleared after {0}.
 Next
 Next 14 days
 Next 3 days
@@ -1382,19 +1769,28 @@ Next 7 days
 Next at {0}
 Next expiry
 Next month
+Next page at
 Next person
+Next try in {0}.
 Next {0}
+Next {0} UTC
+No
 No BOM lists {0} as a component, and no open job plans to use it.
 No BOM. Create one to plan its components.
 No BOMs yet
 No alarm or warning is active.
 No alarms or warnings in this period.
 No alerts open, and none closed in the last 30 days.
+No alerts yet; add one below.
 No attributes are recorded for this material.
 No available lot of this material
 No badge
 No break recorded during a planned one: {0}. Add the break if they took it.
 No breaks recorded in this shift.
+No calendar exceptions at this site.
+No calendar exceptions from now on.
+No call types yet.
+No call types yet; add the first below.
 No calls in the last {0} days.
 No calls waiting
 No characteristics yet.
@@ -1403,24 +1799,34 @@ No classes yet. Add one above.
 No components are planned for this job, and nothing has been consumed. Its order had no BOM.
 No components are planned for this job, so there is nothing to allocate.
 No components yet.
+No connections yet.
+No connections yet. Add the broker, server or PLC your machines are read through.
+No connections yet. Someone who manages integrations adds them.
 No containers at {0} yet.
 No control limits yet. Work them out from a period of results below.
 No conversions yet: {0} converts only between standard units of its own dimension.
 No counts yet
+No crew
+No crews yet. Add one, then name it on the shifts it works under Configure → Shifts.
 No current-shift OEE data
 No deliveries expected at {0}.
 No demand
 No down time in this period.
 No down time this shift
 No due date
+No edge nodes at {0} yet.
 No ended runs of {0} on {1} in the last {2} days.
 No equipment
 No equipment at {0} tracks state. Tick Tracks state on the Equipment screen, and bind its signals on an edge node.
 No equipment tracks state here.
+No equipment uses this profile yet.
+No equipment yet. Start with the enterprise, then add a site under it.
+No expiry
 No feed points at this site
 No feed points at this site. Add equipment with the role Feed point below a line on the Equipment screen.
 No free stock to suggest for the {0} {1} still needed.
 No identity provider '{0}'.
+No imports yet. Checks aren't recorded.
 No job
 No job has run yet
 No job running
@@ -1447,16 +1853,20 @@ No lines that run jobs at this site.
 No location holds inventory: mark one on the Equipment page
 No locations yet
 No longer offered for this material; it can only be cleared
+No longer require it here
 No lot at this site matches {0}.
 No lot attributes at {0} yet.
 No lot found
 No lot is being filled: the next report starts one.
 No lots found
 No lots on hand.
+No machine profiles at {0} yet. Add one for each kind of machine, then import its definitions from a CSV file.
 No material source '{0}'.
 No material source '{0}'. The sources are {1}.
 No message in the machine profile
 No movements
+No one-off changes from today on.
+No one-off changes.
 No open items
 No open job needs components
 No open jobs.
@@ -1464,7 +1874,9 @@ No open production job
 No operations yet.
 No orders
 No other lot can be merged into this one. Move or release lots first.
+No people at {0} yet.
 No people source '{0}'. The sources are {1}.
+No printers yet: labels print as PDF.
 No process can run this material yet; see below
 No process names {0}, its class, or all materials.
 No process value or level tags on this equipment. Bind them on its edge node.
@@ -1472,9 +1884,12 @@ No process-value tags yet: bind one to a machine on Configure → Edge nodes.
 No processes yet
 No production reported for these days.
 No proposals. The scheduled recalculation is set up under Site settings; a rate can also be worked out any time from a material's line, under Rate.
+No qualifications at this site yet.
+No qualifications at this site yet. Add one above, then require it on a line on Equipment.
 No rate: {0} It needs {1} runs and {2} hours of usable history.
 No rated production data has been reported this shift
 No reason
+No reason (uncoded)
 No reasons set up: load db/seed-reasons.sql
 No reference
 No released or draft BOM lists {0} as a component.
@@ -1486,10 +1901,16 @@ No rules match. Without one, a line uses its standard changeover for the incomin
 No rules yet. Without one, a line uses its standard changeover for the incoming material (set on the material's capability).
 No schedulable lines
 No scheduled time in this period.
+No secret is set in the API's configuration, so messages aren't signed and acknowledgements can't be posted back.
 No shift
 No shift now
 No shift schedule covers this line; times assume it runs around the clock.
+No shift schedules at {0} yet, so its lines are planned around the clock.
+No shift schedules at {0} yet, so its lines are planned around the clock. Click New schedule to add one.
+No shifts
+No shifts in the next 7 days.
 No shifts worked in this period.
+No sign-in
 No signal
 No site to show.
 No site yet
@@ -1497,13 +1918,23 @@ No size
 No specifications yet
 No standard crew size for the job running
 No stops in this period.
+No tags yet.
 No target; set targets on
+No targets in force today.
+No targets.
 No term matches.
+No terminals at {0} yet.
 No work orders match.
+No {0} codes yet. Add them above or import the machine's list from CSV.
+No {0} reasons yet. Add one above.
+Nobody holds it yet.
 Nobody on.
 Non-production mode
 None
 None (open from a job's page to record against it)
+None (test only)
+None configured
+None configured (Labels:DropFolders)
 None in the last 24 hours.
 None of the lot is left.
 None of the selected orders can move to {0}, or you may not do it.
@@ -1511,6 +1942,7 @@ None on hand. Receive some, or declare production from a job.
 None yet
 None yet.
 None.
+None. Anyone can be put on {0}.
 None: it converts only between standard units of its own kind.
 None: no components planned
 Not a number
@@ -1530,32 +1962,44 @@ Not qualified
 Not reporting
 Not resolved
 Not sampled from any tag.
+Not saved yet: these are the API's configuration. Once you save, the screen's settings are used and the configuration keeps only the secret.
 Not saved: {0}
+Not sent: the event carries the reference only
 Not signed in
 Not started
 Not tracked
 Not used: exact batches are always the batch size.
+Not valid yet
 Not yet
 Note
 Note (optional)
 Note (optional), e.g. month end
 Note or reason
+Note, e.g. certificate number
 Notes
+Notes (optional)
 Notes about the process.
 Notes for planners and operators.
 Notes for the people who use it. Kept in Pulaski.
 Nothing
+Nothing delivered to show.
+Nothing expires in the next 30 days.
+Nothing failed to show.
+Nothing forwarded for 2 minutes: the edge is offline, or nothing changed
 Nothing has arrived against it; cancel it instead.
 Nothing has been made from this lot yet.
 Nothing has been taken from it yet.
 Nothing is left of {0} to reject.
 Nothing is planned to start.
+Nothing is queued while it's off.
 Nothing is saved until every material is valid.
+Nothing is saved until every person is valid.
 Nothing is short.
 Nothing is waiting. Lines call for help from their operator stations.
 Nothing made from it yet.
 Nothing matches in these dates. Widen the dates or clear a filter.
 Nothing matches {0}.
+Nothing matches “{0}”.
 Nothing matches.
 Nothing matches. {0}
 Nothing more is coming
@@ -1565,10 +2009,13 @@ Nothing planned
 Nothing planned here.
 Nothing planned on {0}.
 Nothing planned until {0}
+Nothing received yet.
 Nothing reported or planned this shift
 Nothing reported this shift
 Nothing reported yet.
+Nothing seen yet. Once the edge runs and a machine publishes, its metrics appear here.
 Nothing selected.
+Nothing skipped to show.
 Nothing to change across {0} jobs.
 Nothing to change.
 Nothing to chart in this period.
@@ -1576,9 +2023,11 @@ Nothing to chart.
 Nothing to code: every stop in this period has its reason.
 Nothing to correct: the details are the same.
 Nothing to see here yet
+Nothing to show.
 Nothing uses it yet. Its code, name, base unit and type come from {0}.
 Nothing uses it yet: every field can still change.
 Nothing waiting
+Nothing waiting to show.
 Nothing waits for you.
 Nothing was imported.
 Nothing was on hand then.
@@ -1587,6 +2036,7 @@ Nothing written.
 Nothing yet
 Nothing: it can start first
 Nothing: it ends the route
+Notice days (30)
 Now
 Now or next
 Now: calculated {0}
@@ -1595,14 +2045,19 @@ Np
 Number
 Number ({0})
 Number defective
+OData $filter
 OEE
+OEE targets
 Obsolete
 Odata
 Of it on hold
 Of {0} {1}; the rest stays in {2}.
 Off
 Offer only active utilization reasons of the profile's site.
+Offer {0}
 Offered
+Offers
+Offers the lines of
 Oldest
 On
 On a break {0}.
@@ -1620,28 +2075,37 @@ On lines
 On now
 On paid break since {0}
 On the floor
+On the profile
 On track
+On {0}
 On {0} reports fill a lot until {1}, then start the next.
 On {0}.
 On-hand stock by how long ago each lot was received or made (a split lot counts from the split). Balances of materials that aren't lot-tracked aren't aged.
 One material
+One material at a time
 One or more fields are invalid.
 One row per lot: lot_number, material_code (needed only when two materials share a lot number), then a column per attribute code. Values are read as on the lot page. A blank cell leaves the value as it is; (clear) clears it. Balances have no lot number, so they aren't in the file. Nothing is saved until every row is valid.
 One row per material and line; material, line, ideal_rate (per hour) and rate_unit are required, and site only when the line code is used at more than one site. A row changes the capability in effect now, or adds one from now; active = no ends it.
+One row per state value or code.
 One rule per row; minutes is required. line is a line's code, blank for every line. Each side names a material (from_material, to_material), a class (from_class, to_class), or neither for anything. A row changes the site's rule with the same line and sides, else adds one; active = no switches it off. Nothing is saved until every row is valid.
 One value, or several from one sample, separated by spaces.
+One-off changes
+One-off changes to {0}
 Only English so far; add a language below.
 Only a balance takes in lots as they arrive.
 Only a number attribute can stand for a quality characteristic.
 Only a number attribute has a unit.
 Only a production job's components are allocated.
+Only a reason that has never been used can become a group
 Only a scheduled recalculation's proposals can be accepted without review; switch it on first.
 Only a stop entered by hand can be removed; change a machine's stop by splitting, merging or retiming it.
 Only active ones
+Only an empty group can become a reason
 Only an open item is closed; a note stays as it was written.
 Only as the lot's latest movement: nothing else may count after it.
 Only consecutive stops can be merged: another stop, at {0:u}, lies between them.
 Only for:
+Only here
 Only if the lot's status and location haven't changed since.
 Only packing or unpacking is put back this way.
 Only rows with errors
@@ -1678,10 +2142,12 @@ Operation {0} runs on a department, so its job must finish by the due date.
 Operation {0}: {1} is too small to share between its equipment.
 Operator
 Optional
+Optional notes about this equipment.
 Or with a Pulaski password:
 Order
 Order creation pre-selects this process for {0}.
 Order number
+Order of {0}
 Orders behind
 Orders for {0} made with {1} are refused until a new BOM version is released.
 Origin
@@ -1691,19 +2157,26 @@ Others (no limits for this material)
 Out of spec
 Out of specification only
 Out of specification.
+Outcome
 Output lots
+Output, % of the ideal rate
 Over 180
 Over the working time inside each material's runs. Good and scrap are as reported; machine counts aren't reports.
 Overlap
+Override
 Overview
 Own tags
+Owning site
 P
 PIN
 PIN (optional)
+PLC address
 PO or transfer number
 Pack
 Pack into another
 Pack into…
+PackML state
+PackML state of {0}
 Packaging
 Packaging (per material)
 Packed
@@ -1716,7 +2189,9 @@ Paid breaks
 Pallet
 Pallets, totes, boxes and bins that hold lots. Each lot keeps its own number and history; moving a container moves every lot in it. Pack a lot from its page or by scanning.
 Parallel
+Parent
 Parent equipment {0} not found.
+Part lots first, so they get used up
 Part of it has arrived; close it as complete instead.
 Part reported on other days
 Partial batch {0} not found.
@@ -1726,6 +2201,8 @@ Partial batches to approve or reject
 Partial batches waiting for approval: {0}.
 Partly received
 Password
+Past
+Pattern
 Pause
 Pause it: why is it stopping?
 Pause or complete {0} first.
@@ -1736,10 +2213,15 @@ Pending
 People
 People and crews
 People are imported into a site; choose one.
+People connections
+People identify with
 Per
 Perf.
 Performance
 Period
+Permanently delete the {0} tag for {1}? Machine history will be kept, and any quality-characteristic source binding will be cleared.
+Permission
+Permissions
 Person
 Person {0} not found.
 Pick only lots {0} used; one of those picked wasn't used by it.
@@ -1747,10 +2229,12 @@ Pick what it was made from…
 Picking list
 Pins
 Place on a line or plan to a department
+Placed by planners
 Placing {0} on a line needs permission to plan jobs at this site.
 Plan to {0}
 Planned
 Planned break
+Planned breaks:
 Planned duration must be greater than zero.
 Planned end must be after planned start.
 Planned h
@@ -1765,35 +2249,50 @@ Planned to
 Planned to {0}, so it can move between its lines whatever its plan status, until it starts.
 Planned, {0}
 Planned:
+Planners add changeover jobs themselves. Pulaski sizes them from the rules unless they have their own length, and warns
 Planning rate
 Planning rate for {0} on {1}
 Planning rate on {0} is the calculated {1} {2}/h again.
 Planning rate on {0} set to {1} {2}/h.
 Planning rates
+Planning rates can be worked out from what lines really made. Proposals wait on
+Planning rates from run history
 Planning rates from run history proposed for review
 Planning rates to review
 Plans for 1 line
+Plans for children
 Plans for {0} lines
 Points of the trend
+Policy
+Poll ms
+Port
 Possible
 Post
 Post the count
 Posted
+Posted back
 Posted. 1 lot was adjusted.
 Posted. Lots adjusted: {0}.
+PostgreSQL query
 PostgreSQL query: {0}
 Pp · Ppk (overall)
 Pre-alpha
+Preferences, in order
 Preferred line for {0}
+Prefilled on {0}'s reports; the lot being filled's location comes first.
 Preparing PDF…
 Previous month
 Print
 Print and schedule actions are available for one selected order.
 Print label
+Print lot labels on
 Print shop order
 Print to…
 Printer
+Printer in BarTender
 Printer {0} not found.
+Printer {0} saved.
+Printers
 Priority
 Priority {0}
 Process
@@ -1820,6 +2319,7 @@ Produced, {0}
 Producing
 Production
 Production by shift
+Production counted at
 Production days; at most 93 days.
 Production days; at most {0} days.
 Production days; at most {0}. Over {1}, from the daily rollups.
@@ -1831,6 +2331,9 @@ Production lots on this line
 Production performance (B2MML)
 Production reports
 Production unit
+Profile
+Profile code
+Profile name
 Projected
 Projected to finish after the due date, or to start more than 15 minutes after the published baseline.
 Projected to finish {0} after its due date.
@@ -1840,19 +2343,39 @@ Properties
 Property view
 Proportion defective
 Propose a change of 0 to 100 percent or more.
+Propose changes over, %
 Proposed
 Proposed {0}
 Proposed {0}: {1} {2}/h
+Protocol
 Published start {0}
+Publishing ms
 Pulaski
+Pulaski (Code 128)
+Pulaski adds a changeover wherever the material changes on a line, sized from the changeover rules, and resizes it as you resequence. It becomes a real changeover job when the next job starts.
 Pulaski can make {0}'s results itself from a process-value tag on a line: at the end of each interval, the value at the last minute, for the job running on the line. Intervals with no job running, or a bad or missing signal, are skipped.
 Pulaski can make {0}'s results itself from a process-value tag on a line: at the end of each interval, the value at the last {1} minutes, for the job running on the line. Intervals with no job running, or a bad or missing signal, are skipped.
 Pulaski doesn't have this lot; to receive it, give its Quantity with a UnitOfMeasure and its StorageLocation.
+Pulaski fills in
+Pulaski has no mail server set up, so no alerts are sent. Ask your administrator.
+Pulaski password
+Pulaski sends every inventory movement to the ERP's webhook, and certificates to a document system's, as they happen, in order, and keeps trying while the receiver is unreachable. A delivery that is refused, or runs out of attempts, stops here as failed, and holds back that lot's (or certificate's) later events until someone retries it or skips it. Below, material connections read items from your item master.
+Pulaski user name
+Pulaski's internal identifier, for API calls and support.
 Pulaski's translation
 Purchases and transfers expected to arrive, so the shortage check can show them beside stock. Pulaski doesn't order anything: the ERP sends these, or you enter them. Receiving a lot against one closes it.
+Put back
+Put the calendar exception back.
 Put {0} and all it holds inside…
+Qualification
+Qualification code
+Qualification name
+Qualification to grant
+Qualification to require
 Qualification {0} not found.
+Qualifications
 Qualifications can't be imported here.
+Qualification…
 Quality
 Quality results
 Quality results: record and review what was measured or inspected
@@ -1865,6 +2388,11 @@ Quantity to place
 Quantity, {0}
 Quarantine
 Quarantine: kept apart, suspected bad
+Query
+Queued
+Queued, retrying or held
+Quiet
+REST (JSON)
 Raised
 Raised {0}.
 Ran on
@@ -1878,29 +2406,41 @@ Rate unit
 Rates from run history the scheduled recalculation proposes. Accepting makes one the calculated planning rate.
 Ratio
 Raw
+Raw TCP
 Raw TCP to {0}:{1}
 Raw tcp
+Reading {0}…
 Readings
 Readings are recorded when a value moves by more than its tag's deadband, and at least once a minute while it holds. Export CSV gives every reading.
+Reads {0}
 Ready
 Ready at {0}.
 Ready transitioning
 Reason
 Reason codes
 Reason for rejecting
+Reason for skipping
+Reason for state {0}
 Reason for the stop
+Reason for {0}
+Reason on {0}
+Reason with no stop code
 Reason {0} can't be chosen.
 Reason {0} not found.
 Reason {0} was changed by someone else. Reload and try again.
 Reasons
+Reasons offered
 Reason…
 Recalculate every 1 to {0} days.
+Recalculate on a schedule
 Receive
 Receive a lot
 Receive here…
 Receive it…
 Receive lots from a B2MML file
 Received
+Receiver's address
+Receivers may acknowledge by answering with
 Receiving against it closes it: nothing more is expected, whatever quantity arrives.
 Recommended
 Record
@@ -1917,7 +2457,10 @@ Refresh allocations
 Refresh now
 Refreshes every {0} seconds while no form is open.
 Refuse the order
+Refuse the order: the ERP must send whole batches
 Region
+Register a terminal
+Register terminal
 Reject
 Reject and write off
 Reject the lot
@@ -1939,13 +2482,23 @@ Released, but some BOMs need a new version:
 Reload
 Remove
 Remove alternate
+Remove break {0}
 Remove last
 Remove line
+Remove shift
+Remove shift {0}
 Remove stop
 Remove {0}
+Removed
 Removed by {0}
+Removed the calendar exception; planning uses that time again.
+Removed the change to {0} on {1}; the cycle applies that day again.
 Removed {0}'s time.
+Renew
+Renewing {0} for {1}: check the days and click Grant.
 Reopen
+Repeats
+Repeats every (days)
 Replace
 Replace it with a job for the quantity not yet made
 Replaced
@@ -1960,8 +2513,17 @@ Report {0} of that job wasn't found. A report recorded before reports could be r
 Reported
 Reported this shift, against the plan for the shift
 Reported: run now has {0} good and {1} scrap{2}.
+Reporting tolerances
 Reports
 Reports · Inventory
+Request envelope
+Require
+Require a qualification…
+Required
+Required on
+Required qualifications
+Required, e.g. America/Chicago
+Reset password
 Resetting a password by e-mail isn't switched on here; ask an administrator to reset it.
 Resolve
 Resolve {0} on {1}
@@ -1983,6 +2545,9 @@ Results beyond the limits, or breaking a run rule, are worth looking into: if th
 Resume
 Retime
 Retire
+Retry
+Retry all failed
+Retrying
 Reverse
 Reverse a movement
 Reverse report
@@ -1991,11 +2556,20 @@ Reversed: its counts are offset and its lots taken back
 Reversed: run now has {0} good and {1} scrap; {2} lot(s) took the output back.
 Reverse…
 Revoke
+Revoked
+Revoked by {0}: {1}
+Revoked {0} for {1}.
 Rework
 Rework return
+Role
 Role assignment not found.
+Role to add
 Role {0} not found.
+Roles
 Roll reasons up to
+Rollover
+Rollover of {0} {1}
+Rollover or deadband
 Round down
 Round down to whole batches
 Round down to whole batches; the order ends short
@@ -2005,6 +2579,7 @@ Round up to whole batches, to meet the order
 Rounded down
 Rounded up
 Rule 1 is always checked. 1, 2, 5 and 6 are the Western Electric set; more rules find more, and more false alarms.
+Rule for ERP quantities that aren't whole batches
 Rule violated
 Rule {0}
 Rule {0}: {1}
@@ -2030,15 +2605,22 @@ Run {0} on {1}
 Running
 Runs
 Runs and reports
+Runs ended in the last, days
+Runs jobs
 Runs on
 Runs that ended in the last
 Runs under {0} or over {1} {2}/h count as unusual.
 Runtime
 SAP-PRD
+SCIM base address
+SCIM filter
+SCIM users are read as a SCIM file is: the enterprise extension's
 SOAP {0} · items <{1}>
+SOAPAction
 SPC alert {0} not found.
 SPC alerts
 SPC alerts to close
+SSCC extension digit
 Sample every 1 to 1440 minutes.
 Sample exclusion
 Sample from it
@@ -2046,20 +2628,52 @@ Sampled
 Sampled at
 Sampled from process values
 Sampled up to
+Sampling ms
 Save
+Save allocation settings
 Save attribute
+Save change
+Save changeovers
 Save changes ({0})
 Save conversion
 Save counts
 Save delivery
+Save details
 Save draft
+Save exception
+Save format
+Save offered reasons
+Save planning rate settings
+Save printer
+Save role
+Save rule
+Save schedule
+Save settings
+Save sites
+Save targets
+Save terminal
 Save the counts first.
 Save the draft first: the version released is the one saved.
 Save these limits
+Save tolerances
+Save {0}
 Saved
+Saved by {0} on {1:yyyy-MM-dd HH:mm} UTC. The API's configuration now holds only the secret.
+Saved by {0}. The API's configuration now holds only the secret.
+Saved call type {0}.
+Saved on {0:yyyy-MM-dd HH:mm} UTC. The API's configuration now holds only the secret.
+Saved the OEE targets from {0}.
+Saved the allocation settings.
+Saved the calendar exception. The schedule shows it on its next refresh.
+Saved the change to {0} on {1}.
 Saved the limits for {0}{1}.
+Saved the planning rate settings.
+Saved the reporting tolerances; the next report uses them.
 Saved {0} → {1}{2}.
 Saved {0}.
+Saved {0}. The schedule shows the new times straight away.
+Saved. The API's configuration now holds only the secret.
+Saved. The feed uses them from its next round.
 Saving…
 Say what was done.
 Say why first.
@@ -2067,18 +2681,23 @@ Say why in the comment; it is required.
 Say why the limits are entered by hand.
 Say why they are entered by hand.
 Say why: the shift is approved already.
+Scale
+Scale 1
+Scale of {0} {1}
 Scan
 Scan a lot, container or location label, or type a lot or container number. Then move it, pack it, consume it or receive into it; a move or pack asks you to scan where it goes. A scanner that types like a keyboard works; click the box first.
 Scan another, or choose what to do
 Scan badge
 Scan or type
 Scan or type a lot number
+Scan or type a sample barcode
 Scan the container
 Scan the container to put it in
 Scan the feed point to load it at
 Scan where it goes
 Scan · Inventory
 Scanned lot
+Schedulable
 Schedule
 Schedule by line
 Schedule conflicts
@@ -2098,16 +2717,29 @@ Sds
 Search
 Search properties
 Search terms
+Security
 See the chart
 See them
+Seen
 Select
+Select equipment to see its properties.
 Select visible ({0})
 Select {0}
 Self
+Send a certificate's file with its event
+Send the link
+Send to this receiver
+Sends
+Sends to
 Sent 1 label to {0}.
 Sent labels to {0}: {1}.
+Sent with the certificate's event
 Series
+Server thumbprint
 Service
+Service account
+Service account (a machine, such as the edge): keeps its password when only administrators sign in with one
+Service root
 Session {0} not found.
 Sessions
 Sessions: {0}
@@ -2119,6 +2751,7 @@ Set quantity
 Set to
 Set window
 Setting the attribute records a quality result for the lot, checked against the material's specification
+Settings
 Setup
 Setup ({0})
 Setup time is for a job: choose it.
@@ -2126,13 +2759,16 @@ Several processes make {0} ({1}); send the process code, or set the material's d
 Share
 Share is of the equipment's scheduled time. Code stops on the Stops tab to move time out of Uncoded.
 Share, %
+Shared tablets and panel PCs where people badge to record their time. Register one here, then open
 Shelf life
 Shelf life (days)
 Shelf life in days
 Shelf life, days
 Shelf life, days (blank for none)
 Shift
+Shift code
 Shift handover: notes and open items per line
+Shift name
 Shift review
 Shift schedule {0} not found.
 Shift schedules
@@ -2141,6 +2777,7 @@ Shift {0} {1}, {2:ddd d MMM}
 Shift {0} {1}, {2}–{3}
 Shift {0}{1}
 Shifts
+Shifts in effect
 Shifts of the last two weeks that have ended with labor no one has approved yet.
 Shifts: {0}
 Ship
@@ -2157,15 +2794,21 @@ Show
 Show all
 Show all {0}
 Show as a table
+Show earlier and ended targets
+Show earlier changes too
 Show ended ({0})
 Show every job
 Show fewer
+Show from now on
+Show from today on
 Show inactive
 Show lines and departments
 Show micro-stops
 Show more
 Show older
 Show on the schedule
+Show only those in force today
+Show past and removed ones too
 Show properties
 Show received and cancelled
 Show replaced stops
@@ -2175,20 +2818,32 @@ Showing one job's movements only.
 Showing the first {0}; there are more. Narrow the period or the equipment.
 Showing the latest {0} stops in this period; there are more.
 Showing {0} of {1}; search to narrow them.
+Sign
+Sign and encrypt
 Sign in
 Sign in with {0}
 Sign off
 Sign on
 Sign out
 Signalled
+Signed in through an identity provider; give them a role to let them in
 Signed on at {0}. Badge again to switch person; after {1} minutes without anything done here, the station signs you off.
+Signs in
+Signs in as
+Signs in through {0}; the provider keeps their name and e-mail up to date.
+Since
 Since {0}{1}{2}
 Site
+Site (default)
 Site settings
 Site {0} not found.
 Site, where the file names none
 Size
+Skip it
 Skipped
+Skipped by {0}: {1}
+Skipped.
+Skip…
 Soap
 Some of those people don't exist.
 Someone else changed the same records at the same moment. Try again.
@@ -2201,6 +2856,7 @@ Specification
 Specification version {0}:
 Specification {0} not found.
 Specifications
+Speed
 Speed scaled
 Speed {0}
 Split
@@ -2221,17 +2877,24 @@ Start a paid break now
 Start again
 Start an unpaid break now
 Start break
+Start it (
 Start paid break
 Start {0}
 Started
+Started (UTC)
 Started.
 Starting a count takes a snapshot of every lot at the location. Count them, enter what you find, then post.
 Starting next
 Starting today
 Starts
+Starts at
 Starts later
 Starts {0} after its baseline
 State
+State (PackML StateCurrent)
+State from
+State {0} active
+States
 Station
 Status
 Status changed
@@ -2245,9 +2908,14 @@ Stock of every material at {0}, grouped by class. Quantities are in each materia
 Stock on a date
 Stop Pareto
 Stop code
+Stop code for {0}
 Stop code {0} isn't in {1}'s machine profile.
+Stop codes
+Stop code…
 Stop not found.
 Stop reason
+Stop reason (first out)
+Stop requiring {0}
 Stop {0} not found.
 Stopped
 Stopped faulted
@@ -2258,10 +2926,14 @@ Stops can be adjusted for {0:0} days after they start.
 Stops chosen: {0}
 Stops in each line's current shift, longer than a micro-stop, that no one has given a reason yet.
 Stops needing their reasons: {0}
+Stops shorter than this are micro-stops: logged, but not queued for a reason and not counted against availability; the output they cost shows as lower performance. An extruder may use 2 minutes, a pack cell more.
 Stops to code
+Stops with these codes show as uncoded until they get a reason
+Stops with this code show as uncoded
 Storage unit
 Storage zone
 Struck-through rows were replaced or removed by a correction after approval; the hours count the correction. Hours are worked time: breaks are left out.
+Subject
 Suggested
 Suggested lot
 Suggestions use the lot that expires first, then the site's preferences (Configure → Site settings), then the oldest; approved alternates on the BOM line come after the component's own lots. They leave out stock that is held, would expire before {0} (when the job needs it) or is allocated to other jobs. Allocated stock is kept for this job: other jobs see it as taken.
@@ -2269,31 +2941,47 @@ Sum {0}
 Superseded
 Supervisor
 Supplier
+Supplier barcodes
 Supplier format {0} not found.
+Supplier format {0} saved.
 Supplier lot
 Supplier or lab
+Switch it on under Settings below.
 Switch light or dark theme
 Switch off
+Switch off people the source no longer has
 Switch on
 Switch the touch layout on or off
+Switched call type {0} back on.
 Switched off
+Switched off call type {0}; its calls stay in the history.
 Switched off too
 Switched off {0}; whoever chose it sees English.
 Switched off. It can't be received, ordered or added to BOMs any more; these carry on: {0}.
+Switched off; nothing more is sent for it.
+Switched on again.
 Switched {0} on again.
+Switched-off roles aren't shown. To add a role or change its name, use
 Synthesized
 Table
 Tag
 Tag deleted
 Tag {0} not found.
+Tags
+Take away
 Take out of {0}
 Take out stops
+Take this role away
 Taken
 Taken by {0}
 Takes one material at a time
+Takes one material at a time, like a silo for one resin: while one material is here, nothing of another can arrive. Once it is empty, any material can go in.
 Target
 Target {0}
 Targets from {0:yyyy-MM-dd} are set already; a new one starts on that day or later.
+Tell me when
+Templates
+Temporary password
 Terminal
 Terminal {0} not found.
 Terminals
@@ -2310,6 +2998,7 @@ That call isn't waiting on this station's line any more.
 That code isn't valid: it is wrong, used already or more than 15 minutes old. Ask for a new one.
 That container isn't where {0} is any more; move one of them first.
 That correction was made before Pulaski kept what it replaced, so it can't be reversed; correct the lot again instead.
+That day it
 That delivery is {0} already.
 That delivery is {0}; only a failed one is retried.
 That equipment doesn't exist.
@@ -2378,15 +3067,25 @@ The characteristic is already sampled on that line; switch that off first.
 The chart signals (beyond the limits or a run rule), so the process isn't stable: capability describes it poorly until the cause is dealt with.
 The code said {0}
 The code, kind and factor can't change later, because quantities are stored in the unit.
+The code, what it sends to and its format can't change later. A B2MML feed sends a production job's totals each time they change. It starts switched off: set its address and what it sends under Settings. Its secret (and a broker's username and password) go in the API's configuration under
+The configuration also sends {0}, which no kind covers; saving keeps only the kinds ticked.
 The constraint machine is equipment below {0} that tracks state.
 The crew size must be greater than 0 and at most {0}.
+The default document
+The document's own
 The earlier operation.
+The equipment that uses this profile; give equipment its profile on the Equipment screen, under Machine data. A machine whose stop code means something else than on the others can take its own reason for it here.
+The equipment this sits under.
+The equipment this will sit under.
 The expected quantity must be greater than zero.
 The factor must be greater than zero.
+The file is all of the system's people: switch off those it doesn't list
 The file is empty; export the language first to see the columns.
 The finish-by time must be after the earliest start.
 The first line names the columns: term,translation.
 The first line names the columns; code, name, type and base_unit are required. A column left out keeps what each material already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code. A class that doesn't exist is an error unless Create missing classes is ticked (class_name names it). Nothing is saved until every row is valid.
+The first line names the columns; employee_number and name are required. A column left out keeps what each person already has. Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that key; the others are matched on their employee number.
+The first time it's switched on, start from now (not the whole history)
 The ideal rate must be greater than zero.
 The item or part number.
 The job hasn't started yet: declarations go into its runs.
@@ -2396,6 +3095,7 @@ The job is {0}; nothing more is declared on it.
 The job is {0}; only planned and firmed jobs change line.
 The job isn't ready to start yet.
 The job makes no material, so there is nothing to check the result against.
+The kinds of help an operator can call for from a line, such as maintenance, quality or a supervisor. A call nobody has answered within its escalation time is shown as escalated. Switch a type off to stop offering it; its calls stay in the history.
 The labor of {0} is approved already.
 The labor of {0} is approved already; a supervisor can correct it.
 The labor of {0} is approved already; ask a supervisor.
@@ -2403,6 +3103,7 @@ The labor of {0} is approved; correct it instead.
 The language Pulaski's screens show you, and how they write dates and numbers.
 The language's usual
 The languages Pulaski's screens can show, and their translations. Where a term has none, it shows in English.
+The last valid day; empty for no expiry
 The limits must be numbers with the lower limit at most the centre line, and the centre line at most the upper limit.
 The line has no ideal rate for this material, so the rate isn't checked.
 The line isn't an active line of this site that runs jobs.
@@ -2429,11 +3130,15 @@ The lot was written off.
 The lot's receipt was reversed.
 The lots allocated to this job that aren't at its line yet, by location, to fetch
 The lots taken in must have nothing counting after it.
+The machine below it whose state is its own.
 The machine's count has no time; count again.
 The machine's counts up to then are in another report of this run already. Take the counts again to report what it counted since.
+The machine's first-out stop codes (PackML Admin.StopReason). A stop takes the reason its code maps to; a code without one shows as uncoded, and operators can confirm or change it.
+The machine's own codes, kept with their messages. Alarm and warning history comes later; their reasons are kept for it.
 The material has no released specification.
 The material has no such conversion.
 The merge comes apart: the lot that was merged gets its quantity and status back, and the lot it joined goes down by that much.
+The next 7 days
 The note is at most {0} characters.
 The operation that follows it.
 The operations it waits for. Draw links on the canvas.
@@ -2443,10 +3148,14 @@ The planning rate follows the ideal rate as on the material page. Nothing is sav
 The planning rate has a modified rate in the old unit; clear it before changing the rate unit.
 The process decides where the order runs: each of its operations becomes a job on its lines or departments.
 The process no longer makes {0}, so order creation won't offer it.
+The profile already has state value {0}; change it in the list.
+The profile already has {0} {1}; change it in the list.
 The quantity goes back to the balance it came from; the receiving balance must still hold it.
 The quantity must be greater than zero.
 The reasons in bold make up the first 80% of the stops. Code stops on the Stops tab to move time out of Uncoded.
 The reasons in bold make up the first 80% of the time. Code stops on the Stops tab to move time out of Uncoded.
+The reasons people choose when they write stock up or off, hold a lot, report scrap or end a run, and the utilization reasons a machine's time is coded with. A code and its kind can't change once created, because history refers to them; switch a reason off instead of reusing it. File reasons under
+The receiver won't get this event. Put it right there by hand first; the later events of the same lot or certificate are sent next.
 The released version names operation {0}, which {1}'s released version no longer has,
 The report is reversed and the figures above reported in its place, at its time, in one go: its lots give their quantity back and new lots are made. 
 The result is already left out.
@@ -2455,8 +3164,11 @@ The run standard was changed by someone else. Reload and try again.
 The same figures as the {0} table; a day adds its shifts' hours up.
 The same line and sides appear earlier in the file.
 The same lot appears earlier in the file.
+The sample doesn't match the pattern.
+The schedule shows a change on its next refresh, for every line in the site. How long each changeover takes is set on
 The scheduling policy for {0} was changed by someone else. Reload and try again.
 The scope names a material class or material that doesn't exist.
+The secret isn't set in the API's configuration, so nothing is sent until it is.
 The shares must add up to 100% before the version can be released.
 The shift hasn't ended yet; approve it once it has.
 The site already has a container {0}.
@@ -2470,7 +3182,10 @@ The site already has an edge node {0}.
 The site already has employee number {0}.
 The site has no crew {0}.
 The site has no qualification {0}.
+The site has no qualifications yet; add them on
+The site has no utilization reasons yet. Add them on Configure → Reasons.
 The site whose lines and departments it can use.
+The site whose time zone and codes this equipment uses.
 The site's allocation settings were changed by someone else. Reload and try again.
 The site's label settings were changed by someone else. Reload and try again.
 The site's planning rate settings were changed by someone else. Reload and try again.
@@ -2491,16 +3206,22 @@ The tag's equipment isn't on a line that runs jobs, so its results would have no
 The template set '{0}' has no template for a {1} label.
 The top equipment of each group; choose one piece of equipment to see its shifts alone.
 The two new passwords don't match.
+The two passwords aren't the same.
 The unit stock is counted in.
+The utilization reasons operators may choose when they code a stop on this profile's machines. With none ticked, every utilization reason of the site is offered; with some ticked, those and the ones its codes and states map to. Reasons are kept on Configure → Reasons, under Utilization.
+The values the machine's state tag takes, and the PackML state each one means. A new profile starts with PackML's own numbers; change them
 The version on the canvas. Pick another above the canvas.
 The whole day
 The whole lot moves there, all {0} {1}, and feeds from now.
 The whole lot moves, all {0} {1}.
+The whole site
 The work order is {0}; it can no longer get jobs.
+The working time planning uses for this equipment and everything below it that inherits: its own setting, or the nearest one above it.
 The {0} call on {1} is resolved.
 The {0} feed has no delivery of event {1}.
 The {0} feed's settings were changed by someone else. Reload and try again.
 The {0} {1} goes back to the lot, and it stops being a parent of what {2} made, unless more of it went into that job.
+Their details are kept at {0}
 There are no indirect reasons at this site yet; ask a supervisor.
 There is already a call type {0} at this site.
 There is already a characteristic {0}.
@@ -2521,7 +3242,9 @@ There is no line {0}{1}.
 There is no location {0} at this site.
 There is no material {0}.
 There is no site yet.
+There is no site yet. Add one on
 There is no site {0}.
+There is no site.
 There is no such call type at {0}'s site.
 There is no target to end.
 There is no unit '{0}' in Pulaski.
@@ -2539,6 +3262,7 @@ These limits have ended already.
 These limits haven't started yet.
 These targets were changed by someone else. Reload and try again.
 They go to zero; {0} takes their stock and the earliest expiry.
+They sign in with the temporary password and must choose their own straight away. At least 10 characters, with two of: lower case, upper case, digits, symbols; not the user name. Tell them the password yourself: Pulaski doesn't send it.
 This BOM already has a draft; change that one.
 This BOM has no released version to start a draft from.
 This alert is no longer offered.
@@ -2556,6 +3280,7 @@ This job was planned with a partial last batch; report it here when it is made.
 This line doesn't report its machine state. Bind its tags through an edge node and switch on state tracking to see it here.
 This lot wasn't made from other lots.
 This month
+This page needs the link from the e-mail.
 This partial batch was {0}; its report can't be reversed while it is.
 This production was recorded before reports could be reversed whole: the lot gives the quantity back, but the job's reported output stays.
 This run standard has no modified rate to clear.
@@ -2564,6 +3289,8 @@ This run: {0} {1}
 This screen isn't enrolled
 This shift
 This shift:
+This site uses the default, automatic.
+This site uses the defaults, 110% each.
 This specification already has a draft; change that one.
 This specification has no released version to start a draft from.
 This station doesn't offer that call; choose one of its buttons.
@@ -2581,14 +3308,22 @@ Tick the lots this output was made from. Left blank, its lots are paired with wh
 Tick who is here.
 Time
 Time on
+Time taken out of the calendar of the site, an area or a line, and everything below it, whichever shift schedule it follows. Planning places no work in it; work that would run into it waits until it ends.
 Time window
 Time window (loaded lot)
+Time zone
+Timeout (s)
+Timeout ms
+Times
+Times are in the site's time zone ({0}).
 Times are in the site's time zone ({0}). No job starts before the start.
+Times are in the site's time zone.
 Times changed
 Timing
 Title
 To
 To back-date it, up to 31 days, to when it was really done; it is recorded now as well. A comment saying why is required.
+To change one shift on one day instead, use
 To location
 To make
 To place
@@ -2598,6 +3333,7 @@ Toggle navigation
 Too large
 Too many wrong PINs: this badge is locked until {0:HH:mm} UTC. Ask a supervisor if you need time recorded now.
 Top: {0}, {1} min
+Topic
 Total
 Total worked
 Tote
@@ -2605,6 +3341,7 @@ Touch layout: larger buttons and fields for a touch screen
 Trace back
 Trace forward
 Tracking
+Tracks state
 Training
 Translated
 Translation of: {0}
@@ -2618,17 +3355,24 @@ Trim
 Trimmed
 True
 True: it can make any material. False: only the classes and materials listed below. Order creation offers it for any material it makes.
+Trust any server (test only)
+Try
 Try a conversion
 Try fewer filters. Used-up lots show only when you choose the Consumed or Scrapped status.
+Try it on a scan
 Type
 Type a material code or name
 Type each good batch's weight as a number, separated by commas, such as 1000, 998.5.
+Type your user name or e-mail address.
+Type your user name or the e-mail address Pulaski has for you. We'll send a link to choose a new password.
 U
 Un-dispatch
 Unchanged
 Uncoded
 Uncoded stop
 Uncoded stops
+Under
+Under {0}
 Undo
 Undo 1 movement
 Undo movements: {0}
@@ -2653,9 +3397,12 @@ Unpack from {0}
 Unpacked
 Unpaid
 Unpaid breaks
+Unsaved
+Until
 Untranslated
 Up to 30 days
 Up to {0} {1} more fits this run at the line's rate.
+Up to, %
 Update
 Updated
 Updated {0} · refreshes every 5 seconds.
@@ -2663,6 +3410,9 @@ Updates every {0} s
 Upper
 Upper limit
 Use
+Use the defaults
+Use the profile's
+Use the standard template
 Use these figures
 Use {0} {1}/h as the calculated rate
 Used
@@ -2670,17 +3420,26 @@ Used in
 Used-up lots
 User
 User name
+User name (optional)
+User name of {0}
+User name or e-mail
 User not found.
 User {0} not found.
 Users
+Users and roles
 Users, roles and permissions
+Uses the profile's reasons for every code.
 Utilization
 Utilization and OEE
+Valid
+Valid from
 Value
 Values a subgroup
 Values in bulk
 Values{0}
 Variable
+Vendor
+Vendor and model
 Version
 Version shown
 Version {0}
@@ -2706,7 +3465,11 @@ Waiting external
 Waiting for a line
 Waiting for review
 Waiting on its department: start it from the Floor, choosing the line it runs on.
+Waits behind an earlier delivery for the same lot.
+Waits for someone to retry or skip it.
+Warehouse system
 Warning
+Warning (active number, 0 = none)
 Warnings
 Warnings to review
 Webhook
@@ -2714,17 +3477,26 @@ Week
 Weighted by how long each reading held
 Welcome back, {0}.
 What
+What Pulaski lets people change, and which roles may. Tick a box to give a role a permission, untick it to take it away: it applies to everyone who holds the role, straight away. A role sees only the screens its viewing permissions allow; a permission to change something includes seeing it (shown ticked and locked).
 What automation couldn't consume
+What availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line with targets of its own uses those instead. A change starts on the day you choose, so earlier days keep the targets they had. Leave a figure blank for no target.
 What changed (optional)
 What each line's shifts hand on: open items stay until someone closes them; notes stay with their shift.
+What each machine bound here last reported, as Pulaski applied it: its PackML state (and the value the machine sent), unit mode, latched stop code and speed. The machines' stops are coded on Operate → Machines.
 What each material is made from, one level deep. A BOM for a process says which operation consumes each component.
 What each material must meet: its characteristics and their limits. Quality results are checked against the released version.
+What each role may change is on
 What every machine is doing now, as its edge node reports it, and its stops. A stop is time a machine isn't executing; stops shorter than the machine's micro-stop threshold aren't coded. Give each stop its reason, or confirm the one its stop code maps to. Where the machine's record is wrong or missing, a supervisor can enter a stop by hand, or split or merge stops.
 What happens when the ERP sends a work order for this material that isn't whole batches (D-066). The site's rule is set on Site settings; the ERP's own quantity is always kept on the order beside Pulaski's.
 What is here
 What is measured (a wall thickness, a melt flow index) or inspected (surface defects). Specifications give each one its limits per material.
+What it did
 What it does, e.g. Extrude.
 What it makes is saved
+What it sends
+What it sends:
+What it's for
+What it's for (optional)
 What one count of the line's counter makes, e.g. 2.4 for 2.4 m a cut.
 What people call it.
 What runs on each line and what comes next. Start, pause and complete jobs, and report what they make.
@@ -2738,21 +3510,35 @@ What was done
 What was done (optional)
 What was measured or inspected, against a lot or a job's run, checked against the material's released
 When
+When each site works. Planning places jobs only inside shifts. Equipment follows a schedule of its own or inherits its parent's (choose on
+When it works, for planning: inherit its parent's shifts, follow one of the site's shift schedules, or run around the clock. Schedules are kept on Configure → Shifts.
+When the ERP sends a work order for a material made in batches, and its quantity isn't whole batches. A material can have a rule of its own on its page; this is the site's default.
 When this version was released for orders.
+When you click Import
 Where
 Where a screen has no translation yet, it shows in English.
+Where it applies
 Where it can run
 Where it is
 Where it is ({0})
 Where it is used
+Where its state comes from: its own state tag, or for a line, its machines: the worst of their states when they run one after another (series), the best when they run side by side (parallel), or one constraint machine.
+Where the edge reads from: an MQTT broker its machines publish to in Sparkplug B (Pulaski listens as a Sparkplug host application), an OPC UA server, or an EtherNet/IP PLC. Passwords aren't kept here; they go in the edge's own configuration (Setup).
 Where the time went
 Where used
 Where what was taken came from
+Which signal means what on which equipment. A Sparkplug B address is
 Who
+Who can sign in, and which roles they hold. Everyone who signs in can view every screen; roles decide the changes. Every user needs a role, and every role but Administrator is held at a site.
+Who holds what
 Who is on each line, the labor of each shift to review and approve, and hours against the standard crew.
+Who places changeovers
+Whoever manages integrations switches it on.
 Whoever reports a partial batch doesn't decide on it
 Whole day
 Whole-batch quantity
+Whose processed and defective counters a production report from the machine takes, usually the last machine of the line. Found by itself when the line has its own counter or only one machine below it has one.
+Who…
 Why
 Why (optional)
 Why (required)
@@ -2766,6 +3552,8 @@ Why it is dismissed (required)
 Why it is entered (needed)
 Why it is left out
 Why it is rejected
+Why it is revoked
+Why it won't be sent, e.g. booked by hand in the ERP
 Why merge
 Why merge them (needed)
 Why remove it (needed)
@@ -2781,10 +3569,14 @@ With an external system, the materials are that system's items, matched on their
 With effective_from (a site-local date, yyyy-MM-dd) a row is the period starting that day: an open-ended period starting earlier ends there, and any other overlap is an error. effective_to (the day after the last) ends a period.
 With everything after it that depends on it
 With the biggest reason named
+With {0}, a 2-hour run on a line whose ideal rate is 1,000 m an hour can report up to {1} m, good and scrap together; more is refused.
+With {0}, a job planned to use 500 kg of a component can record up to {1} kg before Pulaski warns; more is still recorded, with a warning.
 Withdraw
 Withdrawn
 Withdrawn by {0}: {1}
 Withdraw…
+Without a company prefix, containers get no SSCC.
+Without a reason
 Won't fit
 Work cell
 Work center
@@ -2810,8 +3602,12 @@ Work out limits from results
 Work out the rate {0} really made {1} at: good output ÷ run time over its ended runs, or ÷ running time with the stops inside the runs taken out. Short runs, runs with no good output and unusually slow or fast runs are left out. Nothing changes until you accept it.
 Work unit
 Worked out from
+Working it out…
 Working out where it lands…
+Working time
+Works out every line's rates and proposes those that changed.
 Worst of its machines
+Worst of its machines (series)
 Would
 Would change: {0}. Unchanged: {1}.
 Write off
@@ -2820,6 +3616,7 @@ Write the note first.
 Write up
 Written off
 Written up
+W{0} {1}
 X-bar and R
 X-bar and S
 Xbar r
@@ -2840,16 +3637,19 @@ You can view {0}, but changing its status needs permission to manage work orders
 You can view {0}, but moving, pinning or cancelling it needs permission to plan jobs at this site.
 You can't change the capabilities of {0} at {1}.
 You can't manage work orders at {0}.
+You can't see this at {0} any more, so it isn't sent.
 You can't see what this alert is about at that site ({0}).
 You can't switch yourself off.
 You have no Pulaski user, so only your time can be recorded here. Ask a supervisor to link your badge to a user.
 You have no Pulaski user, so the station can't run jobs or record production for you. Ask a supervisor to link your badge to a user.
+You have no e-mail address in Pulaski, so your alerts can't reach you. Ask an administrator to add it on Configure → Users.
 You may not back-date movements at this site: it needs permission to back-date inventory movements.
 You reported it: someone else decides
 You reported this partial batch, so someone else must approve or reject it.
 You signed in with a temporary password. Choose your own before you carry on.
 You're on the {0} call on {1}.
 Your PIN
+Your password is changed. Sign in with it now.
 Your role doesn't code stops; ask someone who does.
 Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes or planning rates.
 Your role doesn't let you code stops at this site.
@@ -2863,6 +3663,8 @@ Your roles don't let you see any screens in Pulaski yet. Ask an administrator to
 Your roles don't let you see anything in Pulaski yet; ask an administrator.
 Your session ended. Sign in again to carry on.
 Zoom
+a job may consume a component beyond its plan (scaled up when it makes more than planned) × this percentage, and the report says so.
+a run can't report more than its length × the line's ideal rate for the material × this percentage.
 a shift
 about the same as the rate in force.
 about the same as {0} then
@@ -2873,17 +3675,27 @@ after end
 after start
 against the rate in force.
 against {0} then
+all groups
+and
 and {0} more
+anonymous
+another site
 answer calls
 answered in {0}, resolved in {1}
 any process
+as it stands then.
+as publishing
+at a site or every site
+at a site or every site ({0} everywhere)
 at the end
 at their published times
+at {0} UTC
 balance
 batch size {0} {1}, exact
 batch size {0} {1}, ± {2}%
 before {0}
 below {0}
+best offered
 by a {0}
 by {0}, {1}{2}
 c chart
@@ -2895,42 +3707,80 @@ change what each role may do
 changed since counted
 characteristics
 close alerts
+code waiting
 container
 corrected
 count stock
 counts from {0}
 create work orders
+data.items (blank: the whole answer)
 days
 default
 department
 down {0} min this shift
+downtime
 duration unknown (no run standard)
+e.g. 10.0.0.20
+e.g. Christmas shutdown
 e.g. ERP1
+e.g. EXT-T1
+e.g. Extrusion hall, east wall
+e.g. HR1
+e.g. Jo Smith
+e.g. Line lead
 e.g. MFI
 e.g. Melt index
+e.g. Overtime for the Acme order
+e.g. Two shifts, weekdays
+e.g. broker.plant1.local
+e.g. es-MX
+e.g. j.smith
+e.g. line_lead
+e.g. pulaski
+each time a production job's totals change (it starts, pauses, completes, is reopened, closed or cancelled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML
+everywhere
+expiry {0:yyyy-MM-dd}
 finishes after its due date
+for a planner; a modified rate always stays in force.
 for {0}
 from run history
 from run history, stops taken out
 from the ideal rate
+from the trusted store
 from {0}
 from {0} runs, {1} hours and {2} {3} good.
 from {0} runs, {1} hours running ({2} h of stops taken out) and {3} {4} good.
+from {0}, no expiry
+generated
+group
+groups
 had 1 movement reversed
 had a movement ({0}) reversed
 had movements reversed, latest first: {0}
 held
+held at a site
 https://…
 inspected
+is
+is an unplanned stop that counts against availability, and
+is producing or running slow,
+is the employee number,
+is the number the machine sends;
+is the state's name or the code's message. A state row also needs
+is the vendor's grouping, and
 it holds {0} {1}
 it is {0} h old
 job
+just now
+last heard from {0}
 late
 limits {0} to {1}
 limits {0} to {1}, beyond them
 line's
+lists the codes they hold, separated by
 loaded at {0}
 locked
+lot {0}
 lots mix there, so what arrives joins it.
 machine
 maintain BOMs
@@ -2950,10 +3800,13 @@ maintain units of measure
 maintain users and their roles
 makes {0} ·
 manage containers
+mapped
+material {0}
 material's
 min
 modified {0} in force
 moved to {0}
+never
 next {0}
 no
 no BOM
@@ -2964,13 +3817,19 @@ no lot of its own
 no run standard on {0}
 none
 not released
+nothing Pulaski uses.
 np chart
 np: number defective
 of which idle
 of {0}
 of {0} {1}
 of {0} {1} good
+off
+on the device and type its enrolment code. Badges are issued on
+on the device and type this code before {0}.
+one-off changes on Shifts
 ongoing
+or
 outside shifts
 overlaps a firmed job
 p chart
@@ -2984,6 +3843,7 @@ proposed {0}
 pushes {0} back {1}
 pushes {0} jobs back, up to {1}
 put on hold
+quantity {0}
 quarantined
 rate not checked
 record expected deliveries
@@ -2993,8 +3853,11 @@ removed
 replaced
 retry or skip deliveries
 reversed
+role at this site. Sign in once as that user and set its password.
 room for {0} more at the line's rate
 run {0}
+runtime
+sent {0}
 shipped on {0}
 since the last report from the machine ({0})
 since the run started
@@ -3006,31 +3869,40 @@ stock
 stopped for {0}, {1} ago
 stopped {0} ago, still stopped
 substitution
+supplier lot {0}
 target {0}
 the changeover before {0}
+the code of the utilization reason it counts as. Each kind in the file replaces that list: entries it leaves out are switched off, and kinds it doesn't mention stay as they are. Nothing is saved until every row is valid.
 the line
 the machine says {0}
+the name and
 the shift changes
 the site
 this site
 to
 to confirm
+to keep long lists tidy: people choose from the reasons, listed under their groups, never a group itself. Moving a reason doesn't change what history recorded.
 to place work on a line.
 to plan them.
+to {0}
 today
 took in 1 lot
 took in lots: {0}
 u chart
 u: defects per unit
 uncoded
+until
 uses
 version {0} released, {1} components
 via {0}
 waiting for a line
 waiting {0}
 waiting {0}: escalated
+where the material changes with none in between.
 where the schedule has them now
+whether they work here. With an external system, the people are that system's, matched on their
 window {0}
+with the user's password (and each broker's, where it has a user name):
 within lead time
 work out, approve or end control limits
 write handover notes
@@ -3040,9 +3912,11 @@ yes
 you measure or inspect first, then a specification for a material with their limits,
 {0:ddd d MMM}, lines without shifts
 {0} (not made)
+{0} (switched off)
 {0} (the material's)
 {0} (to {1})
 {0} Since then: {1}.
+{0} UTC by {1}: {2}
 {0} allocated
 {0} already has GTIN {1}.
 {0} already has a connection {1}.
@@ -3059,6 +3933,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} appears earlier in the file.
 {0} arrived
 {0} assigned to {1}.
+{0} at every site
 {0} at {1}
 {0} batches can't be shared between {1} lines; plan at least one batch for each.
 {0} belongs to another site than {1}.
@@ -3067,6 +3942,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} by shift
 {0} by {1}{2}
 {0} calls are switched off at this site.
+{0} can now sign in as {1} with the temporary password.
 {0} can only go back to the group it was planned to.
 {0} can't be allocated: {1}
 {0} can't be imported: {1}
@@ -3094,6 +3970,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} counted {1} good and {2} scrap {3} {4}, to {5}{6}.
 {0} created on {1} for {2}.
 {0} days
+{0} deliveries go again on the next round.
 {0} doesn't convert to {1} for this material; add a conversion for it.
 {0} doesn't convert to {1}, the base unit of {2}; choose another unit, or add a conversion for {3} on the Units page.
 {0} doesn't convert to {1}, the base unit of {2}; enter the quantity in another unit, or add a conversion for {3} on the Units page.
@@ -3102,6 +3979,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} doesn't hold inventory; mark it on the Equipment page, or choose another location.
 {0} doesn't make that material; add it, or its class, to what the process makes first.
 {0} doesn't make {1}; add it, or its class, to what the process makes first.
+{0} doesn't normally run that day, so this adds it as an extra shift.
 {0} doesn't offer that line.
 {0} doesn't plan to consume that material, and it isn't an approved alternate on its BOM.
 {0} doesn't run jobs, so nothing is reported there.
@@ -3113,6 +3991,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} expired on {1:yyyy-MM-dd}; it can't be {2}. If quality has extended it, correct its expiry first.
 {0} file
 {0} from stock
+{0} goes again on the next round.
 {0} good
 {0} good · {1} scrap
 {0} h not coded, {1} h of it no signal
@@ -3120,6 +3999,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} had no limits in force.
 {0} had no stock at {1}; a movement can't count from then.
 {0} had no stock until {1}; a movement can't count before that.
+{0} has a new temporary password, to change when they sign in.
 {0} has changed since the merge ({1}); reverse that first.
 {0} has changed since the split ({1}); reverse that first.
 {0} has control limits in force; end them before changing its chart, since they were worked out for this one.
@@ -3156,7 +4036,9 @@ you measure or inspect first, then a specification for a material with their lim
 {0} holds {1} and takes one material at a time; empty it first.
 {0} hours worked
 {0} in quarantine
+{0} in the last 24 hours
 {0} incoming
+{0} instead of {1}
 {0} is a group: a job planned to it gets a window, not a slot on a line.
 {0} is a group; only production jobs are planned to it. Put {1} jobs on a line.
 {0} is a group; plan a new job to it instead of moving one there.
@@ -3216,6 +4098,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is paused, so its last run has ended; report the partial batch into that run from the job's page.
 {0} is ready: {1} to create, {2} to update, {3} unchanged.
 {0} is ready: {1} to create, {2} to update, {3} unchanged. Click Import.
+{0} is ready: {1}.
 {0} is retired; it can't be {1}.
 {0} is running on {1}; pause or complete it first.
 {0} is running.
@@ -3261,6 +4144,8 @@ you measure or inspect first, then a specification for a material with their lim
 {0} isn't on hand.
 {0} isn't on hold; hold it first, then reject it.
 {0} isn't running, so {1} can't be recorded now. Start the job, or choose the run it belongs to.
+{0} items
+{0} itself
 {0} jobs
 {0} key {1} appears earlier in the file.
 {0} key {1} is {2} ({3}) at another site.
@@ -3270,9 +4155,13 @@ you measure or inspect first, then a specification for a material with their lim
 {0} locked.
 {0} lots have errors, so nothing can be imported yet. Fix them and pick the file again.
 {0} makes another material in Pulaski; the ERP can't change an order's product. Cancel it and send a new order.
+{0} match
 {0} match {1}; choose one.
+{0} matches the profile already; there is nothing to import.
 {0} material
 {0} min
+{0} min ago
+{0} months
 {0} moved to {1}
 {0} moved to {1}, {2}.
 {0} moved to {1}.
@@ -3282,11 +4171,16 @@ you measure or inspect first, then a specification for a material with their lim
 {0} moves whole; splitting a lot isn't built yet.
 {0} must finish by {1}.
 {0} needed by this job and every one before it
+{0} new, {1} changed, {2} switched off, {3} unchanged
 {0} no longer has a finish-by time.
 {0} no longer holds what that movement added.
+{0} no longer holds {1} at {2}.
+{0} no longer holds {1}.
 {0} no longer runs {1}.
 {0} no longer waits for a start time.
+{0} normally runs {1} that day; this replaces it for that day only.
 {0} not found.
+{0} now holds {1}.
 {0} of {1}
 {0} of {1} components short.
 {0} of {1} consumed by {2}
@@ -3316,6 +4210,8 @@ you measure or inspect first, then a specification for a material with their lim
 {0} points; no targets.
 {0} points; {1} beyond the limits; {2} breaking a run rule.
 {0} points; {1} of {2} with a target below it.
+{0} queued or retrying
+{0} queued or retrying, {1} of them held
 {0} quiet
 {0} released
 {0} results; no control limits in force for them.
@@ -3330,12 +4226,14 @@ you measure or inspect first, then a specification for a material with their lim
 {0} signs in through {1}; only a Pulaski account can be a service account.
 {0} signs in through {1}; reset the password there.
 {0} site time
+{0} skipped.
 {0} split off {1} into {2}.
 {0} starts no earlier than {1}.
 {0} stays at its site; register another terminal for another site.
 {0} still holds {1} {2}; take them out first.
 {0} still holds {1} {2}; unpack or move them first.
 {0} stops to code
+{0} tag for {1} was permanently deleted. Machine history is retained.
 {0} taken out of {1}.
 {0} to code
 {0} to make
@@ -3373,7 +4271,9 @@ you measure or inspect first, then a specification for a material with their lim
 {0} {1}; a capability goes on an active line that runs jobs. A department gets its lines' capabilities.
 {0} {1}; call for help from a line.
 {0} {1}; write handover notes for a line.
+{0} · every site
 {0} · running now
+{0} · unsaved
 {0} · {1} on {2}
 {0}% defective ({1} ppm): {2} defective in {3} inspected
 {0}% defects a unit ({1} ppm): {2} defects in {3} inspected
@@ -3426,8 +4326,10 @@ you measure or inspect first, then a specification for a material with their lim
 {0}{1} hasn't ended yet; approve it once it has.
 {0}{1}. Its share of the operation's quantity; it becomes its own job for that share.
 ~{0} on {1}
+· last at {0} UTC
 · near the rate cap
 · no released version
+· oldest from {0} UTC
 · orders may use any unit that converts to this one
 · running on {0}
 · running {0}
@@ -3435,7 +4337,9 @@ you measure or inspect first, then a specification for a material with their lim
 · work order {0} ({1})
 · {0} {1} per {2} {3}
 ← Counts
+← Edge nodes
 ← Floor
 ← Jobs
+← Machine profiles
 ← Materials
 ← Stock

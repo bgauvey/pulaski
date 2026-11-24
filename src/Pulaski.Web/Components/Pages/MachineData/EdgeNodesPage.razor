@@ -9,21 +9,19 @@
 
 @* Pulaski Edge nodes (D-050): workers on plant hardware that read the machines through their connections and forward what they
    read to Pulaski. *@
-<PageTitle>Edge nodes · Pulaski</PageTitle>
+<PageTitle>@L["Edge nodes"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Edge nodes</h1>
+        <h1 class="mb-1">@L["Edge nodes"]</h1>
         <p class="text-muted mb-0">
-            A Pulaski Edge node runs on plant hardware, close to the machines. It reads them through its connections (an MQTT Sparkplug B broker),
-            keeps what it reads in a local buffer, and forwards it here, so a network drop loses nothing. Add a node here, then its connections
-            and the tags that bind what it reads to your equipment.
+            @L["A Pulaski Edge node runs on plant hardware, close to the machines. It reads them through its connections (an MQTT Sparkplug B broker), keeps what it reads in a local buffer, and forwards it here, so a network drop loses nothing. Add a node here, then its connections and the tags that bind what it reads to your equipment."]
         </p>
     </div>
     @if (Sites.Sites.Count > 1)
     {
         <div class="inv-head-tools">
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -39,9 +37,9 @@
 @if (CanManage)
 {
     <form class="inv-toolbar" @onsubmit="CreateAsync" @onsubmit:preventDefault>
-        <input class="form-control" style="width: 9rem" maxlength="20" placeholder="CODE" aria-label="Edge node code" @bind="_code" @bind:event="oninput" />
-        <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Packaging hall gateway" aria-label="Edge node name" @bind="_name" @bind:event="oninput" />
-        <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">Add edge node</button>
+        <input class="form-control" style="width: 9rem" maxlength="20" placeholder="@L["CODE"]" aria-label="@L["Edge node code"]" @bind="_code" @bind:event="oninput" />
+        <input class="form-control inv-grow" maxlength="100" placeholder="@L["Name, e.g. Packaging hall gateway"]" aria-label="@L["Edge node name"]" @bind="_name" @bind:event="oninput" />
+        <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">@L["Add edge node"]</button>
     </form>
 }
 
@@ -49,18 +47,18 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_nodes.Count == 0)
 {
-    <div class="empty-panel"><p class="text-muted mb-0">No edge nodes at @(Sites.Site?.Code ?? "this site") yet.</p></div>
+    <div class="empty-panel"><p class="text-muted mb-0">@L["No edge nodes at {0} yet.", Sites.Site?.Code ?? L["this site"]]</p></div>
 }
 else
 {
     <div class="table-panel">
         <table class="table align-middle">
-            <thead><tr><th>Code</th><th>Name</th><th class="inv-num">Connections</th><th class="inv-num">Tags</th><th>Last heard from</th><th>Version</th><th>Active</th>@if (CanManage) { <th></th> }</tr></thead>
+            <thead><tr><th>@L["Code"]</th><th>@L["Name"]</th><th class="inv-num">@L["Connections"]</th><th class="inv-num">@L["Tags"]</th><th>@L["Last heard from"]</th><th>@L["Version"]</th><th>@L["Active"]</th>@if (CanManage) { <th></th> }</tr></thead>
             <tbody>
                 @foreach (var n in _nodes)
                 {
@@ -69,13 +67,13 @@ else
                         <td>@n.Name</td>
                         <td class="inv-num">@n.ConnectionCount</td>
                         <td class="inv-num">@n.TagCount</td>
-                        <td>@EdgeView.LastHeard(n.LastSeenAt, DateTimeOffset.UtcNow, Sites.Site?.TimeZone)</td>
+                        <td>@EdgeView.LastHeard(L, n.LastSeenAt, DateTimeOffset.UtcNow, Sites.Site?.TimeZone)</td>
                         <td>@n.AgentVersion</td>
-                        <td>@(n.IsActive ? "Yes" : "No")</td>
+                        <td>@(n.IsActive ? L["Yes"] : L["No"])</td>
                         @if (CanManage)
                         {
                             <td class="text-end">
-                                <button type="button" class="btn btn-sm btn-outline-danger" disabled="@_saving" @onclick="() => DeleteNodeAsync(n)">Delete</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" disabled="@_saving" @onclick="() => DeleteNodeAsync(n)">@L["Delete"]</button>
                             </td>
                         }
                     </tr>
@@ -154,7 +152,7 @@ else
     private async Task DeleteNodeAsync(EdgeNodeDto node)
     {
         if (!await JS.InvokeAsync<bool>("confirm",
-                $"Delete edge node {node.Code}? This will deactivate the node and all its connections and tags. Historical data will be kept."))
+                L["Delete edge node {0}? This will deactivate the node and all its connections and tags. Historical data will be kept.", node.Code]))
         {
             return;
         }

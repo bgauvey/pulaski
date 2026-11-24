@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Pulaski.Contracts.MachineData;
+using Pulaski.Web.Services.Localization;
 using Pulaski.Web.Services.MachineData;
 
 namespace Pulaski.Web.Tests;
@@ -12,10 +13,10 @@ public class EdgeViewTests
     [Fact]
     public void When_a_node_was_last_heard_from_reads_naturally()
     {
-        Assert.Equal("never", EdgeView.LastHeard(null, Now, null));
-        Assert.Equal("just now", EdgeView.LastHeard(Now.AddSeconds(-20), Now, null));
-        Assert.Equal("12 min ago", EdgeView.LastHeard(Now.AddMinutes(-12), Now, null));
-        Assert.Equal("2026-10-18 09:00", EdgeView.LastHeard(Now.AddHours(-3), Now, "UTC"));
+        Assert.Equal("never", EdgeView.LastHeard(Text.English, null, Now, null));
+        Assert.Equal("just now", EdgeView.LastHeard(Text.English, Now.AddSeconds(-20), Now, null));
+        Assert.Equal("12 min ago", EdgeView.LastHeard(Text.English, Now.AddMinutes(-12), Now, null));
+        Assert.Equal("2026-10-18 09:00", EdgeView.LastHeard(Text.English, Now.AddHours(-3), Now, "UTC"));
         Assert.True(EdgeView.IsQuiet(Now.AddMinutes(-3), Now));
         Assert.False(EdgeView.IsQuiet(Now.AddSeconds(-30), Now));
     }

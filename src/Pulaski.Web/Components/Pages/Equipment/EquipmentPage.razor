@@ -3,9 +3,9 @@
 @inject PulaskiApiClient Api
 @inject CurrentUser User
 
-<PageTitle>Equipment · Pulaski</PageTitle>
+<PageTitle>@L["Equipment"] · Pulaski</PageTitle>
 
-<h1>Equipment</h1>
+<h1>@L["Equipment"]</h1>
 
 <ProblemAlert Error="_loadError" />
 <ViewOnlyNote Permission="@PermissionCodes.Equipment" What="@L["maintain equipment"]" />
@@ -14,7 +14,7 @@
 {
     @if (_loadError is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
@@ -23,34 +23,34 @@ else
     var properties = PropertiesForSelection();
 
     <div class="equipment-workspace">
-        <section class="tree-panel" aria-label="Equipment hierarchy">
-            <div class="tree-toolbar" role="toolbar" aria-label="Equipment">
+        <section class="tree-panel" aria-label="@L["Equipment hierarchy"]">
+            <div class="tree-toolbar" role="toolbar" aria-label="@L["Equipment"]">
                 @if (CanChange)
                 {
                     <button type="button" class="btn btn-primary btn-sm btn-with-icon" disabled="@(!CanAdd)" @onclick="AddChild">
-                        <Icon Name="plus" Size="16" />@(_equipment.Count == 0 ? "Add enterprise" : "Add child")
+                        <Icon Name="plus" Size="16" />@(_equipment.Count == 0 ? L["Add enterprise"] : L["Add child"])
                     </button>
                 }
-                <ActionButton Class="btn btn-outline-secondary btn-sm btn-square" Title="Expand all" aria-label="Expand all"
-                              Reason="@(IsFiltering ? "Clear the search first: while searching, every match is shown open." : null)" OnClick="ExpandAll">
+                <ActionButton Class="btn btn-outline-secondary btn-sm btn-square" Title="@L["Expand all"]" aria-label="@L["Expand all"]"
+                              Reason="@(IsFiltering ? L["Clear the search first: while searching, every match is shown open."] : null)" OnClick="ExpandAll">
                     <Icon Name="expand-all" Size="16" />
                 </ActionButton>
-                <ActionButton Class="btn btn-outline-secondary btn-sm btn-square" Title="Collapse all" aria-label="Collapse all"
-                              Reason="@(IsFiltering ? "Clear the search first: while searching, every match is shown open." : null)" OnClick="CollapseAll">
+                <ActionButton Class="btn btn-outline-secondary btn-sm btn-square" Title="@L["Collapse all"]" aria-label="@L["Collapse all"]"
+                              Reason="@(IsFiltering ? L["Clear the search first: while searching, every match is shown open."] : null)" OnClick="CollapseAll">
                     <Icon Name="collapse-all" Size="16" />
                 </ActionButton>
-                <input type="search" class="form-control tree-filter" placeholder="Filter by code or name"
-                       aria-label="Filter equipment by code or name" @bind="_filter" @bind:event="oninput" />
+                <input type="search" class="form-control tree-filter" placeholder="@L["Filter by code or name"]"
+                       aria-label="@L["Filter equipment by code or name"]" @bind="_filter" @bind:event="oninput" />
             </div>
 
             <div class="tree-body">
                 @if (_equipment.Count == 0 && _draft is null)
                 {
-                    <p class="tree-empty">No equipment yet. Start with the enterprise, then add a site under it.</p>
+                    <p class="tree-empty">@L["No equipment yet. Start with the enterprise, then add a site under it."]</p>
                 }
                 else if (rows.Count == 0)
                 {
-                    <p class="tree-empty">Nothing matches “@_filter”.</p>
+                    <p class="tree-empty">@L["Nothing matches “{0}”.", _filter]</p>
                 }
                 else
                 {
@@ -60,13 +60,13 @@ else
             </div>
 
             <div class="tree-status">
-                @_equipment.Count items@(IsFiltering ? $" · {rows.Count(r => r.IsMatch)} match" : "")
+                @L["{0} items", _equipment.Count]@(IsFiltering ? " · " + L["{0} match", rows.Count(r => r.IsMatch)] : "")
             </div>
         </section>
 
         <div class="props-panel">
             <PropertyGrid Items="properties.Items" Title="@properties.Title" Subtitle="@properties.Subtitle"
-                          EmptyText="Select equipment to see its properties."
+                          EmptyText="@L["Select equipment to see its properties."]"
                           Disabled="_saving" Revision="_revision" OnChange="OnPropertyChangeAsync"
                           Banner="@(_propError is null ? null : ErrorBanner)"
                           Footer="@(_draft is not null && _selectedId == EquipmentTreeGrid.DraftId ? DraftFooter : null)" />
@@ -206,12 +206,12 @@ else
     {
         if (_selectedId == EquipmentTreeGrid.DraftId && _draft is not null)
         {
-            var title = string.IsNullOrWhiteSpace(_draft.Code) ? "New equipment" : _draft.Code;
-            return (EquipmentProperties.ForDraft(_draft, _types!), title, $"{L.Label(_draft.Role)} · unsaved");
+            var title = string.IsNullOrWhiteSpace(_draft.Code) ? L["New equipment"] : _draft.Code;
+            return (EquipmentProperties.ForDraft(L, _draft, _types!), title, L["{0} · unsaved", L.Label(_draft.Role)]);
         }
 
         return SelectedExisting is { } e
-            ? (EquipmentProperties.ForExisting(e, _tree, _schedules, CanChange, User.Can(PermissionCodes.Shifts, e.SiteId), _profiles), e.Code, L.Label(e.EquipmentRole))
+            ? (EquipmentProperties.ForExisting(L, e, _tree, _schedules, CanChange, User.Can(PermissionCodes.Shifts, e.SiteId), _profiles), e.Code, L.Label(e.EquipmentRole))
             : ([], null, null);
     }
 
@@ -336,7 +336,7 @@ else
 
     private RenderFragment DraftFooter =>
         @<text>
-            <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_saving" @onclick="CancelDraft">Cancel</button>
-            <button type="button" class="btn btn-primary btn-sm" disabled="@_saving" @onclick="CreateAsync">Create</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_saving" @onclick="CancelDraft">@L["Cancel"]</button>
+            <button type="button" class="btn btn-primary btn-sm" disabled="@_saving" @onclick="CreateAsync">@L["Create"]</button>
         </text>;
 }

@@ -4,14 +4,13 @@
 
 @* One-off changes to a schedule (D-042): a shift at other times or off on one date, or an extra shift, without changing
    the repeating cycle. Each saves straight away; planning, labor and reports by shift follow on their next read. *@
-<section class="inv-facts mb-3" aria-label="One-off changes to @Schedule.Code">
+<section class="inv-facts mb-3" aria-label="@L["One-off changes to {0}", Schedule.Code]">
     <div class="d-flex align-items-center gap-2 mb-2">
-        <h2 class="h6 mb-0">One-off changes to @Schedule.Code</h2>
-        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="OnClose">Close</button>
+        <h2 class="h6 mb-0">@L["One-off changes to {0}", Schedule.Code]</h2>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="OnClose">@L["Close"]</button>
     </div>
     <p class="small text-muted">
-        Change a single day without changing the repeating cycle: an extra Saturday, a shift that starts late, or a shift that doesn't run.
-        Times are in the site's time zone; a shift belongs to the day it starts on.
+        @L["Change a single day without changing the repeating cycle: an extra Saturday, a shift that starts late, or a shift that doesn't run. Times are in the site's time zone; a shift belongs to the day it starts on."]
     </p>
 
     <ProblemAlert Error="_error" />
@@ -21,18 +20,18 @@
     }
     @if (shown.Count == 0)
     {
-        <p class="small text-muted">@(_showEarlier ? "No one-off changes." : "No one-off changes from today on.")</p>
+        <p class="small text-muted">@(_showEarlier ? L["No one-off changes."] : L["No one-off changes from today on."])</p>
     }
     else
     {
         <table class="table table-sm align-middle mb-2">
             <thead>
                 <tr>
-                    <th>Day</th>
-                    <th>Shift</th>
-                    <th>Change</th>
-                    <th>Crew</th>
-                    <th>Note</th>
+                    <th>@L["Day"]</th>
+                    <th>@L["Shift"]</th>
+                    <th>@L["Change"]</th>
+                    <th>@L["Crew"]</th>
+                    <th>@L["Note"]</th>
                     <th></th>
                 </tr>
             </thead>
@@ -40,16 +39,16 @@
                 @foreach (var o in shown)
                 {
                     <tr @key="(o.Date, o.Code)" class="@(o.Date < Today ? "text-muted" : "")">
-                        <td class="small">@o.Date.ToString("ddd d MMM yyyy", CultureInfo.InvariantCulture)</td>
+                        <td class="small">@o.Date.ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture)</td>
                         <td class="small">@o.Code@(o.Name != o.Code ? $" · {o.Name}" : "")</td>
-                        <td class="small">@ShiftOverrideView.Describe(o, Schedule)</td>
+                        <td class="small">@ShiftOverrideView.Describe(L, o, Schedule)</td>
                         <td class="small">@(o.Crew ?? "")</td>
                         <td class="small">@(o.Note ?? "")</td>
                         <td class="text-end text-nowrap">
                             @if (CanManage)
                             {
-                                <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(o)">Change</button>
-                                <button type="button" class="btn btn-sm btn-link text-danger" disabled="@_saving" @onclick="() => RemoveAsync(o)">Remove</button>
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(o)">@L["Change"]</button>
+                                <button type="button" class="btn btn-sm btn-link text-danger" disabled="@_saving" @onclick="() => RemoveAsync(o)">@L["Remove"]</button>
                             }
                         </td>
                     </tr>
@@ -58,19 +57,19 @@
         </table>
     }
     <button type="button" class="btn btn-sm btn-link p-0 mb-3" @onclick="() => _showEarlier = !_showEarlier">
-        @(_showEarlier ? "Show from today on" : "Show earlier changes too")
+        @(_showEarlier ? L["Show from today on"] : L["Show earlier changes too"])
     </button>
 
     @if (CanManage)
     {
         <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
             <div class="col-sm-2">
-                <label class="form-label small" for="ovr-date">Day</label>
+                <label class="form-label small" for="ovr-date">@L["Day"]</label>
                 <input id="ovr-date" type="date" class="form-control form-control-sm" value="@_form.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)"
                        @onchange="OnDateChanged" />
             </div>
             <div class="col-sm-2">
-                <label class="form-label small" for="ovr-code">Shift</label>
+                <label class="form-label small" for="ovr-code">@L["Shift"]</label>
                 <input id="ovr-code" class="form-control form-control-sm" maxlength="10" list="ovr-codes" @bind="_form.Code" @bind:after="FillFromCycle" />
                 <datalist id="ovr-codes">
                     @foreach (var s in Schedule.Shifts)
@@ -80,26 +79,26 @@
                 </datalist>
             </div>
             <div class="col-sm-2">
-                <label class="form-label small" for="ovr-working">That day it</label>
+                <label class="form-label small" for="ovr-working">@L["That day it"]</label>
                 <select id="ovr-working" class="form-select form-select-sm" @bind="_form.IsWorking">
-                    <option value="true">Runs</option>
-                    <option value="false">Doesn't run</option>
+                    <option value="true">@L["Runs"]</option>
+                    <option value="false">@L["Doesn't run"]</option>
                 </select>
             </div>
             @if (_form.IsWorking)
             {
                 <div class="col-sm-1">
-                    <label class="form-label small" for="ovr-start">Starts</label>
+                    <label class="form-label small" for="ovr-start">@L["Starts"]</label>
                     <input id="ovr-start" type="time" class="form-control form-control-sm" @bind="_form.Start" />
                 </div>
                 <div class="col-sm-1">
-                    <label class="form-label small" for="ovr-hours">Hours</label>
+                    <label class="form-label small" for="ovr-hours">@L["Hours"]</label>
                     <input id="ovr-hours" type="number" class="form-control form-control-sm" min="0.25" max="24" step="0.25" @bind="_form.Hours" />
                 </div>
                 <div class="col-sm-1">
-                    <label class="form-label small" for="ovr-crew">Crew</label>
+                    <label class="form-label small" for="ovr-crew">@L["Crew"]</label>
                     <select id="ovr-crew" class="form-select form-select-sm" @bind="_form.Crew">
-                        <option value="">None</option>
+                        <option value="">@L["None"]</option>
                         @foreach (var c in Crews.Where(c => c.IsActive || c.Code == _form.Crew))
                         {
                             <option value="@c.Code">@c.Code</option>
@@ -108,13 +107,13 @@
                 </div>
             }
             <div class="col">
-                <label class="form-label small" for="ovr-note">Note (optional)</label>
-                <input id="ovr-note" class="form-control form-control-sm" maxlength="500" placeholder="e.g. Overtime for the Acme order" @bind="_form.Note" />
+                <label class="form-label small" for="ovr-note">@L["Note (optional)"]</label>
+                <input id="ovr-note" class="form-control form-control-sm" maxlength="500" placeholder="@L["e.g. Overtime for the Acme order"]" @bind="_form.Note" />
             </div>
             <div class="col-auto">
-                <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_form.Code))">Save change</button>
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_form.Code))">@L["Save change"]</button>
             </div>
-            <div class="col-12 small text-muted">@ShiftOverrideView.Hint(Schedule, _form.Date, _form.Code)</div>
+            <div class="col-12 small text-muted">@ShiftOverrideView.Hint(L, Schedule, _form.Date, _form.Code)</div>
         </form>
     }
 </section>
@@ -201,7 +200,7 @@
                 Note = _form.Note,
             });
             _form.Note = null;
-            await OnChanged.InvokeAsync($"Saved the change to {_form.Code.Trim()} on {_form.Date.ToString("ddd d MMM", CultureInfo.InvariantCulture)}.");
+            await OnChanged.InvokeAsync(L["Saved the change to {0} on {1}.", _form.Code.Trim(), _form.Date.ToString("ddd d MMM", CultureInfo.CurrentCulture)]);
         }
         catch (ApiException ex)
         {
@@ -224,7 +223,7 @@
         try
         {
             await Api.RemoveShiftOverrideAsync(Schedule.Id, o.Date, o.Code, Schedule.Version);
-            await OnChanged.InvokeAsync($"Removed the change to {o.Code} on {o.Date.ToString("ddd d MMM", CultureInfo.InvariantCulture)}; the cycle applies that day again.");
+            await OnChanged.InvokeAsync(L["Removed the change to {0} on {1}; the cycle applies that day again.", o.Code, o.Date.ToString("ddd d MMM", CultureInfo.CurrentCulture)]);
         }
         catch (ApiException ex)
         {

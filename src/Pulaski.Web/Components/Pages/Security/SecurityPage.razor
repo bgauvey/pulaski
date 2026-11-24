@@ -8,12 +8,12 @@
 @* Configure → Users (D-037): who signs in, the roles they hold, and what each role may change, as three tabs. *@
 <PageTitle>@Tab · Users and roles · Pulaski</PageTitle>
 
-<h1 class="mb-1">Users and roles</h1>
+<h1 class="mb-1">@L["Users and roles"]</h1>
 
-<nav class="inv-tabs" aria-label="Users and roles">
-    <NavLink class="inv-tab" href="users" Match="NavLinkMatch.All">Users</NavLink>
-    <NavLink class="inv-tab" href="users/roles">Roles</NavLink>
-    <NavLink class="inv-tab" href="users/permissions">Permissions</NavLink>
+<nav class="inv-tabs" aria-label="@L["Users and roles"]">
+    <NavLink class="inv-tab" href="users" Match="NavLinkMatch.All">@L["Users"]</NavLink>
+    <NavLink class="inv-tab" href="users/roles">@L["Roles"]</NavLink>
+    <NavLink class="inv-tab" href="users/permissions">@L["Permissions"]</NavLink>
 </nav>
 
 @switch (Tab)
@@ -32,9 +32,9 @@
 @code {
     private string Tab => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/') switch
     {
-        "users/roles" => "Roles",
-        "users/permissions" => "Permissions",
-        _ => "Users",
+        "users/roles" => L["Roles"],
+        "users/permissions" => L["Permissions"],
+        _ => L["Users"],
     };
 
     // The three tabs are routes of this one page, so moving between them only changes the address.

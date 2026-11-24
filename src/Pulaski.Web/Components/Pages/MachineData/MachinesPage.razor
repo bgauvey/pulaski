@@ -159,7 +159,7 @@ else
                         <option value="">@L["Reason…"]</option>
                         @foreach (var r in _entryReasons)
                         {
-                            <option value="@r.Id">@MachineProfileView.ReasonLabel(r)</option>
+                            <option value="@r.Id">@MachineProfileView.ReasonLabel(L, r)</option>
                         }
                     </select>
                 </div>
@@ -332,7 +332,7 @@ else
                                 <td colspan="@Columns">
                                     <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="SaveCodeAsync" @onsubmit:preventDefault>
                                         <div class="touch-full">
-                                            <ReasonPicker Reasons="_reasons" SelectClass="w-auto" AriaLabel="@L["Reason for the stop"]" OptionLabel="MachineProfileView.ReasonLabel" @bind-Value="_reasonId" />
+                                            <ReasonPicker Reasons="_reasons" SelectClass="w-auto" AriaLabel="@L["Reason for the stop"]" OptionLabel="r => MachineProfileView.ReasonLabel(L, r)" @bind-Value="_reasonId" />
                                         </div>
                                         <input class="form-control inv-grow" maxlength="1000" aria-label="@L["Comment"]" placeholder="@(NeedsComment ? L["Comment (needed for this reason)"] : L["Comment (optional)"])"
                                                @bind="_comment" @bind:event="oninput" />

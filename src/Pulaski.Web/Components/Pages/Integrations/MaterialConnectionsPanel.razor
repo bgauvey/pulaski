@@ -7,10 +7,10 @@
    people, all or nothing, as a file is; on demand or on a schedule, every import recorded. *@
 <section class="inv-facts mb-3" aria-labelledby="connections-title-@Target">
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <h2 class="h6 mb-0 me-auto" id="connections-title-@Target">@(IsPeople ? "People connections" : "Material connections")</h2>
+        <h2 class="h6 mb-0 me-auto" id="connections-title-@Target">@(IsPeople ? L["People connections"] : L["Material connections"])</h2>
         @if (CanConfigure && _form is null)
         {
-            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => _form = ConnectionForm.New(IsPeople)">Add connection</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => _form = ConnectionForm.New(IsPeople)">@L["Add connection"]</button>
         }
     </div>
     <p class="small text-muted">
@@ -26,8 +26,7 @@
             @:items, maps each to the import's fields, and imports them like a materials file: matched on the connection's external system and each
             @:item's key, so running it again updates rather than duplicates.
         }
-        A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's
-        configuration, never here.
+        @L["A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's configuration, never here."]
     </p>
 
     <ProblemAlert Error="_error" />
@@ -37,56 +36,56 @@
         <form class="border rounded p-3 mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
             <div class="row g-2">
                 <div class="col-sm-3">
-                    <label class="form-label small" for="mc-code-@Target">Code</label>
+                    <label class="form-label small" for="mc-code-@Target">@L["Code"]</label>
                     <input id="mc-code-@Target" class="form-control form-control-sm" maxlength="30" placeholder="@(IsPeople ? "HR-PEOPLE" : "ERP-ITEMS")" disabled="@(form.Id is not null)" @bind="form.Code" />
                 </div>
                 <div class="col-sm-5">
-                    <label class="form-label small" for="mc-name-@Target">Name</label>
+                    <label class="form-label small" for="mc-name-@Target">@L["Name"]</label>
                     <input id="mc-name-@Target" class="form-control form-control-sm" maxlength="100" @bind="form.Name" />
                 </div>
                 <div class="col-sm-4">
-                    <label class="form-label small" for="mc-system-@Target">External system</label>
+                    <label class="form-label small" for="mc-system-@Target">@L["External system"]</label>
                     <input id="mc-system-@Target" class="form-control form-control-sm" maxlength="100" placeholder="@(IsPeople ? "e.g. HR1" : "e.g. ERP1")" @bind="form.ExternalSystem" />
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label small" for="mc-kind-@Target">Kind</label>
+                    <label class="form-label small" for="mc-kind-@Target">@L["Kind"]</label>
                     <select id="mc-kind-@Target" class="form-select form-select-sm" disabled="@(form.Id is not null)" @bind="form.Kind">
                         @if (IsPeople)
                         {
                             <option value="scim">SCIM 2.0</option>
                         }
                         <option value="odata">OData v4</option>
-                        <option value="rest">REST (JSON)</option>
+                        <option value="rest">@L["REST (JSON)"]</option>
                         <option value="soap">SOAP</option>
-                        <option value="database">PostgreSQL query</option>
+                        <option value="database">@L["PostgreSQL query"]</option>
                     </select>
                 </div>
                 @if (form.Kind != "database")
                 {
                     <div class="col-sm-6">
-                        <label class="form-label small" for="mc-url-@Target">@(form.Kind switch { "odata" => "Service root", "scim" => "SCIM base address", _ => "Address" })</label>
+                        <label class="form-label small" for="mc-url-@Target">@(form.Kind switch { "odata" => L["Service root"], "scim" => L["SCIM base address"], _ => L["Address"] })</label>
                         <input id="mc-url-@Target" class="form-control form-control-sm" maxlength="500" @bind="form.BaseUrl"
                                placeholder="@(form.Kind switch { "rest" => "https://erp.example.com/api/items?plant=1000", "soap" => "https://erp.example.com/soap/items", "scim" => "https://hr.example.com/scim/v2", _ => "https://erp.example.com/odata/v4/items" })" />
                     </div>
                     @if (form.Kind != "scim")
                     {
                         <div class="col-sm-3">
-                            <label class="form-label small" for="mc-set-@Target">@(form.Kind switch { "rest" => "Items at", "soap" => "Item element", _ => "Entity set" })</label>
+                            <label class="form-label small" for="mc-set-@Target">@(form.Kind switch { "rest" => L["Items at"], "soap" => L["Item element"], _ => L["Entity set"] })</label>
                             <input id="mc-set-@Target" class="form-control form-control-sm" maxlength="100" @bind="form.EntitySet"
-                                   placeholder="@(form.Kind switch { "rest" => "data.items (blank: the whole answer)", "soap" => "Material", _ => "Products" })" />
+                                   placeholder="@(form.Kind switch { "rest" => L["data.items (blank: the whole answer)"], "soap" => "Material", _ => "Products" })" />
                         </div>
                     }
                 }
                 <div class="col-sm-3">
                     <div class="form-check mt-4">
                         <input class="form-check-input" type="checkbox" id="mc-active-@Target" @bind="form.IsActive" />
-                        <label class="form-check-label small" for="mc-active-@Target">Active</label>
+                        <label class="form-check-label small" for="mc-active-@Target">@L["Active"]</label>
                     </div>
                 </div>
                 @if (form.Kind is "odata" or "scim")
                 {
                     <div class="col-12">
-                        <label class="form-label small" for="mc-filter-@Target">Filter <span class="text-muted">(optional, @(form.Kind == "scim" ? "SCIM filter" : "OData $filter"))</span></label>
+                        <label class="form-label small" for="mc-filter-@Target">@L["Filter"] <span class="text-muted">@L["(optional, {0})", form.Kind == "scim" ? L["SCIM filter"] : L["OData $filter"]]</span></label>
                         <input id="mc-filter-@Target" class="form-control form-control-sm" maxlength="1000" @bind="form.Filter"
                                placeholder="@(form.Kind == "scim" ? "active eq true" : "Plant eq '1000' and Blocked eq false")" />
                     </div>
@@ -94,25 +93,25 @@
                 else if (form.Kind == "rest")
                 {
                     <div class="col-sm-6">
-                        <label class="form-label small" for="mc-next-@Target">Next page at <span class="text-muted">(optional)</span></label>
+                        <label class="form-label small" for="mc-next-@Target">@L["Next page at"] <span class="text-muted">@L["(optional)"]</span></label>
                         <input id="mc-next-@Target" class="form-control form-control-sm" maxlength="100" placeholder="links.next" @bind="form.NextLinkPath" />
                     </div>
                 }
                 else if (form.Kind == "soap")
                 {
                     <div class="col-sm-6">
-                        <label class="form-label small" for="mc-action-@Target">SOAPAction <span class="text-muted">(optional)</span></label>
+                        <label class="form-label small" for="mc-action-@Target">@L["SOAPAction"] <span class="text-muted">@L["(optional)"]</span></label>
                         <input id="mc-action-@Target" class="form-control form-control-sm" maxlength="500" @bind="form.SoapAction" />
                     </div>
                     <div class="col-12">
-                        <label class="form-label small" for="mc-body-@Target">Request envelope</label>
+                        <label class="form-label small" for="mc-body-@Target">@L["Request envelope"]</label>
                         <textarea id="mc-body-@Target" class="form-control form-control-sm font-monospace" rows="6" maxlength="20000" @bind="form.RequestBody"></textarea>
                     </div>
                 }
                 else if (form.Kind == "database")
                 {
                     <div class="col-12">
-                        <label class="form-label small" for="mc-query-@Target">Query <span class="text-muted">(one SELECT, run read-only; the connection string is <code>MaterialConnections:&lt;code&gt;:ConnectionString</code>)</span></label>
+                        <label class="form-label small" for="mc-query-@Target">@L["Query"] <span class="text-muted">@L["(one SELECT, run read-only; the connection string is"] <code>MaterialConnections:&lt;code&gt;:ConnectionString</code>)</span></label>
                         <textarea id="mc-query-@Target" class="form-control form-control-sm font-monospace" rows="5" maxlength="4000" @bind="form.Query"
                                   placeholder="@(IsPeople ? "SELECT emp_no, full_name, active FROM hr.employees WHERE plant = '1000'" : "SELECT item_no, description, uom FROM erp.items WHERE plant = '1000'")"></textarea>
                     </div>
@@ -121,24 +120,24 @@
 
             <div class="row g-2 mt-1 align-items-end">
                 <div class="col-sm-3">
-                    <label class="form-label small" for="mc-when-@Target">Runs</label>
+                    <label class="form-label small" for="mc-when-@Target">@L["Runs"]</label>
                     <select id="mc-when-@Target" class="form-select form-select-sm" @bind="form.ScheduleMode">
-                        <option value="none">When you click Import</option>
-                        <option value="hours">Every so many hours</option>
-                        <option value="daily">Daily at set times</option>
+                        <option value="none">@L["When you click Import"]</option>
+                        <option value="hours">@L["Every so many hours"]</option>
+                        <option value="daily">@L["Daily at set times"]</option>
                     </select>
                 </div>
                 @if (form.ScheduleMode == "hours")
                 {
                     <div class="col-sm-2">
-                        <label class="form-label small" for="mc-hours-@Target">Every (hours)</label>
+                        <label class="form-label small" for="mc-hours-@Target">@L["Every (hours)"]</label>
                         <input id="mc-hours-@Target" type="number" min="1" max="168" class="form-control form-control-sm" @bind="form.EveryHours" />
                     </div>
                 }
                 else if (form.ScheduleMode == "daily")
                 {
                     <div class="col-sm-4">
-                        <label class="form-label small" for="mc-times-@Target">At (UTC, up to 4)</label>
+                        <label class="form-label small" for="mc-times-@Target">@L["At (UTC, up to 4)"]</label>
                         <input id="mc-times-@Target" class="form-control form-control-sm" maxlength="40" placeholder="02:00, 14:00" @bind="form.DailyTimes" />
                     </div>
                 }
@@ -147,14 +146,14 @@
                     {
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="mc-missing-@Target" @bind="form.SwitchOffMissing" />
-                            <label class="form-check-label small" for="mc-missing-@Target">Switch off people the source no longer has</label>
+                            <label class="form-check-label small" for="mc-missing-@Target">@L["Switch off people the source no longer has"]</label>
                         </div>
                     }
                     else
                     {
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="mc-classes-saved-@Target" @bind="form.CreateClasses" />
-                            <label class="form-check-label small" for="mc-classes-saved-@Target">Create missing classes</label>
+                            <label class="form-check-label small" for="mc-classes-saved-@Target">@L["Create missing classes"]</label>
                         </div>
                     }
                 </div>
@@ -163,14 +162,14 @@
             @if (form.Kind == "scim")
             {
                 <p class="small text-muted mt-3 mb-0">
-                    SCIM users are read as a SCIM file is: the enterprise extension's <code>employeeNumber</code>, <code>displayName</code>,
-                    <code>active</code>, and <code>externalId</code> (else <code>id</code>) as the key. No fields to map.
+                    @L["SCIM users are read as a SCIM file is: the enterprise extension's"] <code>employeeNumber</code>, <code>displayName</code>,
+                    <code>active</code>@L[", and"] <code>externalId</code> @L["(else"] <code>id</code>@L[") as the key. No fields to map."]
                 </p>
             }
             else
             {
                 <div class="small fw-semibold mt-3 mb-1">
-                    @(form.Kind == "database" ? "Fields: Pulaski's field ← the query's column" : "Fields: Pulaski's field ← the item's property (use / for a property of a property, such as Unit/Code)")
+                    @(form.Kind == "database" ? L["Fields: Pulaski's field ← the query's column"] : L["Fields: Pulaski's field ← the item's property (use / for a property of a property, such as Unit/Code)"])
                 </div>
                 <div class="row g-2">
                     @foreach (var field in Fields)
@@ -184,8 +183,8 @@
                 </div>
             }
             <div class="d-flex gap-2 mt-3">
-                <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">Save</button>
-                <button type="button" class="btn btn-sm btn-link" @onclick="() => _form = null">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">@L["Save"]</button>
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => _form = null">@L["Cancel"]</button>
             </div>
         </form>
     }
@@ -194,18 +193,18 @@
     {
         @if (_error is null)
         {
-            <p class="small text-muted mb-0">Loading…</p>
+            <p class="small text-muted mb-0">@L["Loading…"]</p>
         }
     }
     else if (_connections.Count == 0)
     {
-        <p class="small text-muted mb-0">No connections yet.@(CanConfigure ? "" : " Someone who manages integrations adds them.")</p>
+        <p class="small text-muted mb-0">@(CanConfigure ? L["No connections yet."] : L["No connections yet. Someone who manages integrations adds them."])</p>
     }
     else
     {
         <div class="table-panel">
             <table class="table table-sm align-middle mb-0">
-                <thead><tr><th>Connection</th><th>Source</th><th>Runs</th><th>Credentials</th><th>Last import</th><th></th></tr></thead>
+                <thead><tr><th>@L["Connection"]</th><th>@L["Source"]</th><th>@L["Runs"]</th><th>@L["Credentials"]</th><th>@L["Last import"]</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var c in _connections)
                     {
@@ -216,10 +215,10 @@
                                 @MaterialConnectionView.Schedule(L, c)
                                 @if (c.NextRunAt is { } next && c.IsActive)
                                 {
-                                    <div class="text-muted">Next @Display.SiteTime(next, null) UTC</div>
+                                    <div class="text-muted">@L["Next {0} UTC", Display.SiteTime(next, null)]</div>
                                 }
                             </td>
-                            <td class="small">@(c.HasCredentials ? "Configured" : "None configured")</td>
+                            <td class="small">@(c.HasCredentials ? L["Configured"] : L["None configured"])</td>
                             <td class="small">
                                 @if (c.LastRunAt is { } at)
                                 {
@@ -227,7 +226,7 @@
                                     {
                                         <span class="chip chip-warn">@L[MaterialConnectionView.Outcome(c.LastRunOutcome)]</span>
                                     }
-                                    <div>@($"{Display.SiteTime(at, null)} UTC by {c.LastRunBy}: {c.LastRunSummary}")</div>
+                                    <div>@(L["{0} UTC by {1}: {2}", Display.SiteTime(at, null), c.LastRunBy, c.LastRunSummary])</div>
                                 }
                                 else
                                 {
@@ -237,14 +236,14 @@
                             <td class="text-end text-nowrap">
                                 @if (CanRun && c.IsActive)
                                 {
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => RunAsync(c, dryRun: true)">Check</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => RunAsync(c, dryRun: true)">@L["Check"]</button>
                                     <ActionButton Class="btn btn-sm btn-primary ms-1" Busy="_busy" OnClick="() => RunAsync(c, dryRun: false)"
-                                                  Reason="@(ReadyToImport(c) ? null : "Check first: Import is ready once a check finds no errors and something to change.")">Import</ActionButton>
+                                                  Reason="@(ReadyToImport(c) ? null : L["Check first: Import is ready once a check finds no errors and something to change."])">@L["Import"]</ActionButton>
                                 }
-                                <button type="button" class="btn btn-sm btn-link" @onclick="() => ToggleHistoryAsync(c)">@(_historyFor == c.Id ? "Hide history" : "History")</button>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => ToggleHistoryAsync(c)">@(_historyFor == c.Id ? L["Hide history"] : L["History"])</button>
                                 @if (CanConfigure)
                                 {
-                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _form = ConnectionForm.For(c)">Edit</button>
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _form = ConnectionForm.For(c)">@L["Edit"]</button>
                                 }
                             </td>
                         </tr>
@@ -254,22 +253,22 @@
                                 <td colspan="6">
                                     @if (_history is null)
                                     {
-                                        <p class="small text-muted mb-0">Loading…</p>
+                                        <p class="small text-muted mb-0">@L["Loading…"]</p>
                                     }
                                     else if (_history.Count == 0)
                                     {
-                                        <p class="small text-muted mb-0">No imports yet. Checks aren't recorded.</p>
+                                        <p class="small text-muted mb-0">@L["No imports yet. Checks aren't recorded."]</p>
                                     }
                                     else
                                     {
                                         <table class="table table-sm mb-0">
-                                            <thead><tr><th>Started (UTC)</th><th>By</th><th>Outcome</th><th>What it did</th></tr></thead>
+                                            <thead><tr><th>@L["Started (UTC)"]</th><th>@L["By"]</th><th>@L["Outcome"]</th><th>@L["What it did"]</th></tr></thead>
                                             <tbody>
                                                 @foreach (var run in _history)
                                                 {
                                                     <tr @key="run.Id" class="@(run.Outcome == "applied" ? "" : "table-warning")">
                                                         <td class="small text-nowrap">@Display.SiteTime(run.StartedAt, null)</td>
-                                                        <td class="small">@(run.Trigger == "schedule" ? "Schedule" : run.Actor)</td>
+                                                        <td class="small">@(run.Trigger == "schedule" ? L["Schedule"] : run.Actor)</td>
                                                         <td class="small">@L[MaterialConnectionView.Outcome(run.Outcome)]</td>
                                                         <td class="small">@run.Summary</td>
                                                     </tr>
@@ -288,14 +287,14 @@
         {
             <div class="form-check mt-2">
                 <input class="form-check-input" type="checkbox" id="mc-classes" @bind="_createClasses" />
-                <label class="form-check-label small" for="mc-classes">Create missing classes</label>
+                <label class="form-check-label small" for="mc-classes">@L["Create missing classes"]</label>
             </div>
         }
     }
 
     @if (_busy)
     {
-        <p class="small text-muted mt-2 mb-0">Reading @_runFor?.Code…</p>
+        <p class="small text-muted mt-2 mb-0">@L["Reading {0}…", _runFor?.Code]</p>
     }
     else if (_result is { } r && _runFor is { } ran)
     {
@@ -305,7 +304,7 @@
         @if (r.Rows.Any(x => x.Action == "error" || x.Notes.Count > 0))
         {
             <table class="table table-sm mt-2 mb-0">
-                <thead><tr><th>Item</th><th>Code</th><th>What</th></tr></thead>
+                <thead><tr><th>@L["Item"]</th><th>@L["Code"]</th><th>@L["What"]</th></tr></thead>
                 <tbody>
                     @foreach (var row in r.Rows.Where(x => x.Action == "error" || x.Notes.Count > 0).Take(200))
                     {
@@ -386,7 +385,7 @@
         _error = null;
         if (_form!.ScheduleMode == "daily" && MaterialConnectionView.ParseTimes(_form.DailyTimes) is not { Count: > 0 })
         {
-            _error = new ApiException(400, "Times", "Give the daily times as hours and minutes in UTC, such as 02:00, 14:30.", null);
+            _error = new ApiException(400, L["Times"], L["Give the daily times as hours and minutes in UTC, such as 02:00, 14:30."], null);
             return;
         }
 

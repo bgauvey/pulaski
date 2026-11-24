@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Pulaski.Contracts.MachineData;
+using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.MachineData;
 
@@ -23,17 +24,17 @@ public static class EdgeView
     /// <summary>The roles a tag can take today, with what each carries.</summary>
     public static IReadOnlyList<(string Role, string Label)> Roles { get; } =
     [
-        ("state", "State (PackML StateCurrent)"),
-        ("unit_mode", "Unit mode"),
-        ("stop_reason", "Stop reason (first out)"),
-        ("processed_count", "Processed count"),
-        ("defective_count", "Defective count"),
-        ("consumed_count", "Consumed count"),
-        ("machine_speed", "Machine speed"),
-        ("alarm", "Alarm (active number, 0 = none)"),
-        ("warning", "Warning (active number, 0 = none)"),
-        ("process_value", "Process value"),
-        ("level", "Level (silo or tank)"),
+        ("state", Term.Mark("State (PackML StateCurrent)")),
+        ("unit_mode", Term.Mark("Unit mode")),
+        ("stop_reason", Term.Mark("Stop reason (first out)")),
+        ("processed_count", Term.Mark("Processed count")),
+        ("defective_count", Term.Mark("Defective count")),
+        ("consumed_count", Term.Mark("Consumed count")),
+        ("machine_speed", Term.Mark("Machine speed")),
+        ("alarm", Term.Mark("Alarm (active number, 0 = none)")),
+        ("warning", Term.Mark("Warning (active number, 0 = none)")),
+        ("process_value", Term.Mark("Process value")),
+        ("level", Term.Mark("Level (silo or tank)")),
     ];
 
     /// <summary>A process value's readings pass a deadband; nothing else has one.</summary>
@@ -53,37 +54,37 @@ public static class EdgeView
 
     public static IReadOnlyList<ConnectionSetting> SparkplugSettings { get; } =
     [
-        new("host", "Broker host", "e.g. broker.plant1.local"),
-        new("port", "Port", "1883, or 8883 with TLS"),
+        new("host", Term.Mark("Broker host"), Term.Mark("e.g. broker.plant1.local")),
+        new("port", Term.Mark("Port"), Term.Mark("1883, or 8883 with TLS")),
         new("tls", "TLS", "", IsFlag: true),
-        new("groupId", "Group id", "all groups"),
-        new("hostId", "Host id", "e.g. pulaski"),
-        new("clientId", "Client id", "generated"),
-        new("username", "User name", "none"),
+        new("groupId", Term.Mark("Group id"), Term.Mark("all groups")),
+        new("hostId", Term.Mark("Host id"), Term.Mark("e.g. pulaski")),
+        new("clientId", Term.Mark("Client id"), Term.Mark("generated")),
+        new("username", Term.Mark("User name"), Term.Mark("none")),
     ];
 
     public static IReadOnlyList<ConnectionSetting> OpcUaSettings { get; } =
     [
-        new("endpoint", "Endpoint", "opc.tcp://plc1:4840"),
-        new("securityMode", "Security", "", [("", "Sign and encrypt"), ("sign", "Sign"), ("none", "None (test only)")]),
-        new("securityPolicy", "Policy", "best offered"),
-        new("serverThumbprint", "Server thumbprint", "from the trusted store"),
-        new("trustAnyServer", "Trust any server (test only)", "", IsFlag: true),
-        new("username", "User name", "anonymous"),
-        new("publishingIntervalMs", "Publishing ms", "1000"),
-        new("samplingIntervalMs", "Sampling ms", "as publishing"),
-        new("browseRoot", "Browse from", "Objects (i=85)"),
-        new("browseDepth", "Browse depth", "3"),
+        new("endpoint", Term.Mark("Endpoint"), "opc.tcp://plc1:4840"),
+        new("securityMode", Term.Mark("Security"), "", [("", Term.Mark("Sign and encrypt")), ("sign", Term.Mark("Sign")), ("none", Term.Mark("None (test only)"))]),
+        new("securityPolicy", Term.Mark("Policy"), Term.Mark("best offered")),
+        new("serverThumbprint", Term.Mark("Server thumbprint"), Term.Mark("from the trusted store")),
+        new("trustAnyServer", Term.Mark("Trust any server (test only)"), "", IsFlag: true),
+        new("username", Term.Mark("User name"), Term.Mark("anonymous")),
+        new("publishingIntervalMs", Term.Mark("Publishing ms"), "1000"),
+        new("samplingIntervalMs", Term.Mark("Sampling ms"), Term.Mark("as publishing")),
+        new("browseRoot", Term.Mark("Browse from"), "Objects (i=85)"),
+        new("browseDepth", Term.Mark("Browse depth"), "3"),
     ];
 
     public static IReadOnlyList<ConnectionSetting> EthernetIpSettings { get; } =
     [
-        new("gateway", "PLC address", "e.g. 10.0.0.20"),
-        new("path", "CIP path", "1,0 for a ControlLogix in slot 0"),
+        new("gateway", Term.Mark("PLC address"), Term.Mark("e.g. 10.0.0.20")),
+        new("path", Term.Mark("CIP path"), Term.Mark("1,0 for a ControlLogix in slot 0")),
         new("plc", "PLC", "", [("", "ControlLogix"), ("compactlogix", "CompactLogix"), ("micro800", "Micro800"), ("omron-njnx", "Omron NJ/NX"),
             ("plc5", "PLC-5"), ("slc500", "SLC 500"), ("logixpccc", "Logix (PCCC)")]),
-        new("pollIntervalMs", "Poll ms", "1000"),
-        new("timeoutMs", "Timeout ms", "5000"),
+        new("pollIntervalMs", Term.Mark("Poll ms"), "1000"),
+        new("timeoutMs", Term.Mark("Timeout ms"), "5000"),
     ];
 
     /// <summary>What an address of the protocol looks like, as a placeholder.</summary>
@@ -95,16 +96,16 @@ public static class EdgeView
     };
 
     /// <summary>When a node was last heard from: <c>just now</c>, <c>3 min ago</c>, or the site time; <c>never</c>.</summary>
-    public static string LastHeard(DateTimeOffset? at, DateTimeOffset now, string? timeZone)
+    public static string LastHeard(Text l, DateTimeOffset? at, DateTimeOffset now, string? timeZone)
     {
         if (at is not { } seen)
         {
-            return "never";
+            return l["never"];
         }
 
         var ago = now - seen;
-        return ago < TimeSpan.FromMinutes(1) ? "just now"
-            : ago < TimeSpan.FromHours(1) ? $"{(int)ago.TotalMinutes} min ago"
+        return ago < TimeSpan.FromMinutes(1) ? l["just now"]
+            : ago < TimeSpan.FromHours(1) ? l["{0} min ago", (int)ago.TotalMinutes]
             : Display.SiteTime(seen, timeZone);
     }
 

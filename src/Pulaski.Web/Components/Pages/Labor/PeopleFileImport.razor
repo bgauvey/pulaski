@@ -3,10 +3,10 @@
 @* People from an HR or ERP system, or a list kept elsewhere (D-054): pick the format and the file, check it, then import it
    into the site all or nothing. Each format is a source adapter on the API; they all feed the same import. *@
 <section class="inv-facts mb-3" aria-labelledby="people-import-title">
-    <h2 class="h6" id="people-import-title">Import people from a file</h2>
+    <h2 class="h6" id="people-import-title">@L["Import people from a file"]</h2>
     <div class="row g-2 mb-2">
         <div class="col-sm-3">
-            <label class="form-label small" for="people-import-format">Format</label>
+            <label class="form-label small" for="people-import-format">@L["Format"]</label>
             <select id="people-import-format" class="form-select" disabled="@_busy" @bind="_sourceName" @bind:after="RecheckAsync">
                 @foreach (var source in _sources)
                 {
@@ -15,8 +15,8 @@
             </select>
         </div>
         <div class="col-sm-3">
-            <label class="form-label small" for="people-import-system">External system <span class="text-muted">(optional)</span></label>
-            <input id="people-import-system" class="form-control" maxlength="100" placeholder="e.g. HR1" disabled="@_busy"
+            <label class="form-label small" for="people-import-system">@L["External system"] <span class="text-muted">@L["(optional)"]</span></label>
+            <input id="people-import-system" class="form-control" maxlength="100" placeholder="@L["e.g. HR1"]" disabled="@_busy"
                    @bind="_externalSystem" @bind:after="RecheckAsync" />
         </div>
         <div class="col-sm-6 d-flex align-items-end">
@@ -24,7 +24,7 @@
                 <input class="form-check-input" type="checkbox" id="people-import-missing" disabled="@(_busy || string.IsNullOrWhiteSpace(_externalSystem))"
                        @bind="_switchOffMissing" @bind:after="RecheckAsync" />
                 <label class="form-check-label small" for="people-import-missing">
-                    The file is all of the system's people: switch off those it doesn't list
+                    @L["The file is all of the system's people: switch off those it doesn't list"]
                 </label>
             </div>
         </div>
@@ -33,35 +33,30 @@
     @if (Source.Name == Csv)
     {
         <p class="small text-muted mb-2">
-            The first line names the columns; employee_number and name are required. A column left out keeps what each person already has.
-            Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that
-            key; the others are matched on their employee number. <code>qualifications</code> lists the codes they hold, separated by
-            <code>;</code>, each optionally <code>CODE:valid-from:expires-on</code>; any they aren't already granted are granted (an import never
-            revokes one). Nothing is saved until every row is valid.
+            @L["The first line names the columns; employee_number and name are required. A column left out keeps what each person already has. Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that key; the others are matched on their employee number."] <code>qualifications</code> @L["lists the codes they hold, separated by"]
+            <code>;</code>@L[", each optionally"] <code>CODE:valid-from:expires-on</code>@L["; any they aren't already granted are granted (an import never revokes one). Nothing is saved until every row is valid."]
         </p>
-        <p class="small mb-2"><span class="text-muted">All columns:</span> <code>@PeopleCsvFormat.Header</code></p>
+        <p class="small mb-2"><span class="text-muted">@L["All columns:"]</span> <code>@PeopleCsvFormat.Header</code></p>
     }
     else if (Source.Name == Scim)
     {
         <p class="small text-muted mb-2">
-            @Source.Description Each user is one person: the enterprise extension's <code>employeeNumber</code> is the employee number,
-            <code>displayName</code> the name and <code>active</code> whether they work here. With an external system, the people are that
-            system's, matched on their <code>externalId</code> (or <code>id</code>); without one, on their employee number.
-            Nothing is saved until every person is valid.
+            @Source.Description @L["Each user is one person: the enterprise extension's"] <code>employeeNumber</code> @L["is the employee number,"]
+            <code>displayName</code> @L["the name and"] <code>active</code> @L["whether they work here. With an external system, the people are that system's, matched on their"] <code>externalId</code> @L["(or"] <code>id</code>@L["); without one, on their employee number. Nothing is saved until every person is valid."]
         </p>
     }
     else
     {
-        <p class="small text-muted mb-2">@Source.Description Nothing is saved until every person is valid.</p>
+        <p class="small text-muted mb-2">@Source.Description @L["Nothing is saved until every person is valid."]</p>
     }
 
     <div class="d-flex flex-wrap gap-2 align-items-center">
         <InputFile OnChange="PickAsync" accept="@string.Join(",", Source.FileTypes)" class="form-control" style="max-width: 28rem"
-                   aria-label="@($"{Source.DisplayName} file")" disabled="@_busy" />
+                   aria-label="@L["{0} file", Source.DisplayName]" disabled="@_busy" />
         <ActionButton Class="btn btn-primary" Busy="_busy" Reason="@ImportReadiness.Why(_result is not null, _result?.Applied == true, _result?.FileProblems.Count ?? 0, _result?.Errors ?? 0, _result is null ? 0 : _result.Created + _result.Updated)" OnClick="ImportAsync">
             @ImportLabel
         </ActionButton>
-        <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">Close</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">@L["Close"]</button>
     </div>
 
     <ProblemAlert Error="_error" />
@@ -72,7 +67,7 @@
 
     @if (_busy)
     {
-        <p class="text-muted small mt-3 mb-0">Checking @_fileName…</p>
+        <p class="text-muted small mt-3 mb-0">@L["Checking {0}…", _fileName]</p>
     }
     else if (_result is { } r)
     {
@@ -81,20 +76,20 @@
             <span>
                 @if (r.Applied)
                 {
-                    @($"Imported {_fileName}: {r.Created} created, {r.Updated} updated, {r.Unchanged} unchanged.")
+                    @L["Imported {0}: {1} created, {2} updated, {3} unchanged.", _fileName, r.Created, r.Updated, r.Unchanged]
                 }
                 else if (r.FileProblems.Count > 0)
                 {
-                    @($"{_fileName} can't be imported: {string.Join(" ", r.FileProblems)}")
+                    @(L["{0} can't be imported: {1}", _fileName, string.Join(" ", r.FileProblems)])
                 }
                 else if (r.Errors > 0)
                 {
-                    @($"{_fileName}: {Count(r.Errors, "row")} with errors, so nothing can be imported yet. Fix them and pick the file again." +
-                        (r.Rows.Count > r.Errors ? $" The other rows would give {r.Created} created, {r.Updated} updated, {r.Unchanged} unchanged." : ""))
+                    @(L["{0}: rows with errors: {1}. Nothing can be imported yet; fix them and pick the file again.", _fileName, r.Errors] +
+                        (r.Rows.Count > r.Errors ? L[" The other rows would give {0} created, {1} updated, {2} unchanged.", r.Created, r.Updated, r.Unchanged] : ""))
                 }
                 else
                 {
-                    @($"{_fileName} is ready: {r.Created} to create, {r.Updated} to update, {r.Unchanged} unchanged.")
+                    @(L["{0} is ready: {1} to create, {2} to update, {3} unchanged.", _fileName, r.Created, r.Updated, r.Unchanged])
                 }
             </span>
         </div>
@@ -106,13 +101,13 @@
                 {
                     <div class="form-check mb-0">
                         <input class="form-check-input" type="checkbox" id="people-import-errors" @bind="_errorsOnly" />
-                        <label class="form-check-label small" for="people-import-errors">Only rows with errors</label>
+                        <label class="form-check-label small" for="people-import-errors">@L["Only rows with errors"]</label>
                     </div>
                 }
             </div>
             <div class="table-panel mt-2" style="max-height: 24rem; overflow: auto">
                 <table class="table table-sm align-middle mb-0 import-table">
-                    <thead><tr><th class="inv-num">Line</th><th>Code</th><th>@(r.Applied ? "Done" : "Would")</th><th>Details</th></tr></thead>
+                    <thead><tr><th class="inv-num">@L["Line"]</th><th>@L["Code"]</th><th>@(r.Applied ? L["Done"] : L["Would"])</th><th>@L["Details"]</th></tr></thead>
                     <tbody>
                         @foreach (var row in r.Rows.Where(x => !_errorsOnly || x.Action == "error"))
                         {
@@ -121,7 +116,7 @@
                                 <td class="fw-semibold">@row.Code</td>
                                 <td>@ActionLabel(row.Action, r.Applied)</td>
                                 <td class="small">
-                                    @(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? "Changed " : "Changes ") + string.Join(", ", row.Changes) : ""))
+                                    @(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? L["Changed {0}", string.Join(", ", row.Changes)] : L["Changes {0}", string.Join(", ", row.Changes)]) : ""))
                                     @foreach (var note in row.Notes)
                                     {
                                         <div class="text-muted">@note</div>
@@ -190,8 +185,8 @@
     }
 
     private string ImportLabel => _result is { Errors: 0, Applied: false } r && r.Created + r.Updated > 0
-        ? $"Import {Count(r.Created + r.Updated, "person", "people")}"
-        : "Import";
+        ? (r.Created + r.Updated == 1 ? L["Import 1 person"] : L["Import {0} people", r.Created + r.Updated])
+        : L["Import"];
 
     private async Task PickAsync(InputFileChangeEventArgs e)
     {
@@ -202,7 +197,7 @@
         _fileName = e.File.Name;
         if (e.File.Size > MaxBytes)
         {
-            _readProblem = $"{e.File.Name} is larger than 5 MB; split it into smaller files.";
+            _readProblem = L["{0} is larger than 5 MB; split it into smaller files.", e.File.Name];
             return;
         }
 
@@ -219,7 +214,7 @@
         }
         catch (IOException ex)
         {
-            _readProblem = $"{e.File.Name} couldn't be read: {ex.Message}";
+            _readProblem = L["{0} couldn't be read: {1}", e.File.Name, ex.Message];
         }
         finally
         {
@@ -288,15 +283,14 @@
         }
     }
 
-    private static string ActionLabel(string action, bool applied) => (action, applied) switch
+    private string ActionLabel(string action, bool applied) => (action, applied) switch
     {
-        ("create", false) => "Create",
-        ("create", true) => "Created",
-        ("update", false) => "Update",
-        ("update", true) => "Updated",
-        ("unchanged", _) => "Unchanged",
-        _ => "Error",
+        ("create", false) => L["Create"],
+        ("create", true) => L["Created"],
+        ("update", false) => L["Update"],
+        ("update", true) => L["Updated"],
+        ("unchanged", _) => L["Unchanged"],
+        _ => L["Error"],
     };
 
-    private static string Count(int n, string what, string? plural = null) => $"{n} {(n == 1 ? what : plural ?? what + "s")}";
 }

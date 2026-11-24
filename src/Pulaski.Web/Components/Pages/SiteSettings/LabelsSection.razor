@@ -3,40 +3,39 @@
 
 @* Labels (#75): the site's label format and GS1 numbering, its label printers and how its suppliers' barcodes read. *@
 <section class="inv-facts mb-3" id="labels" aria-labelledby="labels-heading">
-    <h2 class="h6" id="labels-heading">Labels</h2>
+    <h2 class="h6" id="labels-heading">@L["Labels"]</h2>
     <p class="small text-muted">
-        How lot and container labels are printed. A GS1 format adds a GS1 barcode for lots whose material has a GTIN and for containers with an SSCC;
-        every label keeps Pulaski's own code, so a scan in Pulaski always finds exactly that one.
+        @L["How lot and container labels are printed. A GS1 format adds a GS1 barcode for lots whose material has a GTIN and for containers with an SSCC; every label keeps Pulaski's own code, so a scan in Pulaski always finds exactly that one."]
     </p>
     <ProblemAlert Error="_error" />
 
     @if (_setup is null)
     {
-        <p class="small text-muted mb-0">Loading…</p>
+        <p class="small text-muted mb-0">@L["Loading…"]</p>
     }
     else
     {
         <form class="row g-2 align-items-end mb-3" @onsubmit="SaveSettingsAsync" @onsubmit:preventDefault>
                 <div class="col-sm-3">
-                    <label class="form-label small" for="label-format">Label format</label>
+                    <label class="form-label small" for="label-format">@L["Label format"]</label>
                     <select id="label-format" class="form-select form-select-sm" disabled="@(!CanManage)" @bind="_format">
-                        <option value="pulaski">Pulaski (Code 128)</option>
-                        <option value="gs1_128">GS1-128</option>
-                        <option value="gs1_datamatrix">GS1 DataMatrix</option>
+                        <option value="pulaski">@L["Pulaski (Code 128)"]</option>
+                        <option value="gs1_128">@L["GS1-128"]</option>
+                        <option value="gs1_datamatrix">@L["GS1 DataMatrix"]</option>
                     </select>
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label small" for="gs1-prefix">GS1 company prefix</label>
-                    <input id="gs1-prefix" class="form-control form-control-sm" disabled="@(!CanManage)" inputmode="numeric" maxlength="12" placeholder="None" @bind="_prefix" />
+                    <label class="form-label small" for="gs1-prefix">@L["GS1 company prefix"]</label>
+                    <input id="gs1-prefix" class="form-control form-control-sm" disabled="@(!CanManage)" inputmode="numeric" maxlength="12" placeholder="@L["None"]" @bind="_prefix" />
                 </div>
                 <div class="col-sm-2">
-                    <label class="form-label small" for="sscc-ext">SSCC extension digit</label>
+                    <label class="form-label small" for="sscc-ext">@L["SSCC extension digit"]</label>
                     <input id="sscc-ext" type="number" min="0" max="9" class="form-control form-control-sm" disabled="@(!CanManage)" @bind="_extension" />
                 </div>
                 <div class="col-sm-3">
-                    <label class="form-label small" for="default-printer">Default printer</label>
+                    <label class="form-label small" for="default-printer">@L["Default printer"]</label>
                     <select id="default-printer" class="form-select form-select-sm" disabled="@(!CanManage)" @bind="_defaultPrinter">
-                        <option value="@Guid.Empty">None</option>
+                        <option value="@Guid.Empty">@L["None"]</option>
                         @foreach (var p in _setup.Printers.Where(p => p.IsActive))
                         {
                             <option value="@p.Id">@p.Code · @p.Name</option>
@@ -45,25 +44,25 @@
                 </div>
             @if (CanManage)
             {
-                <div class="col-sm-1"><button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save</button></div>
+                <div class="col-sm-1"><button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">@L["Save"]</button></div>
             }
             <div class="col-12 small text-muted">
                 @(_setup.Gs1CompanyPrefix is null
-                    ? "Without a company prefix, containers get no SSCC."
-                    : $"New containers get SSCCs from serial {_setup.SsccNextSerial}.")
+                    ? L["Without a company prefix, containers get no SSCC."]
+                    : L["New containers get SSCCs from serial {0}.", _setup.SsccNextSerial])
             </div>
         </form>
 
-        <h3 class="h6">Printers</h3>
+        <h3 class="h6">@L["Printers"]</h3>
         @if (_setup.Printers.Count == 0)
         {
-            <p class="small text-muted">No printers yet: labels print as PDF.</p>
+            <p class="small text-muted">@L["No printers yet: labels print as PDF."]</p>
         }
         else
         {
             <div class="table-panel mb-2">
                 <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Printer</th><th>Sends</th><th>Templates</th><th></th></tr></thead>
+                    <thead><tr><th>@L["Printer"]</th><th>@L["Sends"]</th><th>@L["Templates"]</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var p in _setup.Printers)
                         {
@@ -74,7 +73,7 @@
                                 <td class="text-end">
                                     @if (CanManage)
                                     {
-                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => EditPrinter(p)">Change</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => EditPrinter(p)">@L["Change"]</button>
                                     }
                                 </td>
                             </tr>
@@ -87,82 +86,81 @@
         {
             @if (_printer is null)
             {
-                <button type="button" class="btn btn-sm btn-link px-0 mb-3" @onclick="() => EditPrinter(null)">Add a printer</button>
+                <button type="button" class="btn btn-sm btn-link px-0 mb-3" @onclick="() => EditPrinter(null)">@L["Add a printer"]</button>
             }
             else
             {
                 <form class="row g-2 align-items-end mb-3" @onsubmit="SavePrinterAsync" @onsubmit:preventDefault>
                     <div class="col-sm-2">
-                        <label class="form-label small" for="prn-code">Code</label>
+                        <label class="form-label small" for="prn-code">@L["Code"]</label>
                         <input id="prn-code" class="form-control form-control-sm" maxlength="30" disabled="@(_printerId is not null)" @bind="_printer.Code" />
                     </div>
                     <div class="col-sm-3">
-                        <label class="form-label small" for="prn-name">Name</label>
+                        <label class="form-label small" for="prn-name">@L["Name"]</label>
                         <input id="prn-name" class="form-control form-control-sm" maxlength="100" @bind="_printer.Name" />
                     </div>
                     <div class="col-sm-2">
-                        <label class="form-label small" for="prn-method">Sends</label>
+                        <label class="form-label small" for="prn-method">@L["Sends"]</label>
                         <select id="prn-method" class="form-select form-select-sm" @bind="_printer.Method">
-                            <option value="raw_tcp">Raw TCP</option>
-                            <option value="drop_folder">Drop folder</option>
-                            <option value="bartender">BarTender (web service)</option>
+                            <option value="raw_tcp">@L["Raw TCP"]</option>
+                            <option value="drop_folder">@L["Drop folder"]</option>
+                            <option value="bartender">@L["BarTender (web service)"]</option>
                         </select>
                     </div>
                     @if (_printer.Method == "bartender")
                     {
                         @* BarTender (#168): a BTXML script per label, posted to a BarTender Integration web service that runs it (Print BTXML Script). *@
                         <div class="col-sm-5">
-                            <label class="form-label small" for="prn-endpoint">BarTender web service address</label>
+                            <label class="form-label small" for="prn-endpoint">@L["BarTender web service address"]</label>
                             <input id="prn-endpoint" type="url" class="form-control form-control-sm" maxlength="500" placeholder="https://bartender.example.com:8080/Integration/Print/Execute" @bind="_printer.EndpointUrl" />
                         </div>
                         <div class="col-sm-3">
-                            <label class="form-label small" for="prn-btprinter">Printer in BarTender <span class="text-muted">(optional)</span></label>
-                            <input id="prn-btprinter" class="form-control form-control-sm" maxlength="200" placeholder="The document's own" @bind="_printer.BartenderPrinter" />
+                            <label class="form-label small" for="prn-btprinter">@L["Printer in BarTender"] <span class="text-muted">@L["(optional)"]</span></label>
+                            <input id="prn-btprinter" class="form-control form-control-sm" maxlength="200" placeholder="@L["The document's own"]" @bind="_printer.BartenderPrinter" />
                         </div>
                         <div class="col-12">
-                            <div class="small fw-semibold mb-1">BarTender document (.btw) for each kind of label</div>
+                            <div class="small fw-semibold mb-1">@L["BarTender document (.btw) for each kind of label"]</div>
                             <div class="row g-2">
                                 @foreach (var operation in LabelPrinterView.Operations(_options.BtwOperations, _printer.BtwFiles))
                                 {
                                     <div class="col-sm-6" @key="operation">
                                         <label class="form-label small mb-0" for="@($"prn-btw-{operation}")">@LabelPrinterView.OperationName(L, operation)</label>
-                                        <input id="@($"prn-btw-{operation}")" class="form-control form-control-sm" maxlength="260" placeholder="@(operation == "default" ? @"C:\Labels\Lot.btw" : "The default document")"
+                                        <input id="@($"prn-btw-{operation}")" class="form-control form-control-sm" maxlength="260" placeholder="@(operation == "default" ? @"C:\Labels\Lot.btw" : L["The default document"])"
                                                value="@_printer.BtwFiles.GetValueOrDefault(operation)" @onchange="@(e => _printer.BtwFiles[operation] = e.Value?.ToString() ?? "")" />
                                     </div>
                                 }
                             </div>
-                            <div class="form-text">A path BarTender can open. A kind without its own document uses the default.</div>
+                            <div class="form-text">@L["A path BarTender can open. A kind without its own document uses the default."]</div>
                         </div>
                         <div class="col-12">
                             <div class="d-flex justify-content-between align-items-end">
-                                <label class="form-label small mb-1" for="prn-btxml">BTXML template</label>
-                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _printer.BtxmlTemplate = _options.BtxmlTemplate">Use the standard template</button>
+                                <label class="form-label small mb-1" for="prn-btxml">@L["BTXML template"]</label>
+                                <button type="button" class="btn btn-sm btn-link" @onclick="() => _printer.BtxmlTemplate = _options.BtxmlTemplate">@L["Use the standard template"]</button>
                             </div>
                             <textarea id="prn-btxml" class="form-control form-control-sm font-monospace" rows="12" maxlength="20000" spellcheck="false" @bind="_printer.BtxmlTemplate"></textarea>
                             <div class="form-text">
-                                Pulaski fills in <code>{{BtwPath}}</code> (the document), <code>{{NamedSubStrings}}</code> (every label value as a named data source),
-                                <code>{{PrintSetup}}</code> (the printer and copies), <code>{{Printer}}</code>, <code>{{Copies}}</code>, <code>{{JobName}}</code>, and
-                                any label value by name, such as <code>{{Code}}</code>, <code>{{Title}}</code>, <code>{{Line1}}</code> or <code>{{Gs1Hri}}</code>.
+                                @L["Pulaski fills in"] <code>{{BtwPath}}</code> @L["(the document),"] <code>{{NamedSubStrings}}</code> @L["(every label value as a named data source),"]
+                                <code>{{PrintSetup}}</code> @L["(the printer and copies),"] <code>{{Printer}}</code>, <code>{{Copies}}</code>, <code>{{JobName}}</code>@L[", and any label value by name, such as"] <code>{{Code}}</code>, <code>{{Title}}</code>, <code>{{Line1}}</code> @L["or"] <code>{{Gs1Hri}}</code>.
                             </div>
                         </div>
                     }
                     else if (_printer.Method == "raw_tcp")
                     {
                         <div class="col-sm-2">
-                            <label class="form-label small" for="prn-host">Host</label>
+                            <label class="form-label small" for="prn-host">@L["Host"]</label>
                             <input id="prn-host" class="form-control form-control-sm" maxlength="255" @bind="_printer.Host" />
                         </div>
                         <div class="col-sm-1">
-                            <label class="form-label small" for="prn-port">Port</label>
+                            <label class="form-label small" for="prn-port">@L["Port"]</label>
                             <input id="prn-port" type="number" min="1" max="65535" class="form-control form-control-sm" @bind="_printer.Port" />
                         </div>
                     }
                     else
                     {
                         <div class="col-sm-3">
-                            <label class="form-label small" for="prn-folder">Drop folder</label>
+                            <label class="form-label small" for="prn-folder">@L["Drop folder"]</label>
                             <select id="prn-folder" class="form-select form-select-sm" @bind="_printer.DropFolder">
-                                <option value="">@(_options.DropFolders.Count == 0 ? "None configured (Labels:DropFolders)" : "Choose…")</option>
+                                <option value="">@(_options.DropFolders.Count == 0 ? L["None configured (Labels:DropFolders)"] : L["Choose…"])</option>
                                 @foreach (var f in _options.DropFolders)
                                 {
                                     <option value="@f">@f</option>
@@ -173,7 +171,7 @@
                     @if (_printer.Method != "bartender")
                     {
                         <div class="col-sm-2">
-                            <label class="form-label small" for="prn-set">Templates</label>
+                            <label class="form-label small" for="prn-set">@L["Templates"]</label>
                             <select id="prn-set" class="form-select form-select-sm" @bind="_printer.TemplateSet">
                                 @foreach (var t in _options.TemplateSets)
                                 {
@@ -185,26 +183,26 @@
                     <div class="col-12 d-flex gap-2 align-items-center">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="prn-active" @bind="_printer.IsActive" />
-                            <label class="form-check-label small" for="prn-active">Active</label>
+                            <label class="form-check-label small" for="prn-active">@L["Active"]</label>
                         </div>
-                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save printer</button>
-                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _printer = null">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">@L["Save printer"]</button>
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _printer = null">@L["Cancel"]</button>
                     </div>
                 </form>
             }
         }
 
-        <h3 class="h6">Supplier barcodes</h3>
+        <h3 class="h6">@L["Supplier barcodes"]</h3>
         <p class="small text-muted">
-            GS1 barcodes are always read. For a supplier's own barcodes, add a pattern (a regular expression) naming its parts:
+            @L["GS1 barcodes are always read. For a supplier's own barcodes, add a pattern (a regular expression) naming its parts:"]
             <code>(?&lt;lot&gt;…)</code>, <code>(?&lt;supplier_lot&gt;…)</code>, <code>(?&lt;material&gt;…)</code>, <code>(?&lt;gtin&gt;…)</code>,
-            <code>(?&lt;qty&gt;…)</code> and <code>(?&lt;expiry&gt;…)</code>. The whole scan must match; formats are tried in order.
+            <code>(?&lt;qty&gt;…)</code> @L["and"] <code>(?&lt;expiry&gt;…)</code>@L[". The whole scan must match; formats are tried in order."]
         </p>
         @if (_setup.SupplierFormats.Count > 0)
         {
             <div class="table-panel mb-2">
                 <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Format</th><th>Pattern</th><th>Expiry</th><th class="text-end">Order</th><th></th></tr></thead>
+                    <thead><tr><th>@L["Format"]</th><th>@L["Pattern"]</th><th>@L["Expiry"]</th><th class="text-end">@L["Order"]</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var f in _setup.SupplierFormats)
                         {
@@ -216,7 +214,7 @@
                                 <td class="text-end">
                                     @if (CanManage)
                                     {
-                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => EditFormat(f)">Change</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => EditFormat(f)">@L["Change"]</button>
                                     }
                                 </td>
                             </tr>
@@ -229,36 +227,36 @@
         {
             @if (_supplier is null)
             {
-                <button type="button" class="btn btn-sm btn-link px-0" @onclick="() => EditFormat(null)">Add a supplier format</button>
+                <button type="button" class="btn btn-sm btn-link px-0" @onclick="() => EditFormat(null)">@L["Add a supplier format"]</button>
             }
             else
             {
                 <form class="row g-2 align-items-end" @onsubmit="SaveFormatAsync" @onsubmit:preventDefault>
                     <div class="col-sm-2">
-                        <label class="form-label small" for="fmt-code">Code</label>
+                        <label class="form-label small" for="fmt-code">@L["Code"]</label>
                         <input id="fmt-code" class="form-control form-control-sm" maxlength="30" disabled="@(_formatId is not null)" @bind="_supplier.Code" />
                     </div>
                     <div class="col-sm-3">
-                        <label class="form-label small" for="fmt-name">Name</label>
+                        <label class="form-label small" for="fmt-name">@L["Name"]</label>
                         <input id="fmt-name" class="form-control form-control-sm" maxlength="100" @bind="_supplier.Name" />
                     </div>
                     <div class="col-sm-2">
-                        <label class="form-label small" for="fmt-expiry">Expiry format</label>
+                        <label class="form-label small" for="fmt-expiry">@L["Expiry format"]</label>
                         <input id="fmt-expiry" class="form-control form-control-sm" maxlength="30" placeholder="yyyy-MM-dd" @bind="_supplier.ExpiryFormat" />
                     </div>
                     <div class="col-sm-1">
-                        <label class="form-label small" for="fmt-order">Order</label>
+                        <label class="form-label small" for="fmt-order">@L["Order"]</label>
                         <input id="fmt-order" type="number" class="form-control form-control-sm" @bind="_supplier.SortOrder" />
                     </div>
                     <div class="col-12">
-                        <label class="form-label small" for="fmt-pattern">Pattern</label>
+                        <label class="form-label small" for="fmt-pattern">@L["Pattern"]</label>
                         <input id="fmt-pattern" class="form-control form-control-sm font-monospace" maxlength="500" @bind="_supplier.Pattern" />
                     </div>
                     <div class="col-sm-6">
-                        <label class="form-label small" for="fmt-sample">Try it on a scan</label>
+                        <label class="form-label small" for="fmt-sample">@L["Try it on a scan"]</label>
                         <div class="d-flex gap-2">
-                            <input id="fmt-sample" class="form-control form-control-sm" maxlength="200" placeholder="Scan or type a sample barcode" @bind="_sample" />
-                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TestAsync">Try</button>
+                            <input id="fmt-sample" class="form-control form-control-sm" maxlength="200" placeholder="@L["Scan or type a sample barcode"]" @bind="_sample" />
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TestAsync">@L["Try"]</button>
                         </div>
                         @if (_test is { } test)
                         {
@@ -269,11 +267,11 @@
                                 }
                                 else if (test.Read is { } read)
                                 {
-                                    <span>Reads @Read(read)</span>
+                                    <span>@L["Reads {0}", Read(read)]</span>
                                 }
                                 else
                                 {
-                                    <span class="text-muted">The sample doesn't match the pattern.</span>
+                                    <span class="text-muted">@L["The sample doesn't match the pattern."]</span>
                                 }
                             </div>
                         }
@@ -281,10 +279,10 @@
                     <div class="col-12 d-flex gap-2 align-items-center">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="fmt-active" @bind="_supplier.IsActive" />
-                            <label class="form-check-label small" for="fmt-active">Active</label>
+                            <label class="form-check-label small" for="fmt-active">@L["Active"]</label>
                         </div>
-                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save format</button>
-                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _supplier = null">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">@L["Save format"]</button>
+                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _supplier = null">@L["Cancel"]</button>
                     </div>
                 </form>
             }
@@ -376,15 +374,15 @@
         }
     }
 
-    private static string Read(ScannedLotDto read) => string.Join(", ", new[]
+    private string Read(ScannedLotDto read) => string.Join(", ", new[]
     {
-        read.LotNumber is { } lot ? $"lot {lot}" : null,
-        read.SupplierLot is { } supplier ? $"supplier lot {supplier}" : null,
-        read.MaterialCode is { } material ? $"material {material}" : null,
+        read.LotNumber is { } lot ? L["lot {0}", lot] : null,
+        read.SupplierLot is { } supplier ? L["supplier lot {0}", supplier] : null,
+        read.MaterialCode is { } material ? L["material {0}", material] : null,
         read.Gtin is { } gtin ? $"GTIN {gtin}" : null,
-        read.Quantity is { } qty ? $"quantity {qty}" : null,
-        read.Expiry is { } expiry ? $"expiry {expiry:yyyy-MM-dd}" : null,
-    }.Where(x => x is not null)) is { Length: > 0 } text ? text + "." : "nothing Pulaski uses.";
+        read.Quantity is { } qty ? L["quantity {0}", qty] : null,
+        read.Expiry is { } expiry ? L["expiry {0:yyyy-MM-dd}", expiry] : null,
+    }.Where(x => x is not null)) is { Length: > 0 } text ? text + "." : L["nothing Pulaski uses."];
 
     private void EditPrinter(LabelPrinterDto? p)
     {
@@ -426,7 +424,7 @@
             SsccExtension = _extension,
             DefaultPrinterId = _defaultPrinter == Guid.Empty ? null : _defaultPrinter,
         }),
-        "Label settings saved.");
+        L["Label settings saved."]);
 
     private Task SavePrinterAsync()
     {
@@ -449,7 +447,7 @@
         };
         return RunAsync(
             async () => { _ = _printerId is { } id ? await Api.UpdateLabelPrinterAsync(id, request) : await Api.AddLabelPrinterAsync(SiteId, request); _printer = null; },
-            $"Printer {p.Code} saved.");
+            L["Printer {0} saved.", p.Code]);
     }
 
     private Task SaveFormatAsync()
@@ -467,7 +465,7 @@
         };
         return RunAsync(
             async () => { _ = _formatId is { } id ? await Api.UpdateSupplierFormatAsync(id, SiteId, request) : await Api.AddSupplierFormatAsync(SiteId, request); _supplier = null; },
-            $"Supplier format {f.Code} saved.");
+            L["Supplier format {0} saved.", f.Code]);
     }
 
     private async Task TestAsync()

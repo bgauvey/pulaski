@@ -7,21 +7,19 @@
 
 @* Machine profiles (D-050): one kind of machine, as its controller reports it. Identical machines share one; a machine of
    another vendor or model gets its own. Equipment names its profile on the Equipment screen. *@
-<PageTitle>Machine profiles · Pulaski</PageTitle>
+<PageTitle>@L["Machine profiles"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Machine profiles</h1>
+        <h1 class="mb-1">@L["Machine profiles"]</h1>
         <p class="text-muted mb-0">
-            How each kind of machine reports itself: the values its state tag takes and the PackML state each one means, and its own stop, alarm and
-            warning codes with the utilization reason each one counts as. Identical machines share a profile; give each machine its profile on the
-            Equipment screen, under Machine data.
+            @L["How each kind of machine reports itself: the values its state tag takes and the PackML state each one means, and its own stop, alarm and warning codes with the utilization reason each one counts as. Identical machines share a profile; give each machine its profile on the Equipment screen, under Machine data."]
         </p>
     </div>
     @if (Sites.Sites.Count > 1)
     {
         <div class="inv-head-tools">
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -37,11 +35,11 @@
 @if (CanManage)
 {
     <form class="inv-toolbar" @onsubmit="CreateAsync" @onsubmit:preventDefault>
-        <input class="form-control" style="width: 9rem" maxlength="20" placeholder="CODE" aria-label="Profile code" @bind="_code" @bind:event="oninput" />
-        <input class="form-control inv-grow" maxlength="100" placeholder="Name, e.g. Case packer, vendor A" aria-label="Profile name" @bind="_name" @bind:event="oninput" />
-        <input class="form-control" style="width: 10rem" maxlength="100" placeholder="Vendor" aria-label="Vendor" @bind="_vendor" />
-        <input class="form-control" style="width: 10rem" maxlength="100" placeholder="Model" aria-label="Model" @bind="_model" />
-        <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">Add profile</button>
+        <input class="form-control" style="width: 9rem" maxlength="20" placeholder="@L["CODE"]" aria-label="@L["Profile code"]" @bind="_code" @bind:event="oninput" />
+        <input class="form-control inv-grow" maxlength="100" placeholder="@L["Name, e.g. Case packer, vendor A"]" aria-label="@L["Profile name"]" @bind="_name" @bind:event="oninput" />
+        <input class="form-control" style="width: 10rem" maxlength="100" placeholder="@L["Vendor"]" aria-label="@L["Vendor"]" @bind="_vendor" />
+        <input class="form-control" style="width: 10rem" maxlength="100" placeholder="@L["Model"]" aria-label="@L["Model"]" @bind="_model" />
+        <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name))">@L["Add profile"]</button>
     </form>
 }
 
@@ -49,14 +47,14 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else if (_profiles.Count == 0)
 {
     <div class="empty-panel">
         <p class="text-muted mb-0">
-            No machine profiles at @(Sites.Site?.Code ?? "this site") yet. Add one for each kind of machine, then import its definitions from a CSV file.
+            @L["No machine profiles at {0} yet. Add one for each kind of machine, then import its definitions from a CSV file.", Sites.Site?.Code ?? L["this site"]]
         </p>
     </div>
 }
@@ -65,7 +63,7 @@ else
     <div class="table-panel">
         <table class="table align-middle">
             <thead>
-                <tr><th>Code</th><th>Name</th><th>Vendor and model</th><th class="inv-num">Stop codes</th><th class="inv-num">Without a reason</th><th class="inv-num">Machines</th><th>Active</th></tr>
+                <tr><th>@L["Code"]</th><th>@L["Name"]</th><th>@L["Vendor and model"]</th><th class="inv-num">@L["Stop codes"]</th><th class="inv-num">@L["Without a reason"]</th><th class="inv-num">@L["Machines"]</th><th>@L["Active"]</th></tr>
             </thead>
             <tbody>
                 @foreach (var p in _profiles)
@@ -78,7 +76,7 @@ else
                         <td class="inv-num">
                             @if (p.UnmappedStopCodeCount > 0)
                             {
-                                <span class="chip chip-warning" title="Stops with these codes show as uncoded until they get a reason">@p.UnmappedStopCodeCount</span>
+                                <span class="chip chip-warning" title="@L["Stops with these codes show as uncoded until they get a reason"]">@p.UnmappedStopCodeCount</span>
                             }
                             else
                             {
@@ -86,7 +84,7 @@ else
                             }
                         </td>
                         <td class="inv-num">@p.MachineCount</td>
-                        <td>@(p.IsActive ? "Yes" : "No")</td>
+                        <td>@(p.IsActive ? L["Yes"] : L["No"])</td>
                     </tr>
                 }
             </tbody>

@@ -6,14 +6,13 @@
 <div class="inv-head">
     <div>
         <p class="text-muted mb-0">
-            Who can sign in, and which roles they hold. Everyone who signs in can view every screen; roles decide the changes.
-            Every user needs a role, and every role but Administrator is held at a site.
+            @L["Who can sign in, and which roles they hold. Everyone who signs in can view every screen; roles decide the changes. Every user needs a role, and every role but Administrator is held at a site."]
         </p>
     </div>
     @if (CanManage)
     {
         <div class="inv-head-tools">
-            <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">New user</button>
+            <button type="button" class="btn btn-primary" @onclick="() => _adding = !_adding">@L["New user"]</button>
         </div>
     }
 </div>
@@ -25,35 +24,35 @@
 {
     <div class="alert alert-success d-flex align-items-center gap-2" role="status">
         <span>@message</span>
-        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">@L["Dismiss"]</button>
     </div>
 }
 
 @if (_adding && CanManage)
 {
     <form class="inv-facts mb-3" @onsubmit="CreateAsync" @onsubmit:preventDefault>
-        <h2 class="h6">New user</h2>
+        <h2 class="h6">@L["New user"]</h2>
         <div class="row g-2">
             <div class="col-sm-3">
-                <label class="form-label small" for="new-username">User name</label>
-                <input id="new-username" class="form-control" maxlength="100" autocomplete="off" placeholder="e.g. j.smith" @bind="_new.Username" @bind:event="oninput" />
+                <label class="form-label small" for="new-username">@L["User name"]</label>
+                <input id="new-username" class="form-control" maxlength="100" autocomplete="off" placeholder="@L["e.g. j.smith"]" @bind="_new.Username" @bind:event="oninput" />
             </div>
             <div class="col-sm-3">
-                <label class="form-label small" for="new-name">Name</label>
-                <input id="new-name" class="form-control" maxlength="200" placeholder="e.g. Jo Smith" @bind="_new.DisplayName" @bind:event="oninput" />
+                <label class="form-label small" for="new-name">@L["Name"]</label>
+                <input id="new-name" class="form-control" maxlength="200" placeholder="@L["e.g. Jo Smith"]" @bind="_new.DisplayName" @bind:event="oninput" />
             </div>
             <div class="col-sm-3">
-                <label class="form-label small" for="new-email">E-mail (optional)</label>
+                <label class="form-label small" for="new-email">@L["E-mail (optional)"]</label>
                 <input id="new-email" type="email" class="form-control" maxlength="254" @bind="_new.Email" />
             </div>
             <div class="col-sm-3">
-                <label class="form-label small" for="new-password">Temporary password</label>
+                <label class="form-label small" for="new-password">@L["Temporary password"]</label>
                 <input id="new-password" class="form-control" autocomplete="off" @bind="_new.TemporaryPassword" @bind:event="oninput" />
             </div>
             <div class="col-sm-3">
-                <label class="form-label small" for="new-role">Role</label>
+                <label class="form-label small" for="new-role">@L["Role"]</label>
                 <select id="new-role" class="form-select" @bind="_new.RoleCode">
-                    <option value="">Choose a role…</option>
+                    <option value="">@L["Choose a role…"]</option>
                     @foreach (var r in _roles.Where(r => r.IsActive))
                     {
                         <option value="@r.Code">@r.Name</option>
@@ -63,12 +62,12 @@
             @if (!IsGlobal(_new.RoleCode))
             {
                 <div class="col-sm-3">
-                    <label class="form-label small" for="new-site">At site</label>
+                    <label class="form-label small" for="new-site">@L["At site"]</label>
                     <select id="new-site" class="form-select" @bind="_new.SiteChoice">
-                        <option value="">Choose a site…</option>
+                        <option value="">@L["Choose a site…"]</option>
                         @if (CanGiveEverywhere(_new.RoleCode))
                         {
-                            <option value="@EverySite">Every site</option>
+                            <option value="@EverySite">@L["Every site"]</option>
                         }
                         @foreach (var s in Sites.AllSites)
                         {
@@ -78,13 +77,12 @@
                 </div>
             }
             <div class="col-12 small text-muted">
-                They sign in with the temporary password and must choose their own straight away. At least 10 characters, with two of: lower case,
-                upper case, digits, symbols; not the user name. Tell them the password yourself: Pulaski doesn't send it.
+                @L["They sign in with the temporary password and must choose their own straight away. At least 10 characters, with two of: lower case, upper case, digits, symbols; not the user name. Tell them the password yourself: Pulaski doesn't send it."]
             </div>
         </div>
         <div class="d-flex gap-2 mt-2">
-            <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanCreate)">Create user</button>
-            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">Cancel</button>
+            <button type="submit" class="btn btn-primary" disabled="@(_saving || !CanCreate)">@L["Create user"]</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="() => _adding = false">@L["Cancel"]</button>
         </div>
     </form>
 }
@@ -93,7 +91,7 @@
 {
     @if (_error is null)
     {
-        <p class="text-muted">Loading…</p>
+        <p class="text-muted">@L["Loading…"]</p>
     }
 }
 else
@@ -102,11 +100,11 @@ else
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>User</th>
-                    <th>Roles</th>
-                    <th>Signs in</th>
-                    <th>Last sign-in</th>
-                    <th>Status</th>
+                    <th>@L["User"]</th>
+                    <th>@L["Roles"]</th>
+                    <th>@L["Signs in"]</th>
+                    <th>@L["Last sign-in"]</th>
+                    <th>@L["Status"]</th>
                     <th></th>
                 </tr>
             </thead>
@@ -121,46 +119,46 @@ else
                         <td>
                             @foreach (var r in u.Roles)
                             {
-                                <span class="chip me-1@(r.SiteId is null && r.RoleCode != "administrator" ? " chip-warn" : "")" title="@(r.SiteId is null ? "Held at every site" : $"Held at {r.SiteCode}")">
-                                    @(r.SiteCode is null ? $"{r.RoleName} · every site" : $"{r.RoleName} · {r.SiteCode}")
+                                <span class="chip me-1@(r.SiteId is null && r.RoleCode != "administrator" ? " chip-warn" : "")" title="@(r.SiteId is null ? L["Held at every site"] : L["Held at {0}", r.SiteCode])">
+                                    @(r.SiteCode is null ? L["{0} · every site", r.RoleName] : $"{r.RoleName} · {r.SiteCode}")
                                 </span>
                             }
                         </td>
                         <td class="small text-break">
-                            @(u.Issuer == "pulaski-local" ? "Pulaski password" : u.Issuer)
+                            @(u.Issuer == "pulaski-local" ? L["Pulaski password"] : u.Issuer)
                             @if (u.IsServiceAccount)
                             {
-                                <div class="text-muted">Service account</div>
+                                <div class="text-muted">@L["Service account"]</div>
                             }
                         </td>
-                        <td class="small">@(u.LastLoginAt is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "Never")</td>
+                        <td class="small">@(u.LastLoginAt is { } at ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : L["Never"])</td>
                         <td class="small">
                             @if (!u.IsActive)
                             {
-                                <span class="chip">Switched off</span>
+                                <span class="chip">@L["Switched off"]</span>
                             }
                             else if (u.IsAwaitingRole)
                             {
-                                <span class="chip chip-warn" title="Signed in through an identity provider; give them a role to let them in">Awaiting a role</span>
+                                <span class="chip chip-warn" title="@L["Signed in through an identity provider; give them a role to let them in"]">@L["Awaiting a role"]</span>
                             }
                             else if (u.IsLocked)
                             {
-                                <span class="chip chip-warning">Locked</span>
+                                <span class="chip chip-warning">@L["Locked"]</span>
                             }
                             else if (u.MustChangePassword)
                             {
-                                <span class="chip">Temporary password</span>
+                                <span class="chip">@L["Temporary password"]</span>
                             }
                             else
                             {
-                                <span>Active</span>
+                                <span>@L["Active"]</span>
                             }
                         </td>
                         <td class="text-end">
                             @if (CanManage)
                             {
                                 <button type="button" class="btn btn-sm btn-link" aria-expanded="@(_open == u.Id ? "true" : "false")" @onclick="() => Open(u)">
-                                    @(_open == u.Id ? "Close" : "Change")
+                                    @(_open == u.Id ? L["Close"] : L["Change"])
                                 </button>
                             }
                         </td>
@@ -171,15 +169,15 @@ else
                             <td colspan="6" class="bg-body-tertiary">
                                 <div class="row g-4 p-2">
                                     <form class="col-lg-4" @onsubmit="() => SaveAsync(u)" @onsubmit:preventDefault>
-                                        <h3 class="h6">Details</h3>
-                                        <label class="form-label small" for="edit-name-@u.Id">Name</label>
+                                        <h3 class="h6">@L["Details"]</h3>
+                                        <label class="form-label small" for="edit-name-@u.Id">@L["Name"]</label>
                                         <input id="edit-name-@u.Id" class="form-control form-control-sm mb-2" maxlength="200" @bind="edit.DisplayName" />
-                                        <label class="form-label small" for="edit-email-@u.Id">E-mail</label>
+                                        <label class="form-label small" for="edit-email-@u.Id">@L["E-mail"]</label>
                                         <input id="edit-email-@u.Id" type="email" class="form-control form-control-sm mb-2" maxlength="254" @bind="edit.Email" />
                                         <div class="form-check mb-2">
                                             <input class="form-check-input" type="checkbox" id="edit-active-@u.Id" @bind="edit.IsActive" disabled="@(u.Id == User.Me?.Id)" />
                                             <label class="form-check-label small" for="edit-active-@u.Id">
-                                                Can sign in@(u.Id == User.Me?.Id ? " (you can't switch yourself off)" : "")
+                                                @(u.Id == User.Me?.Id ? L["Can sign in (you can't switch yourself off)"] : L["Can sign in"])
                                             </label>
                                         </div>
                                         @if (u.Issuer == "pulaski-local")
@@ -187,33 +185,33 @@ else
                                             <div class="form-check mb-2">
                                                 <input class="form-check-input" type="checkbox" id="edit-service-@u.Id" @bind="edit.IsServiceAccount" />
                                                 <label class="form-check-label small" for="edit-service-@u.Id">
-                                                    Service account (a machine, such as the edge): keeps its password when only administrators sign in with one
+                                                    @L["Service account (a machine, such as the edge): keeps its password when only administrators sign in with one"]
                                                 </label>
                                             </div>
                                         }
                                         else
                                         {
-                                            <p class="small text-muted mb-2">Signs in through @u.Issuer; the provider keeps their name and e-mail up to date.</p>
+                                            <p class="small text-muted mb-2">@L["Signs in through {0}; the provider keeps their name and e-mail up to date.", u.Issuer]</p>
                                         }
-                                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">Save details</button>
+                                        <button type="submit" class="btn btn-sm btn-primary" disabled="@_saving">@L["Save details"]</button>
                                     </form>
 
                                     <div class="col-lg-4">
-                                        <h3 class="h6">Roles</h3>
+                                        <h3 class="h6">@L["Roles"]</h3>
                                         <ul class="list-unstyled small mb-2">
                                             @foreach (var r in u.Roles)
                                             {
                                                 <li class="d-flex align-items-center gap-2 mb-1" @key="r.AssignmentId">
-                                                    <span>@r.RoleName@(r.SiteCode is null ? " at every site" : $" at {r.SiteCode}")</span>
-                                                    <ActionButton Class="btn btn-sm btn-link text-danger p-0 ms-auto" Busy="_saving" Title="Take this role away"
-                                                                  Reason="@(u.Roles.Count == 1 ? "Every user needs a role: add another first, or switch them off." : null)"
-                                                                  OnClick="() => EndRoleAsync(u, r)">Take away</ActionButton>
+                                                    <span>@(r.SiteCode is null ? L["{0} at every site", r.RoleName] : L["{0} at {1}", r.RoleName, r.SiteCode])</span>
+                                                    <ActionButton Class="btn btn-sm btn-link text-danger p-0 ms-auto" Busy="_saving" Title="@L["Take this role away"]"
+                                                                  Reason="@(u.Roles.Count == 1 ? L["Every user needs a role: add another first, or switch them off."] : null)"
+                                                                  OnClick="() => EndRoleAsync(u, r)">@L["Take away"]</ActionButton>
                                                 </li>
                                             }
                                         </ul>
                                         <form class="d-flex flex-wrap gap-1" @onsubmit="() => AssignAsync(u)" @onsubmit:preventDefault>
-                                            <select class="form-select form-select-sm w-auto" aria-label="Role to add" @bind="edit.RoleCode">
-                                                <option value="">Add a role…</option>
+                                            <select class="form-select form-select-sm w-auto" aria-label="@L["Role to add"]" @bind="edit.RoleCode">
+                                                <option value="">@L["Add a role…"]</option>
                                                 @foreach (var r in _roles.Where(r => r.IsActive))
                                                 {
                                                     <option value="@r.Code">@r.Name</option>
@@ -221,11 +219,11 @@ else
                                             </select>
                                             @if (!IsGlobal(edit.RoleCode))
                                             {
-                                                <select class="form-select form-select-sm w-auto" aria-label="At site" @bind="edit.SiteChoice">
-                                                    <option value="">At site…</option>
+                                                <select class="form-select form-select-sm w-auto" aria-label="@L["At site"]" @bind="edit.SiteChoice">
+                                                    <option value="">@L["At site…"]</option>
                                                     @if (CanGiveEverywhere(edit.RoleCode))
                                                     {
-                                                        <option value="@EverySite">Every site</option>
+                                                        <option value="@EverySite">@L["Every site"]</option>
                                                     }
                                                     @foreach (var s in Sites.AllSites)
                                                     {
@@ -234,20 +232,20 @@ else
                                                 </select>
                                             }
                                             <button type="submit" class="btn btn-sm btn-outline-primary"
-                                                    disabled="@(_saving || edit.RoleCode == "" || (!IsGlobal(edit.RoleCode) && edit.SiteChoice == ""))">Add</button>
+                                                    disabled="@(_saving || edit.RoleCode == "" || (!IsGlobal(edit.RoleCode) && edit.SiteChoice == ""))">@L["Add"]</button>
                                         </form>
                                     </div>
 
                                     @if (u.Issuer == "pulaski-local")
                                     {
                                         <form class="col-lg-4" @onsubmit="() => ResetAsync(u)" @onsubmit:preventDefault>
-                                            <h3 class="h6">Password</h3>
+                                            <h3 class="h6">@L["Password"]</h3>
                                             <p class="small text-muted mb-2">
-                                                Give them a new temporary password, which they must change when they sign in. It also unlocks them.
+                                                @L["Give them a new temporary password, which they must change when they sign in. It also unlocks them."]
                                             </p>
-                                            <label class="form-label small" for="reset-@u.Id">Temporary password</label>
+                                            <label class="form-label small" for="reset-@u.Id">@L["Temporary password"]</label>
                                             <input id="reset-@u.Id" class="form-control form-control-sm mb-2" autocomplete="off" @bind="edit.TemporaryPassword" @bind:event="oninput" />
-                                            <button type="submit" class="btn btn-sm btn-outline-primary" disabled="@(_saving || string.IsNullOrEmpty(edit.TemporaryPassword))">Reset password</button>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary" disabled="@(_saving || string.IsNullOrEmpty(edit.TemporaryPassword))">@L["Reset password"]</button>
                                         </form>
                                     }
                                 </div>
@@ -260,7 +258,7 @@ else
     </div>
 
     <p class="small text-muted">
-        What each role may change is on <a href="users/roles">Roles</a> and <a href="users/permissions">Permissions</a>.
+        @L["What each role may change is on"] <a href="users/roles">@L["Roles"]</a> @L["and"] <a href="users/permissions">@L["Permissions"]</a>.
     </p>
 }
 
@@ -344,7 +342,7 @@ else
             RoleCode = _new.RoleCode,
             SiteId = IsGlobal(_new.RoleCode) ? null : _new.SiteId,
         });
-        _message = $"{_new.DisplayName.Trim()} can now sign in as {_new.Username.Trim().ToLowerInvariant()} with the temporary password.";
+        _message = L["{0} can now sign in as {1} with the temporary password.", _new.DisplayName.Trim(), _new.Username.Trim().ToLowerInvariant()];
         _new = new();
         _adding = false;
     });
@@ -359,27 +357,27 @@ else
             IsActive = _edit.IsActive,
             IsServiceAccount = user.Issuer == "pulaski-local" ? _edit.IsServiceAccount : null,
         });
-        _message = $"Saved {_edit.DisplayName}.";
+        _message = L["Saved {0}.", _edit.DisplayName];
     });
 
     private Task AssignAsync(UserDto user) => RunAsync(async () =>
     {
         var global = IsGlobal(_edit!.RoleCode);
         await Api.AssignRoleAsync(user.Id, new AssignRoleRequest { RoleCode = _edit.RoleCode, SiteId = global ? null : _edit.SiteId });
-        _message = $"{user.DisplayName} now holds {_roles.First(r => r.Code == _edit.RoleCode).Name}.";
+        _message = L["{0} now holds {1}.", user.DisplayName, _roles.First(r => r.Code == _edit.RoleCode).Name];
         _edit = _edit with { RoleCode = "", SiteChoice = "" };
     });
 
     private Task EndRoleAsync(UserDto user, RoleGrantDto role) => RunAsync(async () =>
     {
         await Api.EndRoleAsync(role.AssignmentId);
-        _message = $"{user.DisplayName} no longer holds {role.RoleName}{(role.SiteCode is null ? "" : $" at {role.SiteCode}")}.";
+        _message = role.SiteCode is null ? L["{0} no longer holds {1}.", user.DisplayName, role.RoleName] : L["{0} no longer holds {1} at {2}.", user.DisplayName, role.RoleName, role.SiteCode];
     });
 
     private Task ResetAsync(UserDto user) => RunAsync(async () =>
     {
         await Api.ResetPasswordAsync(user.Id, new ResetPasswordRequest { TemporaryPassword = _edit!.TemporaryPassword });
-        _message = $"{user.DisplayName} has a new temporary password, to change when they sign in.";
+        _message = L["{0} has a new temporary password, to change when they sign in.", user.DisplayName];
         _edit = _edit with { TemporaryPassword = "" };
     });
 

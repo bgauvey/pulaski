@@ -3083,9 +3083,12 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   day or month names use the reader's culture (invariant without a region). `LabelTerms` covers every `… IN (…)` CHECK, the two-column
   equipment level/role list too (#179). Property-grid builders (`MaterialProperties`, `ProcessProperties`) take the `Text` for names,
   categories, descriptions and choices; the grid translates read-only values and choice labels (`True`/`False`). Services a page creates
-  (`ScheduleController`) take the page's `Text` (#180).
+  (`ScheduleController`) take the page's `Text` (#180). `EquipmentProperties` and the configuration helpers (`EdgeView.LastHeard`,
+  `SiteSettingsView`, `ShiftView`, `ShiftOverrideView`, `QualificationView`, `DeliveryView`, `MachineProfileView`) do the same; their lists
+  of labels (`EdgeView.Roles`, connection settings, calendar exception kinds, ERP batch rules) are `Term.Mark`s shown with `L[…]`. Code
+  literals in help (`<code>` column names, addresses, SQL and URL placeholders) stay untranslated (#181).
 - **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens, terminals and server messages; #175 office screens,
-  split by area: #178 Overview, Inbox, Machines, Quality, Labor; #179 inventory and lots; #180 planning; #181 configuration.
+  split by area: #178 Overview, Inbox, Machines, Quality, Labor; #179 inventory and lots; #180 planning; #181 configuration, My alerts and the password reset pages. With #181 every screen is translated.
 
 ## Application architecture
 

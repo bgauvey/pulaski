@@ -8,17 +8,17 @@
 
 @* A site's settings (D-043): how changeovers get onto the schedule (D-015), the tolerances production reporting allows
    (D-035), OEE targets (D-073), labels, lot allocations (#82), and the holidays and shutdowns taken out of the calendar. Each part saves on its own. *@
-<PageTitle>Site settings · Pulaski</PageTitle>
+<PageTitle>@L["Site settings"] · Pulaski</PageTitle>
 
 <div class="inv-head">
     <div>
-        <h1 class="mb-1">Site settings</h1>
-        <p class="text-muted mb-0">How a site plans changeovers, how far production reports may go, what OEE it aims for, how it labels and allocates lots, and when it doesn't work.</p>
+        <h1 class="mb-1">@L["Site settings"]</h1>
+        <p class="text-muted mb-0">@L["How a site plans changeovers, how far production reports may go, what OEE it aims for, how it labels and allocates lots, and when it doesn't work."]</p>
     </div>
     <div class="inv-head-tools">
         @if (Sites.Sites.Count > 1)
         {
-            <select class="form-select w-auto" aria-label="Site" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
                 @foreach (var site in Sites.Sites)
                 {
                     <option value="@site.Id">@site.Code · @site.Name</option>
@@ -35,133 +35,131 @@
 {
     <div class="alert alert-success d-flex align-items-center gap-2" role="status">
         <span>@message</span>
-        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">Dismiss</button>
+        <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _message = null">@L["Dismiss"]</button>
     </div>
 }
 
 @if (Sites.SiteId is null)
 {
-    <p class="text-muted">There is no site yet. Add one on <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">Equipment</ScreenLink>.</p>
+    <p class="text-muted">@L["There is no site yet. Add one on"] <ScreenLink Href="equipment" Permission="@PermissionCodes.EquipmentView">@L["Equipment"]</ScreenLink>.</p>
 }
 else
 {
     <section class="inv-facts mb-3" aria-labelledby="changeover-heading">
-        <h2 class="h6" id="changeover-heading">Changeovers</h2>
+        <h2 class="h6" id="changeover-heading">@L["Changeovers"]</h2>
         @if (_scheduling is null)
         {
-            <p class="small text-muted mb-0">Loading…</p>
+            <p class="small text-muted mb-0">@L["Loading…"]</p>
         }
         else
         {
             <fieldset disabled="@(!CanManage)">
-                <legend class="visually-hidden">Who places changeovers</legend>
+                <legend class="visually-hidden">@L["Who places changeovers"]</legend>
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="changeover-mode" id="mode-auto" checked="@(_changeoverMode == "auto")"
                            @onchange='() => _changeoverMode = "auto"' />
                     <label class="form-check-label" for="mode-auto">
-                        <span class="fw-semibold">Automatic</span>
-                        <span class="d-block small text-muted">Pulaski adds a changeover wherever the material changes on a line, sized from the changeover rules, and resizes it as you resequence. It becomes a real changeover job when the next job starts.</span>
+                        <span class="fw-semibold">@L["Automatic"]</span>
+                        <span class="d-block small text-muted">@L["Pulaski adds a changeover wherever the material changes on a line, sized from the changeover rules, and resizes it as you resequence. It becomes a real changeover job when the next job starts."]</span>
                     </label>
                 </div>
                 <div class="form-check mt-2">
                     <input class="form-check-input" type="radio" name="changeover-mode" id="mode-scheduler" checked="@(_changeoverMode == "scheduler")"
                            @onchange='() => _changeoverMode = "scheduler"' />
                     <label class="form-check-label" for="mode-scheduler">
-                        <span class="fw-semibold">Placed by planners</span>
-                        <span class="d-block small text-muted">Planners add changeover jobs themselves. Pulaski sizes them from the rules unless they have their own length, and warns <em>Missing changeover</em> where the material changes with none in between.</span>
+                        <span class="fw-semibold">@L["Placed by planners"]</span>
+                        <span class="d-block small text-muted">@L["Planners add changeover jobs themselves. Pulaski sizes them from the rules unless they have their own length, and warns"] <em>@L["Missing changeover"]</em> @L["where the material changes with none in between."]</span>
                     </label>
                 </div>
             </fieldset>
             <p class="small text-muted mt-2 mb-2">
-                @(_scheduling.IsDefault ? "This site uses the default, automatic." : "")
-                The schedule shows a change on its next refresh, for every line in the site.
-                How long each changeover takes is set on <ScreenLink Href="changeovers" Permission="@PermissionCodes.ScheduleView">Changeovers</ScreenLink>.
+                @(_scheduling.IsDefault ? L["This site uses the default, automatic."] : "")
+                @L["The schedule shows a change on its next refresh, for every line in the site. How long each changeover takes is set on"] <ScreenLink Href="changeovers" Permission="@PermissionCodes.ScheduleView">@L["Changeovers"]</ScreenLink>.
             </p>
             @if (CanManage)
             {
-                <button type="button" class="btn btn-sm btn-primary" disabled="@(_saving || _changeoverMode == _scheduling.ChangeoverMode)" @onclick="SaveChangeoverAsync">Save changeovers</button>
+                <button type="button" class="btn btn-sm btn-primary" disabled="@(_saving || _changeoverMode == _scheduling.ChangeoverMode)" @onclick="SaveChangeoverAsync">@L["Save changeovers"]</button>
             }
         }
     </section>
 
     <section class="inv-facts mb-3" aria-labelledby="erp-batch-heading">
-        <h2 class="h6" id="erp-batch-heading">ERP orders that aren't whole batches</h2>
+        <h2 class="h6" id="erp-batch-heading">@L["ERP orders that aren't whole batches"]</h2>
         @if (_scheduling is null)
         {
-            <p class="small text-muted mb-0">Loading…</p>
+            <p class="small text-muted mb-0">@L["Loading…"]</p>
         }
         else
         {
             <p class="small text-muted">
-                When the ERP sends a work order for a material made in batches, and its quantity isn't whole batches. A material can have a
-                rule of its own on its page; this is the site's default.
+                @L["When the ERP sends a work order for a material made in batches, and its quantity isn't whole batches. A material can have a rule of its own on its page; this is the site's default."]
             </p>
-            <select class="form-select form-select-sm w-auto" aria-label="Rule for ERP quantities that aren't whole batches" disabled="@(!CanManage)" @bind="_erpBatchRule">
+            <select class="form-select form-select-sm w-auto" aria-label="@L["Rule for ERP quantities that aren't whole batches"]" disabled="@(!CanManage)" @bind="_erpBatchRule">
                 @foreach (var (rule, label) in SiteSettingsView.ErpBatchRules)
                 {
-                    <option value="@rule">@label</option>
+                    <option value="@rule">@L[label]</option>
                 }
             </select>
             @if (CanManage)
             {
-                <button type="button" class="btn btn-sm btn-primary mt-2" disabled="@(_saving || _erpBatchRule == _scheduling.ErpBatchRule)" @onclick="SaveErpBatchRuleAsync">Save rule</button>
+                <button type="button" class="btn btn-sm btn-primary mt-2" disabled="@(_saving || _erpBatchRule == _scheduling.ErpBatchRule)" @onclick="SaveErpBatchRuleAsync">@L["Save rule"]</button>
             }
         }
     </section>
 
     <section class="inv-facts mb-3" aria-labelledby="tolerance-heading">
-        <h2 class="h6" id="tolerance-heading">Reporting tolerances</h2>
+        <h2 class="h6" id="tolerance-heading">@L["Reporting tolerances"]</h2>
         @if (_execution is null)
         {
-            <p class="small text-muted mb-0">Loading…</p>
+            <p class="small text-muted mb-0">@L["Loading…"]</p>
         }
         else
         {
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label small fw-semibold" for="rate-tolerance">Output, % of the ideal rate</label>
+                    <label class="form-label small fw-semibold" for="rate-tolerance">@L["Output, % of the ideal rate"]</label>
                     <div class="input-group input-group-sm" style="max-width: 12rem">
                         <input id="rate-tolerance" type="number" class="form-control" min="100" max="1000" step="0.1" disabled="@(!CanManage)"
                                aria-describedby="rate-help" @bind="_rateTolerance" @bind:event="oninput" />
                         <span class="input-group-text">%</span>
                     </div>
-                    @if (SiteSettingsView.ToleranceProblem(_rateTolerance) is { } rateProblem)
+                    @if (SiteSettingsView.ToleranceProblem(L, _rateTolerance) is { } rateProblem)
                     {
                         <div class="small text-warning-strong mt-1">@rateProblem</div>
                     }
                     <p class="small text-muted mt-1 mb-0" id="rate-help">
-                        A <strong>limit</strong>: a run can't report more than its length × the line's ideal rate for the material × this percentage.
-                        @SiteSettingsView.RateExample(_rateTolerance)
+                        <strong>@L["A limit:"]</strong> @L["a run can't report more than its length × the line's ideal rate for the material × this percentage."]
+                        @SiteSettingsView.RateExample(L, _rateTolerance)
                     </p>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label small fw-semibold" for="consumption-tolerance">Consumption, % of the planned components</label>
+                    <label class="form-label small fw-semibold" for="consumption-tolerance">@L["Consumption, % of the planned components"]</label>
                     <div class="input-group input-group-sm" style="max-width: 12rem">
                         <input id="consumption-tolerance" type="number" class="form-control" min="100" max="1000" step="0.1" disabled="@(!CanManage)"
                                aria-describedby="consumption-help" @bind="_consumptionTolerance" @bind:event="oninput" />
                         <span class="input-group-text">%</span>
                     </div>
-                    @if (SiteSettingsView.ToleranceProblem(_consumptionTolerance) is { } consumptionProblem)
+                    @if (SiteSettingsView.ToleranceProblem(L, _consumptionTolerance) is { } consumptionProblem)
                     {
                         <div class="small text-warning-strong mt-1">@consumptionProblem</div>
                     }
                     <p class="small text-muted mt-1 mb-0" id="consumption-help">
-                        A <strong>warning</strong>: a job may consume a component beyond its plan (scaled up when it makes more than planned) × this percentage, and the report says so.
-                        @SiteSettingsView.ConsumptionExample(_consumptionTolerance)
+                        <strong>@L["A warning:"]</strong> @L["a job may consume a component beyond its plan (scaled up when it makes more than planned) × this percentage, and the report says so."]
+                        @SiteSettingsView.ConsumptionExample(L, _consumptionTolerance)
                     </p>
                 </div>
             </div>
             <p class="small text-muted mt-2 mb-2">
-                100 to 1000%. @(_execution.IsDefault ? "This site uses the defaults, 110% each." : "")
-                A change applies to the next report on the site's lines; reports already made aren't checked again.
+                @L["100 to 1000%. {0}", _execution.IsDefault ? L["This site uses the defaults, 110% each."] : ""]
+                @L["A change applies to the next report on the site's lines; reports already made aren't checked again."]
             </p>
             @if (CanManage)
             {
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-sm btn-primary" disabled="@(_saving || !TolerancesChanged || SiteSettingsView.ToleranceProblem(_rateTolerance) is not null || SiteSettingsView.ToleranceProblem(_consumptionTolerance) is not null)"
-                            @onclick="SaveTolerancesAsync">Save tolerances</button>
+                    <button type="button" class="btn btn-sm btn-primary" disabled="@(_saving || !TolerancesChanged || SiteSettingsView.ToleranceProblem(L, _rateTolerance) is not null || SiteSettingsView.ToleranceProblem(L, _consumptionTolerance) is not null)"
+                            @onclick="SaveTolerancesAsync">@L["Save tolerances"]</button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_saving"
-                            @onclick="() => { _rateTolerance = SiteSettingsView.DefaultTolerance; _consumptionTolerance = SiteSettingsView.DefaultTolerance; }">Use the defaults</button>
+                            @onclick="() => { _rateTolerance = SiteSettingsView.DefaultTolerance; _consumptionTolerance = SiteSettingsView.DefaultTolerance; }">@L["Use the defaults"]</button>
                 </div>
             }
         }
@@ -178,33 +176,33 @@ else
     <AndonTypesSection SiteId="Sites.SiteId.Value" CanManage="CanManage" Saved="m => _message = m" />
 
     <section class="inv-facts mb-3" id="calendar-exceptions" aria-labelledby="exceptions-heading">
-        <h2 class="h6" id="exceptions-heading">Calendar exceptions: holidays and shutdowns</h2>
+        <h2 class="h6" id="exceptions-heading">@L["Calendar exceptions: holidays and shutdowns"]</h2>
         <p class="small text-muted">
-            Time taken out of the calendar of the site, an area or a line, and everything below it, whichever shift schedule it follows. Planning places no work in it;
-            work that would run into it waits until it ends. Times are in the site's time zone@(SiteZone is { } zone ? $" ({zone})" : "").
-            To change one shift on one day instead, use <ScreenLink Href="shifts" Permission="@PermissionCodes.ShiftsView">one-off changes on Shifts</ScreenLink>.
+            @L["Time taken out of the calendar of the site, an area or a line, and everything below it, whichever shift schedule it follows. Planning places no work in it; work that would run into it waits until it ends."]
+            @(SiteZone is { } zone ? L["Times are in the site's time zone ({0}).", zone] : L["Times are in the site's time zone."])
+            @L["To change one shift on one day instead, use"] <ScreenLink Href="shifts" Permission="@PermissionCodes.ShiftsView">@L["one-off changes on Shifts"]</ScreenLink>.
         </p>
 
         @if (_exceptions is null)
         {
-            <p class="small text-muted">Loading…</p>
+            <p class="small text-muted">@L["Loading…"]</p>
         }
         else
         {
             var now = Clock.GetUtcNow();
             @if (_exceptions.Count == 0)
             {
-                <p class="small text-muted">@(_showAll ? "No calendar exceptions at this site." : "No calendar exceptions from now on.")</p>
+                <p class="small text-muted">@(_showAll ? L["No calendar exceptions at this site."] : L["No calendar exceptions from now on."])</p>
             }
             else
             {
                 <table class="table table-sm align-middle mb-2">
                     <thead>
                         <tr>
-                            <th>When</th>
-                            <th>Applies to</th>
-                            <th>Kind</th>
-                            <th>Note</th>
+                            <th>@L["When"]</th>
+                            <th>@L["Applies to"]</th>
+                            <th>@L["Kind"]</th>
+                            <th>@L["Note"]</th>
                             <th></th>
                             <th></th>
                         </tr>
@@ -213,22 +211,22 @@ else
                         @foreach (var x in _exceptions)
                         {
                             <tr @key="x.Id" class="@(x.IsActive && x.EndsAt > now ? "" : "text-muted")">
-                                <td class="small">@SiteSettingsView.Window(x, SiteZone)</td>
+                                <td class="small">@SiteSettingsView.Window(L, x, SiteZone)</td>
                                 <td class="small">@x.ScopeCode@(x.ScopeName != x.ScopeCode ? $" · {x.ScopeName}" : "")</td>
-                                <td class="small">@SiteSettingsView.KindLabel(x.Kind)</td>
+                                <td class="small">@L.Of(SiteSettingsView.KindLabel(x.Kind))</td>
                                 <td class="small">@(x.Note ?? "")</td>
-                                <td class="small">@(x.IsActive ? SiteSettingsView.When(x, now) : "Removed")</td>
+                                <td class="small">@(x.IsActive ? SiteSettingsView.When(L, x, now) : L["Removed"])</td>
                                 <td class="text-end text-nowrap">
                                     @if (CanManage)
                                     {
                                         @if (x.IsActive)
                                         {
-                                            <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(x)">Change</button>
-                                            <button type="button" class="btn btn-sm btn-link text-danger" disabled="@_saving" @onclick="() => SetActiveAsync(x, false)">Remove</button>
+                                            <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => Edit(x)">@L["Change"]</button>
+                                            <button type="button" class="btn btn-sm btn-link text-danger" disabled="@_saving" @onclick="() => SetActiveAsync(x, false)">@L["Remove"]</button>
                                         }
                                         else
                                         {
-                                            <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => SetActiveAsync(x, true)">Put back</button>
+                                            <button type="button" class="btn btn-sm btn-link" disabled="@_saving" @onclick="() => SetActiveAsync(x, true)">@L["Put back"]</button>
                                         }
                                     }
                                 </td>
@@ -238,15 +236,15 @@ else
                 </table>
             }
             <button type="button" class="btn btn-sm btn-link p-0 mb-3" @onclick="ToggleAllAsync">
-                @(_showAll ? "Show from now on" : "Show past and removed ones too")
+                @(_showAll ? L["Show from now on"] : L["Show past and removed ones too"])
             </button>
 
             @if (CanManage)
             {
                 <form class="row g-2 align-items-end" @onsubmit="SaveExceptionAsync" @onsubmit:preventDefault>
-                    <div class="col-12"><h3 class="h6 mb-0">@(_form.Id is null ? "Add a calendar exception" : "Change the calendar exception")</h3></div>
+                    <div class="col-12"><h3 class="h6 mb-0">@(_form.Id is null ? L["Add a calendar exception"] : L["Change the calendar exception"])</h3></div>
                     <div class="col-sm-3">
-                        <label class="form-label small" for="x-scope">Applies to</label>
+                        <label class="form-label small" for="x-scope">@L["Applies to"]</label>
                         <select id="x-scope" class="form-select form-select-sm" @bind="_form.ScopeId" disabled="@(_form.Id is not null)">
                             @foreach (var e in _scopes)
                             {
@@ -255,38 +253,38 @@ else
                         </select>
                     </div>
                     <div class="col-sm-2">
-                        <label class="form-label small" for="x-kind">Kind</label>
+                        <label class="form-label small" for="x-kind">@L["Kind"]</label>
                         <select id="x-kind" class="form-select form-select-sm" @bind="_form.Kind">
                             @foreach (var (kind, label) in SiteSettingsView.Kinds)
                             {
-                                <option value="@kind">@label</option>
+                                <option value="@kind">@L[label]</option>
                             }
                         </select>
                     </div>
                     <div class="col-sm-2">
-                        <label class="form-label small" for="x-from">From</label>
+                        <label class="form-label small" for="x-from">@L["From"]</label>
                         <input id="x-from" type="datetime-local" class="form-control form-control-sm" @bind="_form.From" />
                     </div>
                     <div class="col-sm-2">
-                        <label class="form-label small" for="x-to">Until</label>
+                        <label class="form-label small" for="x-to">@L["Until"]</label>
                         <input id="x-to" type="datetime-local" class="form-control form-control-sm" @bind="_form.To" />
                     </div>
                     <div class="col">
-                        <label class="form-label small" for="x-note">Note (optional)</label>
-                        <input id="x-note" class="form-control form-control-sm" maxlength="500" placeholder="e.g. Christmas shutdown" @bind="_form.Note" />
+                        <label class="form-label small" for="x-note">@L["Note (optional)"]</label>
+                        <input id="x-note" class="form-control form-control-sm" maxlength="500" placeholder="@L["e.g. Christmas shutdown"]" @bind="_form.Note" />
                     </div>
                     <div class="col-auto d-flex gap-2">
                         <button type="submit" class="btn btn-sm btn-primary" disabled="@(_saving || _form.ScopeId == Guid.Empty || _form.To <= _form.From)">
-                            @(_form.Id is null ? "Add exception" : "Save exception")
+                            @(_form.Id is null ? L["Add exception"] : L["Save exception"])
                         </button>
                         @if (_form.Id is not null)
                         {
-                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">Cancel</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">@L["Cancel"]</button>
                         }
                     </div>
                     @if (_form.To <= _form.From)
                     {
-                        <div class="col-12 small text-warning-strong">It must end after it starts.</div>
+                        <div class="col-12 small text-warning-strong">@L["It must end after it starts."]</div>
                     }
                 </form>
             }
@@ -387,13 +385,13 @@ else
     private async Task SaveErpBatchRuleAsync() => await RunAsync(async site =>
     {
         await Api.SetSiteErpBatchRuleAsync(site, _erpBatchRule);
-        return $"ERP orders that aren't whole batches: {SiteSettingsView.ErpBatchRules.First(r => r.Rule == _erpBatchRule).Label.ToLowerInvariant()}.";
+        return L["ERP orders that aren't whole batches: {0}.", L[SiteSettingsView.ErpBatchRules.First(r => r.Rule == _erpBatchRule).Label].ToLowerInvariant()];
     });
 
     private async Task SaveChangeoverAsync() => await RunAsync(async site =>
     {
         await Api.SetSchedulingPolicyAsync(site, new SetSchedulingPolicyRequest { Version = _scheduling!.Version, ChangeoverMode = _changeoverMode });
-        return _changeoverMode == "auto" ? "Changeovers are now added automatically." : "Changeovers are now placed by planners.";
+        return _changeoverMode == "auto" ? L["Changeovers are now added automatically."] : L["Changeovers are now placed by planners."];
     });
 
     private async Task SaveTolerancesAsync() => await RunAsync(async site =>
@@ -404,7 +402,7 @@ else
             RateTolerancePct = _rateTolerance!.Value,
             ConsumptionTolerancePct = _consumptionTolerance!.Value,
         });
-        return "Saved the reporting tolerances; the next report uses them.";
+        return L["Saved the reporting tolerances; the next report uses them."];
     });
 
     private async Task SaveExceptionAsync() => await RunAsync(async site =>
@@ -423,7 +421,7 @@ else
                 IsActive = true,
             });
             ResetForm();
-            return "Saved the calendar exception. The schedule shows it on its next refresh.";
+            return L["Saved the calendar exception. The schedule shows it on its next refresh."];
         }
 
         await Api.CreateCalendarExceptionAsync(new CreateCalendarExceptionRequest
@@ -435,7 +433,7 @@ else
             Note = _form.Note,
         });
         ResetForm();
-        return "Added the calendar exception. The schedule shows it on its next refresh.";
+        return L["Added the calendar exception. The schedule shows it on its next refresh."];
     });
 
     private async Task SetActiveAsync(CalendarExceptionDto x, bool active) => await RunAsync(async _ =>
@@ -449,7 +447,7 @@ else
             Note = x.Note,
             IsActive = active,
         });
-        return active ? "Put the calendar exception back." : "Removed the calendar exception; planning uses that time again.";
+        return active ? L["Put the calendar exception back."] : L["Removed the calendar exception; planning uses that time again."];
     });
 
     private async Task RunAsync(Func<Guid, Task<string>> action)
