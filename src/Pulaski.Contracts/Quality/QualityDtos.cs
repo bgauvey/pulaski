@@ -366,6 +366,15 @@ public sealed record SpecItemDto
     public int? MaxDefects { get; init; }
     public bool HoldOnFail { get; init; }
     public int SortOrder { get; init; }
+
+    /// <summary>
+    /// When it is sampled in a run (#136): at the start, and/or every so many hours or units (in the job's unit, not both), with a grace in
+    /// minutes before a due sample is overdue. Nothing set: no plan.
+    /// </summary>
+    public bool SampleAtStart { get; init; }
+    public decimal? SampleEveryHours { get; init; }
+    public decimal? SampleEveryUnits { get; init; }
+    public int? SampleGraceMinutes { get; init; }
 }
 
 public sealed record SpecProblemDto(string Code, string Message, Guid? ItemId)
@@ -608,4 +617,37 @@ public sealed record RejectLotRequest
     public long Version { get; init; }
     public Guid ScrapReasonCodeId { get; init; }
     public string? Comment { get; init; }
+}
+
+/// <summary>
+/// A sample a running run owes for a spec item's plan (#136, D-121): the job and line, the characteristic, how it stands (<c>overdue</c>,
+/// <c>due</c>, <c>upcoming</c>, <c>done</c>), when the latest fell due, how many earlier were missed, and when (or after how many more units of
+/// the job's unit) the next falls due.
+/// </summary>
+public sealed record DueSampleDto
+{
+    public required Guid RunId { get; init; }
+    public required Guid JobId { get; init; }
+    public required string JobNumber { get; init; }
+    public required Guid LineId { get; init; }
+    public required string LineCode { get; init; }
+    public required Guid CharacteristicId { get; init; }
+    public required string CharacteristicCode { get; init; }
+    public required string CharacteristicName { get; init; }
+    public required string Status { get; init; }
+    public DateTimeOffset? DueAt { get; init; }
+    public int Missed { get; init; }
+    public DateTimeOffset? NextAt { get; init; }
+    public decimal? NextAfterUnits { get; init; }
+    public string? UomCode { get; init; }
+    public int Taken { get; init; }
+    public bool AtStart { get; init; }
+    public decimal? EveryHours { get; init; }
+    public decimal? EveryUnits { get; init; }
+    public string? SiteTimeZone { get; init; }
+
+    /// <summary>What recording it takes (#136b): <c>variable</c> (values, <see cref="SubgroupSize"/> of them, in <see cref="CharacteristicUomCode"/>) or <c>attribute</c> (inspected and defective).</summary>
+    public string DataKind { get; init; } = "variable";
+    public int SubgroupSize { get; init; } = 1;
+    public string? CharacteristicUomCode { get; init; }
 }

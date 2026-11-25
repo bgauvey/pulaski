@@ -1,6 +1,7 @@
 @page "/jobs/{JobId:guid}"
 @attribute [RequiresView(PermissionCodes.FloorView, PermissionCodes.InventoryView)]
 @using Pulaski.Web.Services.Execution
+@using Pulaski.Web.Services.Quality
 @inject PulaskiApiClient Api
 @inject TimeProvider Clock
 @inject CurrentUser User
@@ -105,6 +106,31 @@
         }
         <div class="inv-tile"><span class="metric @(job.Runs.Count == 0 ? "is-zero" : "")">@job.Runs.Count</span><span class="inv-tile-label">@(job.Runs.Count == 1 ? L["Run"] : L["Runs"])</span></div>
     </div>
+
+    @if (_samples.Count > 0)
+    {
+        @* Samples the running job owes (#136, D-121): each spec item's plan, how it stands, and where to record it. *@
+        <section class="inv-section" aria-labelledby="samples-title">
+            <div class="d-flex align-items-center gap-2">
+                <h2 id="samples-title" class="mb-0">@L["Samples"]</h2>
+                @if (User.Can(PermissionCodes.QualityRecord, job.SiteId))
+                {
+                    <a class="btn btn-sm btn-outline-primary ms-auto" href="@($"quality/results?jobId={JobId}&jobNumber={Uri.EscapeDataString(job.JobNumber)}&materialId={job.MaterialId}")">@L["Record a result"]</a>
+                }
+            </div>
+            <ul class="list-unstyled mb-0 mt-2">
+                @foreach (var sample in _samples)
+                {
+                    <li class="d-flex flex-wrap gap-2 align-items-baseline mb-1" @key="sample.CharacteristicId">
+                        <span class="@SampleView.Chip(sample.Status)">@SampleView.Status(L, sample.Status)</span>
+                        <span class="fw-semibold">@sample.CharacteristicCode · @sample.CharacteristicName</span>
+                        <span class="small text-muted">@SampleView.Plan(L, sample).</span>
+                        <span class="small">@SampleView.Detail(L, sample)</span>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
 
     @if (_instructions.Count > 0)
     {
@@ -482,6 +508,7 @@ else if (_error is null)
 
     private readonly Dictionary<(Guid, string), Dictionary<int, string?>> _answers = [];
     private IReadOnlyList<ChecklistRecordDto> _checklistHistory = [];
+    private IReadOnlyList<DueSampleDto> _samples = [];
     private string? _signOffNote;
 
     private async Task SignOffAsync(JobChecklistDto checklist, bool approve)
@@ -563,7 +590,9 @@ else if (_error is null)
     {
         if (firstRender)
         {
-            _liveFeed = LiveFeed.Subscribe(LiveFilters.To("job", () => JobId), () => InvokeAsync(async () =>
+            // A result recorded anywhere may be one of its samples (#136): results carry no site, so the page reads its samples again.
+            var job = LiveFilters.To("job", () => JobId);
+            _liveFeed = LiveFeed.Subscribe(c => job(c) || (c.Kind == "quality_result" && _samples.Count > 0), () => InvokeAsync(async () =>
             {
                 if (!_busy && !_reporting && _stop is null && _reversing is null)
                 {
@@ -591,6 +620,9 @@ else if (_error is null)
             var mayRead = User.Can(PermissionCodes.FloorView, _job.SiteId) || User.Can(PermissionCodes.InstructionsView, _job.SiteId);
             _instructions = mayRead ? await Api.GetJobInstructionsAsync(JobId) : [];
             _checklistHistory = mayRead ? await Api.GetJobChecklistsAsync(JobId) : [];
+            _samples = User.Can(PermissionCodes.FloorView, _job.SiteId) || User.Can(PermissionCodes.QualityView, _job.SiteId)
+                ? await Api.ListJobDueSamplesAsync(JobId)
+                : [];
             if (_job.PartialBatches.Any(p => p.Status == "pending") && _scrapReasons.Count == 0)
             {
                 _scrapReasons = await Api.ListReasonCodesAsync("scrap", _job.SiteId);

@@ -3309,6 +3309,27 @@ S̄ ÷ c₄; R̄ = d₂σ with D₃/D₄, S̄ = c₄σ with B₃/B₄), with bey
 chart type's own dispersion, so a characteristic's alerts don't change with the view. The chart page shows one view at a time with its own
 table of the data plotted (open, newest first). Computed on read; no schema change.
 
+### D-121 · Sampling plans (#136) · *Proposed, in pieces*
+
+**Context.** Specifications say what to check; nothing said when, or prompted it.
+
+**Decision.**
+- **A plan per spec item** (`SpecItem.Sampling`, `SamplingPlan`): at the start of each run, and/or every N hours or every N units of the run's
+  reported output (in the job's unit; hours or units, not both), with a grace in minutes (default 15, ≤ 480). It lives in the version's
+  definition (`jsonb`), released and fixed with it; no schema change.
+- **Due samples are worked out on read** (`SamplingSchedule.Evaluate`, pure): due times are the start, start + k·N h, or when cumulative
+  processed output (operator reports and corrections, `ts.production_count`) first reaches each multiple of N. Each is met by a result
+  (`ts.quality_sample` of the run, not excluded) taken from the grace before it until the grace before the next; the latest decides the status
+  (`upcoming`, `due`, `overdue` after the grace, `done`), earlier unmet ones count as missed. Each run starts over.
+- `GetDueSamplesQuery` (open production runs at a site or of a job; the material's released plans) → `GET /api/quality/samples-due?siteId=`
+  and `/api/jobs/{id}/samples-due` (`floor.view` or `quality.view`). The job page lists them under **Samples**; the Floor's line cards flag
+  due/overdue. Results have no site, so the pages reload on any `quality_result` change (D-117).
+- **At the line (b).** `StationDto.Samples` = the running job's due samples (every status), `CanRecordSamples` = `quality.record`; `POST
+  /api/terminal/station/sample` records one of them through `RecordQualityResultCommand` (against the job, no lot, source `manual`) as the badged
+  person. `DueSampleDto` carries `DataKind`, `SubgroupSize` and the characteristic's unit for the form. `LineDisplayLineDto.Samples` = those
+  due or overdue, on boards.
+- **Pieces:** (a) plans, the calculation, the job page and the Floor; (b) the operator station prompting and recording them, and line boards.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

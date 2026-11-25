@@ -37,7 +37,14 @@ public sealed record StartSpecDraftCommand(Guid SpecId) : ICommand<CreatedRespon
 internal static class SpecRules
 {
     public static SpecDefinition ToDomain(SpecDefinitionDto dto) =>
-        new([.. dto.Items.Select(i => new SpecItem(i.Id, i.CharacteristicId, i.Lsl, i.Target, i.Usl, i.MaxDefects, i.HoldOnFail, i.SortOrder))]);
+        new([.. dto.Items.Select(i => new SpecItem(i.Id, i.CharacteristicId, i.Lsl, i.Target, i.Usl, i.MaxDefects, i.HoldOnFail, i.SortOrder, Sampling(i)))]);
+
+    // A plan only when something is asked (#136).
+    private static SamplingPlan? Sampling(SpecItemDto i)
+    {
+        var plan = new SamplingPlan(i.SampleAtStart, i.SampleEveryHours, i.SampleEveryUnits, i.SampleGraceMinutes ?? SamplingPlan.DefaultGrace);
+        return plan.IsEmpty ? null : plan;
+    }
 
     public static SpecDefinitionDto ToDto(SpecDefinition definition) => new()
     {
@@ -51,6 +58,10 @@ internal static class SpecRules
             MaxDefects = i.MaxDefects,
             HoldOnFail = i.HoldOnFail,
             SortOrder = i.SortOrder,
+            SampleAtStart = i.Sampling?.AtStart ?? false,
+            SampleEveryHours = i.Sampling?.EveryHours,
+            SampleEveryUnits = i.Sampling?.EveryUnits,
+            SampleGraceMinutes = i.Sampling?.GraceMinutes,
         })],
     };
 

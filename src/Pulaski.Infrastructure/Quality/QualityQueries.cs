@@ -379,7 +379,7 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
             ReleasedBy = row.ReleasedBy,
             Note = row.Note,
             Version = row.Version,
-            Definition = new SpecDefinitionDto { Items = ProcessJson.Read<ItemsDocument>(row.DefinitionJson).Items },
+            Definition = new SpecDefinitionDto { Items = [.. ProcessJson.Read<SpecItemsDocument>(row.DefinitionJson).Items.Select(ToDto)] },
         };
     }
 
@@ -447,7 +447,22 @@ internal sealed class QualityQueries(NpgsqlDataSource dataSource) : IQualityRead
         return [.. rows.Select(r => r.ToDto())];
     }
 
-    private sealed record ItemsDocument(IReadOnlyList<SpecItemDto> Items);
+    // The stored item as the screens take it; its sampling plan (#136) is nested in the document and flat in the contract.
+    private static SpecItemDto ToDto(Domain.Quality.SpecItem i) => new()
+    {
+        Id = i.Id,
+        CharacteristicId = i.CharacteristicId,
+        Lsl = i.Lsl,
+        Target = i.Target,
+        Usl = i.Usl,
+        MaxDefects = i.MaxDefects,
+        HoldOnFail = i.HoldOnFail,
+        SortOrder = i.SortOrder,
+        SampleAtStart = i.Sampling?.AtStart ?? false,
+        SampleEveryHours = i.Sampling?.EveryHours,
+        SampleEveryUnits = i.Sampling?.EveryUnits,
+        SampleGraceMinutes = i.Sampling?.GraceMinutes,
+    };
 
     private sealed class CharacteristicListRow
     {

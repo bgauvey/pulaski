@@ -117,6 +117,7 @@ term,translation
 1 BarTender document,1 documento de BarTender
 1 delivery failed; it holds back later ones for the same subject.,1 entrega falló; retiene las siguientes del mismo sujeto.
 1 delivery goes again on the next round.,1 entrega se reenvía en la siguiente ronda.
+1 earlier sample was missed.,Se perdió 1 muestra anterior.
 1 item is failing.,1 elemento está fallando.
 1 item needs a look.,1 elemento requiere revisión.
 1 lot is still to count; enter 0 for a lot that isn't there.,Falta contar 1 lote; ingrese 0 para un lote que no está.
@@ -131,6 +132,8 @@ term,translation
 1 overlap: a line can't run these at the same time,1 traslape: una línea no puede ejecutar estos al mismo tiempo
 1 production day isn't rolled up yet ({0:yyyy-MM-dd}); long OEE reports work it out from the history.,1 día de producción aún no está consolidado ({0:yyyy-MM-dd}); los reportes OEE largos lo calculan del historial.
 1 request not closed,1 solicitud sin cerrar
+1 sample due,1 muestra pendiente
+1 sample overdue,1 muestra vencida
 1 session,1 sesión
 "1 session, oldest {0}","1 sesión, la más antigua {0}"
 1 stop chosen,1 paro elegido
@@ -447,6 +450,7 @@ Allocated to jobs,Asignado a trabajos
 Allocation refresh,Actualización de asignaciones
 Allocation {0} of that job wasn't found.,No se encontró la asignación {0} de ese trabajo.
 Allocations and suggested lots,Asignaciones y lotes sugeridos
+Allow 0 to {0} minutes' grace.,Dé de 0 a {0} minutos de tolerancia.
 Alphabetical,Alfabético
 Already allocated to this job.,Ya asignado a este trabajo.
 Already at the job's line (picked from nearest),Ya en la línea del trabajo (tomado del más cercano)
@@ -555,6 +559,8 @@ At site…,En el sitio…
 At the end,Al final
 At the end of,Al final del
 At the line,En la línea
+At the start of the run,Al inicio de la corrida
+"At the start of the run, then {0}","Al inicio de la corrida, luego {0}"
 At the top,En la parte superior
 At {0} it goes into lot {1} ({2}).,En {0} va al lote {1} ({2}).
 At {0} it starts a new lot.,En {0} inicia un lote nuevo.
@@ -612,6 +618,7 @@ Badge in to answer it.,Registre su gafete para atenderla.
 Badge in to answer them.,Registre su gafete para atenderlas.
 Badge in to give its reason.,Registre su gafete para dar su motivo.
 Badge in to give their reasons.,Registre su gafete para dar sus motivos.
+Badge in to record a sample.,Registre su gafete para registrar una muestra.
 Badge in to request maintenance.,Pase su gafete para solicitar mantenimiento.
 Badge in to sign it off.,Registre su gafete para firmarla.
 "Badge not recognised. Try again, or ask a supervisor.",Gafete no reconocido. Intente de nuevo o pida ayuda a un supervisor.
@@ -1199,6 +1206,8 @@ Drop to plan {0} to {1}; you'll set its window next.,Suelte para planear {0} a {
 Drop {0} here to plan it to {1} in a window,Suelte {0} aquí para planearlo a {1} en una ventana
 Drop {0} here to see where it lands,Suelte {0} aquí para ver dónde queda
 Due,Fecha de entrega
+Due now,Pendiente
+Due since {0}.,Pendiente desde {0}.
 Due {0},Entrega {0}
 Due{0},Entrega{0}
 Duration,Duración
@@ -1548,6 +1557,7 @@ Good output,Producción buena
 Good output goes to,La producción buena va a
 "Good, {0}","Bueno, {0}"
 "Good, {0} · {1}%","Bueno, {0} · {1}%"
+Grace in minutes,Tolerancia en minutos
 Grant,Otorgar
 Grant not found.,Otorgamiento no encontrado.
 Granted {0}.,Se otorgó {0}.
@@ -1603,6 +1613,7 @@ Host,Host
 Host id,Id de host
 Hours,Horas
 Hours a cycle,Horas por ciclo
+Hours or units,Horas o unidades
 Hours worked,Horas trabajadas
 How,Cómo
 How a characteristic's results vary over time against their control limits. A point beyond the limits is a sign something changed; limits are set on the characteristic's,Cómo varían en el tiempo los resultados de una característica contra sus límites de control. Un punto fuera de los límites es señal de que algo cambió; los límites se fijan en la página de la característica:
@@ -2284,7 +2295,9 @@ Next,Siguiente
 Next 14 days,Próximos 14 días
 Next 3 days,Próximos 3 días
 Next 7 days,Próximos 7 días
+Next after {0} {1} more.,La siguiente tras {0} {1} más.
 Next at {0},Siguiente a las {0}
+Next at {0}.,La siguiente a las {0}.
 Next expiry,Próximo vencimiento
 Next month,Mes siguiente
 Next page at,Siguiente página en
@@ -2502,6 +2515,7 @@ Not an active crew of the site: {0}.,No es una cuadrilla activa del sitio: {0}.
 Not applied,No aplicado
 Not at this site yet: receive it?,Aún no está en este sitio: ¿recibirlo?
 Not capable,No capaz
+Not due yet,Aún no toca
 Not found,No encontrado
 Not heard from for {0} hours.,Sin noticias desde hace {0} horas.
 Not imported (errors),No importado (errores)
@@ -2769,6 +2783,7 @@ Output lots,Lotes producidos
 "Output, % of the ideal rate","Producción, % de la tasa ideal"
 Over 180,Más de 180
 Over the working time inside each material's runs. Good and scrap are as reported; machine counts aren't reports.,Sobre el tiempo de trabajo dentro de las corridas de cada material. Lo bueno y el desperdicio son como se reportaron; las cuentas de máquina no son reportes.
+Overdue,Vencida
 Overlap,Traslape
 Override,Excepción
 Overview,Resumen
@@ -3108,10 +3123,13 @@ Record labor for others and check crews onto lines,Registrar mano de obra de otr
 Record lot attributes and attach or withdraw certificates,Registrar atributos de lote y adjuntar o retirar certificados
 Record production,Registrar producción
 Record quality results against runs and lots,Registrar resultados de calidad de corridas y lotes
+Record the sample,Registrar la muestra
 Recorded,Registrado
 Recorded as {0}.,Registrado como {0}.
 "Recorded late, into a run that has ended.","Registrado tarde, en una corrida que ya terminó."
 Recorded.,Registrado.
+Recorded: in specification.,Registrado: dentro de especificación.
+Recorded: out of specification. Tell quality.,Registrado: fuera de especificación. Avise a calidad.
 Reference,Referencia
 Refresh,Actualizar
 Refresh allocations,Actualizar asignaciones
@@ -3322,13 +3340,20 @@ SPC alert {0} not found.,Alerta de SPC {0} no encontrada.
 SPC alerts,Alertas de SPC
 SPC alerts to close,Alertas de SPC por cerrar
 SSCC extension digit,Dígito de extensión SSCC
+Sample every,Muestrear cada
 Sample every 1 to 1440 minutes.,Muestree cada 1 a 1440 minutos.
+"Sample every so many hours or every so many units, not both.","Muestree cada cierto número de horas o de unidades, no ambas."
+"Sample every so many hours, more than 0 and at most {0}.","Muestree cada cierto número de horas, más de 0 y como máximo {0}."
+"Sample every so many units, more than 0.","Muestree cada cierto número de unidades, más de 0."
 Sample exclusion,Exclusión de muestra
 Sample from it,Muestrear desde ella
+Sample {0},Muestra {0}
+Sample:,Muestra:
 Sampled,Muestreado
 Sampled at,Muestreado a las
 Sampled from process values,Muestreado de valores de proceso
 Sampled up to,Muestreado hasta
+Samples,Muestras
 Sampling ms,Muestreo ms
 Save,Guardar
 Save allocation settings,Guardar ajustes de asignación
@@ -3806,6 +3831,7 @@ That group isn't one of this kind's reasons.,Ese grupo no es uno de los motivos 
 That instruction has no released {0} checklist for {1}.,Esa instrucción no tiene una lista de verificación de {0} liberada para {1}.
 "That is {0}'s only role, and every user needs one. Give them another first, or switch them off.","Ese es el único rol de {0}, y todo usuario necesita uno. Dele otro primero, o desactívelo."
 That isn't a line of this site.,Esa no es una línea de este sitio.
+That isn't a sample the running job's plan asks for; record it on the Quality page.,Esa no es una muestra que pida el plan del trabajo en curso; regístrela en la página de Calidad.
 That isn't one of the instruction's targets.,Ese no es uno de los destinos de la instrucción.
 That isn't the current password.,Esa no es la contraseña actual.
 That isn't your time.,Ese tiempo no es suyo.
@@ -4392,6 +4418,7 @@ Utilization and OEE,Utilización y OEE
 Valid,Válida
 Valid from,Válida desde
 Value,Valor
+Value {0},Valor {0}
 Values a subgroup,Valores por subgrupo
 Values in bulk,Valores en masa
 Values{0},Valores{0}
@@ -4679,6 +4706,7 @@ against the rate in force.,contra la tasa vigente.
 against {0} then,contra {0} entonces
 all groups,todos los grupos
 and,y
+and every,y cada
 and {0} more,y {0} más
 anonymous,anónimo
 another site,otro sitio
@@ -4696,6 +4724,7 @@ at least {0} {1},al menos {0} {1}
 at most {0} {1},como máximo {0} {1}
 at the end,al final
 at the line,en la línea
+at the start of each run,al inicio de cada corrida
 at their published times,en sus horas publicadas
 at {0} UTC,a las {0} UTC
 balance,saldo
@@ -4757,6 +4786,8 @@ e.g. pulaski,p. ej. pulaski
 "each time a production job's totals change (it starts, pauses, completes, is reopened, closed or cancelled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML","cada vez que cambian los totales de un trabajo de producción (empieza, se pausa, termina, se reabre, se cierra o se cancela; se captura, corrige o revierte un reporte; se produce o consume un lote para él; se decide una tanda parcial), el B2MML del trabajo"
 effective_to must be after effective_from.,effective_to debe ser posterior a effective_from.
 employeeNumber (enterprise extension) is missing; it is the person's employee number.,Falta employeeNumber (extensión enterprise); es el número de empleado de la persona.
+every {0} h,cada {0} h
+every {0} {1},cada {0} {1}
 everywhere,en todas partes
 exact or near.,exact o near.
 expects no,espera no
@@ -4783,6 +4814,7 @@ had a movement ({0}) reversed,tuvo un movimiento ({0}) revertido
 "had movements reversed, latest first: {0}","tuvo movimientos revertidos, del más reciente al más antiguo: {0}"
 held,retenido
 held at a site,se tiene en un sitio
+hours,horas
 "hr or erp, for a person from an external system.","hr o erp, para una persona de un sistema externo."
 https://…,https://…
 in a container,en un contenedor
@@ -4833,6 +4865,7 @@ mapped,asignado
 material {0},material {0}
 material's,del material
 min,min
+minutes,minutos
 minutes after it ended,minutos después de que terminó
 minutes before it is needed,minutos antes de que se necesite
 minutes stopped,minutos parada
@@ -4901,6 +4934,7 @@ rate not checked,tasa no revisada
 "raw_tcp, drop_folder or bartender.","raw_tcp, drop_folder o bartender."
 reason: {0} isn't an active utilization reason of the site.,reason: {0} no es un motivo de utilización activo del sitio.
 record expected deliveries,registrar entregas esperadas
+record quality results,registrar resultados de calidad
 recorded {0},registrado {0}
 refused (not imported),rechazadas (no importadas)
 "reject, round_up, round_down or hold.","reject, round_up, round_down o hold."
@@ -4979,6 +5013,7 @@ took in lots: {0},recibió lotes: {0}
 u chart,gráfico u
 u: defects per unit,u: defectos por unidad
 uncoded,sin codificar
+units of output,unidades producidas
 unpacking,desempaque
 until,hasta
 uses,usa
@@ -5102,6 +5137,7 @@ yes,sí
 "{0} doesn't track state, so it has no stops.","{0} no rastrea estado, así que no tiene paros."
 {0} doesn't track state; tick Tracks state before giving it a machine profile.,{0} no rastrea estado; marque Rastrea estado antes de darle un perfil de máquina.
 {0} doesn't work at that site; add it to their sites on Configure → People.,{0} no trabaja en ese sitio; agréguelo a sus sitios en Configurar → Personas.
+{0} earlier samples were missed.,Se perdieron {0} muestras anteriores.
 {0} ends in {1},{0} termina en {1}
 "{0} expired on {1}; it can't be consumed. If quality has extended it, correct its expiry first.","{0} venció el {1}; no se puede consumir. Si calidad lo extendió, corrija primero su vencimiento."
 "{0} expired on {1}; it can't be merged. If quality has extended it, correct its expiry first.","{0} venció el {1}; no se puede combinar. Si calidad lo extendió, corrija primero su vencimiento."
@@ -5447,6 +5483,8 @@ yes,sí
 {0} runs on no day; tick at least one.,{0} no corre ningún día; marque al menos uno.
 "{0} runs, {1} h over {2} days","{0} corridas, {1} h en {2} días"
 "{0} runs, {1} h running ({2} h of stops taken out) over {3} days","{0} corridas, {1} h en marcha ({2} h de paros excluidas) en {3} días"
+{0} samples due,{0} muestras pendientes
+{0} samples overdue,{0} muestras vencidas
 {0} scrap,{0} de desperdicio
 {0} shipped on {1},{0} enviado el {1}
 {0} signs in through {1}; change the password there.,{0} inicia sesión por {1}; cambie la contraseña allí.
@@ -5620,6 +5658,7 @@ yes,sí
 · no released version,· sin versión liberada
 · oldest from {0} UTC,· la más antigua de las {0} UTC
 · orders may use any unit that converts to this one,· las órdenes pueden usar cualquier unidad que se convierta a esta
+· overdue after,· vencida tras
 · running on {0},· en ejecución en {0}
 · running {0},· ejecutando {0}
 · when the operations it follows allow,· cuando lo permitan las operaciones que sigue

@@ -356,6 +356,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (column-level UPDATE). A number lot attribute may stand for a characteristic. `RejectLotCommand` writes off a held lot and, if made in a run,
   moves it good → scrap there (defective count at its effective time), which is how quality reaches OEE. Permissions `quality.view`,
   `quality.record`, `quality.decide`, `specs.manage`.
+- Sampling plans (D-121, proposed, in pieces, #136): `SpecItem.Sampling` (`SamplingPlan`: at start and/or every N h or N units, grace) in the
+  spec definition jsonb; `SamplingSchedule.Evaluate` (pure) over open runs, processed output and the run's results → `GetDueSamplesQuery`
+  (`/api/quality/samples-due?siteId=`, `/api/jobs/{id}/samples-due`); job page **Samples**, Floor card flags. (b) `StationDto.Samples` +
+  `POST /api/terminal/station/sample` (`quality.record`, `RecordQualityResultCommand`); boards' `LineDisplayLineDto.Samples` (due/overdue).
 - SPC (D-099, proposed, in pieces): limits per characteristic + material (+ optional line, which wins); run rules per characteristic
   (Nelson 1–8 in Nelson's numbering, `run_rules`, default the Western Electric 1, 2, 5, 6; `RunRules.Check`); limits from a reviewed baseline (≥ 20 subgroups), approved and versioned. Pure statistics in
   `Pulaski.Domain.Quality.Spc` (`ChartTypes`, `ChartConstants`, `ControlLimits.Points`/`Compute`/`At`). `core.control_limit` periods

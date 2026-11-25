@@ -152,6 +152,10 @@ public sealed class Text(TranslationCache? cache)
             ? char.ToLower(text[0], CultureInfo.CurrentCulture) + text[1..]
             : text;
 
+    /// <summary>Text starting a sentence, with a capital ('every 2 h' → 'Every 2 h').</summary>
+    public static string Upper(string text) =>
+        text.Length > 0 && char.IsLower(text[0]) ? char.ToUpper(text[0], CultureInfo.CurrentCulture) + text[1..] : text;
+
     /// <summary>A refusal in one line: its message, else its title, in the reader's language.</summary>
     public string Problem(ApiException error) => Message(error) ?? Title(error);
 

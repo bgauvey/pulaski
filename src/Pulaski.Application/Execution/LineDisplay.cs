@@ -25,6 +25,7 @@ internal sealed class GetLineDisplayHandler(
     IQueryHandler<GetOeeReportQuery, OeeReportDto> oee,
     IQueryHandler<ListAndonCallsQuery, IReadOnlyList<AndonCallDto>> andon,
     IQueryHandler<ListMaintenanceRequestsQuery, IReadOnlyList<MaintenanceRequestDto>> maintenance,
+    IQueryHandler<Quality.GetDueSamplesQuery, IReadOnlyList<Contracts.Quality.DueSampleDto>> samples,
     IWorkOrderReadStore scopes,
     TimeProvider timeProvider) : IQueryHandler<GetLineDisplayQuery, LineDisplayDto>
 {
@@ -48,6 +49,10 @@ internal sealed class GetLineDisplayHandler(
         var requests = MaintenanceOrder.Waiting(await maintenance.HandleAsync(new ListMaintenanceRequestsQuery(query.SiteId, true), cancellationToken))
             .Where(r => r.LineId is not null).ToLookup(r => r.LineId!.Value);
 
+        // Samples the running jobs owe now (#136b).
+        var due = (await samples.HandleAsync(new Quality.GetDueSamplesQuery(query.SiteId, null), cancellationToken))
+            .Where(s => s.Status is "due" or "overdue").ToLookup(s => s.LineId);
+
         var lines = live.Lines
             .Where(l => inScope.Contains(l.EquipmentId) && jobs.TryGetValue(l.EquipmentId, out var row) && !row.IsGroup)
             .Where(l => query.LineCode is null || string.Equals(l.Code, query.LineCode, StringComparison.OrdinalIgnoreCase))
@@ -55,6 +60,7 @@ internal sealed class GetLineDisplayHandler(
             {
                 Calls = [.. calls[l.EquipmentId]],
                 Maintenance = [.. requests[l.EquipmentId]],
+                Samples = [.. due[l.EquipmentId]],
             })
             .ToList();
 

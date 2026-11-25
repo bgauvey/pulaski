@@ -2076,10 +2076,37 @@ from the [process values](#process-values) its tag sends, instead of by hand.
 3. For a measured one, fill in **Lower limit**, **Upper limit** (one or both) and, if you like, **Target**. For an inspected one, fill in
    **Most defects** (0 for none).
 4. Tick **Holds the lot** where a failure should put the lot on hold.
-5. Click **Save draft**. A yellow box lists anything that stops the release, and the lines concerned are highlighted.
-6. Type an optional **Release note** and click **Release version N**.
+5. To have it sampled while the material runs, fill in the line under it, **Sample:** tick **at the start of each run**, and/or give **and
+   every** so many **hours** or **units of output** (in the job's unit), and the minutes after which a due sample is **overdue** (15 to start
+   with). Leave both empty for no plan.
+6. Click **Save draft**. A yellow box lists anything that stops the release, and the lines concerned are highlighted.
+7. Type an optional **Release note** and click **Release version N**.
 
 To change it later, click **New draft**: it starts as a copy of the released version.
+
+### Samples a running job owes
+
+When the material of a running job has a released specification with sampling plans, the job's page lists them under **Samples**, and the
+line's card on the **Floor** shows **1 sample due** (amber) or **2 samples overdue** (red); click it to open the job.
+
+1. On the job's page, each characteristic says **Due now**, **Overdue**, **Taken** or **Not due yet**, its plan (*At the start of the run, then
+   every 2 h*) and when it fell due, how many earlier ones were missed, and when the next one is (*Next at 16:00*, or *Next after 40 m more*).
+2. Click **Record a result** and record it as usual ([Record a result](#record-a-result)), against the job. The list updates by itself.
+
+In detail:
+
+- **When samples fall due:** at the run's start if asked; every so many hours from the start; or each time the run's reported output (good
+  and scrap, with corrections) reaches another multiple of the units. Each run starts over: pausing and resuming starts a new run.
+- **What counts:** a result recorded against the job in that run, not left out, taken from the grace before a sample falls due until the
+  grace before the next. A due sample is **overdue** once its grace has passed with none. If the next falls due first, the earlier one counts
+  as **missed**.
+- Only running jobs are listed; nothing is stored, so a plan changed by a new release applies at once.
+
+**At the line.** The line's [operator station](#use-an-operator-station) lists the running job's samples under **Samples**, with how each stands,
+to anyone there. Someone badged in who may record quality results (Operator, Supervisor, Quality) types the value (or each value of a
+subgroup, or how many were inspected and defective) under a sample that is due or overdue and taps **Record the sample**. The station says
+whether it is in specification and updates the list. It is recorded against the job, at the line, as that person. The line's
+[board](#show-a-line-board-on-a-tv) shows the samples due and overdue (*Sample WALL-01 · Overdue · 14:00*), overdue ones in red.
 
 ### Record a result
 
@@ -3474,6 +3501,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
   waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
   and machine counts, not days on the calendar.
+- **Sampling plans** show on the job page, the Floor, operator stations and line boards; nothing is e-mailed about an overdue sample, and a
+  sample recorded at a station can't be tied to a lot there (use the Quality page). A unit-based plan counts reported output, not machine counts.
 - **Work instructions** show on the job page and at the station, not on the Floor's board or line boards. At a station only the running job's
   show, or the next job's while nothing runs. A failed or rejected checklist only holds up the job; it doesn't put lots on hold or raise a quality
   alert, and nothing e-mails anyone about a checklist waiting for its sign-off (it is in the Inbox). Who may give the second sign-off is one

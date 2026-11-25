@@ -73,7 +73,8 @@ public sealed record SpecItem(
     decimal? Usl,
     int? MaxDefects,
     bool HoldOnFail,
-    int SortOrder);
+    int SortOrder,
+    SamplingPlan? Sampling = null);
 
 /// <summary>Something wrong with a specification, pinned to the item it concerns when there is one.</summary>
 public sealed record SpecProblem(string Code, UserMessage Text, Guid? ItemId = null)
@@ -122,6 +123,11 @@ public sealed record SpecDefinition(IReadOnlyList<SpecItem> Items)
             if (item.MaxDefects is < 0)
             {
                 problems.Add(new("max_defects", "The most defects allowed can't be negative.", item.Id));
+            }
+
+            if (item.Sampling?.Problem() is { } sampling)
+            {
+                problems.Add(new SpecProblem("sampling", sampling, item.Id));
             }
         }
 

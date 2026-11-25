@@ -100,6 +100,20 @@ public sealed class TerminalEndpointTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
+    public async Task Recording_a_sample_at_a_station_needs_someone_signed_on()
+    {
+        // #136b: a sample is recorded as the badged person, never as the terminal.
+        var (_, secret) = await EnrolledAsync();
+        var response = await TerminalClient(secret).PostAsJsonAsync("/api/terminal/station/sample", new Pulaski.Contracts.Execution.StationSampleRequest
+        {
+            JobId = Guid.CreateVersion7(),
+            CharacteristicId = Guid.CreateVersion7(),
+            Values = [1m],
+        });
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task A_badge_gives_a_ticket_for_this_terminal_only_and_never_a_sign_in()
     {
         var (terminal, secret) = await EnrolledAsync();

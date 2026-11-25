@@ -289,6 +289,38 @@ internal static class TerminalEndpoints
             });
         });
 
+        // A sample at the station (#136b): one the running job's plans ask for, recorded against the job as the signed-on person, at the line.
+        terminal.MapPost("/station/sample", async Task<Ok<StationActionResponse>> (
+            StationSampleRequest request, HttpContext http, StationServices station,
+            ICommandHandler<Application.Quality.RecordQualityResultCommand, Contracts.Quality.QualityResultResponse> record, CancellationToken ct) =>
+        {
+            var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.QualityRecord, UserMessage.Of("record quality results"));
+            var personId = station.Tickets.PersonOf(ticket, terminal.Id);
+            var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
+            if (!before.Samples.Any(s => s.JobId == request.JobId && s.CharacteristicId == request.CharacteristicId))
+            {
+                throw new DomainRuleException("That isn't a sample the running job's plan asks for; record it on the Quality page.");
+            }
+
+            var attribute = before.Samples.First(s => s.CharacteristicId == request.CharacteristicId).DataKind == "attribute";
+            var result = await record.HandleAsync(new Application.Quality.RecordQualityResultCommand(
+                terminal.SiteId, request.CharacteristicId, null, request.JobId, null,
+                attribute ? null : request.Values, attribute ? request.Inspected : null, attribute ? request.Defects : null, "manual", Text(request.Comment)), ct);
+            return TypedResults.Ok(new StationActionResponse
+            {
+                Notes = [result.Conforms switch
+                {
+                    true => Notes.Of($"Recorded: in specification."),
+                    false => Notes.Of($"Recorded: out of specification. Tell quality."),
+                    _ => Notes.Of($"Recorded."),
+                }, .. result.Notes],
+                Ticket = ticket,
+                TicketExpiresAt = expires,
+                Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
+            });
+        });
+
         // Andon at the station (#157): call for help on its line, or answer one of its line's calls, as the signed-on person.
         terminal.MapPost("/station/andon/call", async Task<Ok<StationActionResponse>> (
             StationAndonRequest request, HttpContext http, StationServices station, ICommandHandler<RaiseAndonCallCommand, AndonCallResponse> raise,

@@ -3,6 +3,7 @@
 @implements IDisposable
 @inject LiveFeed LiveFeed
 @using Pulaski.Web.Services.Execution
+@using Pulaski.Web.Services.Quality
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
 @inject TimeProvider Clock
@@ -88,6 +89,11 @@ else
                             @if (_labor.TryGetValue(row.LineId, out var onLine))
                             {
                                 <span class="chip" title="@string.Join(", ", onLine.Sessions.Select(x => x.PersonName))">@L["{0} on", onLine.Sessions.Count]</span>
+                            }
+                            @* Samples the running job owes (#136): overdue in red, due in amber; the job's page lists them. *@
+                            @if (row.Running is { } sampling && SampleView.Flag(L, [.. _samples.Where(s => s.LineId == row.LineId)]) is { } flag)
+                            {
+                                <a class="@flag.Chip text-decoration-none" href="@($"jobs/{sampling.JobId}")">@flag.Text</a>
                             }
                             <span class="@(row.Running is null ? "chip" : "chip chip-strong chip-live")">@(row.Running is null ? L["Idle"] : L["Running"])</span>
                         </div>
@@ -300,6 +306,7 @@ else
     private Guid _groupLine;
     private JobExecutionDto? _reportJob;
     private readonly CancellationTokenSource _cts = new();
+    private IReadOnlyList<DueSampleDto> _samples = [];
 
     private bool FormOpen => _stopFor is not null || _reportJob is not null;
 
@@ -317,7 +324,7 @@ else
     {
         if (firstRender)
         {
-            _liveFeed = LiveFeed.Subscribe(LiveFilters.At(() => Sites.SiteId, "job", "work_order", "partial_batch", "labor_session", "equipment", LiveFilters.Machine), () => InvokeAsync(async () =>
+            _liveFeed = LiveFeed.Subscribe(LiveFilters.At(() => Sites.SiteId, "job", "work_order", "partial_batch", "labor_session", "equipment", LiveFilters.Machine, "quality_result"), () => InvokeAsync(async () =>
             {
                 if (!FormOpen && !_busy)
                 {
@@ -344,6 +351,7 @@ else
             {
                 _board = await Api.GetLineBoardAsync(site);
                 _pending = await Api.ListPendingPartialBatchesAsync(site);
+                _samples = User.Can(PermissionCodes.FloorView, site) || User.Can(PermissionCodes.QualityView, site) ? await Api.ListDueSamplesAsync(site) : [];
                 _labor = (await Api.ListLineLaborAsync(site)).ToDictionary(l => l.LineId);
                 _me = CanClock ? await Api.GetMyLaborAsync() : null;
             }

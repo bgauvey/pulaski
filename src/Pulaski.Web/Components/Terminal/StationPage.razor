@@ -448,6 +448,62 @@ else
                 }
             </section>
 
+            @if (_station.Samples.Count > 0)
+            {
+                @* Samples the running job owes (#136b): how each stands, and for someone who may record results, the form. *@
+                <section class="station-panel" aria-labelledby="station-samples">
+                    <h2 id="station-samples" class="h5">@L["Samples"]</h2>
+                    @foreach (var sample in _station.Samples)
+                    {
+                        <div class="mb-3" @key="sample.CharacteristicId">
+                            <div class="d-flex flex-wrap gap-2 align-items-baseline">
+                                <span class="@Pulaski.Web.Services.Quality.SampleView.Chip(sample.Status)">@Pulaski.Web.Services.Quality.SampleView.Status(L, sample.Status)</span>
+                                <span class="fw-semibold">@sample.CharacteristicCode · @sample.CharacteristicName</span>
+                                <span class="text-muted">@Pulaski.Web.Services.Quality.SampleView.Detail(L, sample)</span>
+                            </div>
+                            @if (_station.CanRecordSamples && sample.Status is "due" or "overdue")
+                            {
+                                <EditForm Model="Input" FormName="@($"station-sample-{sample.CharacteristicId:N}")" OnSubmit="ActAsync" method="post" class="mt-2">
+                                    <input type="hidden" name="Input.JobId" value="@sample.JobId" />
+                                    <input type="hidden" name="Input.CharacteristicId" value="@sample.CharacteristicId" />
+                                    <div class="d-flex flex-wrap gap-2 align-items-end">
+                                        @if (sample.DataKind == "attribute")
+                                        {
+                                            <div>
+                                                <label class="form-label" for="@($"inspected-{sample.CharacteristicId:N}")">@L["Inspected"]</label>
+                                                <input id="@($"inspected-{sample.CharacteristicId:N}")" class="form-control" inputmode="numeric" name="Input.Inspected" />
+                                            </div>
+                                            <div>
+                                                <label class="form-label" for="@($"defective-{sample.CharacteristicId:N}")">@L["Defective"]</label>
+                                                <input id="@($"defective-{sample.CharacteristicId:N}")" class="form-control" inputmode="numeric" name="Input.Defects" />
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @for (var i = 0; i < Math.Max(1, sample.SubgroupSize); i++)
+                                            {
+                                                var n = i;
+                                                <div>
+                                                    <label class="form-label" for="@($"value-{sample.CharacteristicId:N}-{n}")">
+                                                        @(sample.SubgroupSize > 1 ? L["Value {0}", n + 1] : L["Value"])@(sample.CharacteristicUomCode is { } u ? $", {u}" : "")
+                                                    </label>
+                                                    <input id="@($"value-{sample.CharacteristicId:N}-{n}")" class="form-control" style="width: 8rem" inputmode="decimal" name="@($"Input.SampleValues[{n}]")" />
+                                                </div>
+                                            }
+                                        }
+                                        <button type="submit" name="Input.Action" value="sample" class="btn btn-primary">@L["Record the sample"]</button>
+                                    </div>
+                                </EditForm>
+                            }
+                        </div>
+                    }
+                    @if (!_station.CanRecordSamples && _station.PersonName is null && _station.Samples.Any(s => s.Status is "due" or "overdue"))
+                    {
+                        <p class="text-muted mb-0">@L["Badge in to record a sample."]</p>
+                    }
+                </section>
+            }
+
             @if (_station.Instructions.Count > 0)
             {
                 @* The running job's released instructions (#126b): anyone at the station may read them; files open through the web, as the terminal. *@
@@ -803,6 +859,35 @@ else
                 }
 
                 return;
+            case "sample" when Input.JobId is { } sampleJob && Input.CharacteristicId is { } characteristicId:
+                try
+                {
+                    var values = (Input.SampleValues ?? []).OrderBy(v => v.Key).Select(v => StationView.Number(v.Value)).OfType<decimal>().ToList();
+                    var recorded = await Api.StationSampleAsync(Secret!, new StationSampleRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        JobId = sampleJob,
+                        CharacteristicId = characteristicId,
+                        Values = values,
+                        Inspected = Input.Inspected,
+                        Defects = Input.Defects,
+                    });
+                    TerminalCookie.SetStation(HttpContext, recorded.Ticket, recorded.TicketExpiresAt);
+                    _station = recorded.Station;
+                    _notes = L.Notes(recorded.Notes);
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
+                return;
             case "checklist-sign-off" or "checklist-reject" when Input.ResponseId is { } responseId:
                 try
                 {
@@ -937,5 +1022,11 @@ else
 
         /// <summary>A checklist answer given its second sign-off or rejected (#126d).</summary>
         public Guid? ResponseId { get; set; }
+
+        /// <summary>A sample recorded (#136b): which characteristic, its values by position, or an inspection's counts.</summary>
+        public Guid? CharacteristicId { get; set; }
+        public Dictionary<int, string>? SampleValues { get; set; }
+        public int? Inspected { get; set; }
+        public int? Defects { get; set; }
     }
 }

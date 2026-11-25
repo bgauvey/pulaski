@@ -977,6 +977,14 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         return await ReadAsync<CreatedResponse>(response, ct);
     }
 
+    /// <summary>The samples running jobs owe at a site (#136).</summary>
+    public Task<IReadOnlyList<DueSampleDto>> ListDueSamplesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DueSampleDto>>($"api/quality/samples-due?siteId={siteId}", ct);
+
+    /// <summary>The samples a job owes in its open run (#136).</summary>
+    public Task<IReadOnlyList<DueSampleDto>> ListJobDueSamplesAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DueSampleDto>>($"api/jobs/{jobId}/samples-due", ct);
+
     /// <summary>How Pulaski is running (#141).</summary>
     public Task<Contracts.Health.SystemHealthDto> GetSystemHealthAsync(CancellationToken ct = default) =>
         GetAsync<Contracts.Health.SystemHealthDto>("api/system/health", ct);
@@ -996,6 +1004,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     /// <summary>A checklist's second sign-off, given or refused (#126d).</summary>
     public Task<ChecklistSignedOffResponse> SignOffChecklistAsync(Guid responseId, SignOffChecklistRequest request, CancellationToken ct = default) =>
         SendAsync<ChecklistSignedOffResponse>(HttpMethod.Post, $"api/checklist-responses/{responseId}/sign-off", request, ct);
+
+    /// <summary>A sample recorded at the station (#136b), as the signed-on person.</summary>
+    public Task<StationActionResponse> StationSampleAsync(string secret, StationSampleRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/sample", request, ct);
 
     /// <summary>A second sign-off at the station (#126d), as the signed-on person.</summary>
     public Task<StationActionResponse> StationChecklistSignOffAsync(string secret, StationChecklistSignOffRequest request, CancellationToken ct = default) =>
