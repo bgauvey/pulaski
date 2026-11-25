@@ -1,10 +1,11 @@
-@* Grouped by how plants work. Each link shows only to users who may see its screen, and a group with none
-   doesn't show at all, so nothing is advertised that the user can't open (D-039). *@
+@* Grouped by how plants work, like screens under their main one (#199, NavTree). Each link shows only to users who may see its screen, and a
+   group with none doesn't show at all, so nothing is advertised that the user can't open (D-039). *@
 @implements IDisposable
 @inject CurrentUser User
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
 @inject TimeProvider Clock
+@inject IJSRuntime JS
 
 <nav class="side-nav" aria-label="@L["Main"]">
     @if (InboxView.MayDecideAny(User))
@@ -20,21 +21,55 @@
             </NavLink>
         </div>
     }
-    @foreach (var group in Groups)
+    @foreach (var section in NavTree.Visible(May))
     {
-        var links = group.Links.Where(l => User.Can(l.Permission) || (l.OrPermission is { } other && User.Can(other))).ToList();
-        @if (links.Count > 0)
-        {
-            <div class="nav-group">
-                <div class="nav-group-label">@L[group.Label]</div>
-                @foreach (var link in links)
+        <div class="nav-group">
+            <div class="nav-group-label">@L[section.Label]</div>
+            @foreach (var entry in section.Entries)
+            {
+                @if (!entry.IsGroup)
                 {
-                    <NavLink class="nav-item" href="@link.Href" Match="@(link.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@L[link.Title]">
-                        <Icon Name="@link.Icon" /><span class="nav-text">@L[link.Text]</span>
-                    </NavLink>
+                    @Item(entry.Link!, false)
                 }
-            </div>
-        }
+                else
+                {
+                    var key = entry.Key!;
+                    var open = IsOpen(key);
+                    var label = entry.Link?.Text ?? entry.FolderText!;
+                    <div class="nav-tree @(open ? "is-open" : "")" @key="key">
+                        <div class="nav-tree-head">
+                            @if (entry.Link is { } main)
+                            {
+                                <NavLink class="nav-item" href="@main.Href" Match="NavLinkMatch.Prefix" title="@L[main.Title]" @onclick="() => Remember(key)">
+                                    <Icon Name="@main.Icon" /><span class="nav-text">@L[main.Text]</span>
+                                </NavLink>
+                            }
+                            else
+                            {
+                                <button type="button" class="nav-item nav-folder" aria-expanded="@(open ? "true" : "false")" aria-controls="@($"nav-{key}")" @onclick="() => ToggleAsync(key)">
+                                    <Icon Name="@(entry.FolderIcon ?? "categorized")" /><span class="nav-text">@L[label]</span>
+                                </button>
+                            }
+                            @* The group of the open screen stays unfolded, so it has nothing to fold. *@
+                            @if (entry.Children.Count > 0 && NavTree.GroupAt(NavTree.Sections, Path) != key)
+                            {
+                                <button type="button" class="nav-toggle" aria-expanded="@(open ? "true" : "false")" aria-controls="@($"nav-{key}")"
+                                        aria-label="@(open ? L["Fold {0}", L[label]] : L["Unfold {0}", L[label]])" title="@(open ? L["Fold {0}", L[label]] : L["Unfold {0}", L[label]])"
+                                        @onclick="() => ToggleAsync(key)">
+                                    <Icon Name="chevron-right" Size="16" />
+                                </button>
+                            }
+                        </div>
+                        <div id="@($"nav-{key}")" class="nav-children @(open ? "" : "is-folded")" role="group" aria-label="@L[label]">
+                            @foreach (var child in entry.Children)
+                            {
+                                @Item(child, true)
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
     }
 </nav>
 
@@ -51,8 +86,13 @@
     }
 
     // Moving to another page recounts, at most every few seconds, so deciding an item and moving on shows the new count.
+    // The group of the new screen unfolds (#199).
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
-        _ = InvokeAsync(() => CountInboxAsync(force: false));
+        _ = InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await CountInboxAsync(force: false);
+        });
 
     private async Task CountInboxAsync(bool force)
     {
@@ -82,47 +122,54 @@
         _timer?.Dispose();
     }
 
-    private sealed record Link(string Href, string Icon, string Text, string Title, string Permission, string? OrPermission = null);
+    // Grouped like screens (#199): a group unfolds while one of its screens is open; others stay as the reader left them, per browser.
+    private const string OpenKey = "pulaski.nav.open";
+    private readonly HashSet<string> _open = new(StringComparer.Ordinal);
 
-    private sealed record Group(string Label, IReadOnlyList<Link> Links);
+    private bool May(NavLinkItem link) => User.Can(link.Permission) || (link.OrPermission is { } other && User.Can(other));
 
-    private static readonly IReadOnlyList<Group> Groups =
-    [
-        new(Term.Mark("Operate"),
-        [
-            new("", "overview", Term.Mark("Overview"), Term.Mark("Overview"), PermissionCodes.OverviewView),
-            new("work-orders", "work-orders", Term.Mark("Work orders"), Term.Mark("Work orders"), PermissionCodes.WorkOrdersView),
-            new("schedule", "schedule", Term.Mark("Schedule"), Term.Mark("Schedule"), PermissionCodes.ScheduleView),
-            new("floor", "labor", Term.Mark("Floor"), Term.Mark("Floor: run jobs and report production"), PermissionCodes.FloorView),
-            new("machines", "gauge", Term.Mark("Machines"), Term.Mark("Machines: live state and stops to code"), PermissionCodes.MachinesView),
-            new("andon", "alert", Term.Mark("Andon"), Term.Mark("Andon: calls for help from the lines"), PermissionCodes.FloorView),
-            new("handover", "kanban", Term.Mark("Handover"), Term.Mark("Shift handover: notes and open items per line"), PermissionCodes.FloorView),
-            new("inventory", "lot", Term.Mark("Inventory"), Term.Mark("Inventory"), PermissionCodes.InventoryView),
-            new("quality/results", "spc", Term.Mark("Quality"), Term.Mark("Quality results: record and review what was measured or inspected"), PermissionCodes.QualityView),
-            new("labor", "users", Term.Mark("Labor"), Term.Mark("Labor: who is on, shift review and reports"), PermissionCodes.LaborView),
-        ]),
-        new(Term.Mark("Configure"),
-        [
-            new("equipment", "equipment", Term.Mark("Equipment"), Term.Mark("Equipment"), PermissionCodes.EquipmentView),
-            new("machine-profiles", "plug", Term.Mark("Machine profiles"), Term.Mark("Machine profiles: state values and stop codes"), PermissionCodes.EquipmentView),
-            new("edge-nodes", "signal", Term.Mark("Edge nodes"), Term.Mark("Edge nodes: connections and tags that collect machine data"), PermissionCodes.EquipmentView),
-            new("materials", "categorized", Term.Mark("Materials"), Term.Mark("Materials and classes"), PermissionCodes.MaterialsView),
-            new("processes", "process", Term.Mark("Processes"), Term.Mark("Processes"), PermissionCodes.ProcessesView),
-            new("boms", "bom", Term.Mark("BOMs"), Term.Mark("Bills of materials"), PermissionCodes.ProcessesView),
-            new("quality/specs", "spc", Term.Mark("Specifications"), Term.Mark("Material specifications and quality characteristics"), PermissionCodes.QualityView),
-            new("instructions", "info", Term.Mark("Work instructions"), Term.Mark("Work instructions shown at the job"), PermissionCodes.InstructionsView),
-            new("units", "units", Term.Mark("Units"), Term.Mark("Units and conversions"), PermissionCodes.UnitsView),
-            new("reasons", "info", Term.Mark("Reasons"), Term.Mark("Reason codes"), PermissionCodes.ReasonsView),
-            new("shifts", "clock", Term.Mark("Shifts"), Term.Mark("Shift schedules"), PermissionCodes.ShiftsView),
-            new("rate-proposals", "gauge", Term.Mark("Planning rates"), Term.Mark("Planning rates from run history proposed for review"), PermissionCodes.MaterialsView, PermissionCodes.ScheduleView),
-            new("changeovers", "refresh", Term.Mark("Changeovers"), Term.Mark("Changeover rules: how long each change of material takes"), PermissionCodes.ScheduleView, PermissionCodes.MaterialsView),
-            new("site-settings", "calendar", Term.Mark("Site settings"), Term.Mark("Changeover mode, reporting tolerances, OEE targets, planning rates, holidays and shutdowns"), PermissionCodes.SiteSettingsView),
-            new("integrations", "signal", Term.Mark("Integrations"), Term.Mark("Integrations: events sent to the ERP and failed deliveries"), PermissionCodes.IntegrationsView),
-            new("system-health", "gauge", Term.Mark("System health"), Term.Mark("System health: what is unhealthy and where to put it right"), PermissionCodes.SystemView),
-            new("people", "user", Term.Mark("People"), Term.Mark("People and crews"), PermissionCodes.People),
-            new("terminals", "plug", Term.Mark("Terminals"), Term.Mark("Shop-floor terminals for badging"), PermissionCodes.Terminals),
-            new("users", "users", Term.Mark("Users"), Term.Mark("Users, roles and permissions"), PermissionCodes.Security),
-            new("languages", "categorized", Term.Mark("Languages"), Term.Mark("Languages and their translations"), PermissionCodes.Languages),
-        ]),
-    ];
+    private string Path => Navigation.ToBaseRelativePath(Navigation.Uri);
+
+    private bool IsOpen(string key) => _open.Contains(key) || NavTree.GroupAt(NavTree.Sections, Path) == key;
+
+    private RenderFragment Item(NavLinkItem link, bool child) =>
+        @<NavLink class="@(child ? "nav-item nav-child" : "nav-item")" href="@link.Href" Match="@(link.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@L[link.Title]">
+            <Icon Name="@link.Icon" /><span class="nav-text">@L[link.Text]</span>
+        </NavLink>;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && await JS.InvokeAsync<string?>("pulaski.ui.load", OpenKey) is { Length: > 0 } stored)
+        {
+            _open.UnionWith(stored.Split(',', StringSplitOptions.RemoveEmptyEntries));
+            StateHasChanged();
+        }
+    }
+
+    private Task ToggleAsync(string key)
+    {
+        if (!IsOpen(key))
+        {
+            _open.Add(key);
+        }
+        else
+        {
+            _open.Remove(key);
+        }
+
+        return SaveAsync();
+    }
+
+    private Task Remember(string key) => _open.Add(key) ? SaveAsync() : Task.CompletedTask;
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("pulaski.ui.save", OpenKey, string.Join(",", _open.Order(StringComparer.Ordinal)));
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
 }

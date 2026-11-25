@@ -3283,6 +3283,20 @@ writes an event for every change in the same transaction (D-007); machine ingest
 - **Permission** `system.view` (Administration; no role but the administrator to start with; migration 0082). Configure → **System health**
   (`/system-health`). No alerts from it yet.
 
+### D-119 · The menu groups like screens (#199) · *Proposed*
+
+**Context.** The sidebar listed 30 screens flat under Operate and Configure; related setup (equipment, machine profiles, edge nodes) was spread
+through a list of 20.
+
+**Decision.** `NavTree` (web, pure) holds the menu: sections of entries, each a single screen or a group under a key with its main screen and
+the screens that belong with it (Operate: Planning = Work orders + Schedule, a folder with no page of its own; Floor + Andon, Handover.
+Configure: Equipment + Machine profiles, Edge nodes, Terminals; Materials + Units, Specifications; Processes + BOMs, Work instructions,
+Changeovers, Planning rates; Site settings + Shifts, Reasons; People + Users; Integrations + System health, Languages). `NavTree.Visible`
+keeps what the user may open (D-039); a group whose main screen they can't open becomes a folder of the rest. Clicking a group's name opens
+its main screen and unfolds it; an arrow folds without navigating; the group of the current screen is always unfolded (`GroupAt`, by
+address prefix); the open groups are kept per browser (`pulaski.nav.open`). The icon rail shows every screen flat, as before. Screens,
+addresses and permissions are unchanged.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

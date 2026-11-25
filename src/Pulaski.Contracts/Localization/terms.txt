@@ -1453,6 +1453,7 @@ Flags
 Floor
 Floor: run jobs and report production
 Flow
+Fold {0}
 Followed by
 Follows
 For
@@ -4310,6 +4311,7 @@ Undo movements: {0}
 Undo this movement
 Undo {0}
 Undoing that takes back {0} movements; at most {1} go in one step. Undo some of the later ones first.
+Unfold {0}
 Unique within the site. Fixed once created.
 Unit
 Unit conversions for {0}
