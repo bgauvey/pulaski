@@ -103,10 +103,20 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
 ### The screen
 
 - **Menu (left).** **Inbox** at the top, when your role decides anything it gathers, with how many items wait (see
-  [Your inbox](#your-inbox)). Then two groups of pages:
-  - **Operate:** **Overview**, **Work orders**, **Schedule**, **Floor**, **Inventory**, **Labor**: the pages you use day to day.
-  - **Configure:** **Equipment**, **Materials**, **Processes**, **BOMs**, **Units**, **Reasons**, **Shifts**, **Site settings**, **Integrations**, **People** (and **Users**, for administrators, with tabs for users, roles and permissions): the setup you do once and change now and then.
-  - The ☰ button at the top left collapses the menu to icons, to make room on small screens.
+  [Your inbox](#your-inbox)). Then two sections, with like pages grouped under their main one:
+  - **Operate**, the pages you use day to day: **Overview**; **Planning** (**Work orders**, **Schedule**); **Floor** (with **Andon** and
+    **Handover**); **Machines**; **Inventory**; **Quality**; **Labor**.
+  - **Configure**, the setup you do once and change now and then: **Equipment** (with **Machine profiles**, **Edge nodes**, **Terminals**);
+    **Materials** (with **Units**, **Specifications**); **Processes** (with **BOMs**, **Work instructions**, **Changeovers**, **Planning
+    rates**); **Site settings** (with **Shifts**, **Reasons**); **People** (with **Users**, for administrators, with tabs for users, roles and
+    permissions); **Integrations** (with **System health**, **Languages**).
+  - Click a group's name to open its main page; its other pages unfold below it. The arrow beside it folds or unfolds a group without
+    leaving the page you're on. The group of the page you're on is always unfolded, and the browser remembers which others you left open.
+    **Planning** has no page of its own: its name only folds and unfolds.
+  - You see only the pages your roles let you open. If you may open some of a group's pages but not its main one, the group's name only
+    folds and unfolds them.
+  - The ☰ button at the top left collapses the menu to icons, to make room on small screens; then every page you may open shows as an
+    icon, without groups.
 - **You (top right).** Your initials, name and roles. Click them for your menu:
   - **Preferences…** opens a dialog with your [language and region](#your-language-and-region), the **colour theme** (*Like the device*,
     *Light* or *Dark*) and the [touch layout](#use-a-touch-screen) (*Automatic*, *On* or *Off*).

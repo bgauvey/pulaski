@@ -94,3 +94,81 @@
         font-size: 0.7rem;
     }
 }
+
+/* Grouped screens (#199): a group's main page with an arrow that folds its others, indented below it. */
+.nav-tree-head {
+    display: flex;
+    align-items: center;
+}
+
+    .nav-tree-head ::deep .nav-item {
+        flex: 1;
+        min-width: 0;
+    }
+
+.nav-folder {
+    width: 100%;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+.nav-toggle {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: var(--touch-target);
+    height: var(--touch-target);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--text-faint);
+    cursor: pointer;
+}
+
+    .nav-toggle:hover {
+        background: var(--surface-2);
+        color: var(--text);
+    }
+
+    .nav-toggle ::deep .icon {
+        transition: transform 0.15s ease;
+    }
+
+.nav-tree.is-open .nav-toggle ::deep .icon {
+    transform: rotate(90deg);
+}
+
+.nav-children {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-left: var(--space-5);
+    padding-left: var(--space-2);
+    border-left: 1px solid var(--border);
+}
+
+    .nav-children.is-folded {
+        display: none;
+    }
+
+.side-nav ::deep .nav-child {
+    font: var(--type-body);
+}
+
+/* The icon rail shows every screen it may, as before: no folding, no folder rows. */
+@media (min-width: 720px) {
+    :root[data-sidebar="rail"] .nav-toggle,
+    :root[data-sidebar="rail"] .nav-folder {
+        display: none;
+    }
+
+    :root[data-sidebar="rail"] .nav-children,
+    :root[data-sidebar="rail"] .nav-children.is-folded {
+        display: flex;
+        margin-left: 0;
+        padding-left: 0;
+        border-left: 0;
+    }
+}

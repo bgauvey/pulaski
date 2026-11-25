@@ -1454,6 +1454,7 @@ Flags,Señales
 Floor,Piso
 Floor: run jobs and report production,Piso: ejecutar trabajos y reportar producción
 Flow,Flujo
+Fold {0},Plegar {0}
 Followed by,Seguida por
 Follows,Sigue a
 For,Para
@@ -2875,7 +2876,7 @@ Planning rate for {0} on {1},Tasa de planeación de {0} en {1}
 Planning rate now {0}.,Tasa de planeación ahora {0}.
 Planning rate on {0} is the calculated {1} {2}/h again.,La tasa de planeación en {0} vuelve a ser la calculada {1} {2}/h.
 Planning rate on {0} set to {1} {2}/h.,Tasa de planeación en {0} fijada en {1} {2}/h.
-Planning rate refresh,Actualización de velocidades de planeación
+Planning rate refresh,Actualización de tasas de planeación
 "Planning rate set to {0}, from the ideal rate.","Tasa de planeación fijada en {0}, a partir de la tasa ideal."
 Planning rates,Tasas de planeación
 Planning rates can be worked out from what lines really made. Proposals wait on,Las tasas de planeación pueden calcularse a partir de lo que las líneas realmente hicieron. Las propuestas esperan en
@@ -4311,6 +4312,7 @@ Undo movements: {0},Deshacer movimientos: {0}
 Undo this movement,Deshacer este movimiento
 Undo {0},Deshacer {0}
 Undoing that takes back {0} movements; at most {1} go in one step. Undo some of the later ones first.,Deshacer eso retira {0} movimientos; como máximo {1} van en un paso. Deshaga primero algunos de los posteriores.
+Unfold {0},Desplegar {0}
 Unique within the site. Fixed once created.,Único dentro del sitio. Fijo una vez creado.
 Unit,Unidad
 Unit conversions for {0},Conversiones de unidad de {0}
