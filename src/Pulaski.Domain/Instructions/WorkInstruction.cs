@@ -168,3 +168,21 @@ public sealed record InstructionTarget(
     public bool SameAs(InstructionTarget other) =>
         Kind == other.Kind && ProcessId == other.ProcessId && OperationNumber == other.OperationNumber && MaterialId == other.MaterialId && EquipmentId == other.EquipmentId;
 }
+
+/// <summary>
+/// Which released instructions a job shows (#126b): one entry per instruction, whatever number of its targets match, with the kinds that
+/// matched; an operation's first, then a line's, then a material's, each by code. Pure.
+/// </summary>
+public static class JobInstructions
+{
+    private static readonly string[] Order = [InstructionTargetKinds.Operation, InstructionTargetKinds.Line, InstructionTargetKinds.Material];
+
+    public static int Rank(string kind) => Array.IndexOf(Order, kind) is var i and >= 0 ? i : Order.Length;
+
+    public static IReadOnlyList<(Guid InstructionId, string[] Kinds)> Gather(IEnumerable<(Guid InstructionId, string Code, string Kind)> matches) =>
+        [.. matches
+            .GroupBy(m => m.InstructionId)
+            .Select(g => (Id: g.Key, g.First().Code, Kinds: g.Select(m => m.Kind).Distinct().OrderBy(Rank).ToArray()))
+            .OrderBy(g => Rank(g.Kinds[0])).ThenBy(g => g.Code, StringComparer.Ordinal)
+            .Select(g => (g.Id, g.Kinds))];
+}

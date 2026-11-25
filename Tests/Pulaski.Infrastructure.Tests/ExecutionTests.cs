@@ -1071,6 +1071,76 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_job_and_its_station_show_the_released_instructions_for_its_operation_line_and_material()
+    {
+        var plant = await PlantAsync();
+        var processId = await ScalarAsync<Guid>("SELECT id FROM core.process WHERE site_id = @Site", new { plant.Site });
+        byte[] pdf = [0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x37];
+
+        async Task<Guid> ReleasedAsync(string code, string body, params (string Kind, Guid? Process, int? Op, Guid? Material, Guid? Line)[] targets)
+        {
+            CreatedResponse wi = await db.SendAsync(new Pulaski.Application.Instructions.CreateInstructionCommand(plant.Site, code + _s, code));
+            var draft = Assert.Single((await QueryAsync<Pulaski.Application.Instructions.GetInstructionQuery, Contracts.Instructions.InstructionDto>(
+                new Pulaski.Application.Instructions.GetInstructionQuery(wi.Id))).Versions);
+            var saved = await db.SendAsync(new Pulaski.Application.Instructions.SaveInstructionDraftCommand(wi.Id, draft.Version, body));
+            foreach (var t in targets)
+            {
+                await db.SendAsync(new Pulaski.Application.Instructions.AddInstructionTargetCommand(wi.Id, t.Kind, t.Process, t.Op, t.Material, t.Line));
+            }
+
+            if (body.Length > 0)
+            {
+                await db.SendAsync(new Pulaski.Application.Instructions.ReleaseInstructionCommand(wi.Id, saved.Version, null));
+            }
+
+            return wi.Id;
+        }
+
+        var extrude = await ReleasedAsync("A-OP", "1. Heat the zones", ("operation", processId, 10, null, null));
+        await ReleasedAsync("B-MAT", "Check the colour", ("material", null, null, db.MaterialId, null), ("operation", processId, 10, null, null));
+        var packer = await ReleasedAsync("C-LINE", "Load the cartons", ("line", null, null, null, plant.Packer));
+        await ReleasedAsync("D-DRAFT", "", ("material", null, null, db.MaterialId, null));
+        var off = await ReleasedAsync("E-OFF", "Old way", ("line", null, null, null, plant.Extruder));
+        var offVersion = (await QueryAsync<Pulaski.Application.Instructions.GetInstructionQuery, Contracts.Instructions.InstructionDto>(
+            new Pulaski.Application.Instructions.GetInstructionQuery(off))).Version;
+        await db.SendAsync(new Pulaski.Application.Instructions.UpdateInstructionCommand(off, offVersion, "E-OFF", IsActive: false));
+
+        // A file in the second version of A: the job shows version 2 with its file.
+        await db.SendAsync(new Pulaski.Application.Instructions.NewInstructionDraftCommand(extrude));
+        await db.SendAsync(new Pulaski.Application.Instructions.AddInstructionFileCommand(extrude, "zones.pdf", pdf));
+        var second = (await QueryAsync<Pulaski.Application.Instructions.GetInstructionQuery, Contracts.Instructions.InstructionDto>(
+            new Pulaski.Application.Instructions.GetInstructionQuery(extrude))).Versions.Single(v => v.Status == "draft");
+        await db.SendAsync(new Pulaski.Application.Instructions.ReleaseInstructionCommand(extrude, second.Version, null));
+
+        async Task<IReadOnlyList<Contracts.Instructions.JobInstructionDto>> ForAsync(Guid job) =>
+            await QueryAsync<Pulaski.Application.Instructions.GetJobInstructionsQuery, IReadOnlyList<Contracts.Instructions.JobInstructionDto>>(
+                new Pulaski.Application.Instructions.GetJobInstructionsQuery(job));
+
+        // Extrude (operation 10): A and B for the operation (B for its material too); never the draft or the switched-off one.
+        var atExtrude = await ForAsync(plant.Extrude);
+        Assert.Equal([("A-OP" + _s, 2, "operation"), ("B-MAT" + _s, 1, "operation,material")],
+            atExtrude.Select(i => (i.Code, i.Number, string.Join(",", i.ShownFor))));
+        Assert.Equal("zones.pdf", Assert.Single(atExtrude[0].Files).FileName);
+
+        // Pack (operation 20 on the packer): the line's first, then the material's.
+        Assert.Equal([("C-LINE" + _s, "line"), ("B-MAT" + _s, "material")], (await ForAsync(plant.Pack)).Select(i => (i.Code, string.Join(",", i.ShownFor))));
+
+        // An ended target stops it showing.
+        var lineTarget = (await QueryAsync<Pulaski.Application.Instructions.GetInstructionQuery, Contracts.Instructions.InstructionDto>(
+            new Pulaski.Application.Instructions.GetInstructionQuery(packer))).Targets.Single();
+        await db.SendAsync(new Pulaski.Application.Instructions.EndInstructionTargetCommand(packer, lineTarget.Id));
+        Assert.Equal(["B-MAT" + _s], (await ForAsync(plant.Pack)).Select(i => i.Code));
+
+        // The extruder's station shows them for the running job, with no one signed on; nothing while no job runs.
+        var terminal = new Pulaski.Application.Labor.TerminalRecord(
+            Guid.CreateVersion7(), plant.Site, "SI-" + _s, "Extruder station", plant.Site, plant.Extruder, "badge", true, TestTime.Now);
+        Assert.Empty((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null))).Instructions);
+        await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+        var station = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
+        Assert.Equal(["A-OP" + _s, "B-MAT" + _s], station.Instructions.Select(i => i.Code));
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

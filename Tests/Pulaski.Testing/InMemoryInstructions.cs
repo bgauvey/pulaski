@@ -188,6 +188,10 @@ public sealed class InMemoryInstructions : IInstructionRepository, IInstructionR
         }
     }
 
+    /// <summary>The fake knows no jobs: tests of what a job shows run against the database.</summary>
+    public Task<IReadOnlyList<JobInstructionDto>> ForJobAsync(Guid jobId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<JobInstructionDto>>([]);
+
     private Task<Versioned<InstructionVersion>?> Find(Guid instructionId, string status)
     {
         lock (_lock)

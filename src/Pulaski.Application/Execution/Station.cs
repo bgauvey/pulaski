@@ -32,6 +32,7 @@ internal sealed class GetStationHandler(
     IQueryHandler<ListStopsQuery, StopPageDto> stops,
     IQueryHandler<ListCodingReasonsQuery, IReadOnlyList<ReasonCodeDto>> codingReasons,
     IQueryHandler<ListAndonTypesQuery, IReadOnlyList<AndonTypeDto>> andonTypes,
+    IQueryHandler<Instructions.GetJobInstructionsQuery, IReadOnlyList<Contracts.Instructions.JobInstructionDto>> instructions,
     ISecurityReadStore security,
     TimeProvider timeProvider) : IQueryHandler<GetStationQuery, StationDto>
 {
@@ -86,6 +87,9 @@ internal sealed class GetStationHandler(
             AndonCalls = line?.Calls ?? [],
             AndonTypes = types,
             MaintenanceRequests = line?.Maintenance ?? [],
+            Instructions = row?.Running is { } runningJob
+                ? await instructions.HandleAsync(new Instructions.GetJobInstructionsQuery(runningJob.JobId), cancellationToken)
+                : [],
             RunEndReasons = query.PersonId is null ? [] : await reasons.HandleAsync(new ListReasonCodesQuery("run_end", terminal.SiteId), cancellationToken),
             Report = row?.Running is { JobType: "production" } running && May(Permissions.ProductionReport)
                 ? await ReportAsync(running.JobId, terminal.SiteId, cancellationToken)

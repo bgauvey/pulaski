@@ -3674,6 +3674,7 @@ That expected receipt was changed by someone else. Reload and try again.,Otra pe
 That file is larger than 5 MB.,Ese archivo pesa más de 5 MB.
 That file isn't in the draft.,Ese archivo no está en el borrador.
 That file isn't one of the instruction's.,Ese archivo no es de la instrucción.
+That file isn't one of the running job's instructions.,Ese archivo no es de las instrucciones del trabajo en curso.
 That grant is revoked already.,Esa otorgación ya está revocada.
 That grant is revoked; grant the qualification again instead.,Esa otorgación está revocada; otorgue la calificación de nuevo en su lugar.
 That group isn't one of this kind's reasons.,Ese grupo no es uno de los motivos de este tipo.
@@ -4834,6 +4835,7 @@ valid only from {0:yyyy-MM-dd},válida solo desde el {0:yyyy-MM-dd}
 value: '{0}' isn't a whole number.,value: '{0}' no es un número entero.
 variable or attribute.,variable o attribute.
 "version {0} released, {1} components","versión {0} liberada, {1} componentes"
+version {0} · for its {1},versión {0} · por su {1}
 via {0},vía {0}
 waiting for a line,esperando una línea
 waiting for a planner,esperando a un planificador

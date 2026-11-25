@@ -311,6 +311,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `InstructionText.ToHtml` (headings, steps, points, bold; all else escaped). Files PDF/PNG/JPEG ≤ 10 MB, ≤ 20 per version (`InstructionFiles.Check`),
   bytes in insert-only `work_instruction_content`, placed by `work_instruction_file` (`removed_at`). Targets operation (process + number) /
   material / line, ended not deleted. Writes lock the instruction; `/api/instructions`, `instructions.view` / `instructions.manage`.
+  (b) `GetJobInstructionsQuery` (`/api/jobs/{id}/instructions`): released versions matching the job's operation, line (closure) or material,
+  `JobInstructions.Gather` order; shared `JobInstructions` component on the job page and the station (`StationDto.Instructions`, running job;
+  files via the web's `/terminal/station/instructions/...` → API terminal endpoint, only files the station shows).
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

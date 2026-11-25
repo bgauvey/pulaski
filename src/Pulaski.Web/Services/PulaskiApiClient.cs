@@ -977,6 +977,28 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         return await ReadAsync<CreatedResponse>(response, ct);
     }
 
+    /// <summary>The released instructions a job shows (#126b).</summary>
+    public Task<IReadOnlyList<JobInstructionDto>> GetJobInstructionsAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<JobInstructionDto>>($"api/jobs/{jobId}/instructions", ct);
+
+    /// <summary>A file of the running job's instructions at a station (#126b), as the terminal.</summary>
+    public async Task<(byte[] Content, string ContentType, string FileName)> GetStationInstructionFileAsync(
+        string secret, Guid id, Guid fileId, string? line, CancellationToken ct = default)
+    {
+        var uri = $"api/terminal/station/instructions/{id}/files/{fileId}" + (string.IsNullOrWhiteSpace(line) ? "" : $"?line={Uri.EscapeDataString(line)}");
+        var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Terminal", secret);
+        using var response = await SendCoreAsync(request, ct, signedIn: false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ApiException.FromResponseAsync(response, ct);
+        }
+
+        return (await response.Content.ReadAsByteArrayAsync(ct),
+            response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream",
+            response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "document");
+    }
+
     /// <summary>An instruction's file, to hand to the browser.</summary>
     public Task<(byte[] Content, string ContentType, string FileName)> GetInstructionFileAsync(Guid id, Guid fileId, CancellationToken ct = default) =>
         GetFileAsync($"api/instructions/{id}/files/{fileId}", ct);

@@ -59,4 +59,7 @@ public interface IInstructionReadStore
 
     /// <summary>The file, if it is one of the instruction's versions'.</summary>
     Task<InstructionFileContent?> GetFileAsync(Guid instructionId, Guid fileId, CancellationToken cancellationToken);
+
+    /// <summary>The released instructions a job shows (#126b), in <see cref="Domain.Instructions.JobInstructions"/> order; empty for a job not found.</summary>
+    Task<IReadOnlyList<JobInstructionDto>> ForJobAsync(Guid jobId, CancellationToken cancellationToken);
 }

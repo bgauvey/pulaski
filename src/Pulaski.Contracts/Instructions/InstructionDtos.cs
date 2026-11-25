@@ -113,3 +113,22 @@ public static class InstructionFileFormat
     public const int MaxBytes = 10 * 1024 * 1024;
     public const string Accept = ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
 }
+
+/// <summary>
+/// A released instruction as a job shows it (#126b, D-116): the version in force, its text and files, and why the job shows it (its process
+/// operation, its line, its material; <see cref="ShownFor"/> holds those kinds).
+/// </summary>
+public sealed record JobInstructionDto
+{
+    public required Guid InstructionId { get; init; }
+    public required string Code { get; init; }
+    public required string Title { get; init; }
+    public required Guid VersionId { get; init; }
+    public required int Number { get; init; }
+    public DateTimeOffset? ReleasedAt { get; init; }
+    public string Body { get; init; } = "";
+    public IReadOnlyList<InstructionFileDto> Files { get; init; } = [];
+
+    /// <summary><c>operation</c>, <c>line</c> and/or <c>material</c>, in that order.</summary>
+    public IReadOnlyList<string> ShownFor { get; init; } = [];
+}

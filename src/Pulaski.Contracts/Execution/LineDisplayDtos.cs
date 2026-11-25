@@ -126,6 +126,9 @@ public sealed record StationDto
     /// <summary>The line's maintenance requests not closed (#127), its machines' too, the waiting ones first. Shown even while the station waits.</summary>
     public IReadOnlyList<Pulaski.Contracts.Maintenance.MaintenanceRequestDto> MaintenanceRequests { get; init; } = [];
 
+    /// <summary>The released work instructions for the running job (#126b): its operation's, its line's and its material's. Shown even while the station waits.</summary>
+    public IReadOnlyList<Pulaski.Contracts.Instructions.JobInstructionDto> Instructions { get; init; } = [];
+
     /// <summary>Why a run ends (reasons of kind <c>run_end</c> at the site), offered when pausing or completing at the station (#147).</summary>
     public IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto> RunEndReasons { get; init; } = [];
 

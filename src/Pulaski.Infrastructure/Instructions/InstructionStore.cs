@@ -249,6 +249,80 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
             """, new { FileId = fileId, InstructionId = instructionId }, cancellationToken: cancellationToken));
     }
 
+    // A job's targets: its operation (the process and number, whatever the version), its line or one above it, its material (#126b).
+    private const string JobMatches = """
+        WITH j AS (
+            SELECT j.site_id, j.material_id, j.equipment_id, v.process_id, o.operation_number
+            FROM core.job j
+            LEFT JOIN core.process_operation o ON o.id = j.process_operation_id
+            LEFT JOIN core.process_version v ON v.id = o.process_version_id
+            WHERE j.id = @JobId)
+        SELECT DISTINCT i.id, i.code, t.kind
+        FROM j
+        JOIN core.work_instruction i ON i.site_id = j.site_id AND i.is_active
+        JOIN core.work_instruction_target t ON t.instruction_id = i.id AND t.is_active
+        WHERE EXISTS (SELECT 1 FROM core.work_instruction_version r WHERE r.instruction_id = i.id AND r.status = 'released')
+          AND ((t.kind = 'operation' AND t.process_id = j.process_id AND t.operation_number = j.operation_number)
+            OR (t.kind = 'material' AND t.material_id = j.material_id)
+            OR (t.kind = 'line' AND EXISTS (
+                    SELECT 1 FROM core.equipment_closure c WHERE c.ancestor_id = t.equipment_id AND c.descendant_id = j.equipment_id)))
+        """;
+
+    public async Task<IReadOnlyList<JobInstructionDto>> ForJobAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var matches = await connection.QueryAsync<(Guid, string, string)>(new CommandDefinition(JobMatches, new { JobId = jobId }, cancellationToken: cancellationToken));
+        var shown = JobInstructions.Gather(matches);
+        if (shown.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = shown.Select(s => s.InstructionId).ToArray();
+        var versions = (await connection.QueryAsync<ReleasedRow>(new CommandDefinition(
+            """
+            SELECT i.id AS instruction_id, i.code, i.title, v.id AS version_id, v.version_number AS number, v.released_at, v.body
+            FROM core.work_instruction i
+            JOIN core.work_instruction_version v ON v.instruction_id = i.id AND v.status = 'released'
+            WHERE i.id = ANY(@Ids)
+            """, new { Ids = ids }, cancellationToken: cancellationToken))).ToDictionary(v => v.InstructionId);
+        var files = (await connection.QueryAsync<FileRow>(new CommandDefinition(
+            """
+            SELECT f.id, f.version_id, f.file_name, f.content_type, c.size_bytes
+            FROM core.work_instruction_file f
+            JOIN core.work_instruction_content c ON c.id = f.content_id
+            WHERE f.version_id = ANY(@Versions) AND f.removed_at IS NULL
+            ORDER BY f.sort_order, f.id
+            """, new { Versions = versions.Values.Select(v => v.VersionId).ToArray() }, cancellationToken: cancellationToken))).ToLookup(f => f.VersionId);
+        return [.. shown.Where(s => versions.ContainsKey(s.InstructionId)).Select(s =>
+        {
+            var v = versions[s.InstructionId];
+            return new JobInstructionDto
+            {
+                InstructionId = v.InstructionId,
+                Code = v.Code,
+                Title = v.Title,
+                VersionId = v.VersionId,
+                Number = v.Number,
+                ReleasedAt = v.ReleasedAt,
+                Body = v.Body,
+                Files = [.. files[v.VersionId].Select(f => new InstructionFileDto { Id = f.Id, FileName = f.FileName, ContentType = f.ContentType, SizeBytes = f.SizeBytes })],
+                ShownFor = s.Kinds,
+            };
+        })];
+    }
+
+    private sealed class ReleasedRow
+    {
+        public Guid InstructionId { get; init; }
+        public string Code { get; init; } = "";
+        public string Title { get; init; } = "";
+        public Guid VersionId { get; init; }
+        public int Number { get; init; }
+        public DateTimeOffset? ReleasedAt { get; init; }
+        public string Body { get; init; } = "";
+    }
+
     private sealed class FileRow
     {
         public Guid Id { get; init; }

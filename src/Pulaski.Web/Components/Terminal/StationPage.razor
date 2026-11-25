@@ -446,6 +446,15 @@ else
                 }
             </section>
 
+            @if (_station.Instructions.Count > 0)
+            {
+                @* The running job's released instructions (#126b): anyone at the station may read them; files open through the web, as the terminal. *@
+                <section class="station-panel station-instructions" aria-labelledby="station-instructions">
+                    <h2 id="station-instructions" class="h5">@(_station.Instructions.Count == 1 ? L["Work instruction"] : L["Work instructions"])</h2>
+                    <JobInstructions Instructions="_station.Instructions" FileHref="StationFileHref" />
+                </section>
+            }
+
             <section class="station-panel" aria-labelledby="station-next">
                 <h2 id="station-next" class="h5">@L["Next"]</h2>
                 @if (_station.Next.Count == 0)
@@ -531,6 +540,9 @@ else
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
+
+    private string StationFileHref(JobInstructionDto wi, InstructionFileDto file) =>
+        $"terminal/station/instructions/{wi.InstructionId}/files/{file.Id}" + (_station?.Line is { } l ? $"?line={Uri.EscapeDataString(l.Code)}" : "");
 
     [SupplyParameterFromQuery(Name = "line")]
     private string? Line { get; set; }

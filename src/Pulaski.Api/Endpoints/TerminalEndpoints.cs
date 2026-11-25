@@ -134,6 +134,23 @@ internal static class TerminalEndpoints
             });
         });
 
+        // A file of the running job's instructions (#126b): only one the station shows, for a line of the terminal's.
+        terminal.MapGet("/station/instructions/{id:guid}/files/{fileId:guid}", async (
+            Guid id, Guid fileId, string? line, HttpContext http, IQueryHandler<GetStationQuery, StationDto> station,
+            IQueryHandler<Application.Instructions.GetInstructionFileQuery, Application.Instructions.InstructionFileContent> files, CancellationToken ct) =>
+        {
+            var current = TerminalFilter.Current(http);
+            var shown = await station.HandleAsync(new GetStationQuery(current, null, line), ct);
+            if (!shown.Instructions.Any(i => i.InstructionId == id && i.Files.Any(f => f.Id == fileId)))
+            {
+                throw new NotFoundException("That file isn't one of the running job's instructions.");
+            }
+
+            var file = await files.HandleAsync(new Application.Instructions.GetInstructionFileQuery(id, fileId), ct);
+            http.Response.Headers.XContentTypeOptions = "nosniff";
+            return TypedResults.File(file.Content, file.ContentType, file.FileName);
+        });
+
         // Running jobs at the station (#147): as the badged person's user (#150), only a job of the station's line.
         terminal.MapPost("/station/start", (StationJobRequest request, HttpContext http, StationServices station, ICommandHandler<StartJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
             StationJobAsync(http, station, request, UserMessage.Of("start jobs"), () => handler.HandleAsync(new StartJobCommand(request.JobId, request.Version), ct), ct));

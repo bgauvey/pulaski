@@ -62,4 +62,12 @@ public class WorkInstructionTests
         Assert.Throws<DomainRuleException>(() => InstructionTarget.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), "site", null, null, null, Guid.CreateVersion7()));
         Assert.Equal("line", InstructionTarget.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), "line", null, null, null, Guid.CreateVersion7()).Kind);
     }
+
+    [Fact]
+    public void A_job_shows_each_instruction_once_operations_first_then_lines_then_materials()
+    {
+        Guid a = Guid.CreateVersion7(), b = Guid.CreateVersion7(), c = Guid.CreateVersion7(), d = Guid.CreateVersion7();
+        var shown = JobInstructions.Gather([(c, "C", "material"), (b, "B", "line"), (a, "Z", "operation"), (d, "A", "material"), (c, "C", "operation")]);
+        Assert.Equal([(c, "operation,material"), (a, "operation"), (b, "line"), (d, "material")], shown.Select(s => (s.InstructionId, string.Join(",", s.Kinds))));
+    }
 }

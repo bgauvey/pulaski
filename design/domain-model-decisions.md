@@ -3201,6 +3201,14 @@ that was.
   (Configuration; Quality, Process engineer), which implies it. Migration 0079. `/api/instructions` (`?siteId=`, `/{id}`, `/{id}/draft`,
   `/{id}/draft/files`, `/{id}/draft/files/{fileId}/remove`, `/{id}/release`, `/{id}/targets`, `/{id}/targets/{targetId}/end`,
   `/{id}/files/{fileId}`, which `floor.view` may also read). Configure → **Work instructions** (`/instructions`, `/instructions/{id}`).
+- **At the job (b, #194).** `GetJobInstructionsQuery` (`GET /api/jobs/{id}/instructions`, `floor.view` or `instructions.view` at the job's
+  site) gives the released version of each active instruction of the job's site with an active target matching it: its operation (the job's
+  `process_operation_id` → process + operation number), its line or one above it (`equipment_closure`), its material. One entry per
+  instruction with the kinds that matched (`JobInstructions.Gather`: operation first, then line, then material, then by code). Worked out on
+  read: a new release shows at once. The job page shows them under its figures; the operator station's `StationDto.Instructions` are the
+  running job's, shown to anyone at it. The station is static, so its files are links to the web's `/terminal/station/instructions/{id}/files/
+  {fileId}`, which calls `GET /api/terminal/station/instructions/{id}/files/{fileId}?line=` with the terminal's secret; the API serves only a
+  file of an instruction the station shows now (else 404). Which version a run used is recorded with sign-off (d).
 - **Pieces:** (a) documents, versions, files and targets; (b) the released instructions at the job, on the floor and the operator station,
   with the version shown; (c) checklists for setup and first article in a version; (d) sign-off by the operator, with an optional second, kept
   against the run.

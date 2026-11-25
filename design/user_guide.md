@@ -958,6 +958,9 @@ In detail: the station always uses the [touch layout](#use-a-touch-screen) and r
 while they use it; after 15 minutes with nothing done there, it signs them off and waits for a badge. A terminal with no first line offered
 asks which of its lines the station is for (`/terminal/station?line=EXT-01` chooses one). Switching the terminal off stops it at once.
 
+**Read the job's instructions at a station.** Below the running job, the station shows its released work instructions, as the job page
+does, to anyone there: no badge is needed. Tap a folded one to open it, and a file's name to open the file. They change with the running job.
+
 **Run the job at a station.** Signed on with a role that runs jobs:
 
 1. **Start** (or **Resume**) is on the line's next job that is ready, while nothing runs.
@@ -1193,6 +1196,13 @@ The run's rate check still applies: an hour-long run can't take more than an hou
 ### The job page
 
 `jobs/<job>` shows the job's status, planned, good and scrap quantities, its **runs** (line, start, end, length, good, scrap, the most the run can hold, and why it ended) and its **production reports** (when entered, which run, good, scrap, scrap reason, who and any comment; a reversed report is marked *reversed*). The buttons offer what the job's status allows: **Start** or **Resume**, **Pause**, **Complete**, **Reopen** for a completed job whose order isn't closed, and **Report production**. **Materials and lots** opens the job's inventory page. For a production job, **Production performance (B2MML)** downloads its totals as an ISA-95 production performance for the ERP (see [Production performance for the ERP](#production-performance-for-the-erp)).
+
+**Work instructions at the job.** Under the figures, the job page shows every released [work instruction](#work-instructions) for it: those
+shown for its process's operation, for its line (or one the line belongs to) and for its material, in that order. Each gives its code, title
+and version, and what it is shown for (*version 2 · for its operation, material*). A lone instruction is open; with more than one, each
+starts folded: click its title to open it. Its files open by name.
+The job always shows the version released now: a new release shows at once, and a draft never does. Seeing them needs the Floor or *See work
+instructions* at the job's site.
 
 ### Reverse a production report
 
@@ -3338,8 +3348,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
   waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
   and machine counts, not days on the calendar.
-- **Work instructions** are kept and released, but jobs, the Floor and the operator station don't show them yet, and there are no checklists or
-  sign-offs. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
+- **Work instructions** show on the job page and at the station, not on the Floor's board or line boards, and there are no checklists or
+  sign-offs yet. At a station only the running job's show, not the next jobs'. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).

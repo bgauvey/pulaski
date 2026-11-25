@@ -106,6 +106,13 @@ internal static class InstructionEndpoints
             TypedResults.Ok(await handler.HandleAsync(new EndInstructionTargetCommand(id, targetId), ct)))
         .RequirePermission(Permissions.Instructions, Site.Of(SiteOf.WorkInstruction));
 
+        // What a job shows (#126b): the released instructions for its operation, line and material.
+        routes.MapGet("/jobs/{id:guid}/instructions", async Task<Ok<IReadOnlyList<JobInstructionDto>>> (
+            Guid id, IQueryHandler<GetJobInstructionsQuery, IReadOnlyList<JobInstructionDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetJobInstructionsQuery(id), ct)))
+        .WithTags("Work instructions")
+        .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView, Permissions.InstructionsView);
+
         return routes;
     }
 }

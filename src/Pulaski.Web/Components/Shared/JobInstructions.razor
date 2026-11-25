@@ -1,0 +1,54 @@
+@using Pulaski.Web.Services.Instructions
+@* The released work instructions a job shows (#126b, D-116): one per instruction, its version, why it is shown, its text and its files. Works
+   static (the station: files are links, FileHref) and interactive (the job page: files download through OnFile). *@
+@if (Instructions.Count > 0)
+{
+    <div class="job-instructions">
+        @foreach (var wi in Instructions)
+        {
+            <details class="job-instruction" open="@(Instructions.Count == 1 || Open)" @key="wi.VersionId">
+                <summary>
+                    <span class="fw-semibold">@wi.Code</span> · @wi.Title
+                    <span class="text-muted small ms-1">@L["version {0} · for its {1}", wi.Number, string.Join(", ", wi.ShownFor.Select(k => Text.Lower(L.Label(k))))]</span>
+                </summary>
+                <div class="instruction-text mt-2">@((MarkupString)InstructionText.ToHtml(wi.Body))</div>
+                @if (wi.Files.Count > 0)
+                {
+                    <ul class="list-unstyled mb-0 mt-2">
+                        @foreach (var f in wi.Files)
+                        {
+                            <li @key="f.Id">
+                                @if (FileHref is { } href)
+                                {
+                                    <a href="@href(wi, f)" target="_blank" rel="noopener">@f.FileName</a>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-link p-0" @onclick="() => OnFile.InvokeAsync((wi, f))">@f.FileName</button>
+                                }
+                                <span class="text-muted small"> · @L["{0} KB", Math.Max(1, f.SizeBytes / 1024)]</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </details>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<JobInstructionDto> Instructions { get; set; } = [];
+
+    /// <summary>Open every instruction, not only a lone one.</summary>
+    [Parameter]
+    public bool Open { get; set; }
+
+    /// <summary>Static pages: the address each file opens at.</summary>
+    [Parameter]
+    public Func<JobInstructionDto, InstructionFileDto, string>? FileHref { get; set; }
+
+    /// <summary>Interactive pages: a file was chosen.</summary>
+    [Parameter]
+    public EventCallback<(JobInstructionDto Instruction, InstructionFileDto File)> OnFile { get; set; }
+}

@@ -110,3 +110,7 @@
     color: var(--danger);
     font-weight: 600;
 }
+
+/* The running job's instructions (#126b): read at arm's length. */
+.station-instructions .instruction-text { font-size: 1.1rem; }
+.station-instructions .job-instruction > summary { font-size: 1.15rem; padding: var(--space-2) 0; }

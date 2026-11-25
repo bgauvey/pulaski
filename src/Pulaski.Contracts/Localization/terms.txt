@@ -3673,6 +3673,7 @@ That expected receipt was changed by someone else. Reload and try again.
 That file is larger than 5 MB.
 That file isn't in the draft.
 That file isn't one of the instruction's.
+That file isn't one of the running job's instructions.
 That grant is revoked already.
 That grant is revoked; grant the qualification again instead.
 That group isn't one of this kind's reasons.
@@ -4833,6 +4834,7 @@ valid only from {0:yyyy-MM-dd}
 value: '{0}' isn't a whole number.
 variable or attribute.
 version {0} released, {1} components
+version {0} · for its {1}
 via {0}
 waiting for a line
 waiting for a planner

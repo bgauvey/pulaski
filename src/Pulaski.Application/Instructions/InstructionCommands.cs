@@ -307,3 +307,12 @@ internal sealed class GetInstructionFileHandler(IInstructionReadStore store) : I
     public async Task<InstructionFileContent> HandleAsync(GetInstructionFileQuery query, CancellationToken cancellationToken) =>
         await store.GetFileAsync(query.Id, query.FileId, cancellationToken) ?? throw new NotFoundException("That file isn't one of the instruction's.");
 }
+
+/// <summary>The released work instructions a job shows (#126b): for its process operation, its line (or one above it) and its material.</summary>
+public sealed record GetJobInstructionsQuery(Guid JobId) : IQuery<IReadOnlyList<JobInstructionDto>>;
+
+internal sealed class GetJobInstructionsHandler(IInstructionReadStore store) : IQueryHandler<GetJobInstructionsQuery, IReadOnlyList<JobInstructionDto>>
+{
+    public Task<IReadOnlyList<JobInstructionDto>> HandleAsync(GetJobInstructionsQuery query, CancellationToken cancellationToken) =>
+        store.ForJobAsync(query.JobId, cancellationToken);
+}
