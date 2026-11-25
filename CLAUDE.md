@@ -325,6 +325,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `ISiteLookup`) and publishes to `LiveHub`; `GET /api/live` = SSE `changes` batches filtered to visible sites. Web `LiveFeed` (scoped, one
   stream per circuit) → `Subscribe(LiveFilters.At(...)|To(...), refresh, gap)`; pages reload through the API, not while a form is open;
   `LiveStatus Relevant=`. Timers stay as fallback.
+  (b) `/api/terminal/live` (terminal's site) → web `/terminal/live` (terminal cookie, passed through) → `js/terminal-live.js` on pages with
+  `<meta name="pulaski-live" content="board|station" data-every data-idle>`: GET reload ≤ every 3 s; stations wait while a form is typed in.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

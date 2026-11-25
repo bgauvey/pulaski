@@ -12,12 +12,14 @@
    ?line=CODE chooses the line when the terminal offers several. *@
 <PageTitle>@(_station?.Line?.Code ?? _station?.TerminalName ?? L["Station"]) · Pulaski</PageTitle>
 @* Always the touch layout (D-105): a station is worked by finger, whatever the screen says about its pointer. One HeadContent: a page keeps
-   only its last. It reloads to stay current, except while a PIN is being typed. *@
+   only its last. It reloads to stay current (#143b: terminal-live.js, at once when something changes, never while a form is being typed in;
+   without scripts, the meta refresh), except while a PIN is being typed. *@
 <HeadContent>
     <meta name="pulaski-touch" content="always" />
     @if (!_needsPin)
     {
-        <meta http-equiv="refresh" content="@RefreshSeconds" />
+        <meta name="pulaski-live" content="station" data-every="@RefreshSeconds" data-idle="@(_station?.IdleMinutes ?? 15)" />
+        <noscript><meta http-equiv="refresh" content="@RefreshSeconds" /></noscript>
     }
 </HeadContent>
 

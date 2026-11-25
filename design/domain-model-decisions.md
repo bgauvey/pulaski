@@ -3255,6 +3255,13 @@ writes an event for every change in the same transaction (D-007); machine ingest
   every page reload). A page subscribes with what it cares about (`LiveFilters.At(site, kinds…)`, `LiveFilters.To(kind, id)`) and reloads
   through its own API calls, so permissions are as ever: at most every second by default (Machines 2 s, the Overview 10 s), never two at
   once, and not while a form is open. The timers stay as the fallback. `LiveStatus` takes `Relevant` for pages it drives.
+- **Boards and stations (b).** `GET /api/terminal/live` (terminal secret) streams the changes at the terminal's site, or with no site. The
+  pages are static, and a browser's `EventSource` can't send the secret, so the web's `/terminal/live` reads the device's terminal cookie and
+  passes the API's stream through. `js/terminal-live.js` (loaded everywhere, active only on a page with `<meta name="pulaski-live">`: `board` or
+  `station`, `data-every` = the stand-in timer, `data-idle`) reloads with a GET (`location.replace`, never resubmitting a form) at most every
+  3 s. A station holds the reload while a field has focus or anything was typed since it loaded, up to its idle minutes, and none while a PIN is
+  typed; the meta refresh is kept in `<noscript>` for browsers without scripts. Filtering is by site only: a board reloads for any change
+  there, which is cheap at plant scale.
 - **Pieces:** (a) the channel, the stream and the signed-in pages (Overview, Floor, job page, Machines, Andon, Handover, Inbox); (b) line boards
   and operator stations (static pages): boards reload at once, a station only while nobody is typing in one of its forms.
 

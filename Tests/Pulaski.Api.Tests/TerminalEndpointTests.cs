@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Pulaski.Application.Labor;
@@ -65,6 +66,37 @@ public sealed class TerminalEndpointTests(ApiFactory factory) : IClassFixture<Ap
         var uri = new Uri($"/api/terminal/station/instructions/{instruction.Id}/files/{file}", UriKind.Relative);
         Assert.Equal(HttpStatusCode.NotFound, (await TerminalClient(secret).GetAsync(uri)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateSignedOutClient().GetAsync(uri)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_terminal_hears_the_changes_at_its_site_and_no_others()
+    {
+        // #143b: boards and stations reload on these.
+        var (terminal, secret) = await EnrolledAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/terminal/live");
+        using var response = await TerminalClient(secret).SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        Assert.Equal("text/event-stream", response.Content.Headers.ContentType?.MediaType);
+        await using var body = await response.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(body);
+        Assert.Equal(": connected", await reader.ReadLineAsync());
+
+        var hub = factory.Services.GetRequiredService<Pulaski.Application.Live.LiveHub>();
+        var before = hub.Subscribers;
+        Guid elsewhere = Guid.CreateVersion7(), here = Guid.CreateVersion7();
+        hub.Publish(new Pulaski.Contracts.Live.LiveChangeDto("pulaski.job.started.v1", "job", elsewhere, Guid.CreateVersion7()));
+        hub.Publish(new Pulaski.Contracts.Live.LiveChangeDto("machine", "machine", here, terminal.SiteId));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        string? line;
+        do
+        {
+            line = await reader.ReadLineAsync(timeout.Token);
+        }
+        while (line is not null && !line.StartsWith("data:", StringComparison.Ordinal));
+
+        Assert.Contains(here.ToString(), line, StringComparison.Ordinal);
+        Assert.DoesNotContain(elsewhere.ToString(), line, StringComparison.Ordinal);
+        Assert.True(before >= 1);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateSignedOutClient().GetAsync(new Uri("/api/terminal/live", UriKind.Relative))).StatusCode);
     }
 
     [Fact]

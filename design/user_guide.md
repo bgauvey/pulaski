@@ -163,8 +163,8 @@ and when you move to another page.
 ### Screens that update themselves
 
 The floor screens show what happens elsewhere within a few seconds, without reloading: a report entered at one terminal, a job started at a
-station, a machine stopping, an andon call. This works on the **Overview**, **Floor**, a job's page, **Machines**, **Andon**, **Handover** and
-the **Inbox**.
+station, a machine stopping, an andon call. This works on the **Overview**, **Floor**, a job's page, **Machines**, **Andon**, **Handover**, the
+**Inbox**, [line boards](#show-a-line-board-on-a-tv) and [operator stations](#use-an-operator-station).
 
 In detail:
 
@@ -175,6 +175,10 @@ In detail:
 - **How often:** a page reloads at most once a second (Machines every 2 seconds, the Overview every 10), however much changes. The timers stay
   as well (every 15 or 30 seconds), so a page catches up by itself if the live connection drops; when it comes back, every open page reloads once.
 - Process values alone don't trigger a reload.
+- **Boards and stations** reload the whole screen, at most every 3 seconds, for changes at their terminal's site. A station never reloads while
+  someone is typing in one of its forms (a box has the cursor, or something was typed since it last loaded): it waits until the form is sent
+  or the station has been left alone for its idle time (15 minutes). While a PIN is being typed it doesn't reload at all. A screen whose
+  browser runs no scripts keeps reloading on its timer.
 
 ### How saving works
 
@@ -988,7 +992,8 @@ with their badge. (Starting, pausing, reporting and coding stops at the station 
 3. To sign on, hold your badge to the reader (or type its number and press Enter), and your PIN if the terminal asks for one.
 4. Click **Sign off** when you leave. Badging with someone else's badge switches to them.
 
-In detail: the station always uses the [touch layout](#use-a-touch-screen) and refreshes every 30 seconds. Someone signed on stays signed on
+In detail: the station always uses the [touch layout](#use-a-touch-screen) and shows changes [within seconds](#screens-that-update-themselves)
+(and every 30 seconds), never while someone is typing in one of its forms. Someone signed on stays signed on
 while they use it; after 15 minutes with nothing done there, it signs them off and waits for a badge. A terminal with no first line offered
 asks which of its lines the station is for (`/terminal/station?line=EXT-01` chooses one). Switching the terminal off stops it at once.
 
@@ -1071,7 +1076,8 @@ A TV on the floor can show each line's state, running job, output, down time and
 2. Click **Enrolment code**, open `/terminal/enrol` in the TV's browser and type the code.
 3. Open `/terminal/board` on the TV (add `?line=EXT-01` to show one line full screen) and leave it running.
 
-In detail: the board reloads every 15 seconds, so it recovers by itself after a network drop. Its figures are the Overview's: a line that tracks
+In detail: the board reloads [within seconds](#screens-that-update-themselves) of a change at its site, and every 15 seconds, so it recovers by
+itself after a network drop. Its figures are the Overview's: a line that tracks
 machine state but has no signal shows **No signal**, and down time counts no-signal time. Colour is kept for what needs attention: down, no
 signal, waiting, OEE below target, stops to code. Switching the terminal off stops the board at once. A line's calls for help that aren't
 resolved show under its name: amber while waiting, quiet once someone is on it, and red, with the line's frame, once escalated. Its
@@ -3424,8 +3430,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
   show, or the next job's while nothing runs. A failed or rejected checklist only holds up the job; it doesn't put lots on hold or raise a quality
   alert, and nothing e-mails anyone about a checklist waiting for its sign-off (it is in the Inbox). Who may give the second sign-off is one
   permission for every checklist, not chosen per checklist. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
-- **Live updates** reach the Overview, Floor, job pages, Machines, Andon, Handover and the Inbox; line boards and operator stations still reload
-  on their timers, and the Schedule, Inventory and Quality pages show what was there when they were opened (charts and alerts every 30 seconds).
+- **Live updates** reach the Overview, Floor, job pages, Machines, Andon, Handover, the Inbox, line boards and operator stations; the Schedule,
+  Inventory and Quality pages show what was there when they were opened (charts and alerts every 30 seconds). Boards and stations reload
+  for any change at their site, not only their own lines'.
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).
