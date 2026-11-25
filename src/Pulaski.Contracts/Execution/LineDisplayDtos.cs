@@ -61,6 +61,9 @@ public sealed record LineDisplayLineDto
 
     /// <summary>Its calls for help not yet resolved (#158), the longest waiting first, figured as of the board's time.</summary>
     public IReadOnlyList<Pulaski.Contracts.Andon.AndonCallDto> Calls { get; init; } = [];
+
+    /// <summary>Maintenance requests not closed on the line or its machines (#127): waiting ones first, high priority first among them.</summary>
+    public IReadOnlyList<Pulaski.Contracts.Maintenance.MaintenanceRequestDto> Maintenance { get; init; } = [];
 }
 
 public sealed record LineDisplayJobDto
@@ -120,6 +123,9 @@ public sealed record StationDto
     /// <summary>The kinds of help the site offers, in their order, for a signed-on person whose role calls for help; empty otherwise.</summary>
     public IReadOnlyList<Pulaski.Contracts.Andon.AndonTypeDto> AndonTypes { get; init; } = [];
 
+    /// <summary>The line's maintenance requests not closed (#127), its machines' too, the waiting ones first. Shown even while the station waits.</summary>
+    public IReadOnlyList<Pulaski.Contracts.Maintenance.MaintenanceRequestDto> MaintenanceRequests { get; init; } = [];
+
     /// <summary>Why a run ends (reasons of kind <c>run_end</c> at the site), offered when pausing or completing at the station (#147).</summary>
     public IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto> RunEndReasons { get; init; } = [];
 
@@ -139,6 +145,9 @@ public sealed record StationDto
     /// <summary>Whether the signed-on person may call for help (<c>andon.call</c>) and answer calls (<c>andon.respond</c>) here (#157).</summary>
     public bool CanCallForHelp { get; init; }
     public bool CanAnswerCalls { get; init; }
+
+    /// <summary>Whether the signed-on person may request maintenance here (<c>maintenance.request</c>, #127).</summary>
+    public bool CanRequestMaintenance { get; init; }
 
     /// <summary>Minutes without anything done before the station signs its person off.</summary>
     public int IdleMinutes { get; init; }
@@ -245,6 +254,19 @@ public sealed record StationAndonRequest
     public string? Line { get; init; }
     public Guid? TypeId { get; init; }
     public Guid? CallId { get; init; }
+    public string? Text { get; init; }
+}
+
+/// <summary>
+/// Request maintenance at a station (#127), as the signed-on person: for the station's line, or for one of its stops to code (then for the stop's
+/// machine), with what needs looking at; <see cref="Urgent"/> asks for high priority.
+/// </summary>
+public sealed record StationMaintenanceRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public Guid? StopId { get; init; }
+    public bool Urgent { get; init; }
     public string? Text { get; init; }
 }
 

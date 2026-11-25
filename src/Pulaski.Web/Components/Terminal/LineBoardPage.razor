@@ -3,6 +3,7 @@
 @attribute [ExcludeFromInteractiveRouting]
 @layout BoardLayout
 @using Pulaski.Web.Services.Execution
+@using Pulaski.Web.Services.MachineData
 @inject PulaskiApiClient Api
 
 @* A line display board (#120) for a TV on the floor: read-only, no one signs in. The device is enrolled as a terminal (D-049), and its
@@ -79,6 +80,19 @@ else
                         <span class="board-call-type">@call.TypeName</span>
                         <span class="board-call-state">@AndonCallView.State(L, call, _board.AsOf)</span>
                     </div>
+                }
+
+                @* Maintenance requests not closed (#127): waiting ones in the waiting colour, those in progress quiet. *@
+                @foreach (var request in line.Maintenance.Take(3))
+                {
+                    <div class="board-call board-maintenance @(request.Status == "open" ? "" : "is-answered")" @key="request.Id">
+                        <span class="board-call-type">@request.Number · @request.EquipmentCode</span>
+                        <span class="board-call-state">@MaintenanceRequestView.State(L, request)</span>
+                    </div>
+                }
+                @if (line.Maintenance.Count > 3)
+                {
+                    <div class="board-quiet">@L["and {0} more", line.Maintenance.Count - 3]</div>
                 }
 
                 @if (line.Running is { } job)

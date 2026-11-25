@@ -207,6 +207,9 @@
 
 .board-line.has-escalated-call { border-color: var(--board-down); }
 
+/* Maintenance requests (#127): like a call, but dashed, so the two read apart at a distance. */
+.board-call.board-maintenance { border-style: dashed; }
+
 /* Open handover items (#124): quiet, a marker each, the text clipped to a line. */
 .board-handover {
     margin: 0;

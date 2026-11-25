@@ -34,8 +34,8 @@ public interface IMaintenanceRepository
 public interface IMaintenanceReadStore
 {
     /// <summary>
-    /// The site's requests, newest first: those not closed when <paramref name="openOnly"/>, else those raised in the period; for one piece of
-    /// equipment when given. Waiting time and age are left for the handler.
+    /// The site's requests, newest first: those not closed when <paramref name="openOnly"/>, else those raised in the period; for a piece of
+    /// equipment and what is below it when given. Each with its line. Waiting time and age are left for the handler.
     /// </summary>
     Task<IReadOnlyList<MaintenanceRequestDto>> ListAsync(
         Guid siteId, bool openOnly, DateTimeOffset? from, DateTimeOffset? until, Guid? equipmentId, CancellationToken cancellationToken);

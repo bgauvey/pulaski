@@ -67,6 +67,17 @@ internal sealed class InboxQueries(NpgsqlDataSource dataSource) : IInboxReadStor
         WHERE a.status = 'open' AND a.site_id = ANY(@SiteIds)
         """;
 
+    // Maintenance requests nobody has started yet (#127, D-115): worked on the Machines page. The title is the request's
+    // number and equipment, the detail what was asked, so neither needs translating.
+    private const string Maintenance = """
+        SELECT 'maintenance' AS kind, 'maintenance:' || r.id AS key, r.number || ' · ' || e.code AS title, r.description AS detail,
+               r.site_id, s.code AS site_code, r.raised_at AS since, 'machines?tab=maintenance' AS link
+        FROM core.maintenance_request r
+        JOIN core.equipment e ON e.id = r.equipment_id
+        JOIN core.equipment s ON s.id = r.site_id
+        WHERE r.status = 'open' AND r.site_id = ANY(@SiteIds)
+        """;
+
     public async Task<IReadOnlyList<(Guid Id, string Code)>> ListSitesAsync(CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -81,6 +92,7 @@ internal sealed class InboxQueries(NpgsqlDataSource dataSource) : IInboxReadStor
             InboxKinds.RateProposal => RateProposals,
             InboxKinds.ErpChange => ErpChanges,
             InboxKinds.SpcAlert => SpcAlerts,
+            InboxKinds.Maintenance => Maintenance,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Not an inbox kind read from SQL."),
         };
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

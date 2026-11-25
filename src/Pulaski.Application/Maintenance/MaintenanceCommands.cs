@@ -112,7 +112,8 @@ internal sealed class CloseMaintenanceRequestHandler(IUnitOfWork unitOfWork, IMa
 
 /// <summary>
 /// The site's maintenance requests (#127): those not closed when <paramref name="OpenOnly"/>, else those raised in the period (at most 92 days);
-/// for one piece of equipment when given. How long each waited and its age are worked out now.
+/// for a piece of equipment and what is below it when given (a line's requests include its machines'). How long each waited and its age are
+/// worked out now.
 /// </summary>
 public sealed record ListMaintenanceRequestsQuery(Guid SiteId, bool OpenOnly, DateTimeOffset? From = null, DateTimeOffset? To = null, Guid? EquipmentId = null)
     : IQuery<IReadOnlyList<MaintenanceRequestDto>>;
@@ -133,6 +134,15 @@ internal sealed class ListMaintenanceRequestsHandler(IMaintenanceReadStore store
         var requests = await store.ListAsync(query.SiteId, query.OpenOnly, query.From, query.To, query.EquipmentId, cancellationToken);
         return [.. requests.Select(r => MaintenanceView.Figure(r, now))];
     }
+}
+
+/// <summary>The order requests are worked in (#127): waiting before in progress, high priority first, then the longest waiting. Pure.</summary>
+public static class MaintenanceOrder
+{
+    public static IEnumerable<MaintenanceRequestDto> Waiting(IEnumerable<MaintenanceRequestDto> requests) => requests
+        .OrderBy(r => r.Status == MaintenanceStatuses.Open ? 0 : 1)
+        .ThenBy(r => r.Priority switch { MaintenancePriorities.High => 0, MaintenancePriorities.Normal => 1, _ => 2 })
+        .ThenBy(r => r.RaisedAt);
 }
 
 /// <summary>A request's waiting time and age as of now (#127). Pure.</summary>

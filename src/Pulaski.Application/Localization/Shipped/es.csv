@@ -114,6 +114,7 @@ term,translation
 1 delivery goes again on the next round.,1 entrega se reenvía en la siguiente ronda.
 1 lot is still to count; enter 0 for a lot that isn't there.,Falta contar 1 lote; ingrese 0 para un lote que no está.
 1 lot not suggested,1 lote no sugerido
+1 maintenance request open,1 solicitud de mantenimiento abierta
 1 month,1 mes
 1 of it is how many {0},1 de él son cuántos {0}
 1 open item,1 asunto abierto
@@ -580,6 +581,7 @@ Badge in to answer it.,Registre su gafete para atenderla.
 Badge in to answer them.,Registre su gafete para atenderlas.
 Badge in to give its reason.,Registre su gafete para dar su motivo.
 Badge in to give their reasons.,Registre su gafete para dar sus motivos.
+Badge in to request maintenance.,Pase su gafete para solicitar mantenimiento.
 "Badge not recognised. Try again, or ask a supervisor.",Gafete no reconocido. Intente de nuevo o pida ayuda a un supervisor.
 Badge of {0},Gafete de {0}
 Badge plus pin,Gafete más PIN
@@ -1397,6 +1399,7 @@ For every material,Para todo material
 For job,Para el trabajo
 For limits agreed with a customer or carried over from another system. Uses the material and line chosen above; say why.,Para límites acordados con un cliente o traídos de otro sistema. Usa el material y la línea elegidos arriba; diga por qué.
 For process,Para el proceso
+"For the stop of {0}, {1}.","Por el paro de {0}, {1}."
 For this material {0} already converts to {1} (1 {2} = {3:0.######} {4}) through its other conversions; change one of those instead.,Para este material {0} ya se convierte a {1} (1 {2} = {3:0.######} {4}) por sus otras conversiones; cambie una de ellas.
 "For time the machine didn't report, such as an outage with no signal. It may not overlap the machine's other stops.","Para tiempo que la máquina no reportó, como una interrupción sin señal. No puede traslaparse con los otros paros de la máquina."
 For {0}: open,Para {0}: abra
@@ -1999,6 +2002,8 @@ Maintain units of measure,Mantener unidades de medida
 Maintained in Pulaski,Mantenido en Pulaski
 Maintenance,Mantenimiento
 Maintenance request {0} not found.,Solicitud de mantenimiento {0} no encontrada.
+Maintenance requests open: {0},Solicitudes de mantenimiento abiertas: {0}
+Maintenance requests waiting,Solicitudes de mantenimiento en espera
 Make a material class…,Hacer una clase de material…
 Make a single material…,Hacer un solo material…
 Make group,Convertir en grupo
@@ -3036,6 +3041,7 @@ Request,Solicitar
 Request envelope,Sobre de la solicitud
 Request maintenance,Solicitar mantenimiento
 "Request maintenance for a line or machine, on its own or from a stop","Solicitar mantenimiento para una línea o máquina, por sí sola o desde un paro"
+"Request, urgent","Solicitar, urgente"
 "RequestBody: the SOAP envelope to post, at most 20,000 characters.","RequestBody: el sobre SOAP que se envía, como máximo 20.000 caracteres."
 Require,Exigir
 Require a qualification…,Exigir una calificación…
@@ -3430,6 +3436,7 @@ Someone else changed the same records at the same moment. Try again.,Alguien má
 Someone else changed this draft; showing their version.,Alguien más cambió este borrador; se muestra su versión.
 Someone else changed this first; the board now shows their change.,Alguien más cambió esto primero; el tablero ahora muestra su cambio.
 Someone else started this material's balance at that location at the same moment. Try again.,Otra persona inició el saldo de este material en esa ubicación en el mismo momento. Intente de nuevo.
+Something to fix?,¿Algo que reparar?
 Source,Origen
 "Sparkplug B, OPC UA or EtherNet/IP.","Sparkplug B, OPC UA o EtherNet/IP."
 Spc alert,Alerta de SPC
@@ -3635,6 +3642,7 @@ That shift schedule doesn't exist.,Ese horario de turnos no existe.
 That shortfall was changed by someone else. Reload and try again.,Alguien más cambió ese faltante. Recargue e intente de nuevo.
 That shortfall was {0} already.,Ese faltante ya estaba {0}.
 That stop isn't waiting for a reason on this station's line; code it on Machines.,Ese paro no espera un motivo en la línea de esta estación; codifíquelo en Máquinas.
+That stop isn't waiting on this station's line any more.,Ese paro ya no está en espera en la línea de esta estación.
 "That stop wasn't found, or was replaced by an adjustment.","No se encontró ese paro, o un ajuste lo reemplazó."
 That target already ended on {0:yyyy-MM-dd}.,Esa meta ya terminó el {0:yyyy-MM-dd}.
 That time has ended already.,Ese tiempo ya terminó.
@@ -4001,6 +4009,7 @@ This shift:,Este turno:
 This specification already has a draft; change that one.,Esta especificación ya tiene un borrador; cambie ese.
 This specification has no released version to start a draft from.,Esta especificación no tiene versión liberada desde la cual iniciar un borrador.
 This station doesn't offer that call; choose one of its buttons.,Esta estación no ofrece esa llamada; elija uno de sus botones.
+This station has no line to request maintenance for.,Esta estación no tiene una línea para la que solicitar mantenimiento.
 This station isn't enrolled,Esta estación no está inscrita
 "This stop already has {0}, still waiting for maintenance.","Este paro ya tiene {0}, aún en espera de mantenimiento."
 "This stop didn't come from an adjustment, so there is nothing to undo.","Esta parada no vino de un ajuste, así que no hay nada que deshacer."
@@ -4403,7 +4412,7 @@ Your PIN,Su PIN
 Your Pulaski user is switched off; ask a supervisor.,Su usuario de Pulaski está desactivado; pida ayuda a un supervisor.
 Your password is changed. Sign in with it now.,Su contraseña se cambió. Inicie sesión con ella ahora.
 Your role doesn't code stops; ask someone who does.,Su rol no codifica paros; pida ayuda a alguien que sí lo haga.
-"Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes or planning rates.","Su rol no decide nada de lo que reúne Pendientes: tandas parciales, alertas de SPC, mano de obra, cambios del ERP o tasas de planeación."
+"Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes, planning rates or maintenance requests.","Su rol no decide nada de lo que reúne la bandeja: tandas parciales, alertas SPC, mano de obra, cambios del ERP, tasas de planeación ni solicitudes de mantenimiento."
 Your role doesn't let you code stops at this site.,Su rol no le permite codificar paros en este sitio.
 Your role doesn't let you report production at this site.,Su rol no le permite reportar producción en este sitio.
 Your role doesn't let you report production or code stops at this site.,Su rol no le permite reportar producción ni codificar paros en este sitio.
@@ -4655,6 +4664,7 @@ released,liberado
 removed,quitado
 replaced,reemplazado
 report production,reportar producción
+request maintenance,solicitar mantenimiento
 retry or skip deliveries,reintentar u omitir envíos
 reversed,revertido
 revoked,revocada

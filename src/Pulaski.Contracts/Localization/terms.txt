@@ -113,6 +113,7 @@
 1 delivery goes again on the next round.
 1 lot is still to count; enter 0 for a lot that isn't there.
 1 lot not suggested
+1 maintenance request open
 1 month
 1 of it is how many {0}
 1 open item
@@ -579,6 +580,7 @@ Badge in to answer it.
 Badge in to answer them.
 Badge in to give its reason.
 Badge in to give their reasons.
+Badge in to request maintenance.
 Badge not recognised. Try again, or ask a supervisor.
 Badge of {0}
 Badge plus pin
@@ -1396,6 +1398,7 @@ For every open job: release allocations that are no longer usable and allocate w
 For job
 For limits agreed with a customer or carried over from another system. Uses the material and line chosen above; say why.
 For process
+For the stop of {0}, {1}.
 For this material {0} already converts to {1} (1 {2} = {3:0.######} {4}) through its other conversions; change one of those instead.
 For time the machine didn't report, such as an outage with no signal. It may not overlap the machine's other stops.
 For {0}: open
@@ -1998,6 +2001,8 @@ Maintain users, roles and what each role may do
 Maintained in Pulaski
 Maintenance
 Maintenance request {0} not found.
+Maintenance requests open: {0}
+Maintenance requests waiting
 Make a material class…
 Make a single material…
 Make group
@@ -3035,6 +3040,7 @@ Request
 Request envelope
 Request maintenance
 Request maintenance for a line or machine, on its own or from a stop
+Request, urgent
 RequestBody: the SOAP envelope to post, at most 20,000 characters.
 Require
 Require a qualification…
@@ -3429,6 +3435,7 @@ Someone else changed the same records at the same moment. Try again.
 Someone else changed this draft; showing their version.
 Someone else changed this first; the board now shows their change.
 Someone else started this material's balance at that location at the same moment. Try again.
+Something to fix?
 Source
 Sparkplug B, OPC UA or EtherNet/IP.
 Spc alert
@@ -3634,6 +3641,7 @@ That shift schedule doesn't exist.
 That shortfall was changed by someone else. Reload and try again.
 That shortfall was {0} already.
 That stop isn't waiting for a reason on this station's line; code it on Machines.
+That stop isn't waiting on this station's line any more.
 That stop wasn't found, or was replaced by an adjustment.
 That target already ended on {0:yyyy-MM-dd}.
 That time has ended already.
@@ -4000,6 +4008,7 @@ This site uses the defaults, 110% each.
 This specification already has a draft; change that one.
 This specification has no released version to start a draft from.
 This station doesn't offer that call; choose one of its buttons.
+This station has no line to request maintenance for.
 This station isn't enrolled
 This stop already has {0}, still waiting for maintenance.
 This stop didn't come from an adjustment, so there is nothing to undo.
@@ -4402,7 +4411,7 @@ Your PIN
 Your Pulaski user is switched off; ask a supervisor.
 Your password is changed. Sign in with it now.
 Your role doesn't code stops; ask someone who does.
-Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes or planning rates.
+Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes, planning rates or maintenance requests.
 Your role doesn't let you code stops at this site.
 Your role doesn't let you report production at this site.
 Your role doesn't let you report production or code stops at this site.
@@ -4654,6 +4663,7 @@ released
 removed
 replaced
 report production
+request maintenance
 retry or skip deliveries
 reversed
 revoked

@@ -490,8 +490,17 @@ else
 
     private bool Adjusting => _entry is not null || _splitting is not null || _acting is not null || _chosen.Count > 0;
 
+    /// <summary>A tab to open on: <c>?tab=maintenance</c> from the Inbox (#127).</summary>
+    [SupplyParameterFromQuery(Name = "tab")]
+    private string? Tab { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
+        if (Tab is "maintenance" or "alarms" or "values" or "reports")
+        {
+            _tab = Tab;
+        }
+
         await LoadStatusAsync();
         _ = TickAsync(_cts.Token);
     }

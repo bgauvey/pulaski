@@ -77,7 +77,8 @@ internal sealed class MaintenanceQueries(NpgsqlDataSource dataSource) : IMainten
 {
     // A request with its equipment, the stop it came from (and that stop's reason) and the names of the users who raised, started and closed it.
     private const string Requests = """
-        SELECT r.id, r.site_id, r.number, r.equipment_id, e.code AS equipment_code, e.name AS equipment_name, r.status, r.priority, r.description,
+        SELECT r.id, r.site_id, r.number, r.equipment_id, e.code AS equipment_code, e.name AS equipment_name, line.id AS line_id, line.code AS line_code,
+               r.status, r.priority, r.description,
                r.raised_at, r.raised_by, r.raised_from, r.downtime_id, r.downtime_started_at, d.ended_at AS downtime_ended_at,
                rc.code || ' · ' || rc.name AS downtime_reason,
                r.started_at, r.started_by, r.closed_at, r.closed_by, r.resolution,
@@ -88,8 +89,16 @@ internal sealed class MaintenanceQueries(NpgsqlDataSource dataSource) : IMainten
         JOIN core.equipment e ON e.id = r.equipment_id
         LEFT JOIN ts.downtime d ON d.id = r.downtime_id AND d.started_at = r.downtime_started_at
         LEFT JOIN core.reason_code rc ON rc.id = d.effective_reason_code_id
+        LEFT JOIN LATERAL (
+            SELECT a.id, a.code
+            FROM core.equipment_closure c
+            JOIN core.equipment a ON a.id = c.ancestor_id
+            WHERE c.descendant_id = r.equipment_id AND a.can_run_job
+            ORDER BY c.depth
+            LIMIT 1) line ON true
         WHERE r.site_id = @SiteId
-          AND (@EquipmentId::uuid IS NULL OR r.equipment_id = @EquipmentId)
+          AND (@EquipmentId::uuid IS NULL
+               OR EXISTS (SELECT 1 FROM core.equipment_closure c WHERE c.ancestor_id = @EquipmentId AND c.descendant_id = r.equipment_id))
           AND (CASE WHEN @OpenOnly THEN r.status <> 'closed'
                     ELSE (@From::timestamptz IS NULL OR r.raised_at >= @From) AND (@To::timestamptz IS NULL OR r.raised_at < @To) END)
         ORDER BY r.raised_at DESC

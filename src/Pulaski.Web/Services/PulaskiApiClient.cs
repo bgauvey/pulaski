@@ -1677,6 +1677,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<StationActionResponse> StationAndonAsync(string secret, string action, StationAndonRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, $"api/terminal/station/andon/{action}", request, ct);
 
+    /// <summary>Request maintenance at the station (#127), for its line or one of its stops to code.</summary>
+    public Task<StationActionResponse> StationMaintenanceAsync(string secret, StationMaintenanceRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/maintenance/request", request, ct);
+
     public Task<StationResponse> StationSignOnAsync(string secret, StationSignOnRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<StationResponse>(secret, HttpMethod.Post, "api/terminal/station/sign-on", request, ct);
 

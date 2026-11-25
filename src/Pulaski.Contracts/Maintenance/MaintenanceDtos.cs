@@ -10,6 +10,10 @@ public sealed record MaintenanceRequestDto
     public required string EquipmentCode { get; init; }
     public string? EquipmentName { get; init; }
 
+    /// <summary>The line the equipment is (the nearest at or above it that runs jobs): where boards and stations show it. Null above lines.</summary>
+    public Guid? LineId { get; init; }
+    public string? LineCode { get; init; }
+
     /// <summary><c>open</c>, <c>in_progress</c> or <c>closed</c>.</summary>
     public required string Status { get; init; }
 

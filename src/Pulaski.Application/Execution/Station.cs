@@ -85,6 +85,7 @@ internal sealed class GetStationHandler(
             CodingReasons = reasonsByMachine,
             AndonCalls = line?.Calls ?? [],
             AndonTypes = types,
+            MaintenanceRequests = line?.Maintenance ?? [],
             RunEndReasons = query.PersonId is null ? [] : await reasons.HandleAsync(new ListReasonCodesQuery("run_end", terminal.SiteId), cancellationToken),
             Report = row?.Running is { JobType: "production" } running && May(Permissions.ProductionReport)
                 ? await ReportAsync(running.JobId, terminal.SiteId, cancellationToken)
@@ -97,6 +98,7 @@ internal sealed class GetStationHandler(
             CanCodeStops = May(Permissions.DowntimeCode),
             CanCallForHelp = May(Permissions.AndonCall),
             CanAnswerCalls = May(Permissions.AndonRespond),
+            CanRequestMaintenance = line is not null && May(Permissions.MaintenanceRequest),
             IdleMinutes = (int)Domain.Labor.TerminalRules.StationIdle.TotalMinutes,
         };
     }

@@ -15,6 +15,7 @@ public static class InboxKinds
     public const string ErpChange = "erp_change";
     public const string SpcAlert = "spc_alert";
     public const string Labor = "labor";
+    public const string Maintenance = "maintenance";
 
     public static IReadOnlyList<(string Kind, string Permission)> All { get; } =
     [
@@ -23,6 +24,7 @@ public static class InboxKinds
         (Labor, Permissions.LaborApprove),
         (ErpChange, Permissions.WorkOrderManage),
         (RateProposal, Permissions.RateModify),
+        (Maintenance, Permissions.MaintenanceWork),
     ];
 }
 

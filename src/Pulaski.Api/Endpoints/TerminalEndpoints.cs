@@ -7,12 +7,14 @@ using Pulaski.Application.Execution;
 using Pulaski.Application.Labor;
 using Pulaski.Application.Localization;
 using Pulaski.Application.MachineData;
+using Pulaski.Application.Maintenance;
 using Pulaski.Application.Security;
 using Pulaski.Contracts.Andon;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.MachineData;
+using Pulaski.Contracts.Maintenance;
 using Pulaski.Domain.Labor;
 using Pulaski.Domain.Security;
 using Pulaski.Domain;
@@ -225,6 +227,32 @@ internal static class TerminalEndpoints
 
             var result = await raise.HandleAsync(new RaiseAndonCallCommand(before.Line.LineId, type.Id, Text(request.Text), terminal.Code), ct);
             return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, StationAndon.Called(type.Name, result), ct);
+        });
+
+        // Maintenance at the station (#127): request it for the line, or for one of its stops to code (the stop's machine), as the signed-on person.
+        terminal.MapPost("/station/maintenance/request", async Task<Ok<StationActionResponse>> (
+            StationMaintenanceRequest request, HttpContext http, StationServices station,
+            ICommandHandler<RaiseMaintenanceRequestCommand, MaintenanceRequestResponse> raise, CancellationToken ct) =>
+        {
+            var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.MaintenanceRequest,
+                UserMessage.Of("request maintenance"));
+            var personId = station.Tickets.PersonOf(ticket, terminal.Id);
+            var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
+            if (before.Line is null)
+            {
+                throw new DomainRuleException("This station has no line to request maintenance for.");
+            }
+
+            var stop = request.StopId is { } stopId
+                ? before.StopsToCode.FirstOrDefault(s => s.Id == stopId) ?? throw new DomainRuleException("That stop isn't waiting on this station's line any more.")
+                : null;
+            var result = await raise.HandleAsync(new RaiseMaintenanceRequestCommand(
+                stop?.EquipmentId ?? before.Line.LineId, request.Urgent ? "high" : null, Text(request.Text), stop?.Id, stop?.StartedAt, terminal.Code), ct);
+            var note = result.AlreadyOpen
+                ? Notes.Of($"This stop already has {result.Number}, still waiting for maintenance.")
+                : Notes.Of($"{result.Number} is waiting for maintenance.");
+            return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, note, ct);
         });
 
         terminal.MapPost("/station/andon/acknowledge", async Task<Ok<StationActionResponse>> (

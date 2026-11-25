@@ -675,6 +675,14 @@ public sealed class ExecutionTests(DatabaseFixture db)
         var supervisorView = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, sam.Id, null));
         Assert.Equal((true, true), (supervisorView.CanCallForHelp, supervisorView.CanAnswerCalls));
 
+        // Maintenance (#127b): the station shows its line's requests whoever stands there; a signed-on operator may request one.
+        var request = await db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Extruder, null, "Puller squeals", RaisedFrom: "ST-" + _s));
+        await db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Packer, null, "Not this line"));
+        var withRequest = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
+        Assert.Equal((request.Id, "ST-" + _s), (Assert.Single(withRequest.MaintenanceRequests).Id, withRequest.MaintenanceRequests[0].RaisedFrom));
+        Assert.False(withRequest.CanRequestMaintenance);
+        Assert.True((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, olu.Id, null))).CanRequestMaintenance);
+
         // Resolved, it leaves the station.
         await db.SendAsync(new Pulaski.Application.Andon.ResolveAndonCallCommand(raised.Id, "Tensioned"));
         Assert.Empty((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, sam.Id, null))).AndonCalls);
@@ -884,6 +892,25 @@ public sealed class ExecutionTests(DatabaseFixture db)
         Assert.Equal((plant.Extruder, "open", "high", stopStart), (fromStop.EquipmentId, fromStop.Status, fromStop.Priority, fromStop.DowntimeStartedAt!.Value));
         Assert.NotNull(fromStop.DowntimeEndedAt);
 
+        // A machine's request belongs to its line (#127b): on the line's board and in its list, waiting ones first, high priority first.
+        CreatedResponse saw = await db.SendAsync(new CreateEquipmentCommand(plant.Packer, "SAW-" + _s, "Saw", null, "work_unit", "machine", false, false, false, null));
+        var sawRequest = await db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(saw.Id, null, "Blade guard loose"));
+        var packerOnly = await QueryAsync<Pulaski.Application.Maintenance.ListMaintenanceRequestsQuery, IReadOnlyList<Contracts.Maintenance.MaintenanceRequestDto>>(
+            new Pulaski.Application.Maintenance.ListMaintenanceRequestsQuery(plant.Site, true, EquipmentId: plant.Packer));
+        Assert.Equal([own.Id, sawRequest.Id], packerOnly.OrderBy(r => r.Number, StringComparer.Ordinal).Select(r => r.Id));
+        Assert.All(packerOnly, r => Assert.Equal((plant.Packer, "PCK-" + _s), (r.LineId!.Value, r.LineCode)));
+        var board = await QueryAsync<GetLineDisplayQuery, LineDisplayDto>(new GetLineDisplayQuery(plant.Site, plant.Site, "Hall"));
+        Assert.Equal([raised.Id], board.Lines.Single(l => l.LineId == plant.Extruder).Maintenance.Select(r => r.Id));
+        Assert.Equal(2, board.Lines.Single(l => l.LineId == plant.Packer).Maintenance.Count);
+
+        // Requests nobody has started reach the Inbox of whoever may work them (#127b), titled by number and equipment.
+        var worker = new Domain.Security.UserAccess(Guid.CreateVersion7(), "w", "W", "w", true,
+            [new Domain.Security.RoleGrant(Guid.CreateVersion7(), "maintenance", "Maintenance", plant.Site, [Domain.Security.Permissions.MaintenanceWork])]);
+        var inbox = await QueryAsync<Pulaski.Application.Inbox.GetInboxQuery, Contracts.Inbox.InboxDto>(new Pulaski.Application.Inbox.GetInboxQuery(worker));
+        Assert.Equal(3, inbox.Items.Count(i => i.Kind == "maintenance"));
+        Assert.Contains(inbox.Items, i => i.Title == $"{sawRequest.Number} · SAW-{_s}" && i.Detail == "Blade guard loose" && i.Link == "machines?tab=maintenance");
+        await db.SendAsync(new Pulaski.Application.Maintenance.CloseMaintenanceRequestCommand(sawRequest.Id, "Guard tightened"));
+
         // Started, then closed with what was done; closing needs that, and a closed request stays closed.
         await db.SendAsync(new Pulaski.Application.Maintenance.StartMaintenanceRequestCommand(raised.Id));
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Maintenance.StartMaintenanceRequestCommand(raised.Id)));
@@ -896,7 +923,7 @@ public sealed class ExecutionTests(DatabaseFixture db)
         await db.SendAsync(new Pulaski.Application.Maintenance.CloseMaintenanceRequestCommand(own.Id, "Greased; it was dry"));
         Assert.Empty(await ListAsync(true));
         var history = await ListAsync(false);
-        Assert.Equal(["Blade replaced", "Greased; it was dry"], history.OrderBy(r => r.Number, StringComparer.Ordinal).Select(r => r.Resolution));
+        Assert.Equal(["Blade replaced", "Greased; it was dry", "Guard tightened"], history.OrderBy(r => r.Number, StringComparer.Ordinal).Select(r => r.Resolution));
         Assert.All(history, r => Assert.NotNull(r.StartedAt));
         Assert.Equal(3, await ScalarAsync<int>(
             "SELECT count(*) FROM evt.event WHERE subject = @Id AND type LIKE 'pulaski.maintenance.request_%'", new { raised.Id }));
