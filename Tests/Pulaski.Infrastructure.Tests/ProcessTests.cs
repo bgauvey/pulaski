@@ -556,6 +556,64 @@ public sealed class ProcessTests(DatabaseFixture db)
         Assert.StartsWith("The file has no ProductionRequest", Assert.Single(empty.FileProblems)?.Text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task With_approval_on_a_draft_is_submitted_and_released_only_when_someone_else_approves_it()
+    {
+        var plant = await CreatePlantAsync();
+        var settings = await QueryAsync<Pulaski.Application.Approvals.GetReleaseApprovalSettingsQuery, Pulaski.Contracts.Approvals.ReleaseApprovalSettingsDto>(
+            new Pulaski.Application.Approvals.GetReleaseApprovalSettingsQuery(plant.Site));
+        Assert.False(settings.Processes);
+        await db.SendAsync(new Pulaski.Application.Approvals.SetReleaseApprovalSettingsCommand(plant.Site, settings.Version, true, false, false));
+
+        var created = await db.SendAsync(new CreateProcessCommand(plant.Site, "APR", "Approved process", null));
+        var process = await QueryAsync<GetProcessQuery, ProcessDto>(new GetProcessQuery(created.Id));
+        var v1 = Assert.Single(process.Versions);
+        var draft = await QueryAsync<GetProcessVersionQuery, ProcessVersionDto>(new GetProcessVersionQuery(created.Id, v1.Id));
+        var saved = await db.SendAsync(new SaveProcessDraftCommand(created.Id, v1.Id, draft.Version, ExtrudeAndPack(plant)));
+
+        // Releasing directly is refused; submitted, the draft waits and doesn't change.
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => db.SendAsync(new ReleaseProcessVersionCommand(created.Id, v1.Id, saved.Version, null)));
+        CreatedResponse request = await db.SendAsync(new Pulaski.Application.Approvals.SubmitReleaseCommand("process", created.Id, v1.Id, saved.Version, "First cut"));
+        var waiting = await QueryAsync<GetProcessVersionQuery, ProcessVersionDto>(new GetProcessVersionQuery(created.Id, v1.Id));
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => db.SendAsync(new SaveProcessDraftCommand(created.Id, v1.Id, waiting.Version, ExtrudeAndPack(plant))));
+
+        // Whoever edited it can't approve it; someone else needs a comment, and then it is released.
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Approvals.ApproveReleaseCommand(request.Id, "Fine", null)));
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => db.SendAsAsync("qa-" + plant.Site, new Pulaski.Application.Approvals.ApproveReleaseCommand(request.Id, " ", null)));
+        await Assert.ThrowsAsync<Pulaski.Application.Errors.ForbiddenException>(() =>
+            db.SendAsAsync("qa-" + plant.Site, new Pulaski.Application.Approvals.ApproveReleaseCommand(request.Id, "Fine", [Guid.CreateVersion7()])));
+        var approved = await db.SendAsAsync("qa-" + plant.Site, new Pulaski.Application.Approvals.ApproveReleaseCommand(request.Id, "Routes checked", [plant.Site]));
+        Assert.Equal("approved", approved.Status);
+        Assert.Equal("released", (await QueryAsync<GetProcessVersionQuery, ProcessVersionDto>(new GetProcessVersionQuery(created.Id, v1.Id))).Status);
+
+        // The next draft is sent back, then withdrawn after a new submission; the history keeps all three.
+        var v2 = await db.SendAsync(new StartProcessDraftCommand(created.Id));
+        var second = await db.SendAsync(new Pulaski.Application.Approvals.SubmitReleaseCommand("process", created.Id, v2.Id, v2.Version, null));
+        await db.SendAsAsync("qa-" + plant.Site, new Pulaski.Application.Approvals.ReturnReleaseCommand(second.Id, "Pack line is wrong", null));
+        var third = await db.SendAsync(new Pulaski.Application.Approvals.SubmitReleaseCommand("process", created.Id, v2.Id, v2.Version, null));
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var inbox = scope.ServiceProvider.GetRequiredService<Pulaski.Application.Inbox.IInboxReadStore>();
+            var waitingItem = Assert.Single(await inbox.ListAsync("release", [plant.Site], CancellationToken.None));
+            Assert.Equal(("APR · v2", $"processes/{created.Id}?version={v2.Id}"), (waitingItem.Title, waitingItem.Link));
+        }
+
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => db.SendAsAsync("qa-" + plant.Site, new Pulaski.Application.Approvals.WithdrawReleaseCommand(third.Id)));
+        await db.SendAsync(new Pulaski.Application.Approvals.WithdrawReleaseCommand(third.Id));
+        var status = await QueryAsync<Pulaski.Application.Approvals.GetReleaseStatusQuery, Pulaski.Contracts.Approvals.ReleaseStatusDto>(
+            new Pulaski.Application.Approvals.GetReleaseStatusQuery("process", created.Id, null));
+        Assert.True(status.ApprovalRequired);
+        Assert.Equal(["withdrawn", "returned", "approved"], status.Requests.Select(r => r.Status));
+        Assert.Equal(("Routes checked", 1), (status.Requests[2].DecisionNote, status.Requests[2].VersionNumber));
+
+        // Switched off, a draft is released directly again.
+        var now = await QueryAsync<Pulaski.Application.Approvals.GetReleaseApprovalSettingsQuery, Pulaski.Contracts.Approvals.ReleaseApprovalSettingsDto>(
+            new Pulaski.Application.Approvals.GetReleaseApprovalSettingsQuery(plant.Site));
+        await db.SendAsync(new Pulaski.Application.Approvals.SetReleaseApprovalSettingsCommand(plant.Site, now.Version, false, false, false));
+        var v2Now = await QueryAsync<GetProcessVersionQuery, ProcessVersionDto>(new GetProcessVersionQuery(created.Id, v2.Id));
+        await db.SendAsync(new ReleaseProcessVersionCommand(created.Id, v2.Id, v2Now.Version, null));
+    }
+
     /// <summary>Extrude and Pack, making every material, released as version 1.</summary>
     private async Task<Guid> ReleasedExtrudeAndPackAsync(Plant plant)
     {

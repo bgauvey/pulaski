@@ -131,7 +131,8 @@ internal sealed class SaveProcessDraftHandler(
     IUnitOfWork unitOfWork,
     IProcessRepository processes,
     IEventLog eventLog,
-    IEventFactory events) : ICommandHandler<SaveProcessDraftCommand, SaveProcessDraftResponse>
+    IEventFactory events,
+    Approvals.IReleaseApprovalRepository? approvals = null) : ICommandHandler<SaveProcessDraftCommand, SaveProcessDraftResponse>
 {
     public async Task<SaveProcessDraftResponse> HandleAsync(SaveProcessDraftCommand command, CancellationToken cancellationToken)
     {
@@ -140,6 +141,7 @@ internal sealed class SaveProcessDraftHandler(
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var process = await ProcessLocks.ProcessAsync(processes, command.ProcessId, expectedVersion: null, cancellationToken);
         var current = await ProcessLocks.VersionAsync(processes, command.ProcessId, command.VersionId, command.ExpectedVersion, cancellationToken);
+        await Approvals.ReleaseGate.EnsureEditableAsync(approvals, current.Id, cancellationToken);
 
         var equipment = await processes.GetEquipmentAsync(ProcessRules.EquipmentIds(definition), cancellationToken);
         if (ProcessRules.EquipmentProblems(definition, process.SiteId, equipment, malformedOnly: true) is { Count: > 0 } malformed)
@@ -166,7 +168,8 @@ internal sealed class ReleaseProcessVersionHandler(
     IBomRepository boms,
     IEventLog eventLog,
     IEventFactory events,
-    TimeProvider timeProvider) : ICommandHandler<ReleaseProcessVersionCommand, ReleaseProcessVersionResponse>
+    TimeProvider timeProvider,
+    Approvals.IReleaseApprovalRepository? approvals = null) : ICommandHandler<ReleaseProcessVersionCommand, ReleaseProcessVersionResponse>
 {
     public async Task<ReleaseProcessVersionResponse> HandleAsync(ReleaseProcessVersionCommand command, CancellationToken cancellationToken)
     {
@@ -178,14 +181,22 @@ internal sealed class ReleaseProcessVersionHandler(
         var process = await ProcessLocks.ProcessAsync(processes, command.ProcessId, expectedVersion: null, cancellationToken);
         var draft = await ProcessLocks.VersionAsync(processes, command.ProcessId, command.VersionId, command.ExpectedVersion, cancellationToken);
 
-        var equipment = await processes.GetEquipmentAsync(ProcessRules.EquipmentIds(draft.Definition), cancellationToken);
-        if (ProcessRules.EquipmentProblems(draft.Definition, process.SiteId, equipment, malformedOnly: false) is { Count: > 0 } problems)
-        {
-            throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
-        }
+        // Where the site asks for approval (#138), the draft is submitted instead.
+        await Approvals.ReleaseGate.EnsureDirectReleaseAsync(approvals, Domain.Approvals.ReleaseKinds.Process, draft.Id, [process.SiteId], cancellationToken);
+        var (version, warnings) = await new ProcessReleaser(processes, boms, eventLog, events, timeProvider).ReleaseAsync(process, draft, command.Note, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new ReleaseProcessVersionResponse(version, warnings);
+    }
+}
 
+/// <summary>Releasing a locked process draft (D-023), in the caller's transaction: by its own command, or by an approval (#138).</summary>
+internal sealed class ProcessReleaser(IProcessRepository processes, IBomRepository boms, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+{
+    public async Task<(long Version, IReadOnlyList<MessageDto> Warnings)> ReleaseAsync(Process process, ProcessVersion draft, string? note, CancellationToken cancellationToken)
+    {
+        await EnsureReleasableAsync(process, draft, cancellationToken);
         var at = timeProvider.GetUtcNow();
-        var released = draft.Release(at, string.IsNullOrWhiteSpace(command.Note) ? null : command.Note.Trim());
+        var released = draft.Release(at, string.IsNullOrWhiteSpace(note) ? null : note.Trim());
         var previous = await processes.GetReleasedForUpdateAsync(process.Id, cancellationToken);
 
         var envelope = events.Create(
@@ -206,9 +217,8 @@ internal sealed class ReleaseProcessVersionHandler(
         // BOMs keep naming the operations they were released with; say which ones this release breaks (D-025).
         var broken = await boms.ListMissingOperationsAsync(process.Id, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
-        return new ReleaseProcessVersionResponse(version, [.. broken.Select(b => b.Operations.Length == 1
+        return (version, [.. broken.Select(b => b.Operations.Length == 1
             ? Notes.Of(
                 $"The BOM for {b.MaterialCode} (version {b.VersionNumber}) names operation {b.Operations[0]}, which version {released.Number} of {process.Code} doesn't have. " +
                 $"Orders for {b.MaterialCode} made with {process.Code} are refused until a new BOM version is released.")
@@ -216,6 +226,60 @@ internal sealed class ReleaseProcessVersionHandler(
                 $"The BOM for {b.MaterialCode} (version {b.VersionNumber}) names operations {string.Join(", ", b.Operations)}, which version {released.Number} of {process.Code} doesn't have. " +
                 $"Orders for {b.MaterialCode} made with {process.Code} are refused until a new BOM version is released."))]);
     }
+
+    /// <exception cref="DomainRuleException">The draft's equipment doesn't let it be released.</exception>
+    public async Task EnsureReleasableAsync(Process process, ProcessVersion draft, CancellationToken cancellationToken)
+    {
+        var equipment = await processes.GetEquipmentAsync(ProcessRules.EquipmentIds(draft.Definition), cancellationToken);
+        if (ProcessRules.EquipmentProblems(draft.Definition, process.SiteId, equipment, malformedOnly: false) is { Count: > 0 } problems)
+        {
+            throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
+        }
+    }
+}
+
+/// <summary>A process as release approval sees it (#138): its site decides; a draft is locked as the process's own commands lock it.</summary>
+internal sealed class ProcessReleasable(IProcessRepository processes, IBomRepository boms, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+    : Approvals.IReleasableDocument
+{
+    private Process? _process;
+    private ProcessVersion? _draft;
+
+    public string Kind => Domain.Approvals.ReleaseKinds.Process;
+
+    public IReadOnlyList<string> DraftSavedEvents { get; } = [EventTypes.ProcessDraftSaved];
+
+    public async Task<Approvals.ReleasableDraft> LockAsync(Guid documentId, Guid versionId, long? expectedVersion, CancellationToken cancellationToken)
+    {
+        _process = await ProcessLocks.ProcessAsync(processes, documentId, expectedVersion: null, cancellationToken);
+        var current = await processes.GetVersionForUpdateAsync(documentId, versionId, cancellationToken)
+            ?? throw new NotFoundException($"Version {versionId} of process {documentId} not found.");
+        if (expectedVersion is { } expected && current.Version != expected)
+        {
+            throw new ConflictException($"Version {current.Value.Number} was changed by someone else. Reload and try again.");
+        }
+
+        _draft = current.Value;
+        return new Approvals.ReleasableDraft(_process.Id, _draft.Id, _process.Code, _draft.Number, [_process.SiteId]);
+    }
+
+    public async Task EnsureReleasableAsync(Approvals.ReleasableDraft draft, CancellationToken cancellationToken)
+    {
+        if (_draft!.Status != ProcessVersionStatus.Draft)
+        {
+            throw new DomainRuleException($"Version {_draft.Number} of {_process!.Code} isn't a draft.");
+        }
+
+        if (_draft.Definition.ReleaseProblems() is { Count: > 0 } problems)
+        {
+            throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
+        }
+
+        await new ProcessReleaser(processes, boms, eventLog, events, timeProvider).EnsureReleasableAsync(_process!, _draft, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<MessageDto>> ReleaseAsync(Approvals.ReleasableDraft draft, string? note, CancellationToken cancellationToken) =>
+        (await new ProcessReleaser(processes, boms, eventLog, events, timeProvider).ReleaseAsync(_process!, _draft!, note, cancellationToken)).Warnings;
 }
 
 internal sealed class StartProcessDraftHandler(

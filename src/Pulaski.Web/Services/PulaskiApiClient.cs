@@ -10,6 +10,7 @@ using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Integrations;
+using Pulaski.Contracts.Approvals;
 using Pulaski.Contracts.Instructions;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
@@ -976,6 +977,23 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Post, $"api/instructions/{id}/draft/files") { Content = form }, ct);
         return await ReadAsync<CreatedResponse>(response, ct);
     }
+
+    /// <summary>Approval before release (#138): a site's settings, a process's status, and deciding requests.</summary>
+    public Task<ReleaseApprovalSettingsDto> GetReleaseApprovalSettingsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<ReleaseApprovalSettingsDto>($"api/release-approval/settings/{siteId}", ct);
+
+    public Task<VersionResponse> SetReleaseApprovalSettingsAsync(Guid siteId, SetReleaseApprovalSettingsRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/release-approval/settings/{siteId}", request, ct);
+
+    public Task<ReleaseStatusDto> GetProcessReleaseStatusAsync(Guid processId, CancellationToken ct = default) =>
+        GetAsync<ReleaseStatusDto>($"api/processes/{processId}/release-status", ct);
+
+    public Task<CreatedResponse> SubmitProcessReleaseAsync(Guid processId, Guid versionId, SubmitReleaseRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/processes/{processId}/versions/{versionId}/submit", request, ct);
+
+    /// <summary><paramref name="action"/>: <c>approve</c>, <c>return</c> or <c>withdraw</c>.</summary>
+    public Task<ReleaseDecisionResponse> DecideReleaseAsync(Guid requestId, string action, DecideReleaseRequest request, CancellationToken ct = default) =>
+        SendAsync<ReleaseDecisionResponse>(HttpMethod.Post, $"api/release-requests/{requestId}/{action}", request, ct);
 
     /// <summary>The samples running jobs owe at a site (#136).</summary>
     public Task<IReadOnlyList<DueSampleDto>> ListDueSamplesAsync(Guid siteId, CancellationToken ct = default) =>

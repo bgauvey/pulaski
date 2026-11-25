@@ -31,6 +31,7 @@ public static class InboxView
         "rate_proposal" => Term.Mark("Planning rates to review"),
         "maintenance" => Term.Mark("Maintenance requests waiting"),
         "checklist" => Term.Mark("Checklists to sign off"),
+        "release" => Term.Mark("Releases to approve"),
         _ => kind,
     };
 

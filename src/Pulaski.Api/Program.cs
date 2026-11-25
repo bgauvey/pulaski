@@ -138,6 +138,7 @@ api.MapMaintenanceEndpoints();
 api.MapInstructionEndpoints();
 api.MapLiveEndpoints();
 api.MapSystemEndpoints();
+api.MapReleaseApprovalEndpoints();
 api.MapAlertEndpoints();
 api.MapHandoverEndpoints();
 api.MapLanguageEndpoints();

@@ -22,6 +22,8 @@ public static class DependencyInjection
         services.AddSingleton<IPeopleSourceAdapter, CsvPeopleSource>();
         services.AddSingleton<IPeopleSourceAdapter, ScimPeopleSource>();
         services.AddScoped<MachineData.OeeRollups>();
+        // What release approval can release (#138): one per kind of document.
+        services.AddScoped<Approvals.IReleasableDocument, Processes.ProcessReleasable>();
         services.AddScoped<MachineData.OeeTargetWrites>();
         services.AddScoped<Inventory.FeedCounterPoster>();
         services.AddScoped<Inventory.AllocationAutoRefresh>();

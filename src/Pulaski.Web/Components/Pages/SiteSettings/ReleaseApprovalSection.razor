@@ -1,0 +1,117 @@
+@inject PulaskiApiClient Api
+
+@* Approval before release (#138, D-122): which kinds of document a second person approves before they are released, at this site. *@
+<section class="inv-facts mb-3" id="release-approval" aria-labelledby="release-approval-heading">
+    <h2 class="h6" id="release-approval-heading">@L["Approval before release"]</h2>
+    <p class="small text-muted">
+        @L["Switched on, a draft is submitted for approval instead of released, and someone else who may approve releases approves it (which releases it) or sends it back, each with a comment. A process follows its own site; a BOM or specification needs approval when any site that can make its material asks for it."]
+    </p>
+    <ProblemAlert Error="_error" />
+    @if (_settings is null)
+    {
+        <p class="small text-muted mb-0">@L["Loading…"]</p>
+    }
+    else
+    {
+        <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            @foreach (var (key, label) in Kinds)
+            {
+                <div class="form-check mb-1" @key="key">
+                    <input id="@($"approval-{key}")" type="checkbox" class="form-check-input" checked="@On(key)" disabled="@(!CanManage)" @onchange="e => Set(key, e.Value is true)" />
+                    <label class="form-check-label" for="@($"approval-{key}")">@L[label]</label>
+                </div>
+            }
+            @if (CanManage)
+            {
+                <button type="submit" class="btn btn-sm btn-primary mt-2" disabled="@_saving">@L["Save approval settings"]</button>
+            }
+        </form>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>Says what was saved, in the page's message.</summary>
+    [Parameter] public EventCallback<string> Saved { get; set; }
+
+    private static readonly (string Key, string Label)[] Kinds =
+    [
+        ("processes", Term.Mark("Processes")),
+        ("boms", Term.Mark("BOMs")),
+        ("specs", Term.Mark("Specifications")),
+    ];
+
+    private ReleaseApprovalSettingsDto? _settings;
+    private Guid? _loadedFor;
+    private bool _processes;
+    private bool _boms;
+    private bool _specs;
+    private bool _saving;
+    private ApiException? _error;
+
+    private bool On(string key) => key switch { "processes" => _processes, "boms" => _boms, _ => _specs };
+
+    private void Set(string key, bool on)
+    {
+        switch (key)
+        {
+            case "processes": _processes = on; break;
+            case "boms": _boms = on; break;
+            default: _specs = on; break;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == SiteId)
+        {
+            return;
+        }
+
+        _loadedFor = SiteId;
+        _settings = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _settings = await Api.GetReleaseApprovalSettingsAsync(SiteId);
+            (_processes, _boms, _specs) = (_settings.Processes, _settings.Boms, _settings.Specs);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Api.SetReleaseApprovalSettingsAsync(SiteId, new SetReleaseApprovalSettingsRequest
+            {
+                Version = _settings!.Version,
+                Processes = _processes,
+                Boms = _boms,
+                Specs = _specs,
+            });
+            await LoadAsync();
+            await Saved.InvokeAsync(L["Approval settings saved."]);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

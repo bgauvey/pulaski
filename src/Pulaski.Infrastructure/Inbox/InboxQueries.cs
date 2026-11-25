@@ -93,6 +93,23 @@ internal sealed class InboxQueries(NpgsqlDataSource dataSource) : IInboxReadStor
         WHERE r.sign_off = 'pending' AND r.site_id = ANY(@SiteIds)
         """;
 
+    // Drafts waiting for release approval (#138): decided on the document's page. Title its code and version number, detail who submitted it and
+    // why; a request at several sites shows at the first the reader sees.
+    private const string Releases = """
+        SELECT 'release' AS kind, 'release:' || r.id AS key,
+               COALESCE(p.code, '?') || ' · v' || COALESCE(pv.version_number, 0) AS title,
+               COALESCE((SELECT u.display_name FROM sec.app_user u
+                   WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = r.submitted_by), r.submitted_by)
+                   || COALESCE(' · ' || r.note, '') AS detail,
+               s.id AS site_id, s.code AS site_code, r.submitted_at AS since,
+               CASE r.kind WHEN 'process' THEN 'processes/' || r.document_id || '?version=' || r.version_id ELSE '' END AS link
+        FROM core.release_request r
+        LEFT JOIN core.process p ON r.kind = 'process' AND p.id = r.document_id
+        LEFT JOIN core.process_version pv ON r.kind = 'process' AND pv.id = r.version_id
+        JOIN LATERAL (SELECT e.id, e.code FROM core.equipment e WHERE e.id = ANY(r.site_ids) AND e.id = ANY(@SiteIds) ORDER BY e.code LIMIT 1) s ON true
+        WHERE r.status = 'pending'
+        """;
+
     public async Task<IReadOnlyList<(Guid Id, string Code)>> ListSitesAsync(CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -109,6 +126,7 @@ internal sealed class InboxQueries(NpgsqlDataSource dataSource) : IInboxReadStor
             InboxKinds.SpcAlert => SpcAlerts,
             InboxKinds.Maintenance => Maintenance,
             InboxKinds.Checklist => Checklists,
+            InboxKinds.Release => Releases,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Not an inbox kind read from SQL."),
         };
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
