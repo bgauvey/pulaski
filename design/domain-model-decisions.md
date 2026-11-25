@@ -3297,6 +3297,18 @@ its main screen and unfolds it; an arrow folds without navigating; the group of 
 address prefix); the open groups are kept per browser (`pulaski.nav.open`). The icon rail shows every screen flat, as before. Screens,
 addresses and permissions are unchanged.
 
+### D-120 · Views of a control chart (#198) · *Proposed*
+
+**Context.** A subgroup chart showed its means and the one dispersion it was set up with (R for X̄-R, S for X̄-S), and its data only in a folded
+table.
+
+**Decision.** `ChartViews.For(chartType)`: X̄-R and X̄-S charts show `location` (the default), `range` and `std_dev`; I-MR `location` and
+`moving_range`; attribute charts only `location`. Each point carries its subgroup's measurements, range and standard deviation and both
+dispersions' limits: the chart type's own as stored, the other from the same sigma within subgroups (`DispersionLimits.For`: σ = R̄ ÷ d₂ or
+S̄ ÷ c₄; R̄ = d₂σ with D₃/D₄, S̄ = c₄σ with B₃/B₄), with beyond-limit flags. Run rules stay on the means; alerts (`SpcSignals`) stay on the
+chart type's own dispersion, so a characteristic's alerts don't change with the view. The chart page shows one view at a time with its own
+table of the data plotted (open, newest first). Computed on read; no schema change.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

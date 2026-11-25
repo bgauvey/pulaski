@@ -2025,11 +2025,15 @@ from the [process values](#process-values) its tag sends, instead of by hand.
    30 days to start with). Click **Show**.
 3. The chart shows each result in time order: the value (or a subgroup's mean, proportion or count, as the chart takes it), with the control
    limits in force for it as dashed lines and the centre line solid. A result beyond its limits is a red diamond; one that completes another run
-   rule is an amber square labelled with the rules' numbers. The rules checked are listed above the chart. Measured characteristics have a
-   second chart below: the range, standard deviation or moving range.
-4. Hover over a point to see when it was sampled, its value against its limits, and its line, job and lot. **Show as a table** lists the same.
-5. Under the chart, **Capability** says how well the results fit the material's specification.
-6. The chart refreshes itself every 30 seconds while open; the pill at the top right says when it was last updated, and the refresh button
+   rule is an amber square labelled with the rules' numbers. The rules checked are listed above the chart.
+4. Measured characteristics have views above the chart. Subgroups (X-bar charts): **X̄ chart (means)**, the default, **R chart (ranges)** and
+   **S chart (standard deviations)**. Single values: **Individuals** and **Moving range**. Click one to see it; Pulaski keeps it as you move
+   between charts.
+5. Hover over a point to see when it was sampled, its value against its limits, and its line, job and lot. Below the chart, **The data
+   plotted** lists every result, newest first: when, its measurements, the size, the view's value (mean, range, standard deviation or moving
+   range), the centre line and limits in force for it, its line, job and lot, and whether it is beyond the limits or breaks a run rule.
+6. Under the chart, **Capability** says how well the results fit the material's specification.
+7. The chart refreshes itself every 30 seconds while open; the pill at the top right says when it was last updated, and the refresh button
    updates it at once.
 
 **In detail**
@@ -2043,8 +2047,12 @@ from the [process values](#process-values) its tag sends, instead of by hand.
   many.
 - **Run rules** are marked on the point that completes the pattern: the ninth of nine in a row, say. Each point is measured against its own
   limits, so a run carries on across new limits, and a result without limits breaks it. Rising, falling and alternating look at the values alone.
-  Rules apply to the main chart; the range, standard deviation or moving range chart marks only results beyond its limits. A newly recorded
-  result that signals raises an [SPC alert](#respond-to-spc-alerts).
+  Rules apply to the means (or individuals); the range, standard deviation and moving range views mark only results beyond their limits. A
+  newly recorded result that signals raises an [SPC alert](#respond-to-spc-alerts): for the view the characteristic is set up with (its chart
+  type), not the other.
+- **R and S from one set of limits.** A characteristic is set up as X̄-R or X̄-S, and its limits come from that. The other dispersion view uses
+  limits from the same estimate of sigma (sigma = R̄ ÷ d₂, or S̄ ÷ c₄), so both describe the same process; the view says so. A subgroup's range
+  is its largest less its smallest measurement; its standard deviation is the sample standard deviation (n − 1).
 - **Capability** is worked out from the results the chart shows (the period and line you chose), against the material's released
   specification now:
   - **Cp · Cpk (within)** use the spread within subgroups (the mean range, standard deviation or moving range, as the chart estimates sigma):

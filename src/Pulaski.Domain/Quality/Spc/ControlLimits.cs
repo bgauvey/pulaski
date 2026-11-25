@@ -230,7 +230,8 @@ public static class ControlLimits
         return new(uBar, uBar + spread, Math.Max(0, uBar - spread));
     }
 
-    private static double StdDev(IReadOnlyList<double> values)
+    /// <summary>A subgroup's sample standard deviation (n − 1).</summary>
+    public static double StdDev(IReadOnlyList<double> values)
     {
         var mean = values.Average();
         return Math.Sqrt(values.Sum(v => (v - mean) * (v - mean)) / (values.Count - 1));

@@ -368,6 +368,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`AutoSampling`: consecutive minute snapshots, skip without a running job or with bad/stale readings). Capability on the chart
   (`ProcessCapability`: Cp/Cpk within, Pp/Ppk overall, ≥ 20 subgroups, released spec now; bands 1.33/1.00; attributes → defect rate + ppm). Chart and alert screens refresh every 30 s (`LiveStatus`/`LiveRefresh`; a window reaching now follows it,
   `ControlChartView.RefreshedTo`).
+  Views (D-120, #198): `ChartViews.For` (X̄-R/X̄-S: location, range, std_dev; I-MR: location, moving_range); points carry `Values`,
+  `Range`, `StdDev` and both dispersions' limits (`DispersionLimits.For`, the other from the same sigma); alerts stay on the chart type's own.
 - Attribute values in bulk, certificate feed (D-086, proposed): `LotAttributeCsv` (lot_number, optional material_code, a column per attribute code;
   blank = unchanged, `(clear)` clears) → `ImportLotAttributeValuesCommand` (all or nothing, dry run ends uncommitted; locks lots in id order; writes
   through `LotAttributeWriter`, shared with the lot page). Export `values.csv` is the import format. Webhook feeds `erp` and `documents`
