@@ -7,7 +7,9 @@ COPY global.json Directory.Build.props Directory.Packages.props nuget.config .ed
 COPY src/ src/
 COPY tools/Pulaski.DemoSetup/ tools/Pulaski.DemoSetup/
 COPY deploy/simulator/packml-simulator-profile.csv deploy/simulator/
-RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
+# Each image keeps its own package cache: docker compose builds them in parallel, and two restores unpacking the same package into a
+# shared cache race (NuGet's temporary file vanishes under the other).
+RUN --mount=type=cache,id=nuget-demo-setup,target=/root/.nuget/packages \
     dotnet publish tools/Pulaski.DemoSetup -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0.15

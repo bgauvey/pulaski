@@ -6,7 +6,9 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.404 AS build
 WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props nuget.config .editorconfig ./
 COPY src/ src/
-RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
+# Each image keeps its own package cache: docker compose builds them in parallel, and two restores unpacking the same package into a
+# shared cache race (NuGet's temporary file vanishes under the other).
+RUN --mount=type=cache,id=nuget-api,target=/root/.nuget/packages \
     dotnet publish src/Pulaski.Api -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.15
