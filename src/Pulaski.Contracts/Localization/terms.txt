@@ -114,7 +114,10 @@
 0 to 366 days.
 0 to 6.
 1 BarTender document
+1 delivery failed; it holds back later ones for the same subject.
 1 delivery goes again on the next round.
+1 item is failing.
+1 item needs a look.
 1 lot is still to count; enter 0 for a lot that isn't there.
 1 lot not suggested
 1 maintenance request open
@@ -125,6 +128,7 @@
 1 open session was ended at the end of the shift.
 1 overlap on this line
 1 overlap: a line can't run these at the same time
+1 production day isn't rolled up yet ({0:yyyy-MM-dd}); long OEE reports work it out from the history.
 1 request not closed
 1 session
 1 session, oldest {0}
@@ -439,6 +443,7 @@ Allocate all suggested
 Allocate lots to jobs, release allocations and refresh them
 Allocated lot
 Allocated to jobs
+Allocation refresh
 Allocation {0} of that job wasn't found.
 Allocations and suggested lots
 Alphabetical
@@ -552,6 +557,8 @@ At the line
 At the top
 At {0} it goes into lot {1} ({2}).
 At {0} it starts a new lot.
+At {0}, as this version needs.
+At {0}; this version needs {1}. Run db/migrate.sh.
 Attach
 Attach a file, or give a document number or address.
 Attached
@@ -594,6 +601,8 @@ Back-dated: recorded at the time above, counts from this one
 Back-dated; recorded {0}
 Backflush
 Backflush on count
+Background services
+Background services are known since the API started, {0}.
 Badge
 Badge and PIN
 Badge and PIN suits terminals anyone could walk up to with a found badge. Switching a terminal off stops it working at once.
@@ -996,6 +1005,7 @@ Connecting…
 Connection
 Connection code
 Connection name
+Connection scheduler
 Connection {0} not found.
 Connections
 Constraint machine
@@ -1132,7 +1142,10 @@ Delete edge node {0}? This will deactivate the node and all its connections and 
 Delete link
 Delete operation
 Delivered
+Delivery clean-up
+Delivery feeds
 Delivery or shipment number
+Delivery relay
 Delivery {0} not found.
 Department
 Department window
@@ -1189,6 +1202,7 @@ Due{0}
 Duration
 E-mail
 E-mail (optional)
+E-mail alerts
 E-mail the person and whoever maintains people this many days before a grant expires
 E-mails Pulaski sends you when something needs you: one for each stop or call, with a link to it.
 ERP
@@ -1225,6 +1239,7 @@ Edge node code
 Edge node name
 Edge node {0} not found.
 Edge nodes
+Edge nodes, deliveries, connections, background services and the database, in one place.
 Edge nodes: connections and tags that collect machine data
 Edge quiet
 Edit
@@ -1311,12 +1326,14 @@ Every 1 to {0:0} run hours.
 Every characteristic
 Every class and material as B2MML, which the B2MML import reads back
 Every day from {0}
+Every history table has next month's partition.
 Every hour
 Every item and part, grouped by class. Materials imported from the ERP keep their code, name, base unit and type there; Pulaski owns the rest.
 Every later movement of this lot, and of lots split off it since, is reversed first, latest first. Check shows the list before anything is done.
 Every line
 Every material
 Every movement
+Every production day is rolled up.
 Every qualification
 Every receipt, adjustment, move, hold, consumption and production in the site, newest first.
 Every site
@@ -1331,6 +1348,7 @@ Every {0} min
 Every, days
 Every, minutes
 Everyone whose time is recorded, the crews they work in and the qualifications they hold. A shift schedule names the crew on each shift, so a supervisor can check the whole crew onto a line at once. People don't need a Pulaski sign-in; link one to let them clock themselves on. People from an HR or ERP system are imported from a file; their name and whether they are active change there.
+Everything checked is healthy.
 Everything is covered
 Everything it was made from
 Everything made from it
@@ -1375,6 +1393,7 @@ Failed on item {0} ({1}): put it right and answer it again.
 Failed on items {0} ({1}): put them right and answer it again.
 Failed to rejoin.
 Failed to resume the session.
+Failing
 False
 Feed
 Feed point
@@ -1544,6 +1563,7 @@ Handover
 Handover entry {0} not found.
 Happened (UTC)
 Hard reservation
+Healthy
 Held
 Held at every site
 Held at {0}
@@ -1559,6 +1579,7 @@ High
 Highest
 Highest allowed
 History
+History partitions
 Hold
 Hold it
 Hold or quarantine
@@ -1700,6 +1721,7 @@ It expires {0}, before the job needs it ({1}).
 It filled {0} of {1} {2}.
 It goes into a lot of its own, on hold until someone approves it: it can't be sold as a partial.
 It goes into the run going on then.
+It has never connected.
 It hasn't run yet.
 It is accepted: it will be used.
 It is empty.
@@ -1746,11 +1768,16 @@ Its control limits were worked out for this chart; end them to change it.
 Its conversions
 Its good and scrap come off the run, and every lot it made gives the quantity back. A lot that has been used, split or moved into a silo since must be put right first; Pulaski says which.
 Its group {0} is switched off; switch it on first.
+Its last round failed: {0}
+Its last run applied.
+Its last run failed.
+Its last run found problems and changed nothing.
 Its own conversions
 Its own state tag
 Its place in the route: 10, 20, 30… Unique within the version.
 Its plan
 Its quantity, place and status then, in the order its movements count (back-dated ones at their time).
+Its scheduled run is {0} hours late.
 Its shift isn't approved yet: change the break instead.
 Its shift isn't approved yet: change the session instead.
 Its stops have been adjusted since: undo that first.
@@ -1943,6 +1970,7 @@ Lines without shifts
 Line…
 Link
 Live
+Live updates
 Live updates aren't available.
 Live · updated {0} site time
 Live, updated {0}
@@ -2059,6 +2087,7 @@ Made from process {0}.
 Made from:
 Made in batches of this size: orders and jobs are whole batches, and production is reported batch by batch. A batch cut short when the line stops is a partial batch. Leave blank for a material made continuously.
 Made in batches of {0} {1}: plan whole batches.
+Mail server
 Main
 Maintain changeover rules: how long each change of material takes on a line
 Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags
@@ -2211,6 +2240,7 @@ Needed in the next 24 hours
 Needed sooner than its {0}-day lead time from now
 Needed sooner than the material's {0}-day lead time from now
 Needs a comment
+Needs a look
 Needs a second sign-off (by someone who may sign off checklists)
 Needs attention
 Needs machine data
@@ -2351,6 +2381,7 @@ No lots found
 No lots on hand.
 No machine profiles at {0} yet. Add one for each kind of machine, then import its definitions from a CSV file.
 No machine state for this run, so its stops aren't known
+No mail server is set up: alerts, password resets and notices aren't e-mailed.
 No material has GTIN {0}; set it on the material's page.
 No material source '{0}'.
 No material source '{0}'. The sources are {1}.
@@ -2365,6 +2396,7 @@ No open production job
 No operations yet.
 No orders
 No other lot can be merged into this one. Move or release lots first.
+No partition for next month yet: {0}. Writes there will fail once the month starts.
 No people at {0} yet.
 No people source '{0}'. The sources are {1}.
 No planned duration, and no material change to size it from.
@@ -2394,6 +2426,8 @@ No request is waiting. Raise one here, or from a stop.
 No results recorded for this lot.
 No results yet.
 No results.
+No round has finished for {0} minutes; it runs every {1} minutes.
+No round has finished since it started.
 No rules match. Without one, a line uses its standard changeover for the incoming material (set on the material's capability).
 No rules yet. Without one, a line uses its standard changeover for the incoming material (set on the material's capability).
 No run standard for this material on this line; duration unknown.
@@ -2463,6 +2497,7 @@ Not applied
 Not at this site yet: receive it?
 Not capable
 Not found
+Not heard from for {0} hours.
 Not imported (errors)
 Not in production mode
 Not made from other lots.
@@ -2476,6 +2511,7 @@ Not released
 Not released yet: jobs show nothing of it.
 Not reporting
 Not resolved
+Not run yet.
 Not sampled from any tag.
 Not saved yet: these are the API's configuration. Once you save, the screen's settings are used and the configuration keeps only the secret.
 Not saved: {0}
@@ -2539,6 +2575,7 @@ Nothing to change across {0} jobs.
 Nothing to change.
 Nothing to chart in this period.
 Nothing to chart.
+Nothing to check here.
 Nothing to code: every stop in this period has its reason.
 Nothing to correct: the details are the same.
 Nothing to record.
@@ -2549,6 +2586,7 @@ Nothing uses it yet: every field can still change.
 Nothing waiting
 Nothing waiting for maintenance
 Nothing waiting to show.
+Nothing waiting.
 Nothing waits for you.
 Nothing was imported.
 Nothing was on hand then.
@@ -2570,6 +2608,7 @@ Number ({0})
 Number defective
 OData $filter
 OEE
+OEE rollups
 OEE targets
 Obsolete
 Odata
@@ -2678,6 +2717,7 @@ Open orders whose last job is projected to finish today.
 Open orders with a schedule warning (late, no rate, unit mismatch…) or work that overlaps on a line.
 Open the draft
 Open the lot
+Open the page
 Open the schedule
 Open work orders
 Operate
@@ -2768,6 +2808,7 @@ Partial batch, {0}
 Partial batches
 Partial batches to approve or reject
 Partial batches waiting for approval: {0}.
+Partition upkeep
 Partly received
 Passed
 Passed {0} by {1}, signed off by {2}.
@@ -2833,6 +2874,7 @@ Planning rate for {0} on {1}
 Planning rate now {0}.
 Planning rate on {0} is the calculated {1} {2}/h again.
 Planning rate on {0} set to {1} {2}/h.
+Planning rate refresh
 Planning rate set to {0}, from the ideal rate.
 Planning rates
 Planning rates can be worked out from what lines really made. Proposals wait on
@@ -2866,6 +2908,7 @@ Preferred line for {0}
 Prefilled on {0}'s reports; the lot being filled's location comes first.
 Preparing PDF…
 Preventive
+Preventive maintenance
 Preventive plans
 Previous month
 Print
@@ -2888,6 +2931,7 @@ Process details saved
 Process links
 Process routes: the operations an order goes through, and the lines or departments that run each one.
 Process value
+Process value sampling
 Process values
 Process {0} doesn't make this material; pick a process whose scope covers it.
 Process {0} doesn't make {1}.
@@ -2967,6 +3011,7 @@ Put the calendar exception back.
 Put {0} and all it holds inside…
 Qualification
 Qualification code
+Qualification expiry notices
 Qualification name
 Qualification not found.
 Qualification to grant
@@ -2993,6 +3038,7 @@ Query: one SELECT (or WITH … SELECT) statement, at most 4000 characters.
 Queued
 Queued, retrying or held
 Quiet
+Quiet for {0} minutes.
 REST (JSON)
 Raised
 Raised {0}.
@@ -3245,6 +3291,8 @@ Run {0} of {1} ended after {2}. Start the job again to resume it.
 Run {0} of {1} wasn't going on at {2}.
 Run {0} on {1}
 Running
+Running.
+Running; no round has finished yet.
 Runs
 Runs and reports
 Runs ended in the last, days
@@ -3366,9 +3414,11 @@ Schedulable
 Schedule
 Schedule by line
 Schedule conflicts
+Scheduled connections
 Scheduled h
 Scheduled is the time its shifts cover (the whole day without shifts). Planned leaves out non-production modes and planned stops.
 Scheduler
+Schema version
 Scim
 Scrap
 Scrap %
@@ -3394,6 +3444,7 @@ See processes and BOMs
 See reason codes
 See shift schedules
 See specifications, characteristics and quality results
+See system health: edge nodes, deliveries, connections, background services and the database
 See the Maintenance tab
 See the Overview
 See the chart
@@ -3414,6 +3465,7 @@ Send a certificate's file with its event
 Send machine data as a Pulaski Edge node: read its configuration and forward what it collects
 Send the link
 Send to this receiver
+Sending.
 Sends
 Sends to
 Sent 1 label to {0}.
@@ -3436,6 +3488,7 @@ Set by {0}{1}; calculated {2}
 Set modified rate
 Set quantity
 Set to
+Set up; nothing sent yet.
 Set window
 Setting the attribute records a quality result for the lot, checked against the material's specification
 Settings
@@ -3669,8 +3722,11 @@ Switch on
 Switched call type {0} back on.
 Switched off
 Switched off call type {0}; its calls stay in the history.
+Switched off in configuration.
 Switched off too
+Switched off with {0} waiting.
 Switched off {0}; whoever chose it sees English.
+Switched off.
 Switched off. It can't be received, ordered or added to BOMs any more; these carry on: {0}.
 Switched off; nothing more is sent for it.
 Switched on again.
@@ -3678,6 +3734,8 @@ Switched {0} on again.
 Switched-off roles aren't shown. To add a role or change its name, use
 Switching off people who are missing needs every row to be one external system's person: name the system and give each an external_key.
 Synthesized
+System health
+System health: what is unhealthy and where to put it right
 Table
 Tag
 Tag deleted
@@ -3897,6 +3955,7 @@ The labor of {0} is approved; correct it instead.
 The language Pulaski's screens show you, and how they write dates and numbers.
 The language's usual
 The languages Pulaski's screens can show, and their translations. Where a term has none, it shows in English.
+The last e-mail couldn't be sent: {0}
 The last valid day; empty for no expiry
 The limits must be numbers with the lower limit at most the centre line, and the centre line at most the upper limit.
 The line has no capability in effect for the material, so there is no ideal rate to go back to.
@@ -5008,6 +5067,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} created on {1} for {2}.
 {0} days
 {0} days aren't included because their rollups are being worked out again: {1}. Try again shortly.
+{0} deliveries failed; they hold back later ones for the same subjects.
 {0} deliveries go again on the next round.
 {0} doesn't convert to the job's unit, so the run's good output wasn't changed.
 {0} doesn't convert to {1} for this material; add a conversion for it.
@@ -5036,6 +5096,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} expired on {1}; it can't be shipped. If quality has extended it, correct its expiry first.
 {0} expired on {1}; nothing can be merged into it. If quality has extended it, correct its expiry first.
 {0} failed: put it right and answer it again.
+{0} failing, {1} needing a look.
 {0} file
 {0} follow {1}; give them another schedule first.
 {0} follows {1}; give it another schedule first.
@@ -5277,6 +5338,8 @@ you measure or inspect first, then a specification for a material with their lim
 {0} isn't running, so consumption can't be recorded now. Start the job, or choose the run it belongs to.
 {0} isn't running, so production can't be recorded now. Start the job, or choose the run it belongs to.
 {0} items
+{0} items are failing.
+{0} items need a look.
 {0} itself
 {0} jobs
 {0} key {1} appears earlier in the file.
@@ -5355,6 +5418,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} points; no targets.
 {0} points; {1} beyond the limits; {2} breaking a run rule.
 {0} points; {1} of {2} with a target below it.
+{0} production days aren't rolled up yet, since {1:yyyy-MM-dd}; long OEE reports work them out from the history.
 {0} queued or retrying
 {0} queued or retrying, {1} of them held
 {0} quiet
@@ -5411,6 +5475,8 @@ you measure or inspect first, then a specification for a material with their lim
 {0} users hold {1}; give them another role and take this one away first.
 {0} waiting
 {0} waiting for a planner
+{0} waiting, the oldest for {1} minutes.
+{0} waiting.
 {0} waits for a line in its window; change the window in its editor.
 {0} was already on.
 {0} was called already; that call is still being answered.

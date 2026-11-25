@@ -1,0 +1,104 @@
+@page "/system-health"
+@attribute [RequiresView(PermissionCodes.SystemView)]
+@using Pulaski.Contracts.Health
+@inject PulaskiApiClient Api
+
+<PageTitle>@L["System health"] · Pulaski</PageTitle>
+
+@* System health (#141, D-118): what is unhealthy across the plant's moving parts, worst first, each with the screen where it is put right. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">@L["System health"]</h1>
+        <p class="text-muted mb-0">
+            @if (_health is { } h)
+            {
+                <span class="@SystemHealthView.Chip(h.Status) me-2">@SystemHealthView.Status(L, h.Status)</span>
+                @SystemHealthView.Summary(L, h)
+                <span class="small ms-2">@L["Background services are known since the API started, {0}.", Display.SiteTime(h.StartedAt, null)]</span>
+            }
+            else
+            {
+                @L["Edge nodes, deliveries, connections, background services and the database, in one place."]
+            }
+        </p>
+    </div>
+    <div class="inv-head-tools">
+        <LiveStatus OnRefresh="LoadAsync" LoadedAt="_loadedAt" />
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_health is { } health)
+{
+    @foreach (var section in health.Sections.OrderBy(s => s.Status switch { "failing" => 0, "warning" => 1, _ => 2 }))
+    {
+        <section class="inv-section" aria-labelledby="@($"health-{section.Key}")" @key="section.Key">
+            <h2 id="@($"health-{section.Key}")" class="d-flex align-items-center gap-2">
+                @SystemHealthView.Section(L, section.Key)
+                <span class="@SystemHealthView.Chip(section.Status)">@SystemHealthView.Status(L, section.Status)</span>
+                @if (SystemHealthView.SectionLink(section.Key) is { } link)
+                {
+                    <a class="small fw-normal ms-auto" href="@link">@L["Open the page"]</a>
+                }
+            </h2>
+            @if (section.Items.Count == 0)
+            {
+                <p class="text-muted small">@(section.Key == "rollups" ? L["Every production day is rolled up."] : L["Nothing to check here."])</p>
+            }
+            else
+            {
+                <div class="table-panel">
+                    <table class="table table-sm align-middle mb-0">
+                        <tbody>
+                            @foreach (var item in section.Items)
+                            {
+                                <tr @key="item.Name">
+                                    <td class="text-nowrap" style="width: 9rem"><span class="@SystemHealthView.Chip(item.Status)">@SystemHealthView.Status(L, item.Status)</span></td>
+                                    <td class="fw-semibold text-nowrap">
+                                        @if (item.Link is { } to)
+                                        {
+                                            <a href="@to">@SystemHealthView.Name(L, section.Key, item.Name)</a>
+                                        }
+                                        else
+                                        {
+                                            @SystemHealthView.Name(L, section.Key, item.Name)
+                                        }
+                                    </td>
+                                    <td>@L.Of(item.Message)</td>
+                                    <td class="small text-muted text-nowrap">@(item.At is { } at ? Display.SiteTime(at, null) : "")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+}
+else if (_error is null)
+{
+    <p class="text-muted">@L["Loading…"]</p>
+}
+
+@code {
+    private SystemHealthDto? _health;
+    private DateTimeOffset? _loadedAt;
+    private ApiException? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _health = await Api.GetSystemHealthAsync();
+            _loadedAt = _health.CheckedAt;
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+}

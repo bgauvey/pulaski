@@ -49,6 +49,9 @@ public static class Permissions
     public const string QualityRecord = "quality.record";
     public const string QualityDecide = "quality.decide";
 
+    /// <summary>See how Pulaski is running (#141): edge nodes, deliveries, connections, background services, the database.</summary>
+    public const string SystemView = "system.view";
+
     /// <summary>Give a checklist its second sign-off, or reject it (#126d).</summary>
     public const string ChecklistSignOff = "checklists.sign_off";
     public const string Materials = "materials.manage";
@@ -151,6 +154,7 @@ public static class Permissions
         new(Instructions, Term.Mark("Configuration"), Term.Mark("Maintain work instructions: write, attach and release them")),
         new(Security, Term.Mark("Administration"), Term.Mark("Maintain users, roles and what each role may do")),
         new(Languages, Term.Mark("Administration"), Term.Mark("Add languages and keep their translations")),
+        new(SystemView, Term.Mark("Administration"), Term.Mark("See system health: edge nodes, deliveries, connections, background services and the database")),
         new(SecurityGrantEverywhere, Term.Mark("Administration"), Term.Mark("Give or take away a role held at every site, rather than at one")),
         new(Integrations, Term.Mark("Administration"), Term.Mark("Retry or skip failed deliveries to the ERP")),
         new(EdgeIngest, Term.Mark("Machine data"), Term.Mark("Send machine data as a Pulaski Edge node: read its configuration and forward what it collects")),

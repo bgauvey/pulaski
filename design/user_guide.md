@@ -2656,6 +2656,36 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 - **The first administrator** is created when Pulaski starts with no users, from the `Security:BootstrapAdmin` settings, with a temporary password to change at the first sign-in.
 - **For integrators:** the API takes a bearer token from `POST /api/auth/sign-in`; every other call needs one, and a call without the permission is refused with 403 and the permission in words.
 
+
+### System health (administrators)
+
+**Configure → System health** shows, on one page, what is unhealthy in the parts of Pulaski that run by themselves, and where to put it
+right.
+
+1. Open **Configure → System health**. The line at the top says whether everything checked is healthy, or how many items fail or need a look.
+2. Sections with a problem come first: **Database**, **Background services**, **Edge nodes**, **Delivery feeds**, **Scheduled connections**,
+   **OEE rollups** and **E-mail**. Each item is **Failing**, **Needs a look**, **Healthy** or **Off**, with what was found.
+3. Click an item's name (an edge node, a connection), or **Open the page** beside a section, to go where it is fixed.
+
+In detail:
+
+- **Database:** *failing* when the database is older than this version needs (run `db/migrate.sh`), or a history table has no partition for
+  next month yet (writes there would fail once it starts; the API normally creates them 3 months ahead).
+- **Background services** (partition upkeep, the delivery relay and its clean-up, OEE rollups, allocation and planning rate refreshes,
+  preventive maintenance, process value sampling, the connection scheduler, qualification notices, e-mail alerts, live updates): *failing* when
+  the last round failed (with its error), *needs a look* when no round has finished for three of its intervals, *off* when switched off in
+  configuration. They are known since the API last started, which the page says.
+- **Edge nodes:** healthy when heard from within 2 minutes, *needs a look* when quiet for longer or never connected, *failing* after an hour.
+- **Delivery feeds:** *failing* while a delivery has failed (it holds back the subject's later events until it is retried or skipped on
+  Integrations), *needs a look* when the oldest waiting delivery is over 15 minutes old.
+- **Scheduled connections** (material and people imports): *failing* when the last run failed, *needs a look* when it found problems and
+  changed nothing, or a scheduled run is an hour late.
+- **OEE rollups:** sites with production days changed more than a day ago and still not rolled up. OEE reports stay right meanwhile; long
+  ones work those days out from the history.
+- **E-mail:** *off* without a mail server; *failing* when the last e-mail couldn't be sent.
+- The page refreshes every 30 seconds. Seeing it needs *See system health*: the administrator has it, and no other role does until it is
+  given on the Roles tab.
+
 ---
 
 ## 16. Shift schedules
@@ -3433,6 +3463,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Live updates** reach the Overview, Floor, job pages, Machines, Andon, Handover, the Inbox, line boards and operator stations; the Schedule,
   Inventory and Quality pages show what was there when they were opened (charts and alerts every 30 seconds). Boards and stations reload
   for any change at their site, not only their own lines'.
+- **System health** is a page to look at: it sends no alerts. Background services are known only since the API last started, and only the API's
+  own; an edge node's own buffer and connections show on its page, not here.
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).

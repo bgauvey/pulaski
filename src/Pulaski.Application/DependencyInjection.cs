@@ -14,6 +14,7 @@ public static class DependencyInjection
         // To whole microseconds, so times worked out in memory equal the same times read back from PostgreSQL.
         services.TryAddSingleton<TimeProvider>(MicrosecondClock.Instance);
         services.TryAddSingleton<Live.LiveHub>();
+        services.TryAddSingleton<Health.ServiceHealth>();
         services.AddSingleton<IIdGenerator, UuidV7Generator>();
         services.AddScoped<IEventFactory, EventFactory>();
         services.AddSingleton<IMaterialSourceAdapter, CsvMaterialSource>();

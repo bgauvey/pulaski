@@ -977,6 +977,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         return await ReadAsync<CreatedResponse>(response, ct);
     }
 
+    /// <summary>How Pulaski is running (#141).</summary>
+    public Task<Contracts.Health.SystemHealthDto> GetSystemHealthAsync(CancellationToken ct = default) =>
+        GetAsync<Contracts.Health.SystemHealthDto>("api/system/health", ct);
+
     /// <summary>The released instructions a job shows (#126b).</summary>
     public Task<IReadOnlyList<JobInstructionDto>> GetJobInstructionsAsync(Guid jobId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<JobInstructionDto>>($"api/jobs/{jobId}/instructions", ct);

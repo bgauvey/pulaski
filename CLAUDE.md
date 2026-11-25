@@ -327,6 +327,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `LiveStatus Relevant=`. Timers stay as fallback.
   (b) `/api/terminal/live` (terminal's site) → web `/terminal/live` (terminal cookie, passed through) → `js/terminal-live.js` on pages with
   `<meta name="pulaski-live" content="board|station" data-every data-idle>`: GET reload ≤ every 3 s; stations wait while a form is typed in.
+- System health (D-118, proposed, #141): `GetSystemHealthQuery` (`/api/system/health`, `system.view`, admin only by default) over
+  `ISystemHealthReadStore` (migration, missing next-month partitions, edge nodes, feeds' queues, connections, stale rollups) + `ServiceHealth`
+  (singleton; every hosted service calls `Started`/`Disabled`/`Succeeded`/`Failed` with a `BackgroundServices` key) → pure `HealthRules`.
+  Configure → System health (`/system-health`).
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

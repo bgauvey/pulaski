@@ -7,17 +7,19 @@ namespace Pulaski.Api.Infrastructure;
 /// Runs material and people connections when their schedule is due (#71), checking every <c>Connections:Schedule:PollSeconds</c> (60).
 /// <c>Connections:Schedule:Enabled</c> = false stops it, for an instance that shouldn't pull. Runs act as <c>system</c>.
 /// </summary>
-internal sealed partial class ConnectionScheduleService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<ConnectionScheduleService> logger) : BackgroundService
+internal sealed partial class ConnectionScheduleService(IServiceScopeFactory scopes, IConfiguration configuration, Application.Health.ServiceHealth health, ILogger<ConnectionScheduleService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!configuration.GetValue("Connections:Schedule:Enabled", true))
         {
+            health.Disabled(Application.Health.BackgroundServices.Connections);
             return;
         }
 
         var poll = TimeSpan.FromSeconds(Math.Max(10, configuration.GetValue("Connections:Schedule:PollSeconds", 60)));
         using var timer = new PeriodicTimer(poll);
+        health.Started(Application.Health.BackgroundServices.Connections, poll);
         do
         {
             try
@@ -28,10 +30,13 @@ internal sealed partial class ConnectionScheduleService(IServiceScopeFactory sco
                 {
                     LogRan(logger, ran);
                 }
+
+                health.Succeeded(Application.Health.BackgroundServices.Connections);
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
                 logger.LogError(ex, "Couldn't check scheduled connections; trying again in {Interval}.", poll);
+                health.Failed(Application.Health.BackgroundServices.Connections, ex.Message);
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

@@ -66,19 +66,23 @@ internal sealed class SmtpMailSender(IOptions<EmailOptions> options) : IMailSend
 }
 
 /// <summary>Sends what <see cref="MailOutbox"/> holds, one at a time; a failure is logged (by the address's domain only) and not retried.</summary>
-internal sealed class MailSenderService(MailOutbox outbox, IMailSender sender, ILogger<MailSenderService> logger) : BackgroundService
+internal sealed class MailSenderService(MailOutbox outbox, IMailSender sender, Application.Health.ServiceHealth health, ILogger<MailSenderService> logger)
+    : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        health.Started(Application.Health.BackgroundServices.Mail, null);
         await foreach (var mail in outbox.Reader.ReadAllAsync(stoppingToken))
         {
             try
             {
                 await sender.SendAsync(mail, stoppingToken);
+                health.Succeeded(Application.Health.BackgroundServices.Mail);
             }
             catch (Exception ex) when (ex is SmtpException or InvalidOperationException or FormatException or IOException)
             {
                 logger.LogError(ex, "Couldn't send \"{Subject}\" to an address at {Domain}.", mail.Subject, mail.Recipient.Split('@').LastOrDefault());
+                health.Failed(Application.Health.BackgroundServices.Mail, ex.Message);
             }
         }
     }

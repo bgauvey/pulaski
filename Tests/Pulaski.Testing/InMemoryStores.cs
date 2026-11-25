@@ -114,6 +114,8 @@ public sealed class InMemoryStores
 
     public InMemoryLiveSignals LiveSignals { get; } = new();
 
+    public InMemorySystemHealth Health { get; } = new();
+
     public InMemoryAlerts Alerts { get; } = new();
 
     public InMemoryLineOutput LineOutput { get; } = new();
@@ -222,6 +224,7 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Instructions.IInstructionReadStore>();
         services.RemoveAll<Application.Instructions.IChecklistRepository>();
         services.RemoveAll<Application.Live.ILiveSignals>();
+        services.RemoveAll<Application.Health.ISystemHealthReadStore>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -322,6 +325,7 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Instructions.IInstructionReadStore>(Instructions);
         services.AddSingleton<Application.Instructions.IChecklistRepository>(Instructions);
         services.AddSingleton<Application.Live.ILiveSignals>(LiveSignals);
+        services.AddSingleton<Application.Health.ISystemHealthReadStore>(Health);
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);
@@ -426,4 +430,28 @@ public sealed class InMemoryLiveSignals : Application.Live.ILiveSignals
 
         return Task.CompletedTask;
     }
+}
+
+/// <summary>A database as healthy as can be, with whatever edge nodes and feeds a test adds (#141).</summary>
+public sealed class InMemorySystemHealth : Application.Health.ISystemHealthReadStore
+{
+    public List<(Guid Id, string Code, string SiteCode, bool IsActive, DateTimeOffset? LastSeenAt)> EdgeNodes { get; } = [];
+
+    public List<(string Feed, bool Enabled, int Pending, DateTimeOffset? OldestPending, int Failed)> Feeds { get; } = [];
+
+    public Task<(string? Applied, string Required, bool HasRequired)> MigrationAsync(CancellationToken cancellationToken) => Task.FromResult<(string?, string, bool)>(("test", "test", true));
+
+    public Task<IReadOnlyList<string>> MissingPartitionsAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<string>>([]);
+
+    public Task<IReadOnlyList<(Guid Id, string Code, string SiteCode, bool IsActive, DateTimeOffset? LastSeenAt)>> EdgeNodesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(Guid, string, string, bool, DateTimeOffset?)>>([.. EdgeNodes]);
+
+    public Task<IReadOnlyList<(string Feed, bool Enabled, int Pending, DateTimeOffset? OldestPending, int Failed)>> FeedsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(string, bool, int, DateTimeOffset?, int)>>([.. Feeds]);
+
+    public Task<IReadOnlyList<(string Code, string Target, bool IsActive, bool Scheduled, string? LastOutcome, DateTimeOffset? LastRunAt, DateTimeOffset? NextRunAt)>> ConnectionsAsync(
+        CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<(string, string, bool, bool, string?, DateTimeOffset?, DateTimeOffset?)>>([]);
+
+    public Task<IReadOnlyList<(string SiteCode, int Days, DateOnly Oldest)>> StaleRollupsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(string, int, DateOnly)>>([]);
 }
