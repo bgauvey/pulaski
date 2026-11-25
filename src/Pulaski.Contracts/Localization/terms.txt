@@ -41,6 +41,7 @@
 '{0}' isn't a container kind; use {1}.
 '{0}' isn't a kind of event.
 '{0}' isn't a material type; use {1}.
+'{0}' isn't a meter; use run_hours or counts.
 '{0}' isn't a priority; use low, normal or high.
 '{0}' isn't a protocol Pulaski Edge reads ({1}).
 '{0}' isn't a role.
@@ -253,6 +254,7 @@ A path can't hold control characters.
 A pattern of 1 to {0} characters.
 A people connection's site is fixed once made; add another connection for another site.
 A person belongs to a site; choose one.
+A plan raises a maintenance request by itself every so many run hours (time executing) or machine counts. The next one counts from when its request is closed.
 A proposal for a rate already from run history is accepted at once when it is within the limit below. The first rate from run history, and larger changes, always wait for a planner.
 A qualification belongs to a site; choose one.
 A reason for every site can only go under a group for every site; {0} is for one site.
@@ -323,6 +325,7 @@ Add a lot attribute
 Add a material
 Add a material class
 Add a note
+Add a plan
 Add a printer
 Add a role…
 Add a rule
@@ -1268,8 +1271,11 @@ Event type
 Event type, e.g. consumed
 Events (CloudEvents JSON)
 Events sent
+Every
 Every (hours)
 Every 1 to 168 hours.
+Every 1 to {0:0} counts.
+Every 1 to {0:0} run hours.
 Every characteristic
 Every class and material as B2MML, which the B2MML import reads back
 Every day from {0}
@@ -1440,6 +1446,7 @@ Give at least one target.
 Give both BeforeAt and BeforeId, or neither.
 Give both external_system and external_key, or neither.
 Give each shift a start time as HH:mm.
+Give how often first.
 Give or take away a role held at every site, rather than at one
 Give the .btw document for at least one operation, such as default.
 Give the .btw document's path.
@@ -1688,6 +1695,7 @@ Its group {0} is switched off; switch it on first.
 Its own conversions
 Its own state tag
 Its place in the route: 10, 20, 30… Unique within the version.
+Its plan
 Its quantity, place and status then, in the order its movements count (back-dated ones at their time).
 Its shift isn't approved yet: change the break instead.
 Its shift isn't approved yet: change the session instead.
@@ -1793,6 +1801,7 @@ Last hour
 Last import
 Last recalculated {0}.
 Last refreshed {0}.
+Last request
 Last shift
 Last sign-in
 Last signal
@@ -2006,6 +2015,7 @@ Maintain units of measure
 Maintain users, roles and what each role may do
 Maintained in Pulaski
 Maintenance
+Maintenance plan {0} not found.
 Maintenance request {0} not found.
 Maintenance requests
 Maintenance requests open: {0}
@@ -2293,6 +2303,7 @@ No people at {0} yet.
 No people source '{0}'. The sources are {1}.
 No planned duration, and no material change to size it from.
 No planned duration.
+No plans yet.
 No printers yet: labels print as PDF.
 No process can run this material yet; see below
 No process names {0}, its class, or all materials.
@@ -2489,6 +2500,7 @@ OEE
 OEE targets
 Obsolete
 Odata
+Of
 Of it on hold
 Of {0} {1}; the rest stays in {2}.
 Off
@@ -2773,6 +2785,8 @@ Preferences…
 Preferred line for {0}
 Prefilled on {0}'s reports; the lot being filled's location comes first.
 Preparing PDF…
+Preventive
+Preventive plans
 Previous month
 Print
 Print and schedule actions are available for one selected order.
@@ -3224,6 +3238,8 @@ Saved {0}. The schedule shows the new times straight away.
 Saved. The API's configuration now holds only the secret.
 Saved. The feed uses them from its next round.
 Saving…
+Say what is done first.
+Say what is done, in at most {0} characters, such as Grease the gearbox.
 Say what needs looking at first.
 Say what needs looking at.
 Say what was done, at most {0} characters.
@@ -3435,6 +3451,7 @@ Skipped
 Skipped by {0}: {1}
 Skipped.
 Skip…
+So far
 Soap
 SoapAction: at most 500 characters.
 Some of those people don't exist.
@@ -4214,6 +4231,7 @@ Waited
 Waiting
 Waiting external
 Waiting for a line
+Waiting for its request
 Waiting for review
 Waiting on its department: start it from the Floor, choosing the line it runs on.
 Waiting {0}
@@ -4240,6 +4258,7 @@ What each material must meet: its characteristics and their limits. Quality resu
 What each role may change is on
 What every machine is doing now, as its edge node reports it, and its stops. A stop is time a machine isn't executing; stops shorter than the machine's micro-stop threshold aren't coded. Give each stop its reason, or confirm the one its stop code maps to. Where the machine's record is wrong or missing, a supervisor can enter a stop by hand, or split or merge stops.
 What happens when the ERP sends a work order for this material that isn't whole batches (D-066). The site's rule is set on Site settings; the ERP's own quantity is always kept on the order beside Pulaski's.
+What is done
 What is here
 What is measured (a wall thickness, a melt flow index) or inspected (surface defects). Specifications give each one its limits per material.
 What it did
@@ -4578,6 +4597,7 @@ locked
 lot {0}
 lots mix there, so what arrives joins it.
 machine
+machine counts
 maintain BOMs
 maintain characteristics
 maintain edge nodes
@@ -4681,6 +4701,7 @@ reversed
 revoked
 role at this site. Sign in once as that user and set its password.
 room for {0} more at the line's rate
+run hours
 run {0}
 runtime
 securityMode is {0}.
@@ -4702,6 +4723,7 @@ stock
 stopped for {0}, {1} ago
 stopped {0} ago, still stopped
 substitution
+such as Grease the gearbox
 supplier lot {0}
 target {0}
 the answer has no array at '{0}'.
@@ -4774,6 +4796,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} (switched off)
 {0} (the material's)
 {0} (to {1})
+{0} ({1:0}%)
 {0} Since then: {1}.
 {0} UTC by {1}: {2}
 {0} allocated
@@ -4833,6 +4856,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} could run here: {1}, {2} ({3} – {4}). Drag it onto a line to assign it.
 {0} couldn't be read: {1}
 {0} counted {1} good and {2} scrap {3} {4}, to {5}{6}.
+{0} counts
 {0} created
 {0} created on {1} for {2}.
 {0} days
@@ -5066,6 +5090,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} isn't a language the screens are translated into.
 {0} isn't a line of the department {1} was planned to.
 {0} isn't a line of {1}'s group that can run it.
+{0} isn't a line or machine; plan maintenance for one.
 {0} isn't a line or machine; request maintenance for one.
 {0} isn't a line; call for help from a line.
 {0} isn't a line; write handover notes for a line.
@@ -5182,6 +5207,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} results; {1} beyond the limits, {2} breaking a run rule.
 {0} results; {1} beyond the limits.
 {0} rows have errors, so nothing can be imported yet. Fix them and pick the file again.
+{0} run hours
 {0} runs on no day; tick at least one.
 {0} runs, {1} h over {2} days
 {0} runs, {1} h running ({2} h of stops taken out) over {3} days

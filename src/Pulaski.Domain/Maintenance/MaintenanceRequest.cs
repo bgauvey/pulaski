@@ -46,7 +46,8 @@ public sealed record MaintenanceRequest(
     string? ClosedBy = null,
     string? Resolution = null,
     string? ExternalSystem = null,
-    string? ExternalReference = null)
+    string? ExternalReference = null,
+    Guid? PlanId = null)
 {
     public const int MaxText = 1000;
 
@@ -58,7 +59,7 @@ public sealed record MaintenanceRequest(
     /// <exception cref="DomainRuleException">No description, too long a text, or an unknown priority.</exception>
     public static MaintenanceRequest Raise(
         Guid id, Guid siteId, Guid equipmentId, string number, string? priority, string? description, DateTimeOffset at, string by, string? from = null,
-        Guid? downtimeId = null, DateTimeOffset? downtimeStartedAt = null)
+        Guid? downtimeId = null, DateTimeOffset? downtimeStartedAt = null, Guid? planId = null)
     {
         var chosen = string.IsNullOrWhiteSpace(priority) ? MaintenancePriorities.Normal : priority.Trim();
         if (!MaintenancePriorities.All.Contains(chosen))
@@ -67,7 +68,10 @@ public sealed record MaintenanceRequest(
         }
 
         var text = Text(description) ?? throw new DomainRuleException("Say what needs looking at.");
-        return new MaintenanceRequest(id, siteId, equipmentId, number, MaintenanceStatuses.Open, chosen, text, at, by, from, downtimeId, downtimeStartedAt);
+        return new MaintenanceRequest(id, siteId, equipmentId, number, MaintenanceStatuses.Open, chosen, text, at, by, from, downtimeId, downtimeStartedAt)
+        {
+            PlanId = planId,
+        };
     }
 
     public bool IsClosed => Status == MaintenanceStatuses.Closed;

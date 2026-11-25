@@ -250,6 +250,10 @@ public static class EventTypes
 
     /// <summary>A CMMS took a request on as its own work order (#127c), with its number.</summary>
     public const string MaintenanceRequestLinked = "pulaski.maintenance.request_linked.v1";
+
+    /// <summary>Preventive plans (#127d): made and changed; the requests they raise are <see cref="MaintenanceRequestRaised"/>.</summary>
+    public const string MaintenancePlanCreated = "pulaski.maintenance.plan_created.v1";
+    public const string MaintenancePlanChanged = "pulaski.maintenance.plan_changed.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

@@ -42,6 +42,7 @@ term,translation
 '{0}' isn't a container kind; use {1}.,'{0}' no es un tipo de contenedor; use {1}.
 '{0}' isn't a kind of event.,'{0}' no es un tipo de evento.
 '{0}' isn't a material type; use {1}.,'{0}' no es un tipo de material; use {1}.
+'{0}' isn't a meter; use run_hours or counts.,'{0}' no es un medidor; use run_hours o counts.
 "'{0}' isn't a priority; use low, normal or high.","'{0}' no es una prioridad; use baja, normal o alta."
 '{0}' isn't a protocol Pulaski Edge reads ({1}).,'{0}' no es un protocolo que lea Pulaski Edge ({1}).
 '{0}' isn't a role.,'{0}' no es un rol.
@@ -254,6 +255,7 @@ A path can't hold control characters.,Una ruta no puede contener caracteres de c
 A pattern of 1 to {0} characters.,Un patrón de 1 a {0} caracteres.
 A people connection's site is fixed once made; add another connection for another site.,El sitio de una conexión de personas es fijo una vez creada; agregue otra conexión para otro sitio.
 A person belongs to a site; choose one.,Una persona pertenece a un sitio; elija uno.
+A plan raises a maintenance request by itself every so many run hours (time executing) or machine counts. The next one counts from when its request is closed.,Un plan crea por sí solo una solicitud de mantenimiento cada tantas horas de funcionamiento (tiempo en ejecución) o conteos de máquina. La siguiente cuenta desde que se cierra su solicitud.
 "A proposal for a rate already from run history is accepted at once when it is within the limit below. The first rate from run history, and larger changes, always wait for a planner.","Una propuesta para una tasa que ya viene del historial de corridas se acepta de inmediato cuando está dentro del límite de abajo. La primera tasa del historial de corridas, y los cambios mayores, siempre esperan a un planeador."
 A qualification belongs to a site; choose one.,Una calificación pertenece a un sitio; elija uno.
 A reason for every site can only go under a group for every site; {0} is for one site.,Un motivo para todos los sitios solo puede ir bajo un grupo para todos los sitios; {0} es para un sitio.
@@ -324,6 +326,7 @@ Add a lot attribute,Agregar un atributo de lote
 Add a material,Agregar un material
 Add a material class,Agregar una clase de material
 Add a note,Agregar una nota
+Add a plan,Agregar un plan
 Add a printer,Agregar una impresora
 Add a role…,Agregar un rol…
 Add a rule,Agregar una regla
@@ -1269,8 +1272,11 @@ Event type,Tipo de evento
 "Event type, e.g. consumed","Tipo de evento, p. ej. consumed"
 Events (CloudEvents JSON),Eventos (CloudEvents JSON)
 Events sent,Eventos enviados
+Every,Cada
 Every (hours),Cada (horas)
 Every 1 to 168 hours.,Cada 1 a 168 horas.
+Every 1 to {0:0} counts.,Cada 1 a {0:0} conteos.
+Every 1 to {0:0} run hours.,Cada 1 a {0:0} horas de funcionamiento.
 Every characteristic,Todas las características
 "Every class and material as B2MML, which the B2MML import reads back","Cada clase y material como B2MML, que la importación B2MML vuelve a leer"
 Every day from {0},Cada día desde {0}
@@ -1441,6 +1447,7 @@ Give at least one target.,Indique al menos una meta.
 "Give both BeforeAt and BeforeId, or neither.","Dé BeforeAt y BeforeId, o ninguno."
 "Give both external_system and external_key, or neither.","Dé external_system y external_key, o ninguno."
 Give each shift a start time as HH:mm.,Dé a cada turno una hora de inicio como HH:mm.
+Give how often first.,Indique primero con qué frecuencia.
 "Give or take away a role held at every site, rather than at one","Dar o quitar un rol que se tiene en todos los sitios, en lugar de en uno"
 "Give the .btw document for at least one operation, such as default.","Dé el documento .btw para al menos una operación, como default."
 Give the .btw document's path.,Indique la ruta del documento .btw.
@@ -1689,6 +1696,7 @@ Its group {0} is switched off; switch it on first.,Su grupo {0} está desactivad
 Its own conversions,"Lo bueno y el desperdicio salen de la corrida, y cada lote que hizo devuelve la cantidad. Un lote que se usó, dividió o movió a un silo desde entonces debe corregirse primero; Pulaski dice cuál."
 Its own state tag,Su propia etiqueta de estado
 "Its place in the route: 10, 20, 30… Unique within the version.","Su lugar en la ruta: 10, 20, 30… Único dentro de la versión."
+Its plan,Su plan
 "Its quantity, place and status then, in the order its movements count (back-dated ones at their time).","Su cantidad, lugar y estado entonces, en el orden en que cuentan sus movimientos (los de fecha anterior a su hora)."
 Its shift isn't approved yet: change the break instead.,Su turno aún no está aprobado: cambie el descanso en su lugar.
 Its shift isn't approved yet: change the session instead.,Su turno aún no está aprobado: cambie la sesión en su lugar.
@@ -1794,6 +1802,7 @@ Last hour,Última hora
 Last import,Última importación
 Last recalculated {0}.,Último recálculo {0}.
 Last refreshed {0}.,Última actualización {0}.
+Last request,Última solicitud
 Last shift,Turno anterior
 Last sign-in,Último inicio de sesión
 Last signal,Última señal
@@ -2007,6 +2016,7 @@ Maintain units of measure,Mantener unidades de medida
 "Maintain users, roles and what each role may do","Mantener usuarios, roles y lo que puede hacer cada rol"
 Maintained in Pulaski,Mantenido en Pulaski
 Maintenance,Mantenimiento
+Maintenance plan {0} not found.,Plan de mantenimiento {0} no encontrado.
 Maintenance request {0} not found.,Solicitud de mantenimiento {0} no encontrada.
 Maintenance requests,Solicitudes de mantenimiento
 Maintenance requests open: {0},Solicitudes de mantenimiento abiertas: {0}
@@ -2294,6 +2304,7 @@ No people at {0} yet.,Aún no hay personas en {0}.
 No people source '{0}'. The sources are {1}.,No hay fuente de personas '{0}'. Las fuentes son {1}.
 "No planned duration, and no material change to size it from.","Sin duración planeada, y sin cambio de material del cual calcularla."
 No planned duration.,Sin duración planeada.
+No plans yet.,Aún no hay planes.
 No printers yet: labels print as PDF.,Aún no hay impresoras: las etiquetas se imprimen como PDF.
 No process can run this material yet; see below,Ningún proceso puede ejecutar este material aún; vea abajo
 "No process names {0}, its class, or all materials.","Ningún proceso nombra {0}, su clase, o todos los materiales."
@@ -2490,6 +2501,7 @@ OEE,OEE
 OEE targets,Metas de OEE
 Obsolete,Obsoleta
 Odata,OData
+Of,De
 Of it on hold,De ello retenido
 Of {0} {1}; the rest stays in {2}.,De {0} {1}; el resto queda en {2}.
 Off,Apagado
@@ -2774,6 +2786,8 @@ Preferences…,Preferencias…
 Preferred line for {0},Línea preferida para {0}
 Prefilled on {0}'s reports; the lot being filled's location comes first.,Se prellena en los reportes de {0}; la ubicación del lote que se está llenando va primero.
 Preparing PDF…,Preparando PDF…
+Preventive,Preventivo
+Preventive plans,Planes preventivos
 Previous month,Mes anterior
 Print,Imprimir
 Print and schedule actions are available for one selected order.,Las acciones de impresión y programación están disponibles para una orden elegida.
@@ -3136,7 +3150,7 @@ Run end,Fin de corrida
 Run h,h ejecución
 Run history,Historial de corridas
 Run history net,Historial de corridas neto
-Run hours,Horas de ejecución
+Run hours,Horas de funcionamiento
 Run rules are Nelson's 1 to 8.,"Las reglas de corrida son las de Nelson, del 1 al 8."
 Run rules its chart checks,Reglas de corrida que revisa su gráfico
 "Run so far: the machine counted {0} good, {1} scrap {2}; reported {3} good, {4} scrap {5}.","Corrida hasta ahora: la máquina contó {0} buenos, {1} de desperdicio {2}; se reportaron {3} buenos, {4} de desperdicio {5}."
@@ -3225,6 +3239,8 @@ Saved {0}. The schedule shows the new times straight away.,Se guardó {0}. El pr
 Saved. The API's configuration now holds only the secret.,Guardado. La configuración de la API ahora guarda solo el secreto.
 Saved. The feed uses them from its next round.,Guardado. El canal los usa a partir de su siguiente ronda.
 Saving…,Guardando…
+Say what is done first.,Diga primero qué se hace.
+"Say what is done, in at most {0} characters, such as Grease the gearbox.","Diga qué se hace, en como máximo {0} caracteres, como Engrasar la caja de engranes."
 Say what needs looking at first.,Diga primero qué hay que revisar.
 Say what needs looking at.,Diga qué hay que revisar.
 "Say what was done, at most {0} characters.","Diga qué se hizo, como máximo {0} caracteres."
@@ -3436,6 +3452,7 @@ Skipped,Omitido
 Skipped by {0}: {1},Omitido por {0}: {1}
 Skipped.,Omitido.
 Skip…,Omitir…
+So far,Hasta ahora
 Soap,SOAP
 SoapAction: at most 500 characters.,SoapAction: como máximo 500 caracteres.
 Some of those people don't exist.,Algunas de esas personas no existen.
@@ -4215,6 +4232,7 @@ Waited,Esperó
 Waiting,En espera
 Waiting external,Esperando externo
 Waiting for a line,Esperando una línea
+Waiting for its request,En espera de su solicitud
 Waiting for review,Esperando revisión
 "Waiting on its department: start it from the Floor, choosing the line it runs on.","Esperando en su departamento: inícielo desde Piso, eligiendo la línea en que se ejecuta."
 Waiting {0},En espera {0}
@@ -4241,6 +4259,7 @@ What each material must meet: its characteristics and their limits. Quality resu
 What each role may change is on,Lo que cada rol puede cambiar está en
 "What every machine is doing now, as its edge node reports it, and its stops. A stop is time a machine isn't executing; stops shorter than the machine's micro-stop threshold aren't coded. Give each stop its reason, or confirm the one its stop code maps to. Where the machine's record is wrong or missing, a supervisor can enter a stop by hand, or split or merge stops.","Lo que hace cada máquina ahora, como lo reporta su nodo de borde, y sus paros. Un paro es tiempo en que una máquina no está ejecutando; los paros más cortos que el umbral de microparos de la máquina no se codifican. Dé a cada paro su motivo, o confirme el que indica su código de paro. Donde el registro de la máquina está mal o falta, un supervisor puede ingresar un paro a mano, o dividir o unir paros."
 What happens when the ERP sends a work order for this material that isn't whole batches (D-066). The site's rule is set on Site settings; the ERP's own quantity is always kept on the order beside Pulaski's.,Qué pasa cuando el ERP envía una orden de trabajo para este material que no son tandas completas (D-066). La regla del sitio se fija en Ajustes del sitio; la cantidad propia del ERP siempre se guarda en la orden junto a la de Pulaski.
+What is done,Qué se hace
 What is here,Lo que hay aquí
 "What is measured (a wall thickness, a melt flow index) or inspected (surface defects). Specifications give each one its limits per material.","Lo que se mide (un espesor de pared, un índice de fluidez) o se inspecciona (defectos de superficie). Las especificaciones dan a cada una sus límites por material."
 What it did,Lo que hizo
@@ -4579,6 +4598,7 @@ locked,bloqueado
 lot {0},lote {0}
 "lots mix there, so what arrives joins it.","los lotes se mezclan allí, así que lo que llega se une."
 machine,máquina
+machine counts,conteos de máquina
 maintain BOMs,mantener listas de materiales
 maintain characteristics,mantener características
 maintain edge nodes,mantener nodos de borde
@@ -4682,6 +4702,7 @@ reversed,revertido
 revoked,revocada
 role at this site. Sign in once as that user and set its password.,en este sitio. Inicie sesión una vez como ese usuario y fije su contraseña.
 room for {0} more at the line's rate,cabe {0} más a la tasa de la línea
+run hours,horas de funcionamiento
 run {0},corrida {0}
 runtime,tiempo productivo
 securityMode is {0}.,securityMode es {0}.
@@ -4703,6 +4724,7 @@ stock,existencia
 "stopped for {0}, {1} ago","detenido durante {0}, hace {1}"
 "stopped {0} ago, still stopped","detenido hace {0}, sigue detenido"
 substitution,sustitución
+such as Grease the gearbox,como Engrasar la caja de engranes
 supplier lot {0},lote del proveedor {0}
 target {0},meta {0}
 the answer has no array at '{0}'.,la respuesta no tiene un arreglo en '{0}'.
@@ -4775,6 +4797,7 @@ yes,sí
 {0} (switched off),{0} (desactivado)
 {0} (the material's),{0} (el del material)
 {0} (to {1}),{0} (hasta {1})
+{0} ({1:0}%),{0} ({1:0}%)
 {0} Since then: {1}.,{0} Desde entonces: {1}.
 {0} UTC by {1}: {2},{0} UTC por {1}: {2}
 {0} allocated,{0} asignados
@@ -4834,6 +4857,7 @@ yes,sí
 "{0} could run here: {1}, {2} ({3} – {4}). Drag it onto a line to assign it.","{0} podría ejecutarse aquí: {1}, {2} ({3} – {4}). Arrástrelo a una línea para asignarlo."
 {0} couldn't be read: {1},{0} no pudo leerse: {1}
 "{0} counted {1} good and {2} scrap {3} {4}, to {5}{6}.","{0} contó {1} buenos y {2} de desperdicio {3} {4}, hasta las {5}{6}."
+{0} counts,{0} conteos
 {0} created,{0} creadas
 {0} created on {1} for {2}.,{0} creado en {1} por {2}.
 {0} days,{0} días
@@ -5067,6 +5091,7 @@ yes,sí
 {0} isn't a language the screens are translated into.,{0} no es un idioma al que estén traducidas las pantallas.
 {0} isn't a line of the department {1} was planned to.,{0} no es una línea del departamento al que se planeó {1}.
 {0} isn't a line of {1}'s group that can run it.,{0} no es una línea del grupo de {1} que pueda ejecutarlo.
+{0} isn't a line or machine; plan maintenance for one.,{0} no es una línea ni una máquina; planee mantenimiento para una.
 {0} isn't a line or machine; request maintenance for one.,{0} no es una línea ni una máquina; solicite mantenimiento para una.
 {0} isn't a line; call for help from a line.,{0} no es una línea; pida ayuda desde una línea.
 {0} isn't a line; write handover notes for a line.,{0} no es una línea; escriba notas de entrega de turno para una línea.
@@ -5183,6 +5208,7 @@ yes,sí
 "{0} results; {1} beyond the limits, {2} breaking a run rule.","{0} resultados; {1} fuera de los límites, {2} rompen una regla de corrida."
 {0} results; {1} beyond the limits.,{0} resultados; {1} fuera de los límites.
 "{0} rows have errors, so nothing can be imported yet. Fix them and pick the file again.","{0} filas tienen errores, así que aún no se puede importar nada. Corríjalas y elija el archivo de nuevo."
+{0} run hours,{0} horas de funcionamiento
 {0} runs on no day; tick at least one.,{0} no corre ningún día; marque al menos uno.
 "{0} runs, {1} h over {2} days","{0} corridas, {1} h en {2} días"
 "{0} runs, {1} h running ({2} h of stops taken out) over {3} days","{0} corridas, {1} h en marcha ({2} h de paros excluidas) en {3} días"

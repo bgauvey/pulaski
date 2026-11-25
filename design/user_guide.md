@@ -3190,6 +3190,24 @@ In detail:
   and closing needs *Work maintenance requests* (Supervisor, Maintenance). The Maintenance role comes with a new Pulaski and is added to
   an existing one by its upgrade.
 - The tab refreshes itself, as the Andon page does. **Equipment** narrows it to a line or machine; a line includes its machines' requests.
+**Plan maintenance by run hours or counts** (Maintenance and Supervisor roles):
+
+1. On the **Maintenance** tab, under **Preventive plans**, click **Add a plan**.
+2. Choose the **Line or machine**, say **What is done** (such as *Grease the gearbox*), and set **Every** so many **run hours** or
+   **machine counts**, and the **Priority**.
+3. Click **Save**. **So far** shows how far its meter has got, and its share of the interval.
+
+When the meter reaches the interval, Pulaski raises a request by itself, with the plan's words, marked **Preventive** and raised by **Its plan**.
+
+- **Run hours** are the time the line or machine spent executing (PackML Execute), from its machine state; **machine counts** are what its
+  counter tag counted. Equipment that reports neither never reaches its interval.
+- **One at a time.** While a plan's request is open, its meter waits (**Waiting for its request**). Once the request is closed, the meter
+  starts again from then, so time or counts before the close don't count towards the next one.
+- **Change** a plan's words, interval or priority, or switch it **Off**. Its meter (run hours or counts) is fixed once made; make another
+  plan for the other. Switched on again, its meter starts from then. Plans are never deleted, since their requests name them.
+- Pulaski checks the plans every 10 minutes (`Maintenance:Plans:PollMinutes` in the API's settings; `Maintenance:Plans:Enabled` = false stops
+  it), so a request comes up to 10 minutes after its interval is reached.
+
 - **A CMMS** can take requests on: send them through a delivery feed with *Maintenance requests* ticked, and it answers with its own number,
   and can start and close them (see [Send movements to the ERP and certificates to a document system](#send-movements-to-the-erp-and-certificates-to-a-document-system)). Its number shows as **CMMS …** under the request's.
 - **Elsewhere:** a line's open requests show on its [operator station](#use-an-operator-station), where they can be raised too, and on its
@@ -3280,8 +3298,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
   put up for review, a delivery's error. Dates and quantities inside a message keep Pulaski's usual form (*2026-11-24*, *1,234.5*), and the
   screens that haven't moved to regional formats yet still write them that way.
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
-  waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Nothing raises one by itself yet (after
-  so many run hours or counts).
+  waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
+  and machine counts, not days on the calendar.
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).

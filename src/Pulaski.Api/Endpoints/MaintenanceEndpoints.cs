@@ -3,6 +3,7 @@ using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Maintenance;
 using Pulaski.Application.Security;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Maintenance;
 using Pulaski.Domain.Security;
 
@@ -38,6 +39,27 @@ internal static class MaintenanceEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new CloseMaintenanceRequestCommand(id, request.Resolution), ct)))
         .RequirePermission(Permissions.MaintenanceWork, Site.Of(SiteOf.MaintenanceRequest));
+
+        // Preventive plans (#127d): seen with the requests, kept by whoever works them.
+        maintenance.MapGet("/plans", async Task<Ok<IReadOnlyList<MaintenancePlanDto>>> (
+            Guid siteId, IQueryHandler<ListMaintenancePlansQuery, IReadOnlyList<MaintenancePlanDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListMaintenancePlansQuery(siteId), ct)))
+        .RequireAny(Site.Query(), Permissions.MachinesView);
+
+        maintenance.MapPost("/plans", async Task<Created<CreatedResponse>> (
+            CreateMaintenancePlanRequest request, ICommandHandler<CreateMaintenancePlanCommand, CreatedResponse> handler, CancellationToken ct) =>
+        {
+            var created = await handler.HandleAsync(
+                new CreateMaintenancePlanCommand(request.EquipmentId, request.Name, request.Meter, request.Interval, request.Priority), ct);
+            return TypedResults.Created($"/api/maintenance/plans/{created.Id}", created);
+        })
+        .RequirePermission(Permissions.MaintenanceWork, Site.FromBody<CreateMaintenancePlanRequest>(SiteOf.Equipment, r => r.EquipmentId));
+
+        maintenance.MapPut("/plans/{id:guid}", async Task<Ok<VersionResponse>> (
+            Guid id, UpdateMaintenancePlanRequest request, ICommandHandler<UpdateMaintenancePlanCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(
+                new UpdateMaintenancePlanCommand(id, request.Version, request.Name, request.Interval, request.Priority, request.IsActive), ct)))
+        .RequirePermission(Permissions.MaintenanceWork, Site.Of(SiteOf.MaintenancePlan));
 
         return routes;
     }

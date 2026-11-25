@@ -3162,6 +3162,14 @@ CMMS (maintenance system); Pulaski shouldn't become one, but a plant without one
   (`UpdateMaintenanceFromCmmsCommand`). An answer already applied changes nothing, so retries are safe; a new number replaces the old. A
   separate answer rather than the delivery acknowledgement, which is per event and says only whether it was booked. No adapter for a
   particular CMMS; events the CMMS caused go back to it like others.
+- **Preventive plans (d).** `core.maintenance_plan` (migration 0078) for equipment below an area: what is done (the requests' description),
+  meter `run_hours` (Execute time from `ts.equipment_state_change`, the state in effect at the start included) or `counts` (processed machine
+  counts, `ts.production_count` source `machine`), interval, priority; switched off, never deleted. `MaintenancePlan.CountsFrom`: its start, or
+  its last request's close if later; `IsDue` when the reading reaches the interval. `MaintenancePlanService` (API, `Maintenance:Plans:PollMinutes`
+  10, `Enabled`) → `MaintenancePlanRunner.RaiseDueAsync`: each active plan in its own transaction, the plan locked, skipped while its request is
+  open (`maintenance_request_plan_uq`), meters read on the read store, the equipment locked, a request raised as `system` with
+  `maintenance_plan_id`. Plans on the Maintenance tab (`/api/maintenance/plans`, `maintenance.work` to keep them), each with its reading so far,
+  worked out on read. Calendar-based plans (every so many days) are left out. With (d), #127 is complete.
 - **Pieces:** (a) requests from a stop or the line, statuses, the Machines tab; (b) the operator station, line boards and Inbox; (c) a CMMS feed
   and its answer back (work order number, closing); (d) preventive triggers by run hours or machine counts.
 

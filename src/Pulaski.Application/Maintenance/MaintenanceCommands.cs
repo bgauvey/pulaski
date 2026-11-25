@@ -24,9 +24,6 @@ internal sealed class RaiseMaintenanceRequestHandler(
     IUnitOfWork unitOfWork, IMaintenanceRepository maintenance, IEventLog eventLog, IEventFactory events, IIdGenerator ids, TimeProvider time)
     : ICommandHandler<RaiseMaintenanceRequestCommand, MaintenanceRequestResponse>
 {
-    /// <summary>Equipment a request can be for: below an area (a line, a machine, a unit, a feed point).</summary>
-    private static readonly string[] Levels = ["work_center", "work_unit", "equipment_module"];
-
     public async Task<MaintenanceRequestResponse> HandleAsync(RaiseMaintenanceRequestCommand command, CancellationToken cancellationToken)
     {
         if ((command.DowntimeId is null) != (command.DowntimeStartedAt is null))
@@ -46,7 +43,7 @@ internal sealed class RaiseMaintenanceRequestHandler(
         var equipmentId = stop?.EquipmentId ?? command.EquipmentId;
         var equipment = await maintenance.LockEquipmentAsync(equipmentId, cancellationToken)
             ?? throw new NotFoundException($"Equipment {equipmentId} not found.");
-        if (!Levels.Contains(equipment.Level) || equipment.SiteId is not { } siteId)
+        if (!MaintenanceEquipmentRules.Levels.Contains(equipment.Level) || equipment.SiteId is not { } siteId)
         {
             throw new DomainRuleException($"{equipment.Code} isn't a line or machine; request maintenance for one.");
         }

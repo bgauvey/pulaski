@@ -1605,6 +1605,15 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         return GetAsync<IReadOnlyList<MaintenanceRequestDto>>(query, ct);
     }
 
+    public Task<IReadOnlyList<MaintenancePlanDto>> ListMaintenancePlansAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaintenancePlanDto>>($"api/maintenance/plans?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateMaintenancePlanAsync(CreateMaintenancePlanRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/maintenance/plans", request, ct);
+
+    public Task<VersionResponse> UpdateMaintenancePlanAsync(Guid id, UpdateMaintenancePlanRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/maintenance/plans/{id}", request, ct);
+
     public Task<MaintenanceRequestResponse> RaiseMaintenanceRequestAsync(RaiseMaintenanceRequestRequest request, CancellationToken ct = default) =>
         SendAsync<MaintenanceRequestResponse>(HttpMethod.Post, "api/maintenance/requests", request, ct);
 

@@ -55,4 +55,32 @@ public class MaintenanceRequestTests
         Assert.Throws<DomainRuleException>(() => Raised().LinkExternal("cmms", " "));
         Assert.Throws<DomainRuleException>(() => Raised().LinkExternal("cmms", new string('x', 101)));
     }
+
+    [Fact]
+    public void A_plan_counts_from_its_start_or_its_last_close_and_is_due_at_its_interval()
+    {
+        var plan = MaintenancePlan.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), " Grease the gearbox ", "run_hours", 500m, null, T0);
+        Assert.Equal(("Grease the gearbox", "normal", T0), (plan.Name, plan.Priority, plan.StartedAt));
+        Assert.Equal(T0, plan.CountsFrom(null));
+        Assert.Equal(T0.AddDays(3), plan.CountsFrom(T0.AddDays(3)));
+        Assert.Equal(T0, plan.CountsFrom(T0.AddDays(-3)));
+        Assert.False(plan.IsDue(499.9m));
+        Assert.True(plan.IsDue(500m));
+
+        // Off, never due; switched on again, its meter starts again then.
+        var off = plan.Edit(plan.Name, 500m, "high", false, T0.AddDays(1));
+        Assert.False(off.IsDue(1000m));
+        Assert.Equal(T0.AddDays(5), off.Edit(off.Name, 500m, "high", true, T0.AddDays(5)).StartedAt);
+        Assert.Equal(T0, plan.Edit(plan.Name, 400m, null, true, T0.AddDays(5)).StartedAt);
+    }
+
+    [Fact]
+    public void A_plan_needs_a_known_meter_words_and_a_sensible_interval()
+    {
+        Assert.Throws<DomainRuleException>(() => MaintenancePlan.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "x", "days", 5m, null, T0));
+        Assert.Throws<DomainRuleException>(() => MaintenancePlan.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), " ", "counts", 5m, null, T0));
+        Assert.Throws<DomainRuleException>(() => MaintenancePlan.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "x", "counts", 0m, null, T0));
+        Assert.Throws<DomainRuleException>(() => MaintenancePlan.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "x", "run_hours", 200_000m, null, T0));
+        Assert.Equal(2_000_000m, MaintenancePlan.Create(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "x", "counts", 2_000_000m, "low", T0).Interval);
+    }
 }

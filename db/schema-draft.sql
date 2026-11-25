@@ -2467,6 +2467,23 @@ CREATE INDEX andon_call_site_ix ON core.andon_call (site_id, raised_at DESC);
 
 -- Maintenance requests (#127, D-115): raised for a line or machine, on its own or from a stop; started and closed with what was done.
 -- A request changes as it is worked and is referred to (by a CMMS too), so it lives here (D-010).
+-- Preventive plans (#127d): every so many run hours or counts a request is raised; referred to by requests, switched off not deleted.
+CREATE TABLE core.maintenance_plan (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
+    name                text NOT NULL,                              -- what is done; the requests' description
+    meter               text NOT NULL CONSTRAINT maintenance_plan_meter_ck CHECK (meter IN ('run_hours', 'counts')),   -- fixed once made
+    interval_value      numeric(18,3) NOT NULL CONSTRAINT maintenance_plan_interval_ck CHECK (interval_value > 0),
+    priority            text NOT NULL DEFAULT 'normal' CONSTRAINT maintenance_plan_priority_ck CHECK (priority IN ('low', 'normal', 'high')),
+    is_active           boolean NOT NULL DEFAULT true,
+    started_at          timestamptz NOT NULL,                       -- the meter counts from here, or from its last request's close if later
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    created_by          text,
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX maintenance_plan_site_ix ON core.maintenance_plan (site_id);
+
 CREATE SEQUENCE core.maintenance_request_no;
 
 CREATE TABLE core.maintenance_request (
@@ -2489,6 +2506,7 @@ CREATE TABLE core.maintenance_request (
     resolution              text,
     external_system         text,                                       -- the delivery feed a CMMS took it on through (#127c)
     external_reference      text,                                       -- the CMMS's work order number
+    maintenance_plan_id     uuid REFERENCES core.maintenance_plan(id),  -- the preventive plan that raised it (#127d)
     created_at              timestamptz NOT NULL DEFAULT now(),
     updated_at              timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT maintenance_request_external_ck CHECK ((external_system IS NULL) = (external_reference IS NULL)),
@@ -2498,6 +2516,8 @@ CREATE TABLE core.maintenance_request (
 );
 
 -- One request still open per stop: asking again from the same stop is the same request.
+-- One request of a plan open at a time: the next interval counts from when it is closed.
+CREATE UNIQUE INDEX maintenance_request_plan_uq ON core.maintenance_request (maintenance_plan_id) WHERE status <> 'closed' AND maintenance_plan_id IS NOT NULL;
 CREATE UNIQUE INDEX maintenance_request_stop_uq ON core.maintenance_request (downtime_id) WHERE status <> 'closed' AND downtime_id IS NOT NULL;
 CREATE INDEX maintenance_request_site_ix ON core.maintenance_request (site_id, raised_at DESC);
 CREATE INDEX maintenance_request_equipment_ix ON core.maintenance_request (equipment_id, raised_at DESC);
@@ -2797,7 +2817,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0074_shift_handover'),
     ('0075_languages'),
     ('0076_maintenance_requests'),
-    ('0077_maintenance_cmms');
+    ('0077_maintenance_cmms'),
+    ('0078_maintenance_plans');
 
 -- =====================================================================
 -- 17. SEED DATA

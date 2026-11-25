@@ -303,7 +303,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `maintenance.work` (role `maintenance`); `/api/maintenance/requests`; Machines → Maintenance tab and **Request maintenance** on a stop.
   (b) requests carry their line (closure); boards (`LineDisplayLineDto.Maintenance`), the station (`/api/terminal/station/maintenance/request`)
   and Inbox kind `maintenance`. (c) delivery kind `maintenance`; the CMMS answers on the signed `POST /api/integrations/{feed}/maintenance-requests`
-  (`accepted` + number → `external_system`/`external_reference`, `started`, `closed`; repeats change nothing). Preventive triggers (d) come later.
+  (`accepted` + number → `external_system`/`external_reference`, `started`, `closed`; repeats change nothing). (d) `core.maintenance_plan` (run_hours
+  from Execute time / counts from machine counts, interval): `MaintenancePlanService` → `MaintenancePlanRunner` raises a request as `system` when
+  the reading since its start or last close reaches the interval, one open per plan; `/api/maintenance/plans`.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

@@ -33,7 +33,8 @@ public static class MaintenanceRequestView
 
     /// <summary>"Lee Ong" or the actor, and the station when raised there.</summary>
     public static string Raiser(Text l, MaintenanceRequestDto r) =>
-        r.RaisedFrom is { } station ? l["{0} at {1}", r.RaisedByName ?? r.RaisedBy, station] : r.RaisedByName ?? r.RaisedBy;
+        r.PlanId is not null ? l["Its plan"]
+        : r.RaisedFrom is { } station ? l["{0} at {1}", r.RaisedByName ?? r.RaisedBy, station] : r.RaisedByName ?? r.RaisedBy;
 
     /// <summary>"From the stop at 14:02 (Jam · Material jam)" when raised from a stop; null otherwise.</summary>
     public static string? Stop(Text l, MaintenanceRequestDto r, string? timeZone) => r.DowntimeStartedAt is { } started

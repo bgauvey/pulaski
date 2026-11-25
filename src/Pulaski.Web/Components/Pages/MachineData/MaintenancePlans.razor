@@ -1,0 +1,209 @@
+@using System.Globalization
+@using Pulaski.Web.Services.MachineData
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* Preventive plans (#127d, D-115): every so many run hours or machine counts, Pulaski raises a request with the plan's words. Each shows how
+   far its meter has got since it last raised one (or since its start), and its open request while it waits. *@
+<section class="mt-4" aria-labelledby="plans-heading">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h2 class="h6 mb-0" id="plans-heading">@L["Preventive plans"]</h2>
+        @if (CanKeep && _editing is null)
+        {
+            <button type="button" class="btn btn-sm btn-outline-primary ms-auto" @onclick="StartNew">@L["Add a plan"]</button>
+        }
+    </div>
+    <p class="small text-muted">@L["A plan raises a maintenance request by itself every so many run hours (time executing) or machine counts. The next one counts from when its request is closed."]</p>
+    <ProblemAlert Error="_error" />
+
+    @if (_editing is { } edit && CanKeep)
+    {
+        <form class="inv-facts row g-2 align-items-end mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            @if (edit.Id is null)
+            {
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold" for="plan-equipment">@L["Line or machine"]</label>
+                    <select id="plan-equipment" class="form-select form-select-sm" @bind="edit.EquipmentId">
+                        <option value="">@L["Choose…"]</option>
+                        @foreach (var m in Machines)
+                        {
+                            <option value="@m.EquipmentId">@m.Code · @m.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold" for="plan-name">@L["What is done"]</label>
+                <input id="plan-name" class="form-control form-control-sm" maxlength="200" placeholder="@L["such as Grease the gearbox"]" @bind="edit.Name" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold" for="plan-interval">@L["Every"]</label>
+                <input id="plan-interval" type="number" inputmode="decimal" min="1" step="any" class="form-control form-control-sm" @bind="edit.Interval" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold" for="plan-meter">@L["Of"]</label>
+                <select id="plan-meter" class="form-select form-select-sm" @bind="edit.Meter" disabled="@(edit.Id is not null)">
+                    <option value="run_hours">@L["run hours"]</option>
+                    <option value="counts">@L["machine counts"]</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold" for="plan-priority">@L["Priority"]</label>
+                <select id="plan-priority" class="form-select form-select-sm" @bind="edit.Priority">
+                    @foreach (var (priority, priorityLabel) in MaintenanceRequestView.Priorities)
+                    {
+                        <option value="@priority">@L[priorityLabel]</option>
+                    }
+                </select>
+            </div>
+            @if (edit.Id is not null)
+            {
+                <div class="col-md-2 form-check ms-2">
+                    <input id="plan-active" class="form-check-input" type="checkbox" @bind="edit.IsActive" />
+                    <label class="form-check-label small" for="plan-active">@L["On"]</label>
+                </div>
+            }
+            <div class="col-12 form-actions">
+                <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
+                              Reason="@(edit.Id is null && edit.EquipmentId is null ? L["Choose the line or machine first."] : string.IsNullOrWhiteSpace(edit.Name) ? L["Say what is done first."] : edit.Interval is not > 0 ? L["Give how often first."] : null)">@L["Save"]</ActionButton>
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => _editing = null">@L["Cancel"]</button>
+            </div>
+        </form>
+    }
+
+    @if (_plans is null)
+    {
+        @if (_error is null)
+        {
+            <p class="text-muted small">@L["Loading…"]</p>
+        }
+    }
+    else
+    {
+        <div class="table-panel">
+            <table class="table table-sm align-middle mb-0">
+                <thead><tr><th>@L["Equipment"]</th><th>@L["What is done"]</th><th>@L["Every"]</th><th>@L["So far"]</th><th>@L["Last request"]</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _plans)
+                    {
+                        <tr @key="p.Id" class="@(p.IsActive ? "" : "text-muted")">
+                            <td class="fw-semibold">@p.EquipmentCode</td>
+                            <td>@p.Name@if (p.Priority != "normal") {<span class="chip ms-1 @(p.Priority == "high" ? "chip-danger" : "")">@L.Label(p.Priority)</span>}</td>
+                            <td class="text-nowrap">@Every(p)</td>
+                            <td class="text-nowrap">@SoFar(p)</td>
+                            <td class="small">@(p.LastRequestNumber is { } number ? $"{number} · {L.Word(p.LastRequestStatus ?? "")}" : "—")</td>
+                            <td class="text-end">
+                                @if (CanKeep && _editing is null)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => StartEdit(p)">@L["Change"]</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (_plans.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-muted small">@L["No plans yet."]</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<MachineStatusDto> Machines { get; set; } = [];
+
+    private IReadOnlyList<MaintenancePlanDto>? _plans;
+    private PlanEdit? _editing;
+    private bool _busy;
+    private ApiException? _error;
+
+    private bool CanKeep => User.Can(PermissionCodes.MaintenanceWork, SiteId);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    public async Task LoadAsync()
+    {
+        try
+        {
+            _plans = await Api.ListMaintenancePlansAsync(SiteId);
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private string Every(MaintenancePlanDto p) =>
+        p.Meter == "run_hours" ? L["{0} run hours", Number(p.Interval)] : L["{0} counts", Number(p.Interval)];
+
+    private string SoFar(MaintenancePlanDto p) => !p.IsActive
+        ? L["Off"]
+        : p.Reading is { } reading
+            ? L["{0} ({1:0}%)", Number(reading), p.Interval > 0 ? Math.Min(999m, reading / p.Interval * 100m) : 0m]
+            : L["Waiting for its request"];
+
+    private static string Number(decimal value) => value.ToString(value >= 100 ? "#,0" : "#,0.#", CultureInfo.CurrentCulture);
+
+    private void StartNew() => _editing = new PlanEdit();
+
+    private void StartEdit(MaintenancePlanDto p) => _editing = new PlanEdit
+    {
+        Id = p.Id, Version = p.Version, Name = p.Name, Meter = p.Meter, Interval = p.Interval, Priority = p.Priority, IsActive = p.IsActive,
+    };
+
+    private async Task SaveAsync()
+    {
+        if (_editing is not { } edit || string.IsNullOrWhiteSpace(edit.Name) || edit.Interval is not > 0 || (edit.Id is null && edit.EquipmentId is null))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            if (edit.Id is { } id)
+            {
+                await Api.UpdateMaintenancePlanAsync(id, new UpdateMaintenancePlanRequest
+                {
+                    Version = edit.Version, Name = edit.Name, Interval = edit.Interval.Value, Priority = edit.Priority, IsActive = edit.IsActive,
+                });
+            }
+            else
+            {
+                await Api.CreateMaintenancePlanAsync(new CreateMaintenancePlanRequest
+                {
+                    EquipmentId = edit.EquipmentId!.Value, Name = edit.Name, Meter = edit.Meter, Interval = edit.Interval.Value, Priority = edit.Priority,
+                });
+            }
+
+            _editing = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class PlanEdit
+    {
+        public Guid? Id { get; set; }
+        public long Version { get; set; }
+        public Guid? EquipmentId { get; set; }
+        public string? Name { get; set; }
+        public string Meter { get; set; } = "run_hours";
+        public decimal? Interval { get; set; }
+        public string Priority { get; set; } = "normal";
+        public bool IsActive { get; set; } = true;
+    }
+}

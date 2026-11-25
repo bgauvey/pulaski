@@ -12,7 +12,7 @@ internal sealed class MaintenanceRepository(DbSession session) : IMaintenanceRep
 {
     private const string Columns = """
         id, site_id, equipment_id, number, status, priority, description, raised_at, raised_by, raised_from, downtime_id, downtime_started_at,
-        started_at, started_by, closed_at, closed_by, resolution, external_system, external_reference
+        started_at, started_by, closed_at, closed_by, resolution, external_system, external_reference, maintenance_plan_id AS plan_id
         """;
 
     public Task<MaintenanceEquipment?> LockEquipmentAsync(Guid equipmentId, CancellationToken cancellationToken) =>
@@ -42,9 +42,9 @@ internal sealed class MaintenanceRepository(DbSession session) : IMaintenanceRep
         session.ExecuteAsync(
             """
             INSERT INTO core.maintenance_request (id, site_id, equipment_id, number, status, priority, description, raised_at, raised_by, raised_from,
-                                                  downtime_id, downtime_started_at, created_at, updated_at)
+                                                  downtime_id, downtime_started_at, maintenance_plan_id, created_at, updated_at)
             VALUES (@Id, @SiteId, @EquipmentId, @Number, @Status, @Priority, @Description, @RaisedAt, @RaisedBy, @RaisedFrom,
-                    @DowntimeId, @DowntimeStartedAt, @At, @At)
+                    @DowntimeId, @DowntimeStartedAt, @PlanId, @At, @At)
             """,
             new
             {
@@ -60,6 +60,7 @@ internal sealed class MaintenanceRepository(DbSession session) : IMaintenanceRep
                 request.RaisedFrom,
                 request.DowntimeId,
                 request.DowntimeStartedAt,
+                request.PlanId,
                 At = at,
             },
             cancellationToken);
@@ -97,7 +98,7 @@ internal sealed class MaintenanceQueries(NpgsqlDataSource dataSource) : IMainten
                r.status, r.priority, r.description,
                r.raised_at, r.raised_by, r.raised_from, r.downtime_id, r.downtime_started_at, d.ended_at AS downtime_ended_at,
                rc.code || ' · ' || rc.name AS downtime_reason,
-               r.started_at, r.started_by, r.closed_at, r.closed_by, r.resolution, r.external_system, r.external_reference,
+               r.started_at, r.started_by, r.closed_at, r.closed_by, r.resolution, r.external_system, r.external_reference, r.maintenance_plan_id AS plan_id,
                (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = r.raised_by) AS raised_by_name,
                (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = r.started_by) AS started_by_name,
                (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = r.closed_by) AS closed_by_name

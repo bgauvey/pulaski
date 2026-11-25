@@ -1680,6 +1680,25 @@ The kinds of help a line can call for at a site. Kept on Site settings; switched
 | `is_active` | boolean | no | Offered for new calls. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
+### core.maintenance_plan — preventive maintenance plans (#127d, D-115) · *In use*
+
+Every so many run hours or machine counts, a request for the equipment is raised by itself (`MaintenancePlanService` in the API). The meter
+counts from `started_at`, or from its last request's close if later; while a request of the plan is open, no other is raised
+(`maintenance_request_plan_uq`). Switched off rather than deleted, since requests refer to it.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The equipment's site. |
+| `equipment_id` | uuid → equipment | no | The line or machine (below an area). |
+| `name` | text | no | What is done, at most 200 characters; each request's description. |
+| `meter` | text | no | `run_hours` (time in PackML Execute, from `ts.equipment_state_change`) or `counts` (processed machine counts, `ts.production_count`). Fixed once made. |
+| `interval_value` | numeric(18,3) | no | Every so many: above 0, at most 100,000 run hours or 1,000,000,000 counts. |
+| `priority` | text | no | The requests' priority: `low`, `normal` or `high`. |
+| `is_active` | boolean | no | Switched on; switching it on again sets `started_at` to then. |
+| `started_at` | timestamptz | no | Where the meter counts from, unless its last request was closed later. |
+| `created_at`, `created_by`, `updated_at` | timestamptz, text, timestamptz | | Row timestamps and who made it. |
+
 ### core.maintenance_request — maintenance requests (#127, D-115) · *In use*
 
 A request for maintenance to look at a line or machine, raised on its own or from one of its stops: open → in progress → closed with what was
@@ -1701,6 +1720,7 @@ because it changes as it is worked and is referred to, by a CMMS too (D-010). Nu
 | `started_at`, `started_by` | timestamptz, text | yes | When someone started on it; closing one nobody started sets them to the close. |
 | `closed_at`, `closed_by` | timestamptz, text | yes | When and by whom it was closed. |
 | `resolution` | text | yes | What was done, at most 1000 characters; needed to close. |
+| `maintenance_plan_id` | uuid → maintenance_plan | yes | The preventive plan that raised it (#127d); one not closed per plan. |
 | `external_system`, `external_reference` | text | yes | The delivery feed a CMMS took it on through and the CMMS's own number (#127c), at most 100 characters. Both or neither. |
 | `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
 
