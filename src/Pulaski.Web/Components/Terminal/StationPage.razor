@@ -3,6 +3,7 @@
 @attribute [ExcludeFromInteractiveRouting]
 @layout StationLayout
 @using Pulaski.Web.Services.Execution
+@using Pulaski.Web.Services.MachineData
 @inject PulaskiApiClient Api
 @inject NavigationManager Navigation
 
@@ -154,8 +155,21 @@ else
                                         {
                                             <div class="station-actions">
                                                 <button type="submit" name="Input.Action" value="choose-stop" class="btn btn-primary">@L["Give the reason"]</button>
+                                                @if (_station.CanRequestMaintenance)
+                                                {
+                                                    <button type="submit" name="Input.Action" value="choose-maintenance" class="btn btn-outline-secondary">@L["Request maintenance"]</button>
+                                                }
                                             </div>
                                         }
+                                    </EditForm>
+                                }
+                                else if (_station.CanRequestMaintenance)
+                                {
+                                    <EditForm Model="Input" FormName="@($"station-stop-mr-{s.Id:N}")" OnSubmit="ActAsync" method="post" class="mt-2">
+                                        <input type="hidden" name="Input.StopId" value="@s.Id" />
+                                        <div class="station-actions">
+                                            <button type="submit" name="Input.Action" value="choose-maintenance" class="btn btn-outline-secondary">@L["Request maintenance"]</button>
+                                        </div>
                                     </EditForm>
                                 }
                             </li>
@@ -239,6 +253,58 @@ else
                                 </div>
                             }
                         </EditForm>
+                    }
+                </section>
+            }
+            @if (_station.MaintenanceRequests.Count > 0 || _station.CanRequestMaintenance)
+            {
+                @* Maintenance (#127): the line's requests not closed, its machines' too; whoever may request asks for the line or one of its stops. *@
+                <section class="station-panel station-maintenance" aria-labelledby="station-maintenance">
+                    <h2 id="station-maintenance" class="h5">@(_station.MaintenanceRequests.Count == 0 ? L["Something to fix?"] : StationView.MaintenanceTitle(L, _station.MaintenanceRequests.Count))</h2>
+                    @if (_station.MaintenanceRequests.Count > 0)
+                    {
+                        <ul class="station-next">
+                            @foreach (var r in _station.MaintenanceRequests)
+                            {
+                                <li @key="r.Id">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <span><span class="fw-semibold">@r.Number</span> · @r.EquipmentCode@(r.Priority == "high" ? $" · {L.Label("high")}" : "")</span>
+                                        <span class="text-muted">@MaintenanceRequestView.State(L, r)</span>
+                                    </div>
+                                    <div class="text-muted">@r.Description</div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    @if (_station.CanRequestMaintenance)
+                    {
+                        <EditForm Model="Input" FormName="station-maintenance" OnSubmit="ActAsync" method="post" class="mt-2">
+                            @if (_requestingMaintenance)
+                            {
+                                @if (_maintenanceStop is { } stopId && _station.StopsToCode.FirstOrDefault(s => s.Id == stopId) is { } forStop)
+                                {
+                                    <input type="hidden" name="Input.StopId" value="@stopId" />
+                                    <p class="mb-2">@L["For the stop of {0}, {1}.", forStop.EquipmentCode, StationView.StopWhen(L, forStop, DateTimeOffset.UtcNow)]</p>
+                                }
+                                <label class="form-label" for="station-maintenance-text">@L["What needs looking at"]</label>
+                                <InputText id="station-maintenance-text" class="form-control mb-2" maxlength="1000" @bind-Value="Input.Comment" />
+                                <div class="station-actions">
+                                    <button type="submit" name="Input.Action" value="request-maintenance" class="btn btn-primary">@L["Request"]</button>
+                                    <button type="submit" name="Input.Action" value="request-maintenance-urgent" class="btn btn-outline-danger">@L["Request, urgent"]</button>
+                                    <button type="submit" name="Input.Action" value="cancel" class="btn btn-outline-secondary">@L["Back"]</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="station-actions">
+                                    <button type="submit" name="Input.Action" value="choose-maintenance" class="btn btn-outline-secondary">@L["Request maintenance"]</button>
+                                </div>
+                            }
+                        </EditForm>
+                    }
+                    else if (_station.PersonName is null)
+                    {
+                        <p class="text-muted mb-0">@L["Badge in to request maintenance."]</p>
                     }
                 </section>
             }
@@ -482,6 +548,8 @@ else
     private Guid? _codingStop;
     private bool _calling;
     private Guid? _resolvingCall;
+    private bool _requestingMaintenance;
+    private Guid? _maintenanceStop;
     private IReadOnlyList<string> _notes = [];
 
     private string? Secret => TerminalCookie.Get(HttpContext);
@@ -591,6 +659,36 @@ else
                 return;
             case "choose-stop":
                 _codingStop = Input.StopId;
+                return;
+            case "choose-maintenance":
+                (_requestingMaintenance, _maintenanceStop) = (true, Input.StopId);
+                return;
+            case "request-maintenance" or "request-maintenance-urgent":
+                try
+                {
+                    var requested = await Api.StationMaintenanceAsync(Secret!, new StationMaintenanceRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        StopId = Input.StopId,
+                        Urgent = action == "request-maintenance-urgent",
+                        Text = Input.Comment,
+                    });
+                    TerminalCookie.SetStation(HttpContext, requested.Ticket, requested.TicketExpiresAt);
+                    _station = requested.Station;
+                    _notes = L.Notes(requested.Notes);
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
+                    (_requestingMaintenance, _maintenanceStop) = ex.Status == 401 ? (false, null) : (true, Input.StopId);
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
                 return;
             case "code" when Input.StopId is { } stopId && reasonId is { } stopReason:
                 try

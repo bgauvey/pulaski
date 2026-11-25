@@ -2465,6 +2465,63 @@ CREATE TABLE core.andon_call (
 CREATE UNIQUE INDEX andon_call_open_uq ON core.andon_call (line_id, andon_type_id) WHERE status <> 'resolved';
 CREATE INDEX andon_call_site_ix ON core.andon_call (site_id, raised_at DESC);
 
+-- Maintenance requests (#127, D-115): raised for a line or machine, on its own or from a stop; started and closed with what was done.
+-- A request changes as it is worked and is referred to (by a CMMS too), so it lives here (D-010).
+-- Preventive plans (#127d): every so many run hours or counts a request is raised; referred to by requests, switched off not deleted.
+CREATE TABLE core.maintenance_plan (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id             uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id        uuid NOT NULL REFERENCES core.equipment(id),
+    name                text NOT NULL,                              -- what is done; the requests' description
+    meter               text NOT NULL CONSTRAINT maintenance_plan_meter_ck CHECK (meter IN ('run_hours', 'counts')),   -- fixed once made
+    interval_value      numeric(18,3) NOT NULL CONSTRAINT maintenance_plan_interval_ck CHECK (interval_value > 0),
+    priority            text NOT NULL DEFAULT 'normal' CONSTRAINT maintenance_plan_priority_ck CHECK (priority IN ('low', 'normal', 'high')),
+    is_active           boolean NOT NULL DEFAULT true,
+    started_at          timestamptz NOT NULL,                       -- the meter counts from here, or from its last request's close if later
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    created_by          text,
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX maintenance_plan_site_ix ON core.maintenance_plan (site_id);
+
+CREATE SEQUENCE core.maintenance_request_no;
+
+CREATE TABLE core.maintenance_request (
+    id                      uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id                 uuid NOT NULL REFERENCES core.equipment(id),
+    equipment_id            uuid NOT NULL REFERENCES core.equipment(id),
+    number                  text NOT NULL CONSTRAINT maintenance_request_number_uq UNIQUE,   -- MR-000042, from the sequence
+    status                  text NOT NULL DEFAULT 'open' CONSTRAINT maintenance_request_status_ck CHECK (status IN ('open', 'in_progress', 'closed')),
+    priority                text NOT NULL DEFAULT 'normal' CONSTRAINT maintenance_request_priority_ck CHECK (priority IN ('low', 'normal', 'high')),
+    description             text NOT NULL,
+    raised_at               timestamptz NOT NULL,
+    raised_by               text NOT NULL,                              -- as on evt.event
+    raised_from             text,                                       -- the operator station's code, when raised there
+    downtime_id             uuid,                                       -- the stop it was raised from: ts.downtime (id, started_at), no FK (D-010)
+    downtime_started_at     timestamptz,
+    started_at              timestamptz,
+    started_by              text,
+    closed_at               timestamptz,
+    closed_by               text,
+    resolution              text,
+    external_system         text,                                       -- the delivery feed a CMMS took it on through (#127c)
+    external_reference      text,                                       -- the CMMS's work order number
+    maintenance_plan_id     uuid REFERENCES core.maintenance_plan(id),  -- the preventive plan that raised it (#127d)
+    created_at              timestamptz NOT NULL DEFAULT now(),
+    updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT maintenance_request_external_ck CHECK ((external_system IS NULL) = (external_reference IS NULL)),
+    CONSTRAINT maintenance_request_started_ck CHECK ((status = 'open') = (started_at IS NULL)),
+    CONSTRAINT maintenance_request_closed_ck CHECK ((status = 'closed') = (closed_at IS NOT NULL AND resolution IS NOT NULL)),
+    CONSTRAINT maintenance_request_stop_ck CHECK ((downtime_id IS NULL) = (downtime_started_at IS NULL))
+);
+
+-- One request still open per stop: asking again from the same stop is the same request.
+-- One request of a plan open at a time: the next interval counts from when it is closed.
+CREATE UNIQUE INDEX maintenance_request_plan_uq ON core.maintenance_request (maintenance_plan_id) WHERE status <> 'closed' AND maintenance_plan_id IS NOT NULL;
+CREATE UNIQUE INDEX maintenance_request_stop_uq ON core.maintenance_request (downtime_id) WHERE status <> 'closed' AND downtime_id IS NOT NULL;
+CREATE INDEX maintenance_request_site_ix ON core.maintenance_request (site_id, raised_at DESC);
+CREATE INDEX maintenance_request_equipment_ix ON core.maintenance_request (equipment_id, raised_at DESC);
+
 -- E-mail alerts (#121, D-109): each user's subscriptions per site (optionally narrowed to a line or area), and the alerts sent, so each goes
 -- once per subscription and subject however many API instances look.
 CREATE TABLE core.alert_subscription (
@@ -2758,7 +2815,10 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0072_bartender_printers'),
     ('0073_line_output'),
     ('0074_shift_handover'),
-    ('0075_languages');
+    ('0075_languages'),
+    ('0076_maintenance_requests'),
+    ('0077_maintenance_cmms'),
+    ('0078_maintenance_plans');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2826,7 +2886,9 @@ INSERT INTO sec.permission (code, description) VALUES
     ('andon.call', 'Call for help from a line: maintenance, quality, materials or a supervisor'),
     ('andon.respond', 'Answer andon calls: acknowledge them on arrival and resolve them'),
     ('handover.write', 'Write shift handover notes and open items for lines, and close open items'),
-    ('languages.manage', 'Add languages and keep their translations')
+    ('languages.manage', 'Add languages and keep their translations'),
+    ('maintenance.request', 'Request maintenance for a line or machine, on its own or from a stop'),
+    ('maintenance.work', 'Work maintenance requests: start them and close them with what was done')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
@@ -2834,12 +2896,13 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 INSERT INTO sec.role (code, name, description, is_system) VALUES
     ('administrator', 'Administrator', 'Everything, everywhere, including users and roles.', true),
     ('planner', 'Planner', 'Plans and sequences jobs, manages work orders, planning rates, changeover times and materials. Sees the floor, inventory and processes.', true),
-    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results; calls for and answers andon calls. Doesn''t correct inventory.', true),
-    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results, calls for help.', true),
+    ('supervisor', 'Supervisor', 'Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results; calls for and answers andon calls; requests and works maintenance. Doesn''t correct inventory.', true),
+    ('operator', 'Operator', 'Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results, calls for help, requests maintenance.', true),
     ('quality', 'Quality', 'Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality, answers andon calls.', true),
     ('manager', 'Manager', 'Views everything; reopens jobs, closes work orders, approves labor, maintains reason codes, shift schedules, people, lot attributes and the site''s settings.', true),
     ('auditor', 'Auditor', 'Views everything, corrects inventory and reverses production reports; counts stock. Doesn''t plan or run jobs.', true),
     ('process_engineer', 'Process engineer', 'Maintains processes, BOMs, capabilities, changeover times and specifications. Sees equipment, materials, units and the schedule.', true),
+    ('maintenance', 'Maintenance', 'Works maintenance requests: starts and closes them, raises them, codes machine stops and answers andon calls. Sees the floor, machines and equipment.', true),
     ('edge_node', 'Edge node', 'For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens.', true)
 ON CONFLICT (code) DO NOTHING;
 
@@ -2848,6 +2911,18 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('operator', 'handover.write'),
     ('supervisor', 'handover.write'),
     ('quality', 'handover.write'),
+    ('operator', 'maintenance.request'),
+    ('supervisor', 'maintenance.request'),
+    ('supervisor', 'maintenance.work'),
+    ('maintenance', 'overview.view'),
+    ('maintenance', 'floor.view'),
+    ('maintenance', 'machines.view'),
+    ('maintenance', 'equipment.view'),
+    ('maintenance', 'downtime.code'),
+    ('maintenance', 'andon.respond'),
+    ('maintenance', 'handover.write'),
+    ('maintenance', 'maintenance.request'),
+    ('maintenance', 'maintenance.work'),
     ('operator', 'andon.call'),
     ('supervisor', 'andon.call'),
     ('supervisor', 'andon.respond'),

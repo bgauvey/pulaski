@@ -185,9 +185,9 @@ else
                                 <td class="fw-semibold">@c.LineCode</td>
                                 <td>@c.TypeName@if (c.Note is { } note) {<div class="small text-muted">@note</div>}</td>
                                 <td class="small">@Display.SiteTime(c.RaisedAt, Zone)<div class="text-muted">@AndonCallView.Caller(L, c)</div></td>
-                                <td class="inv-num @(c.WaitedSeconds >= c.EscalateAfterMinutes * 60 ? "text-danger fw-semibold" : "")">@AndonCallView.Time(c.WaitedSeconds)@(c.AcknowledgedAt is null ? ", still waiting" : "")</td>
+                                <td class="inv-num @(c.WaitedSeconds >= c.EscalateAfterMinutes * 60 ? "text-danger fw-semibold" : "")">@(c.AcknowledgedAt is null ? L["{0}, still waiting", AndonCallView.Time(c.WaitedSeconds)] : AndonCallView.Time(c.WaitedSeconds))</td>
                                 <td class="small">@(c.AcknowledgedByName ?? c.AcknowledgedBy ?? "—")</td>
-                                <td class="small">@(c.Resolution ?? (c.ResolvedAt is null ? "not resolved" : "—"))</td>
+                                <td class="small">@(c.Resolution ?? (c.ResolvedAt is null ? L["not resolved"] : "—"))</td>
                             </tr>
                         }
                     </tbody>

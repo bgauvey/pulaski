@@ -63,6 +63,8 @@ public static class Permissions
     public const string AndonCall = "andon.call";
     public const string AndonRespond = "andon.respond";
     public const string Handover = "handover.write";
+    public const string MaintenanceRequest = "maintenance.request";
+    public const string MaintenanceWork = "maintenance.work";
     public const string Languages = "languages.manage";
     public const string People = "people.manage";
     public const string Terminals = "terminals.manage";
@@ -114,6 +116,8 @@ public static class Permissions
         new(AndonCall, Term.Mark("Floor"), Term.Mark("Call for help from a line: maintenance, quality, materials or a supervisor")),
         new(AndonRespond, Term.Mark("Floor"), Term.Mark("Answer andon calls: acknowledge them on arrival and resolve them")),
         new(Handover, Term.Mark("Floor"), Term.Mark("Write shift handover notes and open items for lines, and close open items")),
+        new(MaintenanceRequest, Term.Mark("Floor"), Term.Mark("Request maintenance for a line or machine, on its own or from a stop")),
+        new(MaintenanceWork, Term.Mark("Floor"), Term.Mark("Work maintenance requests: start them and close them with what was done")),
         new(QualityRecord, Term.Mark("Quality"), Term.Mark("Record quality results against runs and lots")),
         new(QualityDecide, Term.Mark("Quality"), Term.Mark("Exclude quality results and reject held lots on quality")),
         new(LotReceive, Term.Mark("Inventory"), Term.Mark("Receive lots")),
@@ -199,6 +203,8 @@ public static class Permissions
         [AndonCall] = [FloorView],
         [AndonRespond] = [FloorView],
         [Handover] = [FloorView],
+        [MaintenanceRequest] = [MachinesView],
+        [MaintenanceWork] = [MachinesView],
         // Terminals are placed on lines; their screen lists the site's equipment.
         [Terminals] = [EquipmentView],
         [Integrations] = [IntegrationsView],
@@ -232,6 +238,7 @@ public static class Roles
     public const string Auditor = "auditor";
     public const string ProcessEngineer = "process_engineer";
     public const string EdgeNode = "edge_node";
+    public const string Maintenance = "maintenance";
 
     public const int MaxCodeLength = 50;
 
@@ -250,13 +257,15 @@ public static class Roles
              Permissions.JobExecute, Permissions.JobReopen, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove,
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
              Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode,
-             Permissions.DowntimeAdjust, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.AndonRespond, Permissions.Handover],
-            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results; calls for and answers andon calls. Doesn't correct inventory."),
+             Permissions.DowntimeAdjust, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.AndonRespond, Permissions.Handover,
+             Permissions.MaintenanceRequest, Permissions.MaintenanceWork],
+            "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results; calls for and answers andon calls; requests and works maintenance. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,
-             Permissions.MachinesView, Permissions.DowntimeCode, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.Handover],
-            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results, calls for help."),
+             Permissions.MachinesView, Permissions.DowntimeCode, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.Handover,
+             Permissions.MaintenanceRequest],
+            "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results, calls for help, requests maintenance."),
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
@@ -274,6 +283,10 @@ public static class Roles
             [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes, Permissions.Changeovers,
              Permissions.QualityView, Permissions.Specs],
             "Maintains processes, BOMs, capabilities, changeover times and specifications. Sees equipment, materials, units and the schedule."),
+        new(Maintenance, "Maintenance", false,
+            [Permissions.OverviewView, Permissions.FloorView, Permissions.MachinesView, Permissions.EquipmentView, Permissions.DowntimeCode,
+             Permissions.AndonRespond, Permissions.Handover, Permissions.MaintenanceRequest, Permissions.MaintenanceWork],
+            "Works maintenance requests: starts and closes them, raises them, codes machine stops and answers andon calls. Sees the floor, machines and equipment."),
         new(EdgeNode, "Edge node", false, [Permissions.EdgeIngest],
             "For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens."),
     ];

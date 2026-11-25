@@ -4,6 +4,7 @@ using System.Text.Json;
 using Pulaski.Web.Services.Localization;
 using Pulaski.Contracts.Alerts;
 using Pulaski.Contracts.Andon;
+using Pulaski.Contracts.Maintenance;
 using Pulaski.Contracts.Boms;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
@@ -1581,6 +1582,47 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<AndonCallResponse> ResolveAndonCallAsync(Guid id, ResolveAndonCallRequest request, CancellationToken ct = default) =>
         SendAsync<AndonCallResponse>(HttpMethod.Post, $"api/andon/calls/{id}/resolve", request, ct);
 
+    /// <summary>The site's maintenance requests (#127): open ones, or those raised in [from, until).</summary>
+    public Task<IReadOnlyList<MaintenanceRequestDto>> ListMaintenanceRequestsAsync(
+        Guid siteId, bool openOnly = true, DateTimeOffset? from = null, DateTimeOffset? until = null, Guid? equipmentId = null, CancellationToken ct = default)
+    {
+        var query = $"api/maintenance/requests?siteId={siteId}&open={(openOnly ? "true" : "false")}";
+        if (from is { } f)
+        {
+            query += $"&from={Uri.EscapeDataString(f.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}";
+        }
+
+        if (until is { } u)
+        {
+            query += $"&to={Uri.EscapeDataString(u.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}";
+        }
+
+        if (equipmentId is { } e)
+        {
+            query += $"&equipmentId={e}";
+        }
+
+        return GetAsync<IReadOnlyList<MaintenanceRequestDto>>(query, ct);
+    }
+
+    public Task<IReadOnlyList<MaintenancePlanDto>> ListMaintenancePlansAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<MaintenancePlanDto>>($"api/maintenance/plans?siteId={siteId}", ct);
+
+    public Task<CreatedResponse> CreateMaintenancePlanAsync(CreateMaintenancePlanRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/maintenance/plans", request, ct);
+
+    public Task<VersionResponse> UpdateMaintenancePlanAsync(Guid id, UpdateMaintenancePlanRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/maintenance/plans/{id}", request, ct);
+
+    public Task<MaintenanceRequestResponse> RaiseMaintenanceRequestAsync(RaiseMaintenanceRequestRequest request, CancellationToken ct = default) =>
+        SendAsync<MaintenanceRequestResponse>(HttpMethod.Post, "api/maintenance/requests", request, ct);
+
+    public Task<MaintenanceRequestResponse> StartMaintenanceRequestAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<MaintenanceRequestResponse>(HttpMethod.Post, $"api/maintenance/requests/{id}/start", new { }, ct);
+
+    public Task<MaintenanceRequestResponse> CloseMaintenanceRequestAsync(Guid id, CloseMaintenanceRequestRequest request, CancellationToken ct = default) =>
+        SendAsync<MaintenanceRequestResponse>(HttpMethod.Post, $"api/maintenance/requests/{id}/close", request, ct);
+
     public Task<CreatedResponse> CreateAndonTypeAsync(CreateAndonTypeRequest request, CancellationToken ct = default) =>
         SendAsync<CreatedResponse>(HttpMethod.Post, "api/andon/types", request, ct);
 
@@ -1643,6 +1685,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     /// <summary>Andon at the station (#157): <paramref name="action"/> is call, acknowledge or resolve.</summary>
     public Task<StationActionResponse> StationAndonAsync(string secret, string action, StationAndonRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, $"api/terminal/station/andon/{action}", request, ct);
+
+    /// <summary>Request maintenance at the station (#127), for its line or one of its stops to code.</summary>
+    public Task<StationActionResponse> StationMaintenanceAsync(string secret, StationMaintenanceRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/maintenance/request", request, ct);
 
     public Task<StationResponse> StationSignOnAsync(string secret, StationSignOnRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<StationResponse>(secret, HttpMethod.Post, "api/terminal/station/sign-on", request, ct);

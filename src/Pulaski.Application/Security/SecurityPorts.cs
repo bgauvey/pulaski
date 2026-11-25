@@ -224,6 +224,10 @@ public enum SiteOf
     AndonType,
     AndonCall,
 
+    /// <summary>A maintenance request (#127), or a preventive plan (#127d): its site.</summary>
+    MaintenanceRequest,
+    MaintenancePlan,
+
     /// <summary>A shift handover entry (#124): its site.</summary>
     HandoverEntry,
 }

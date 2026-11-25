@@ -297,6 +297,15 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   word one sentence per action; rule helpers return `UserMessage?` (`Validator.Require(field, problem)`). Import problems are `UserMessage`s,
   results `MessageDto` (`Notes.Of(ex)` for a failed row); server text the screens show is the Domain's `Term.Mark("…")`, shown with `L[…]`. Helpers take `Text l` and use `l["…"]` (tests: `Text.English`); plain labels are
   `Term.Mark` shown with `L[…]`/`L.Of`; codes via `L.Label(code)` (`LabelTerms`, checked against the schema). CSV exports stay English.
+- Maintenance requests (D-115, proposed, in pieces, #127): `core.maintenance_request` for equipment below an area, on its own or from a stop
+  (`downtime_id` + `downtime_started_at`, one open per stop, `AlreadyOpen`): open → in_progress → closed with `resolution` (closing one not
+  started starts it); `MR-000042` from `core.maintenance_request_no`; locks the equipment first. Permissions `maintenance.request` /
+  `maintenance.work` (role `maintenance`); `/api/maintenance/requests`; Machines → Maintenance tab and **Request maintenance** on a stop.
+  (b) requests carry their line (closure); boards (`LineDisplayLineDto.Maintenance`), the station (`/api/terminal/station/maintenance/request`)
+  and Inbox kind `maintenance`. (c) delivery kind `maintenance`; the CMMS answers on the signed `POST /api/integrations/{feed}/maintenance-requests`
+  (`accepted` + number → `external_system`/`external_reference`, `started`, `closed`; repeats change nothing). (d) `core.maintenance_plan` (run_hours
+  from Execute time / counts from machine counts, interval): `MaintenancePlanService` → `MaintenancePlanRunner` raises a request as `system` when
+  the reading since its start or last close reaches the interval, one open per plan; `/api/maintenance/plans`.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

@@ -32,7 +32,7 @@
 else if (_list.Alarms.Count == 0)
 {
     <div class="empty-panel">
-        <p class="text-muted mb-0">@(_activeOnly ? L["No alarm or warning is active."] : L["No alarms or warnings in this period."]) Bind a machine's alarm and warning tags on its edge node to record them.</p>
+        <p class="text-muted mb-0">@(_activeOnly ? L["No alarm or warning is active."] : L["No alarms or warnings in this period."]) @L["Bind a machine's alarm and warning tags on its edge node to record them."]</p>
     </div>
 }
 else

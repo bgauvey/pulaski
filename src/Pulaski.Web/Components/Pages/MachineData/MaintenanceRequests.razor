@@ -1,0 +1,278 @@
+@using Pulaski.Web.Services.MachineData
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* Maintenance requests (#127, D-115): what is waiting for maintenance at the site, the longest waiting first, to start and close; requests
+   raised here or from a stop; and those closed in the last 7 days. Refreshes itself. *@
+<div class="inv-toolbar flex-wrap">
+    <select class="form-select w-auto" aria-label="@L["Equipment"]" value="@(_equipment?.ToString() ?? "")" @onchange="OnEquipmentChangedAsync">
+        <option value="">@L["All equipment"]</option>
+        @foreach (var m in Machines)
+        {
+            <option value="@m.EquipmentId">@m.Code · @m.Name</option>
+        }
+    </select>
+    @if (_open is not null)
+    {
+        <LiveStatus OnRefresh="LoadAsync" LoadedAt="_loadedAt" TimeZone="@TimeZone" />
+    }
+    @if (CanRequest && !_raising)
+    {
+        <button type="button" class="btn btn-outline-primary ms-auto" @onclick="StartRaise">@L["Request maintenance"]</button>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.MaintenanceWork" What="@L["start and close requests"]" SiteId="SiteId" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success small" role="status">@message</div>
+}
+
+@if (_raising && CanRequest)
+{
+    <section class="inv-facts mb-3" aria-labelledby="raise-heading">
+        <h2 class="h6" id="raise-heading">@L["Request maintenance"]</h2>
+        <form class="row g-2 align-items-end" @onsubmit="RaiseAsync" @onsubmit:preventDefault>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold" for="mr-equipment">@L["Line or machine"]</label>
+                <select id="mr-equipment" class="form-select form-select-sm" @bind="_raiseEquipment">
+                    <option value="">@L["Choose…"]</option>
+                    @foreach (var m in Machines)
+                    {
+                        <option value="@m.EquipmentId">@m.Code · @m.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold" for="mr-priority">@L["Priority"]</label>
+                <select id="mr-priority" class="form-select form-select-sm" @bind="_priority">
+                    @foreach (var (priority, priorityLabel) in MaintenanceRequestView.Priorities)
+                    {
+                        <option value="@priority">@L[priorityLabel]</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label small fw-semibold" for="mr-description">@L["What needs looking at"]</label>
+                <input id="mr-description" class="form-control form-control-sm" maxlength="1000" @bind="_description" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2 form-actions">
+                <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
+                              Reason="@(_raiseEquipment is null ? L["Choose the line or machine first."] : string.IsNullOrWhiteSpace(_description) ? L["Say what needs looking at first."] : null)">@L["Request"]</ActionButton>
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => _raising = false">@L["Cancel"]</button>
+            </div>
+        </form>
+        <p class="small text-muted mt-2 mb-0">@L["To request maintenance for a stop, use Request maintenance on the stop in the Stops tab: the request then names the stop."]</p>
+    </section>
+}
+
+@if (_open is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">@L["Loading…"]</p>
+    }
+}
+else
+{
+    <h2 class="h6">@(_open.Count == 0 ? L["Nothing waiting for maintenance"] : _open.Count == 1 ? L["1 request not closed"] : L["{0} requests not closed", _open.Count])</h2>
+    <div class="table-panel mb-3">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>@L["Request"]</th><th>@L["Equipment"]</th><th>@L["What needs looking at"]</th><th>@L["Raised"]</th><th>@L["Now"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _open)
+                {
+                    <tr @key="r.Id">
+                        <td class="fw-semibold text-nowrap">@r.Number@if (r.Priority != "normal") {<div><span class="chip @(r.Priority == "high" ? "chip-danger" : "")">@L.Label(r.Priority)</span></div>}@CmmsReference(r)</td>
+                        <td class="fw-semibold">@r.EquipmentCode<div class="small text-muted fw-normal">@r.EquipmentName</div></td>
+                        <td>@r.Description@if (MaintenanceRequestView.Stop(L, r, TimeZone) is { } stop) {<div class="small text-muted">@stop</div>}@if (r.PlanId is not null) {<div><span class="chip">@L["Preventive"]</span></div>}</td>
+                        <td class="small text-nowrap">@Display.SiteTime(r.RaisedAt, TimeZone)<div class="text-muted">@MaintenanceRequestView.Raiser(L, r)</div></td>
+                        <td><span class="chip @MaintenanceRequestView.Chip(r)">@MaintenanceRequestView.State(L, r)</span></td>
+                        <td class="text-end text-nowrap">
+                            @if (CanWork)
+                            {
+                                @if (r.Status == "open")
+                                {
+                                    <button type="button" class="btn btn-sm btn-primary" disabled="@_busy" @onclick="() => StartAsync(r)">@L["Start"]</button>
+                                }
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => ChooseClose(r)">@L["Close"]</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (_open.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-muted small">@L["No request is waiting. Raise one here, or from a stop."]</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_closing is { } closing && CanWork)
+    {
+        <section class="inv-facts mb-3" aria-labelledby="close-heading">
+            <h2 class="h6" id="close-heading">@L["Close {0} on {1}", closing.Number, closing.EquipmentCode]</h2>
+            <form class="row g-2 align-items-end" @onsubmit="CloseAsync" @onsubmit:preventDefault>
+                <div class="col-md-9">
+                    <label class="form-label small fw-semibold" for="mr-resolution">@L["What was done"]</label>
+                    <input id="mr-resolution" class="form-control form-control-sm" maxlength="1000" @bind="_resolution" @bind:event="oninput" />
+                </div>
+                <div class="col-md-3 form-actions">
+                    <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
+                                  Reason="@(string.IsNullOrWhiteSpace(_resolution) ? L["Say what was done, or why nothing was."] : null)">@L["Close"]</ActionButton>
+                    <button type="button" class="btn btn-sm btn-link" @onclick="() => _closing = null">@L["Cancel"]</button>
+                </div>
+            </form>
+        </section>
+    }
+
+    <h2 class="h6">@L["Closed in the last 7 days"]</h2>
+    <div class="table-panel">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>@L["Request"]</th><th>@L["Equipment"]</th><th>@L["What needs looking at"]</th><th>@L["Raised"]</th><th>@L["Closed"]</th><th>@L["What was done"]</th></tr></thead>
+            <tbody>
+                @foreach (var r in _closed)
+                {
+                    <tr @key="r.Id">
+                        <td class="fw-semibold text-nowrap">@r.Number@CmmsReference(r)</td>
+                        <td class="fw-semibold">@r.EquipmentCode</td>
+                        <td>@r.Description@if (MaintenanceRequestView.Stop(L, r, TimeZone) is { } stop) {<div class="small text-muted">@stop</div>}</td>
+                        <td class="small text-nowrap">@Display.SiteTime(r.RaisedAt, TimeZone)<div class="text-muted">@MaintenanceRequestView.Raiser(L, r)</div></td>
+                        <td class="small">@(r.ClosedByName ?? r.ClosedBy)<div class="text-muted">@MaintenanceRequestView.Took(L, r)</div></td>
+                        <td class="small">@r.Resolution</td>
+                    </tr>
+                }
+                @if (_closed.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-muted small">@L["None in the last 7 days."]</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<MaintenancePlans SiteId="SiteId" Machines="Machines" />
+
+@code {
+    private static readonly TimeSpan ClosedWindow = TimeSpan.FromDays(7);
+
+    // The CMMS's own number for it, once a CMMS has taken it on (#127c).
+    private RenderFragment CmmsReference(MaintenanceRequestDto r) => r.ExternalReference is { } reference
+        ? @<div class="small text-muted fw-normal" title="@L["The number {0} gave it", r.ExternalSystem ?? ""]">@L["CMMS {0}", reference]</div>
+        : @<text></text>;
+
+    [Parameter, EditorRequired]
+    public Guid SiteId { get; set; }
+
+    [Parameter]
+    public string? TimeZone { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<MachineStatusDto> Machines { get; set; } = [];
+
+    [Inject]
+    private TimeProvider Clock { get; set; } = default!;
+
+    private IReadOnlyList<MaintenanceRequestDto>? _open;
+    private IReadOnlyList<MaintenanceRequestDto> _closed = [];
+    private Guid? _equipment;
+    private DateTimeOffset? _loadedAt;
+    private bool _busy;
+    private bool _raising;
+    private Guid? _raiseEquipment;
+    private string _priority = "normal";
+    private string? _description;
+    private MaintenanceRequestDto? _closing;
+    private string? _resolution;
+    private string? _message;
+    private ApiException? _error;
+
+    private bool CanRequest => User.Can(PermissionCodes.MaintenanceRequest, SiteId);
+
+    private bool CanWork => User.Can(PermissionCodes.MaintenanceWork, SiteId);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var now = Clock.GetUtcNow();
+            var open = await Api.ListMaintenanceRequestsAsync(SiteId, openOnly: true, equipmentId: _equipment);
+            var recent = await Api.ListMaintenanceRequestsAsync(SiteId, openOnly: false, from: now - ClosedWindow, until: now, equipmentId: _equipment);
+
+            // The longest waiting first: high priority first among those waiting, then by when raised.
+            _open = [.. open.OrderBy(r => r.Status == "open" ? 0 : 1).ThenBy(r => r.Priority == "high" ? 0 : r.Priority == "normal" ? 1 : 2).ThenBy(r => r.RaisedAt)];
+            _closed = [.. recent.Where(r => r.Status == "closed").OrderByDescending(r => r.ClosedAt)];
+            _loadedAt = now;
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnEquipmentChangedAsync(ChangeEventArgs e)
+    {
+        _equipment = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await LoadAsync();
+    }
+
+    private void StartRaise() => (_raising, _raiseEquipment, _priority, _description, _message) = (true, _equipment, "normal", null, null);
+
+    private async Task RaiseAsync()
+    {
+        if (_raiseEquipment is not { } equipment || string.IsNullOrWhiteSpace(_description))
+        {
+            return;
+        }
+
+        await ActAsync(async () =>
+        {
+            var raised = await Api.RaiseMaintenanceRequestAsync(new RaiseMaintenanceRequestRequest { EquipmentId = equipment, Priority = _priority, Description = _description });
+            (_raising, _message) = (false, L["{0} is waiting for maintenance.", raised.Number]);
+        });
+    }
+
+    private Task StartAsync(MaintenanceRequestDto r) => ActAsync(async () =>
+    {
+        await Api.StartMaintenanceRequestAsync(r.Id);
+        _message = L["{0} is in progress.", r.Number];
+    });
+
+    private void ChooseClose(MaintenanceRequestDto r) => (_closing, _resolution, _message) = (r, null, null);
+
+    private async Task CloseAsync()
+    {
+        if (_closing is not { } closing || string.IsNullOrWhiteSpace(_resolution))
+        {
+            return;
+        }
+
+        await ActAsync(async () =>
+        {
+            await Api.CloseMaintenanceRequestAsync(closing.Id, new CloseMaintenanceRequestRequest { Resolution = _resolution });
+            (_closing, _message) = (null, L["{0} is closed.", closing.Number]);
+        });
+    }
+
+    private async Task ActAsync(Func<Task> act)
+    {
+        _busy = true;
+        try
+        {
+            await act();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

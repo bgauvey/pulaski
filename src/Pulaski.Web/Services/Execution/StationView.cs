@@ -75,6 +75,9 @@ public static class StationView
 
     public static string StopsTitle(Text l, int count) => count == 1 ? l["A stop needs its reason"] : l["Stops needing their reasons: {0}", count];
 
+    /// <summary>"1 maintenance request open" or "Maintenance requests open: 3" (#127).</summary>
+    public static string MaintenanceTitle(Text l, int count) => count == 1 ? l["1 maintenance request open"] : l["Maintenance requests open: {0}", count];
+
     /// <summary>"stopped 4 min ago, still stopped" for the open stop; "stopped for 12 min, 35 min ago" for an ended one.</summary>
     public static string StopWhen(Text l, Pulaski.Contracts.MachineData.DowntimeDto stop, DateTimeOffset now) => stop.EndedAt is { } ended
         ? l["stopped for {0}, {1} ago", LineDisplayView.Duration(stop.StartedAt, ended), LineDisplayView.Duration(ended, now)]

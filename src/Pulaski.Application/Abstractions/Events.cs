@@ -242,6 +242,18 @@ public static class EventTypes
     public const string AndonCallRaised = "pulaski.andon.call_raised.v1";
     public const string AndonCallAcknowledged = "pulaski.andon.call_acknowledged.v1";
     public const string AndonCallResolved = "pulaski.andon.call_resolved.v1";
+
+    /// <summary>Maintenance requests (#127, D-115): raised for a line or machine, started and closed.</summary>
+    public const string MaintenanceRequestRaised = "pulaski.maintenance.request_raised.v1";
+    public const string MaintenanceRequestStarted = "pulaski.maintenance.request_started.v1";
+    public const string MaintenanceRequestClosed = "pulaski.maintenance.request_closed.v1";
+
+    /// <summary>A CMMS took a request on as its own work order (#127c), with its number.</summary>
+    public const string MaintenanceRequestLinked = "pulaski.maintenance.request_linked.v1";
+
+    /// <summary>Preventive plans (#127d): made and changed; the requests they raise are <see cref="MaintenanceRequestRaised"/>.</summary>
+    public const string MaintenancePlanCreated = "pulaski.maintenance.plan_created.v1";
+    public const string MaintenancePlanChanged = "pulaski.maintenance.plan_changed.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

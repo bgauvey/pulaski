@@ -63,7 +63,7 @@
                         <div class="form-check form-check-inline" @key="kind.Code">
                             <input id="@($"kind-{kind.Code}")" type="checkbox" class="form-check-input" checked="@_kinds.Contains(kind.Code)"
                                    @onchange="e => Toggle(kind.Code, e.Value is true)" />
-                            <label class="form-check-label small" for="@($"kind-{kind.Code}")" title="@string.Join(", ", kind.Prefixes)">@kind.Label</label>
+                            <label class="form-check-label small" for="@($"kind-{kind.Code}")" title="@string.Join(", ", kind.Prefixes)">@L[kind.Label]</label>
                         </div>
                     }
                     @if (_settings.OtherEventTypes.Count > 0)

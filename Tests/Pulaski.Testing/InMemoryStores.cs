@@ -106,6 +106,10 @@ public sealed class InMemoryStores
 
     public InMemoryAndon Andon { get; } = new();
 
+    public InMemoryMaintenance Maintenance { get; } = new();
+
+    public InMemoryMaintenancePlans MaintenancePlans { get; } = new();
+
     public InMemoryAlerts Alerts { get; } = new();
 
     public InMemoryLineOutput LineOutput { get; } = new();
@@ -206,6 +210,10 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Scheduling.IChangeoverRuleReadStore>();
         services.RemoveAll<Application.Andon.IAndonRepository>();
         services.RemoveAll<Application.Andon.IAndonReadStore>();
+        services.RemoveAll<Application.Maintenance.IMaintenanceRepository>();
+        services.RemoveAll<Application.Maintenance.IMaintenanceReadStore>();
+        services.RemoveAll<Application.Maintenance.IMaintenancePlanRepository>();
+        services.RemoveAll<Application.Maintenance.IMaintenancePlanReadStore>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -298,6 +306,10 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Scheduling.IChangeoverRuleReadStore>(ChangeoverRules);
         services.AddSingleton<Application.Andon.IAndonRepository>(Andon);
         services.AddSingleton<Application.Andon.IAndonReadStore>(Andon);
+        services.AddSingleton<Application.Maintenance.IMaintenanceRepository>(Maintenance);
+        services.AddSingleton<Application.Maintenance.IMaintenanceReadStore>(Maintenance);
+        services.AddSingleton<Application.Maintenance.IMaintenancePlanRepository>(MaintenancePlans);
+        services.AddSingleton<Application.Maintenance.IMaintenancePlanReadStore>(MaintenancePlans);
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);

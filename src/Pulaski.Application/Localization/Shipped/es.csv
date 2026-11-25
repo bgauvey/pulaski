@@ -42,6 +42,8 @@ term,translation
 '{0}' isn't a container kind; use {1}.,'{0}' no es un tipo de contenedor; use {1}.
 '{0}' isn't a kind of event.,'{0}' no es un tipo de evento.
 '{0}' isn't a material type; use {1}.,'{0}' no es un tipo de material; use {1}.
+'{0}' isn't a meter; use run_hours or counts.,'{0}' no es un medidor; use run_hours o counts.
+"'{0}' isn't a priority; use low, normal or high.","'{0}' no es una prioridad; use baja, normal o alta."
 '{0}' isn't a protocol Pulaski Edge reads ({1}).,'{0}' no es un protocolo que lea Pulaski Edge ({1}).
 '{0}' isn't a role.,'{0}' no es un rol.
 '{0}' isn't a {1} setting ({2}).,'{0}' no es un ajuste de {1} ({2}).
@@ -113,6 +115,7 @@ term,translation
 1 delivery goes again on the next round.,1 entrega se reenvía en la siguiente ronda.
 1 lot is still to count; enter 0 for a lot that isn't there.,Falta contar 1 lote; ingrese 0 para un lote que no está.
 1 lot not suggested,1 lote no sugerido
+1 maintenance request open,1 solicitud de mantenimiento abierta
 1 month,1 mes
 1 of it is how many {0},1 de él son cuántos {0}
 1 open item,1 asunto abierto
@@ -120,6 +123,7 @@ term,translation
 1 open session was ended at the end of the shift.,Se terminó 1 sesión abierta al final del turno.
 1 overlap on this line,1 traslape en esta línea
 1 overlap: a line can't run these at the same time,1 traslape: una línea no puede ejecutar estos al mismo tiempo
+1 request not closed,1 solicitud sin cerrar
 1 session,1 sesión
 "1 session, oldest {0}","1 sesión, la más antigua {0}"
 1 stop chosen,1 paro elegido
@@ -251,6 +255,7 @@ A path can't hold control characters.,Una ruta no puede contener caracteres de c
 A pattern of 1 to {0} characters.,Un patrón de 1 a {0} caracteres.
 A people connection's site is fixed once made; add another connection for another site.,El sitio de una conexión de personas es fijo una vez creada; agregue otra conexión para otro sitio.
 A person belongs to a site; choose one.,Una persona pertenece a un sitio; elija uno.
+A plan raises a maintenance request by itself every so many run hours (time executing) or machine counts. The next one counts from when its request is closed.,Un plan crea por sí solo una solicitud de mantenimiento cada tantas horas de funcionamiento (tiempo en ejecución) o conteos de máquina. La siguiente cuenta desde que se cierra su solicitud.
 "A proposal for a rate already from run history is accepted at once when it is within the limit below. The first rate from run history, and larger changes, always wait for a planner.","Una propuesta para una tasa que ya viene del historial de corridas se acepta de inmediato cuando está dentro del límite de abajo. La primera tasa del historial de corridas, y los cambios mayores, siempre esperan a un planeador."
 A qualification belongs to a site; choose one.,Una calificación pertenece a un sitio; elija uno.
 A reason for every site can only go under a group for every site; {0} is for one site.,Un motivo para todos los sitios solo puede ir bajo un grupo para todos los sitios; {0} es para un sitio.
@@ -275,6 +280,7 @@ A spreadsheet saved as CSV; the first line names the columns.,Una hoja de cálcu
 A start time as HH:mm.,Una hora de inicio como HH:mm.
 "A stop entered by hand is removed, not undone.","Una parada ingresada a mano se elimina, no se deshace."
 A stop entered by hand must have ended: it can't end in the future.,Un paro ingresado a mano debe haber terminado: no puede terminar en el futuro.
+A stop is named by its id and its start.,Un paro se nombra por su id y su inicio.
 A stop must end after it starts.,Un paro debe terminar después de empezar.
 A stop needs its reason,Un paro necesita su motivo
 "A stop reason, alarm or warning.","Un motivo de paro, alarma o advertencia."
@@ -320,6 +326,7 @@ Add a lot attribute,Agregar un atributo de lote
 Add a material,Agregar un material
 Add a material class,Agregar una clase de material
 Add a note,Agregar una nota
+Add a plan,Agregar un plan
 Add a printer,Agregar una impresora
 Add a role…,Agregar un rol…
 Add a rule,Agregar una regla
@@ -577,6 +584,7 @@ Badge in to answer it.,Registre su gafete para atenderla.
 Badge in to answer them.,Registre su gafete para atenderlas.
 Badge in to give its reason.,Registre su gafete para dar su motivo.
 Badge in to give their reasons.,Registre su gafete para dar sus motivos.
+Badge in to request maintenance.,Pase su gafete para solicitar mantenimiento.
 "Badge not recognised. Try again, or ask a supervisor.",Gafete no reconocido. Intente de nuevo o pida ayuda a un supervisor.
 Badge of {0},Gafete de {0}
 Badge plus pin,Gafete más PIN
@@ -633,6 +641,7 @@ Beyond the limits,Más allá de los límites
 Bills of materials,Listas de materiales
 Bin,Contenedor pequeño
 Bind,Vincular
+Bind a machine's alarm and warning tags on its edge node to record them.,Vincule las etiquetas de alarma y advertencia de una máquina en su nodo de borde para registrarlas.
 Bind tag,Vincular etiqueta
 Bind tags to equipment of {0}'s site that tracks state (a consumed counter or a level may go on one that holds inventory); {1} doesn't qualify.,Asocie etiquetas a equipo del sitio de {0} que rastree estado (un contador consumido o un nivel puede ir en uno que guarde inventario); {1} no califica.
 Binding {0} not found.,Asociación {0} no encontrada.
@@ -668,6 +677,7 @@ By shift,Por turno
 By {0},Por {0}
 C,C
 CIP path,Ruta CIP
+CMMS {0},CMMS {0}
 CODE,CÓDIGO
 CSV file,Archivo CSV
 Calculated now,Calculada ahora
@@ -723,6 +733,7 @@ Centre,Centro
 Centre line,Línea central
 Certificate files,Archivos de certificados
 Certificates and documents,Certificados y documentos
+Certificates and lot documents,Certificados y documentos de lote
 Change,Cambiar
 "Change a single day without changing the repeating cycle: an extra Saturday, a shift that starts late, or a shift that doesn't run. Times are in the site's time zone; a shift belongs to the day it starts on.","Cambie un solo día sin cambiar el ciclo repetitivo: un sábado extra, un turno que empieza tarde o un turno que no se trabaja. Las horas están en la zona horaria del sitio; un turno pertenece al día en que empieza."
 Change a translation first.,Primero cambie una traducción.
@@ -844,6 +855,7 @@ Choose the cycle's first day.,Elija el primer día del ciclo.
 Choose the day it is valid from.,Elija el día desde el que es válido.
 Choose the day.,Elija el día.
 Choose the line it runs on first.,Primero elija la línea en que se ejecuta.
+Choose the line or machine first.,Elija primero la línea o máquina.
 Choose the lot it came from,Elija el lote del que vino
 Choose the machine.,Elija la máquina.
 "Choose the material classes it is for, or offer it for every material.","Elija las clases de material para las que es, u ofrézcalo para todo material."
@@ -897,9 +909,11 @@ Close alert,Cerrar alerta
 Close as complete,Cerrar como completa
 Close it,Cerrarlo
 "Close the lot being filled, so the next report starts a new one","Cerrar el lote en llenado, para que el siguiente reporte inicie uno nuevo"
+Close {0} on {1},Cerrar {0} en {1}
 Closed,Cerrado
 Closed and cancelled,Cerradas y canceladas
 Closed by {0}: {1},Cerrado por {0}: {1}
+Closed in the last 7 days,Cerradas en los últimos 7 días
 Closed lot {0}; the next report starts a new lot.,Se cerró el lote {0}; el siguiente reporte inicia un lote nuevo.
 Closed lots {0}; the next report starts a new lot.,Se cerraron los lotes {0}; el siguiente reporte inicia un lote nuevo.
 Closed the alert on {0}. The next signal on its chart opens a new one.,Se cerró la alerta de {0}. La siguiente señal en su gráfico abre una nueva.
@@ -1258,8 +1272,11 @@ Event type,Tipo de evento
 "Event type, e.g. consumed","Tipo de evento, p. ej. consumed"
 Events (CloudEvents JSON),Eventos (CloudEvents JSON)
 Events sent,Eventos enviados
+Every,Cada
 Every (hours),Cada (horas)
 Every 1 to 168 hours.,Cada 1 a 168 horas.
+Every 1 to {0:0} counts.,Cada 1 a {0:0} conteos.
+Every 1 to {0:0} run hours.,Cada 1 a {0:0} horas de funcionamiento.
 Every characteristic,Todas las características
 "Every class and material as B2MML, which the B2MML import reads back","Cada clase y material como B2MML, que la importación B2MML vuelve a leer"
 Every day from {0},Cada día desde {0}
@@ -1390,6 +1407,7 @@ For every material,Para todo material
 For job,Para el trabajo
 For limits agreed with a customer or carried over from another system. Uses the material and line chosen above; say why.,Para límites acordados con un cliente o traídos de otro sistema. Usa el material y la línea elegidos arriba; diga por qué.
 For process,Para el proceso
+"For the stop of {0}, {1}.","Por el paro de {0}, {1}."
 For this material {0} already converts to {1} (1 {2} = {3:0.######} {4}) through its other conversions; change one of those instead.,Para este material {0} ya se convierte a {1} (1 {2} = {3:0.######} {4}) por sus otras conversiones; cambie una de ellas.
 "For time the machine didn't report, such as an outage with no signal. It may not overlap the machine's other stops.","Para tiempo que la máquina no reportó, como una interrupción sin señal. No puede traslaparse con los otros paros de la máquina."
 For {0}: open,Para {0}: abra
@@ -1408,6 +1426,8 @@ From run history,Del historial de corridas
 "From the daily rollups (today, yesterday and any day not rolled yet worked out now), by day rather than by shift.","De los acumulados diarios (hoy, ayer y cualquier día aún no acumulado se calculan ahora), por día en lugar de por turno."
 From the machine,De la máquina
 From the machine: its counts up to {0},De la máquina: sus cuentas hasta {0}
+From the stop at {0},Del paro de las {0}
+From the stop at {0} ({1}),Del paro de las {0} ({1})
 From the stop code; confirm it or give another,Del código de paro; confírmelo o dé otro
 From the {0} barcode,Del código de barras {0}
 "From today on, it follows the site's","A partir de hoy, sigue las del sitio"
@@ -1427,10 +1447,12 @@ Give at least one target.,Indique al menos una meta.
 "Give both BeforeAt and BeforeId, or neither.","Dé BeforeAt y BeforeId, o ninguno."
 "Give both external_system and external_key, or neither.","Dé external_system y external_key, o ninguno."
 Give each shift a start time as HH:mm.,Dé a cada turno una hora de inicio como HH:mm.
+Give how often first.,Indique primero con qué frecuencia.
 "Give or take away a role held at every site, rather than at one","Dar o quitar un rol que se tiene en todos los sitios, en lugar de en uno"
 "Give the .btw document for at least one operation, such as default.","Dé el documento .btw para al menos una operación, como default."
 Give the .btw document's path.,Indique la ruta del documento .btw.
 Give the BTXML template; start from the standard one.,Indique la plantilla BTXML; parta de la estándar.
+"Give the CMMS's number for {0}, at most {1} characters.","Indique el número del CMMS para {0}, como máximo {1} caracteres."
 "Give the PLC's address (gateway), such as 10.0.0.20.","Indique la dirección del PLC (gateway), como 10.0.0.20."
 Give the broker's host.,Indique el host del broker.
 "Give the call type a name of at most {0} characters, such as Maintenance.","Dé al tipo de llamada un nombre de como máximo {0} caracteres, como Mantenimiento."
@@ -1493,6 +1515,7 @@ Hide history,Ocultar historial
 Hide lines and departments,Ocultar líneas y departamentos
 Hide properties,Ocultar propiedades
 Hierarchy,Jerarquía
+High,Alta
 Highest,Más alto
 History,Historial
 Hold,Retener
@@ -1582,6 +1605,7 @@ In force,Vigente
 "In force now: centre {0}, limits {1} to {2}. Approving ends them where the new ones start.","Vigentes ahora: centro {0}, límites {1} a {2}. Aprobar los termina donde empiezan los nuevos."
 In production,En producción
 In progress,En proceso
+In progress · {0},En proceso · {0}
 In spec,En especificación
 In specification.,En especificación.
 In stock only,Solo en existencia
@@ -1617,6 +1641,7 @@ Interval,Intervalo
 Into,Hacia
 Inventory,Inventario
 Inventory adjustment,Ajuste de inventario
+Inventory movements,Movimientos de inventario
 Inventory reports,Reportes de inventario
 Issue,Salida
 Issued,Emitido
@@ -1671,6 +1696,7 @@ Its group {0} is switched off; switch it on first.,Su grupo {0} está desactivad
 Its own conversions,"Lo bueno y el desperdicio salen de la corrida, y cada lote que hizo devuelve la cantidad. Un lote que se usó, dividió o movió a un silo desde entonces debe corregirse primero; Pulaski dice cuál."
 Its own state tag,Su propia etiqueta de estado
 "Its place in the route: 10, 20, 30… Unique within the version.","Su lugar en la ruta: 10, 20, 30… Único dentro de la versión."
+Its plan,Su plan
 "Its quantity, place and status then, in the order its movements count (back-dated ones at their time).","Su cantidad, lugar y estado entonces, en el orden en que cuentan sus movimientos (los de fecha anterior a su hora)."
 Its shift isn't approved yet: change the break instead.,Su turno aún no está aprobado: cambie el descanso en su lugar.
 Its shift isn't approved yet: change the session instead.,Su turno aún no está aprobado: cambie la sesión en su lugar.
@@ -1753,6 +1779,7 @@ Label settings saved.,Se guardaron los ajustes de etiquetas.
 Labels,Etiquetas
 Labor,Mano de obra
 "Labor for shift {0} on {1:yyyy-MM-dd} is approved, so its times are locked.","La mano de obra del turno {0} del {1:yyyy-MM-dd} está aprobada, así que sus horas están bloqueadas."
+"Labor sessions, breaks and approvals","Sesiones de mano de obra, descansos y aprobaciones"
 Labor to approve,Mano de obra por aprobar
 "Labor: who is on, shift review and reports","Mano de obra: quién está, revisión de turno y reportes"
 Laboratory,Laboratorio
@@ -1775,6 +1802,7 @@ Last hour,Última hora
 Last import,Última importación
 Last recalculated {0}.,Último recálculo {0}.
 Last refreshed {0}.,Última actualización {0}.
+Last request,Última solicitud
 Last shift,Turno anterior
 Last sign-in,Último inicio de sesión
 Last signal,Última señal
@@ -1828,6 +1856,7 @@ Line for {0},Línea para {0}
 Line number {0} is used {1} times.,El número de renglón {0} se usa {1} veces.
 Line numbers must be positive; {0} is not.,Los números de renglón deben ser positivos; {0} no lo es.
 Line or department,Línea o departamento
+Line or machine,Línea o máquina
 Line {0} appears twice.,El renglón {0} aparece dos veces.
 Line {0} isn't in count {1}.,La línea {0} no está en el conteo {1}.
 Line {0} names a material that doesn't exist.,El renglón {0} nombra un material que no existe.
@@ -1945,6 +1974,7 @@ Lots still to count: {0}. Enter 0 for a lot that isn't there.,Lotes por contar: 
 Lots with a value,Lotes con un valor
 Lots with stock on hold or in quarantine at this site.,Lotes con existencia retenida o en cuarentena en este sitio.
 Lots · Inventory,Lotes · Inventario
+Low,Baja
 Lower,Inferior
 Lower limit,Límite inferior
 "Lower-case letters, digits and _ only, starting with a letter.","Solo minúsculas, dígitos y _, empezando por una letra."
@@ -1959,6 +1989,7 @@ Machine profile {0} not found.,Perfil de máquina {0} no encontrado.
 Machine profiles,Perfiles de máquina
 Machine profiles: state values and stop codes,Perfiles de máquina: valores de estado y códigos de paro
 Machine speed,Velocidad de máquina
+Machine stops coded and adjusted,Paros de máquina codificados y ajustados
 Machines,Máquinas
 Machines: live state and stops to code,Máquinas: estado en vivo y paros por codificar
 Machine…,Máquina…
@@ -1985,6 +2016,11 @@ Maintain units of measure,Mantener unidades de medida
 "Maintain users, roles and what each role may do","Mantener usuarios, roles y lo que puede hacer cada rol"
 Maintained in Pulaski,Mantenido en Pulaski
 Maintenance,Mantenimiento
+Maintenance plan {0} not found.,Plan de mantenimiento {0} no encontrado.
+Maintenance request {0} not found.,Solicitud de mantenimiento {0} no encontrada.
+Maintenance requests,Solicitudes de mantenimiento
+Maintenance requests open: {0},Solicitudes de mantenimiento abiertas: {0}
+Maintenance requests waiting,Solicitudes de mantenimiento en espera
 Make a material class…,Hacer una clase de material…
 Make a single material…,Hacer un solo material…
 Make group,Convertir en grupo
@@ -2268,6 +2304,7 @@ No people at {0} yet.,Aún no hay personas en {0}.
 No people source '{0}'. The sources are {1}.,No hay fuente de personas '{0}'. Las fuentes son {1}.
 "No planned duration, and no material change to size it from.","Sin duración planeada, y sin cambio de material del cual calcularla."
 No planned duration.,Sin duración planeada.
+No plans yet.,Aún no hay planes.
 No printers yet: labels print as PDF.,Aún no hay impresoras: las etiquetas se imprimen como PDF.
 No process can run this material yet; see below,Ningún proceso puede ejecutar este material aún; vea abajo
 "No process names {0}, its class, or all materials.","Ningún proceso nombra {0}, su clase, o todos los materiales."
@@ -2288,6 +2325,7 @@ No reference,Sin referencia
 No released or draft BOM lists {0} as a component.,Ninguna lista de materiales liberada o en borrador tiene {0} como componente.
 No released process at this site makes this material,Ningún proceso liberado en este sitio hace este material
 "No released process at {0} makes {1}; release one, or send the process code.",Ningún proceso liberado en {0} hace {1}; libere uno o envíe el código de proceso.
+"No request is waiting. Raise one here, or from a stop.",No hay solicitudes en espera. Cree una aquí o desde un paro.
 No results recorded for this lot.,No hay resultados registrados para este lote.
 No results yet.,Aún no hay resultados.
 No results.,Sin resultados.
@@ -2334,6 +2372,7 @@ None (test only),Ninguna (solo pruebas)
 None configured,Ninguna configurada
 None configured (Labels:DropFolders),Ninguna configurada (Labels:DropFolders)
 None in the last 24 hours.,Ninguna en las últimas 24 horas.
+None in the last 7 days.,Ninguna en los últimos 7 días.
 None of the lot is left.,No queda nada del lote.
 "None of the selected orders can move to {0}, or you may not do it.","Ninguna de las órdenes elegidas puede pasar a {0}, o usted no puede hacerlo."
 "None on hand. Receive some, or declare production from a job.","Nada en existencia. Reciba algo, o declare producción desde un trabajo."
@@ -2343,6 +2382,7 @@ None.,Ninguno.
 None. Anyone can be put on {0}.,Ninguna. Cualquiera puede asignarse a {0}.
 None: it converts only between standard units of its own kind.,Ninguna: solo se convierte entre unidades estándar de su propio tipo.
 None: no components planned,Ninguno: no hay componentes planeados
+Normal,Normal
 Not a number,No es un número
 Not a page of this list: start again from the first page.,No es una página de esta lista: empiece de nuevo desde la primera página.
 Not a permission: {0}.,No es un permiso: {0}.
@@ -2436,6 +2476,7 @@ Nothing to show.,No hay nada que mostrar.
 "Nothing uses it yet. Its code, name, base unit and type come from {0}.","Aún nada lo usa. Su código, nombre, unidad base y tipo vienen de {0}."
 Nothing uses it yet: every field can still change.,Aún nada lo usa: cualquier campo puede cambiar todavía.
 Nothing waiting,Nada en espera
+Nothing waiting for maintenance,Nada en espera de mantenimiento
 Nothing waiting to show.,No hay pendientes que mostrar.
 Nothing waits for you.,Nada espera su decisión.
 Nothing was imported.,No se importó nada.
@@ -2460,6 +2501,7 @@ OEE,OEE
 OEE targets,Metas de OEE
 Obsolete,Obsoleta
 Odata,OData
+Of,De
 Of it on hold,De ello retenido
 Of {0} {1}; the rest stays in {2}.,De {0} {1}; el resto queda en {2}.
 Off,Apagado
@@ -2744,6 +2786,8 @@ Preferences…,Preferencias…
 Preferred line for {0},Línea preferida para {0}
 Prefilled on {0}'s reports; the lot being filled's location comes first.,Se prellena en los reportes de {0}; la ubicación del lote que se está llenando va primero.
 Preparing PDF…,Preparando PDF…
+Preventive,Preventivo
+Preventive plans,Planes preventivos
 Previous month,Mes anterior
 Print,Imprimir
 Print and schedule actions are available for one selected order.,Las acciones de impresión y programación están disponibles para una orden elegida.
@@ -2798,6 +2842,7 @@ Production line,Línea de producción
 Production lots on this line,Lotes de producción en esta línea
 Production performance (B2MML),Desempeño de producción (B2MML)
 Production reports,Reportes de producción
+Production reports and partial batches,Reportes de producción y tandas parciales
 Production unit,Unidad de producción
 Profile,Perfil
 Profile code,Código del perfil
@@ -3014,7 +3059,11 @@ Reported: run now has {0} good and {1} scrap{2}.,Reportado: la corrida ahora tie
 Reporting tolerances,Tolerancias de reporte
 Reports,Reportes
 Reports · Inventory,Reportes · Inventario
+Request,Solicitar
 Request envelope,Sobre de la solicitud
+Request maintenance,Solicitar mantenimiento
+"Request maintenance for a line or machine, on its own or from a stop","Solicitar mantenimiento para una línea o máquina, por sí sola o desde un paro"
+"Request, urgent","Solicitar, urgente"
 "RequestBody: the SOAP envelope to post, at most 20,000 characters.","RequestBody: el sobre SOAP que se envía, como máximo 20.000 caracteres."
 Require,Exigir
 Require a qualification…,Exigir una calificación…
@@ -3101,7 +3150,7 @@ Run end,Fin de corrida
 Run h,h ejecución
 Run history,Historial de corridas
 Run history net,Historial de corridas neto
-Run hours,Horas de ejecución
+Run hours,Horas de funcionamiento
 Run rules are Nelson's 1 to 8.,"Las reglas de corrida son las de Nelson, del 1 al 8."
 Run rules its chart checks,Reglas de corrida que revisa su gráfico
 "Run so far: the machine counted {0} good, {1} scrap {2}; reported {3} good, {4} scrap {5}.","Corrida hasta ahora: la máquina contó {0} buenos, {1} de desperdicio {2}; se reportaron {3} buenos, {4} de desperdicio {5}."
@@ -3190,7 +3239,12 @@ Saved {0}. The schedule shows the new times straight away.,Se guardó {0}. El pr
 Saved. The API's configuration now holds only the secret.,Guardado. La configuración de la API ahora guarda solo el secreto.
 Saved. The feed uses them from its next round.,Guardado. El canal los usa a partir de su siguiente ronda.
 Saving…,Guardando…
+Say what is done first.,Diga primero qué se hace.
+"Say what is done, in at most {0} characters, such as Grease the gearbox.","Diga qué se hace, en como máximo {0} caracteres, como Engrasar la caja de engranes."
+Say what needs looking at first.,Diga primero qué hay que revisar.
+Say what needs looking at.,Diga qué hay que revisar.
 "Say what was done, at most {0} characters.","Diga qué se hizo, como máximo {0} caracteres."
+"Say what was done, or why nothing was.","Diga qué se hizo, o por qué no se hizo nada."
 Say what was done.,Diga lo que se hizo.
 Say why first.,Diga primero por qué.
 Say why in the comment; it is required.,Diga por qué en el comentario; es obligatorio.
@@ -3252,6 +3306,7 @@ See processes and BOMs,Ver procesos y listas de materiales
 See reason codes,Ver códigos de motivo
 See shift schedules,Ver calendarios de turnos
 "See specifications, characteristics and quality results","Ver especificaciones, características y resultados de calidad"
+See the Maintenance tab,Ver la pestaña Mantenimiento
 See the Overview,Ver el Resumen
 See the chart,Ver el gráfico
 See the equipment hierarchy and its settings,Ver la jerarquía de equipos y sus ajustes
@@ -3397,6 +3452,7 @@ Skipped,Omitido
 Skipped by {0}: {1},Omitido por {0}: {1}
 Skipped.,Omitido.
 Skip…,Omitir…
+So far,Hasta ahora
 Soap,SOAP
 SoapAction: at most 500 characters.,SoapAction: como máximo 500 caracteres.
 Some of those people don't exist.,Algunas de esas personas no existen.
@@ -3405,6 +3461,7 @@ Someone else changed the same records at the same moment. Try again.,Alguien má
 Someone else changed this draft; showing their version.,Alguien más cambió este borrador; se muestra su versión.
 Someone else changed this first; the board now shows their change.,Alguien más cambió esto primero; el tablero ahora muestra su cambio.
 Someone else started this material's balance at that location at the same moment. Try again.,Otra persona inició el saldo de este material en esa ubicación en el mismo momento. Intente de nuevo.
+Something to fix?,¿Algo que reparar?
 Source,Origen
 "Sparkplug B, OPC UA or EtherNet/IP.","Sparkplug B, OPC UA o EtherNet/IP."
 Spc alert,Alerta de SPC
@@ -3610,6 +3667,8 @@ That shift schedule doesn't exist.,Ese horario de turnos no existe.
 That shortfall was changed by someone else. Reload and try again.,Alguien más cambió ese faltante. Recargue e intente de nuevo.
 That shortfall was {0} already.,Ese faltante ya estaba {0}.
 That stop isn't waiting for a reason on this station's line; code it on Machines.,Ese paro no espera un motivo en la línea de esta estación; codifíquelo en Máquinas.
+That stop isn't waiting on this station's line any more.,Ese paro ya no está en espera en la línea de esta estación.
+"That stop wasn't found, or was replaced by an adjustment.","No se encontró ese paro, o un ajuste lo reemplazó."
 That target already ended on {0:yyyy-MM-dd}.,Esa meta ya terminó el {0:yyyy-MM-dd}.
 That time has ended already.,Ese tiempo ya terminó.
 That user wasn't found.,No se encontró ese usuario.
@@ -3769,6 +3828,7 @@ The name of a drop folder in the API's configuration.,El nombre de una carpeta d
 "The name of a template set: letters, digits, - or _.","El nombre de un juego de plantillas: letras, dígitos, - o _."
 The next 7 days,Los próximos 7 días
 The note is at most {0} characters.,La nota tiene como máximo {0} caracteres.
+The number {0} gave it,El número que le dio {0}
 The operation that follows it.,La operación que lo sigue.
 The operations it waits for. Draw links on the canvas.,Las operaciones que espera. Dibuje vínculos en el lienzo.
 The operations that wait for it.,Las operaciones que lo esperan.
@@ -3800,6 +3860,7 @@ The reasons in bold make up the first 80% of the time. Code stops on the Stops t
 The receiver won't get this event. Put it right there by hand first; the later events of the same lot or certificate are sent next.,El receptor no recibirá este evento. Corríjalo allá a mano primero; los eventos posteriores del mismo lote o certificado se envían después.
 "The released version names operation {0}, which {1}'s released version no longer has,","La versión liberada nombra la operación {0}, que la versión liberada de {1} ya no tiene,"
 "The report is reversed and the figures above reported in its place, at its time, in one go: its lots give their quantity back and new lots are made. ","El reporte se revierte y las cifras de arriba se reportan en su lugar, a su hora, de una vez: sus lotes devuelven su cantidad y se hacen lotes nuevos."
+The request names this stop; maintenance sees it on the Maintenance tab.,La solicitud nombra este paro; mantenimiento la ve en la pestaña Mantenimiento.
 The required column 'lot_number' is missing.,Falta la columna obligatoria 'lot_number'.
 The required column 'minutes' is missing.,Falta la columna obligatoria 'minutes'.
 The required column '{0}' is missing.,Falta la columna obligatoria '{0}'.
@@ -3910,6 +3971,7 @@ There is no line {0}.,No hay ninguna línea {0}.
 There is no location {0} at this site.,No hay una ubicación {0} en este sitio.
 There is no lot {0} at this site.,No hay ningún lote {0} en este sitio.
 There is no lot {0} of {1} at this site.,No hay ningún lote {0} de {1} en este sitio.
+There is no maintenance request {0}.,No hay ninguna solicitud de mantenimiento {0}.
 There is no material class {0}.,No hay ninguna clase de material {0}.
 There is no material {0}.,No hay un material {0}.
 There is no released process {0} at {1} that makes {2}.,No hay ningún proceso liberado {0} en {1} que haga {2}.
@@ -3974,7 +4036,9 @@ This shift:,Este turno:
 This specification already has a draft; change that one.,Esta especificación ya tiene un borrador; cambie ese.
 This specification has no released version to start a draft from.,Esta especificación no tiene versión liberada desde la cual iniciar un borrador.
 This station doesn't offer that call; choose one of its buttons.,Esta estación no ofrece esa llamada; elija uno de sus botones.
+This station has no line to request maintenance for.,Esta estación no tiene una línea para la que solicitar mantenimiento.
 This station isn't enrolled,Esta estación no está inscrita
+"This stop already has {0}, still waiting for maintenance.","Este paro ya tiene {0}, aún en espera de mantenimiento."
 "This stop didn't come from an adjustment, so there is nothing to undo.","Esta parada no vino de un ajuste, así que no hay nada que deshacer."
 This stop has been split or merged: code the stops that replaced it.,Este paro se dividió o unió: codifique los paros que lo reemplazaron.
 "This stop is replaced by the stops it came from, with their reasons and coding. Only if it wasn't adjusted since.","Este paro se reemplaza por los paros de los que vino, con sus motivos y codificación. Solo si no se ajustó desde entonces."
@@ -4009,11 +4073,13 @@ To,Hasta
 To location,A la ubicación
 To make,Por hacer
 To place,Por colocar
+"To request maintenance for a stop, use Request maintenance on the stop in the Stops tab: the request then names the stop.","Para solicitar mantenimiento por un paro, use Solicitar mantenimiento en el paro, en la pestaña Paros: así la solicitud nombra el paro."
 "To skip this choice, set the terminal's first line offered on Labor → Terminals.","Para omitir esta elección, fije la primera línea ofrecida de la terminal en Mano de obra → Terminales."
 Today,Hoy
 Toggle navigation,Mostrar u ocultar el menú
 Too large,Demasiado grande
 Too many wrong PINs: this badge is locked until {0:HH:mm} UTC. Ask a supervisor if you need time recorded now.,Demasiados PIN incorrectos: este gafete está bloqueado hasta las {0:HH:mm} UTC. Pida ayuda a un supervisor si necesita registrar tiempo ahora.
+Took {0},Tardó {0}
 "Top: {0}, {1} min","Principal: {0}, {1} min"
 Topic,Tópico
 Total,Total
@@ -4166,8 +4232,10 @@ Waited,Esperó
 Waiting,En espera
 Waiting external,Esperando externo
 Waiting for a line,Esperando una línea
+Waiting for its request,En espera de su solicitud
 Waiting for review,Esperando revisión
 "Waiting on its department: start it from the Floor, choosing the line it runs on.","Esperando en su departamento: inícielo desde Piso, eligiendo la línea en que se ejecuta."
+Waiting {0},En espera {0}
 Waits behind an earlier delivery for the same lot.,Espera detrás de un envío anterior del mismo lote.
 Waits for someone to retry or skip it.,Espera a que alguien lo reintente o lo omita.
 Warehouse system,Sistema de almacén
@@ -4191,6 +4259,7 @@ What each material must meet: its characteristics and their limits. Quality resu
 What each role may change is on,Lo que cada rol puede cambiar está en
 "What every machine is doing now, as its edge node reports it, and its stops. A stop is time a machine isn't executing; stops shorter than the machine's micro-stop threshold aren't coded. Give each stop its reason, or confirm the one its stop code maps to. Where the machine's record is wrong or missing, a supervisor can enter a stop by hand, or split or merge stops.","Lo que hace cada máquina ahora, como lo reporta su nodo de borde, y sus paros. Un paro es tiempo en que una máquina no está ejecutando; los paros más cortos que el umbral de microparos de la máquina no se codifican. Dé a cada paro su motivo, o confirme el que indica su código de paro. Donde el registro de la máquina está mal o falta, un supervisor puede ingresar un paro a mano, o dividir o unir paros."
 What happens when the ERP sends a work order for this material that isn't whole batches (D-066). The site's rule is set on Site settings; the ERP's own quantity is always kept on the order beside Pulaski's.,Qué pasa cuando el ERP envía una orden de trabajo para este material que no son tandas completas (D-066). La regla del sitio se fija en Ajustes del sitio; la cantidad propia del ERP siempre se guarda en la orden junto a la de Pulaski.
+What is done,Qué se hace
 What is here,Lo que hay aquí
 "What is measured (a wall thickness, a melt flow index) or inspected (surface defects). Specifications give each one its limits per material.","Lo que se mide (un espesor de pared, un índice de fluidez) o se inspecciona (defectos de superficie). Las especificaciones dan a cada una sus límites por material."
 What it did,Lo que hizo
@@ -4200,6 +4269,8 @@ What it sends,Lo que envía
 What it sends:,Lo que envía:
 What it's for,Para qué es
 What it's for (optional),Para qué es (opcional)
+What needs looking at,Qué hay que revisar
+What needs looking at (needed),Qué hay que revisar (obligatorio)
 "What one count of the line's counter makes, e.g. 2.4 for 2.4 m a cut.","Lo que hace una cuenta del contador de la línea, p. ej. 2.4 para 2.4 m por corte."
 What people call it.,Cómo lo llama la gente.
 "What runs on each line and what comes next. Start, pause and complete jobs, and report what they make.","Lo que se ejecuta en cada línea y lo que sigue. Inicie, pause y termine trabajos, y reporte lo que hacen."
@@ -4284,6 +4355,7 @@ Won't fit,No cabe
 Work cell,Celda de trabajo
 Work center,Centro de trabajo
 Work it out,Calcularlo
+Work maintenance requests: start them and close them with what was done,Atender solicitudes de mantenimiento: iniciarlas y cerrarlas con lo que se hizo
 Work order,Orden de trabajo
 Work order {0},Orden de trabajo {0}
 Work order {0} belongs to another site than {1}.,La orden de trabajo {0} pertenece a otro sitio que {1}.
@@ -4304,6 +4376,7 @@ Work order {0}'s jobs moved while it was being changed. Try again.,Los trabajos 
 "Work order {0}, operation {1}","Orden de trabajo {0}, operación {1}"
 Work order · {0},Orden de trabajo · {0}
 Work orders,Órdenes de trabajo
+Work orders and jobs,Órdenes de trabajo y trabajos
 Work out again,Calcular de nuevo
 Work out limits from results,Calcular límites desde resultados
 "Work out the rate {0} really made {1} at: good output ÷ run time over its ended runs, or ÷ running time with the stops inside the runs taken out. Short runs, runs with no good output and unusually slow or fast runs are left out. Nothing changes until you accept it.","Calcule la tasa a la que {0} realmente hizo {1}: producción buena ÷ tiempo de ejecución en sus corridas terminadas, o ÷ tiempo en marcha con los paros dentro de las corridas excluidos. Las corridas cortas, las que no tienen producción buena y las inusualmente lentas o rápidas se excluyen. Nada cambia hasta que la acepte."
@@ -4369,7 +4442,7 @@ Your PIN,Su PIN
 Your Pulaski user is switched off; ask a supervisor.,Su usuario de Pulaski está desactivado; pida ayuda a un supervisor.
 Your password is changed. Sign in with it now.,Su contraseña se cambió. Inicie sesión con ella ahora.
 Your role doesn't code stops; ask someone who does.,Su rol no codifica paros; pida ayuda a alguien que sí lo haga.
-"Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes or planning rates.","Su rol no decide nada de lo que reúne Pendientes: tandas parciales, alertas de SPC, mano de obra, cambios del ERP o tasas de planeación."
+"Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes, planning rates or maintenance requests.","Su rol no decide nada de lo que reúne la bandeja: tandas parciales, alertas SPC, mano de obra, cambios del ERP, tasas de planeación ni solicitudes de mantenimiento."
 Your role doesn't let you code stops at this site.,Su rol no le permite codificar paros en este sitio.
 Your role doesn't let you report production at this site.,Su rol no le permite reportar producción en este sitio.
 Your role doesn't let you report production or code stops at this site.,Su rol no le permite reportar producción ni codificar paros en este sitio.
@@ -4392,6 +4465,7 @@ about the same as {0} then,casi igual que {0} entonces
 about {0} on {1},cerca de {0} en {1}
 accept or reject proposals,aceptar o rechazar propuestas
 accepted or rejected.,accepted o rejected.
+"accepted, started or closed.","accepted, started o closed."
 active,activo
 active: '{0}' isn't yes or no.,active: '{0}' no es sí ni no.
 after end,después del fin
@@ -4524,6 +4598,7 @@ locked,bloqueado
 lot {0},lote {0}
 "lots mix there, so what arrives joins it.","los lotes se mezclan allí, así que lo que llega se une."
 machine,máquina
+machine counts,conteos de máquina
 maintain BOMs,mantener listas de materiales
 maintain characteristics,mantener características
 maintain edge nodes,mantener nodos de borde
@@ -4568,6 +4643,7 @@ no run standard on {0},sin estándar de corrida en {0}
 none,ninguno
 not held,no la tiene
 not released,no liberada
+not resolved,sin resolver
 nothing Pulaski uses.,nada que use Pulaski.
 np chart,gráfico np
 np: number defective,np: número de defectuosos
@@ -4620,11 +4696,13 @@ released,liberado
 removed,quitado
 replaced,reemplazado
 report production,reportar producción
+request maintenance,solicitar mantenimiento
 retry or skip deliveries,reintentar u omitir envíos
 reversed,revertido
 revoked,revocada
 role at this site. Sign in once as that user and set its password.,en este sitio. Inicie sesión una vez como ese usuario y fije su contraseña.
 room for {0} more at the line's rate,cabe {0} más a la tasa de la línea
+run hours,horas de funcionamiento
 run {0},corrida {0}
 runtime,tiempo productivo
 securityMode is {0}.,securityMode es {0}.
@@ -4638,6 +4716,7 @@ since the run started,desde que empezó la corrida
 since {0},desde las {0}
 so orders for {0} made with {1} are refused.,así que las órdenes de {0} hechas con {1} se rechazan.
 specification,especificación
+start and close requests,iniciar y cerrar solicitudes
 start jobs,iniciar trabajos
 "start, pause and complete jobs","iniciar, pausar y terminar trabajos"
 status change,cambio de estado
@@ -4645,6 +4724,7 @@ stock,existencia
 "stopped for {0}, {1} ago","detenido durante {0}, hace {1}"
 "stopped {0} ago, still stopped","detenido hace {0}, sigue detenido"
 substitution,sustitución
+such as Grease the gearbox,como Engrasar la caja de engranes
 supplier lot {0},lote del proveedor {0}
 target {0},meta {0}
 the answer has no array at '{0}'.,la respuesta no tiene un arreglo en '{0}'.
@@ -4717,6 +4797,7 @@ yes,sí
 {0} (switched off),{0} (desactivado)
 {0} (the material's),{0} (el del material)
 {0} (to {1}),{0} (hasta {1})
+{0} ({1:0}%),{0} ({1:0}%)
 {0} Since then: {1}.,{0} Desde entonces: {1}.
 {0} UTC by {1}: {2},{0} UTC por {1}: {2}
 {0} allocated,{0} asignados
@@ -4776,6 +4857,7 @@ yes,sí
 "{0} could run here: {1}, {2} ({3} – {4}). Drag it onto a line to assign it.","{0} podría ejecutarse aquí: {1}, {2} ({3} – {4}). Arrástrelo a una línea para asignarlo."
 {0} couldn't be read: {1},{0} no pudo leerse: {1}
 "{0} counted {1} good and {2} scrap {3} {4}, to {5}{6}.","{0} contó {1} buenos y {2} de desperdicio {3} {4}, hasta las {5}{6}."
+{0} counts,{0} conteos
 {0} created,{0} creadas
 {0} created on {1} for {2}.,{0} creado en {1} por {2}.
 {0} days,{0} días
@@ -4900,6 +4982,8 @@ yes,sí
 "{0} is back on {1}, waiting for a line.","{0} vuelve a {1}, esperando una línea."
 {0} is called.,Se llamó a {0}.
 {0} is clocked on at that site; end their time there first.,{0} tiene entrada registrada en ese sitio; termine primero su tiempo allí.
+{0} is closed already.,{0} ya está cerrada.
+{0} is closed.,{0} está cerrada.
 {0} is empty.,{0} está vacío.
 {0} is empty; there is nothing to pack.,{0} está vacío; no hay nada que empacar.
 {0} is empty; there is nothing to ship.,{0} está vacío; no hay nada que enviar.
@@ -4916,6 +5000,8 @@ yes,sí
 {0} is in another site.,{0} está en otro sitio.
 {0} is in another site; a lot stays in its site.,{0} está en otro sitio; un lote se queda en su sitio.
 {0} is in another site; jobs cannot move between sites.,{0} está en otro sitio; los trabajos no pueden moverse entre sitios.
+{0} is in progress already.,{0} ya está en proceso.
+{0} is in progress.,{0} está en proceso.
 "{0} is in use, and its quantities are stored in its base unit; the base unit can't change.","{0} está en uso, y sus cantidades se guardan en su unidad base; la unidad base no puede cambiar."
 "{0} is in use, so its code is fixed.","{0} está en uso, así que su código es fijo."
 {0} is in {1}; the ERP must keep sending that unit.,{0} está en {1}; el ERP debe seguir enviando esa unidad.
@@ -4964,6 +5050,7 @@ yes,sí
 {0} is switched off.,{0} está desactivado.
 {0} is switched off; call for help from a line.,{0} está desactivada; pida ayuda desde una línea.
 {0} is switched off; it can only be cleared.,{0} está desactivado; solo se puede borrar.
+{0} is switched off; request maintenance for equipment in use.,{0} está desactivado; solicite mantenimiento para equipos en uso.
 {0} is switched off; switch it on first.,{0} está desactivado; actívelo primero.
 {0} is switched off; switch it on on the Roles screen first.,{0} está desactivado; actívelo primero en la pantalla Roles.
 {0} is switched off; switch it on to add a line.,{0} está desactivado; actívelo para agregar una línea.
@@ -4972,6 +5059,7 @@ yes,sí
 {0} is too small to record in {1}.,{0} es demasiado pequeño para registrarse en {1}.
 {0} is true or false.,{0} es true o false.
 {0} is up to date: {1} unchanged.,{0} está al día: {1} sin cambio.
+{0} is waiting for maintenance.,{0} está en espera de mantenimiento.
 {0} is {1} and the stock it joins is {2}; lots merge only in the same status. Release or hold one of them first.,{0} está {1} y la existencia a la que se une está {2}; los lotes se unen solo en el mismo estado. Libere o retenga uno de ellos primero.
 {0} is {1} in Pulaski; the ERP's change comes too late and is left out.,{0} está {1} en Pulaski; el cambio del ERP llega tarde y se deja fuera.
 "{0} is {1} now, not {2}; reverse what changed it first.","{0} está {1} ahora, no {2}; revierta primero lo que lo cambió."
@@ -5003,6 +5091,8 @@ yes,sí
 {0} isn't a language the screens are translated into.,{0} no es un idioma al que estén traducidas las pantallas.
 {0} isn't a line of the department {1} was planned to.,{0} no es una línea del departamento al que se planeó {1}.
 {0} isn't a line of {1}'s group that can run it.,{0} no es una línea del grupo de {1} que pueda ejecutarlo.
+{0} isn't a line or machine; plan maintenance for one.,{0} no es una línea ni una máquina; planee mantenimiento para una.
+{0} isn't a line or machine; request maintenance for one.,{0} no es una línea ni una máquina; solicite mantenimiento para una.
 {0} isn't a line; call for help from a line.,{0} no es una línea; pida ayuda desde una línea.
 {0} isn't a line; write handover notes for a line.,{0} no es una línea; escriba notas de entrega de turno para una línea.
 {0} isn't a number; use a decimal point.,{0} no es un número; use punto decimal.
@@ -5113,10 +5203,12 @@ yes,sí
 {0} refused,{0} rechazadas
 {0} refused (not imported),{0} rechazadas (no importadas)
 {0} released,{0} liberados
+{0} requests not closed,{0} solicitudes sin cerrar
 {0} results; no control limits in force for them.,{0} resultados; sin límites de control vigentes para ellos.
 "{0} results; {1} beyond the limits, {2} breaking a run rule.","{0} resultados; {1} fuera de los límites, {2} rompen una regla de corrida."
 {0} results; {1} beyond the limits.,{0} resultados; {1} fuera de los límites.
 "{0} rows have errors, so nothing can be imported yet. Fix them and pick the file again.","{0} filas tienen errores, así que aún no se puede importar nada. Corríjalas y elija el archivo de nuevo."
+{0} run hours,{0} horas de funcionamiento
 {0} runs on no day; tick at least one.,{0} no corre ningún día; marque al menos uno.
 "{0} runs, {1} h over {2} days","{0} corridas, {1} h en {2} días"
 "{0} runs, {1} h running ({2} h of stops taken out) over {3} days","{0} corridas, {1} h en marcha ({2} h de paros excluidas) en {3} días"
@@ -5225,6 +5317,7 @@ yes,sí
 "{0}, enjoy your break.","{0}, disfrute su descanso."
 "{0}, on the {1}.","{0}, en el {1}."
 "{0}, specification version {1}","{0}, versión de especificación {1}"
+"{0}, still waiting","{0}, aún en espera"
 "{0}, subgroups of {1}","{0}, subgrupos de {1}"
 "{0}, you're clocked off.","{0}, registró su salida."
 "{0}, you're on {1} for {2}.","{0}, está en {1} para {2}."

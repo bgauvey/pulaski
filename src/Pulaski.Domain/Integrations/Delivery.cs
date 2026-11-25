@@ -71,16 +71,18 @@ public static class DeliveryKinds
     public const string Labor = "labor";
     public const string Stops = "stops";
     public const string Quality = "quality";
+    public const string Maintenance = "maintenance";
 
     public static IReadOnlyList<DeliveryKind> All { get; } =
     [
-        new(Inventory, "Inventory movements", ["pulaski.lot."]),
-        new(Certificates, "Certificates and lot documents", ["pulaski.lot_document."]),
-        new(Orders, "Work orders and jobs", ["pulaski.work_order.", "pulaski.job."]),
-        new(Production, "Production reports and partial batches", ["pulaski.job.production_", "pulaski.partial_batch."]),
-        new(Labor, "Labor sessions, breaks and approvals", ["pulaski.labor."]),
-        new(Stops, "Machine stops coded and adjusted", ["pulaski.downtime."]),
-        new(Quality, "Quality results", ["pulaski.quality_result."]),
+        new(Inventory, Term.Mark("Inventory movements"), ["pulaski.lot."]),
+        new(Certificates, Term.Mark("Certificates and lot documents"), ["pulaski.lot_document."]),
+        new(Orders, Term.Mark("Work orders and jobs"), ["pulaski.work_order.", "pulaski.job."]),
+        new(Production, Term.Mark("Production reports and partial batches"), ["pulaski.job.production_", "pulaski.partial_batch."]),
+        new(Labor, Term.Mark("Labor sessions, breaks and approvals"), ["pulaski.labor."]),
+        new(Stops, Term.Mark("Machine stops coded and adjusted"), ["pulaski.downtime."]),
+        new(Quality, Term.Mark("Quality results"), ["pulaski.quality_result."]),
+        new(Maintenance, Term.Mark("Maintenance requests"), ["pulaski.maintenance."]),
     ];
 
     /// <summary>The type prefixes of the kinds, each once, in catalog order.</summary>

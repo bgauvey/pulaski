@@ -3128,6 +3128,51 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   checks (then notes, warnings and draft-check problems), #188 refusals worded in parts and words inside messages, then imports, scans,
   the server's other text and the reconnect banner. With #188 #128 is done.
 
+### D-115 · Maintenance requests (#127) · *Proposed, in pieces*
+
+**Context.** Stops are coded, but nothing asks maintenance to act on them, and nothing keeps track of what maintenance did. Many plants run a
+CMMS (maintenance system); Pulaski shouldn't become one, but a plant without one still needs requests tracked to closure.
+
+**Decision.**
+- **Pulaski keeps the request; a CMMS is optional.** `core.maintenance_request` (in `core`: it changes as it is worked and is referred to, D-010)
+  is raised for a line or machine (equipment below an area, active), on its own or from one of its stops (`downtime_id` + `downtime_started_at`,
+  no FK into the partitioned `ts.downtime`; the stop's machine is used): open → in progress → closed with what was done (`resolution`
+  required). Closing one nobody started starts it at the same moment. Priority low / normal / high. Numbers `MR-000042` from the sequence
+  `core.maintenance_request_no`. Never deleted; each step is an event (`pulaski.maintenance.request_raised/started/closed.v1`).
+- **One open request per stop** (`maintenance_request_stop_uq`): asking again from it returns the same request (`AlreadyOpen`). Raising locks
+  the equipment first (`FOR NO KEY UPDATE`, as ingest and andon). A request on its own may sit beside others for the same machine.
+- **Waiting time and age are worked out on read** (`MaintenanceRules.Waited`/`Age`), never stored.
+- **Permissions** `maintenance.request` (Operator, Supervisor, Maintenance) and `maintenance.work` (Supervisor, Maintenance), both implying
+  `machines.view`; lists need `machines.view`. A **Maintenance** role ships (new databases and by migration 0076): sees the floor, machines and
+  equipment, codes stops, answers andon calls, writes handover notes, raises and works requests.
+- `GET /api/maintenance/requests?siteId=&open=&from=&to=&equipmentId=` (open by default; a period at most 92 days), `POST /api/maintenance/requests`,
+  `/requests/{id}/start`, `/requests/{id}/close`. Machines gets a **Maintenance** tab (`MaintenanceRequests`) and **Request maintenance** on a stop.
+- **Andon stays separate:** a call brings someone now; a request is work tracked to closure.
+- **Station, boards and Inbox (b).** Each request carries its line (`LineId`/`LineCode`: the nearest equipment at or above it that runs jobs,
+  through `core.equipment_closure`), and the list's equipment filter takes what is below it too. `LineDisplayLineDto.Maintenance` holds a line's
+  requests not closed (`MaintenanceOrder.Waiting`: waiting first, high priority first, then oldest); the station takes its line's
+  (`StationDto.MaintenanceRequests`) and offers raising to a signed-on person with `maintenance.request` (`CanRequestMaintenance`):
+  `POST /api/terminal/station/maintenance/request` for the line or one of its stops to code, `Urgent` = high, raised from the terminal's code.
+  Working requests stays on Machines. The Inbox kind `maintenance` (`maintenance.work`) lists requests not started, titled by number and
+  equipment code with the asker's words, so nothing in it needs translating; it opens `machines?tab=maintenance`.
+- **A CMMS (c).** Delivery kind `maintenance` (`pulaski.maintenance.`; kind labels are now terms) lets any feed send requests raised, started,
+  closed and linked. The CMMS answers on `POST /api/integrations/{feed}/maintenance-requests`, signed with the feed's secret like acknowledgements
+  (`AcknowledgementSignature`), actor `receiver:{feed}`: `{number, action, reference?, resolution?}` with action `accepted` (records
+  `external_system` = the feed and `external_reference` = its number, `MaintenanceRequest.LinkExternal`; migration 0077), `started` or `closed`
+  (`UpdateMaintenanceFromCmmsCommand`). An answer already applied changes nothing, so retries are safe; a new number replaces the old. A
+  separate answer rather than the delivery acknowledgement, which is per event and says only whether it was booked. No adapter for a
+  particular CMMS; events the CMMS caused go back to it like others.
+- **Preventive plans (d).** `core.maintenance_plan` (migration 0078) for equipment below an area: what is done (the requests' description),
+  meter `run_hours` (Execute time from `ts.equipment_state_change`, the state in effect at the start included) or `counts` (processed machine
+  counts, `ts.production_count` source `machine`), interval, priority; switched off, never deleted. `MaintenancePlan.CountsFrom`: its start, or
+  its last request's close if later; `IsDue` when the reading reaches the interval. `MaintenancePlanService` (API, `Maintenance:Plans:PollMinutes`
+  10, `Enabled`) → `MaintenancePlanRunner.RaiseDueAsync`: each active plan in its own transaction, the plan locked, skipped while its request is
+  open (`maintenance_request_plan_uq`), meters read on the read store, the equipment locked, a request raised as `system` with
+  `maintenance_plan_id`. Plans on the Maintenance tab (`/api/maintenance/plans`, `maintenance.work` to keep them), each with its reading so far,
+  worked out on read. Calendar-based plans (every so many days) are left out. With (d), #127 is complete.
+- **Pieces:** (a) requests from a stop or the line, statuses, the Machines tab; (b) the operator station, line boards and Inbox; (c) a CMMS feed
+  and its answer back (work order number, closing); (d) preventive triggers by run hours or machine counts.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

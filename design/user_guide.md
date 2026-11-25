@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-24 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-25 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -148,11 +148,13 @@ In detail:
 
 1. Click **Inbox** at the top of the menu; its number says how many items wait.
 2. Items are grouped by what they are, oldest first: **Partial batches to approve or reject**, **SPC alerts to close**, **Labor to approve**,
-   **ERP changes to work orders** and **Planning rates to review**. Each says where it is and how long it has waited.
+   **ERP changes to work orders**, **Planning rates to review** and **Maintenance requests waiting**. Each says where it is and how long it
+   has waited.
 3. Click an item to open the page where it is decided, and decide it there. It leaves the inbox once decided.
 
 In detail: each kind shows only where you hold the permission that decides it (*partial batches: decide*, *quality: record*, *labor: approve*,
-*work orders: manage*, *rates: modify*). Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
+*work orders: manage*, *rates: modify*, *Work maintenance requests*). A maintenance request shows by its number and machine with what was asked,
+until someone starts it; it opens the **Maintenance** tab of Machines. Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
 does. The page refreshes every 30 seconds; the menu's number every minute, and when you move to another page.
 
 ### How saving works
@@ -966,6 +968,16 @@ for a kind of help that is still waiting doesn't make a second call; the station
 acknowledged too: it counts as answered then. The kinds of help and their times are kept on **Site settings** (see [Andon: calls for
 help](#andon-calls-for-help)).
 
+**Request maintenance at a station.** When something needs fixing but not someone right now (a squeal, a loose guard), ask maintenance:
+
+1. Badge in, with a role that requests maintenance (Operator, Supervisor and Maintenance do).
+2. Tap **Request maintenance**, under **Something to fix?**, or on one of the stops waiting for a reason, to ask about that stop's machine.
+3. Say **What needs looking at** and tap **Request**, or **Request, urgent** for high priority. The station gives its number, such as MR-000042.
+
+In detail: the station lists every request of its line and its machines that isn't closed, even before anyone badges in, with its state
+(waiting, or in progress and who is on it). Asking again for the same stop while its request is open doesn't make a second one; the station
+says it already has one. Starting and closing requests is done on the **Maintenance** tab of Machines (see [Maintenance requests](#maintenance-requests)).
+
 **Who may do what at a station.** What someone may do there is what their Pulaski user may do at the station's site, as if they had signed
 in: an operator's role lets them start, pause and complete jobs, report production and code stops; a planner's doesn't. Link a person to their
 user on **People** (their user name). Someone with no user can still clock on and off at the badge terminal, and the station tells them what it
@@ -982,7 +994,9 @@ A TV on the floor can show each line's state, running job, output, down time and
 In detail: the board reloads every 15 seconds, so it recovers by itself after a network drop. Its figures are the Overview's: a line that tracks
 machine state but has no signal shows **No signal**, and down time counts no-signal time. Colour is kept for what needs attention: down, no
 signal, waiting, OEE below target, stops to code. Switching the terminal off stops the board at once. A line's calls for help that aren't
-resolved show under its name: amber while waiting, quiet once someone is on it, and red, with the line's frame, once escalated.
+resolved show under its name: amber while waiting, quiet once someone is on it, and red, with the line's frame, once escalated. Its
+maintenance requests that aren't closed, its machines' too, show under them with a dashed frame: up to three, the waiting ones first, with
+**and … more** after that.
 
 ### Answer calls for help from the Andon page
 
@@ -1692,7 +1706,7 @@ Pulaski can send every inventory movement (received, moved, consumed, produced, 
 
 1. Open **Configure → Integrations** and choose the feed: **ERP** or **Document system**.
 2. Under **Settings**, type the **Receiver's address** (an `https://` address) and tick **Send to this receiver**.
-3. Under **What it sends**, tick the kinds of events: *Inventory movements*, *Certificates and lot documents*, *Work orders and jobs*, *Production reports and partial batches*, *Labor sessions, breaks and approvals*, *Machine stops coded and adjusted*, *Quality results*.
+3. Under **What it sends**, tick the kinds of events: *Inventory movements*, *Certificates and lot documents*, *Work orders and jobs*, *Production reports and partial batches*, *Labor sessions, breaks and approvals*, *Machine stops coded and adjusted*, *Quality results*, *Maintenance requests*.
 4. Tick **Send a certificate's file with its event** if the receiver should get the file itself.
 5. Leave **Attempts**, **Timeout** and **Check every** as they are unless the receiver needs otherwise, then click **Save settings**.
 
@@ -1734,6 +1748,7 @@ Whoever runs Pulaski puts the feed's secret (and a broker's username and passwor
 - **The secret, and the configuration.** In the API's settings (or environment), section `Integrations:Erp` (or `Integrations:Documents`): `Secret`, shared with the receiver; keep it in a secret store or environment variable, not in a file in source control. Until **Save settings** is first used, the feed also takes the rest from there: `Enabled`, `Url`, `EventTypes` (type prefixes, default `pulaski.lot.`), `IncludeFiles`, `MaxAttempts` (12), `TimeoutSeconds` (15), `PollSeconds` (5) and `StartFromNow` (true: the first time it is switched on, only events from then on are sent; false sends the whole history). After that the screen's settings are used and only the secret comes from the configuration. Changing the secret needs an API restart.
 - **Settings are recorded.** Each save is an event (`pulaski.delivery_feed.settings_saved.v1`) with the settings before and after and who saved them. The full address is shown only to those who may change it; everyone else sees the receiver's host.
 - **The document feed.** Section `Integrations:Documents`, with the same settings as the ERP's. It sends `pulaski.lot_document.attached.v1` and `…withdrawn.v1` (default `EventTypes` `pulaski.lot_document.`), each holding the document's kind, title, number, issuer, issue date, URL, file name, type, size and SHA-256 and the lot it was attached to; a withdrawal has the reason. With `IncludeFiles` (on for this feed, off for the ERP's unless set), the attached event also carries the stored file in `data.file`: `fileName`, `contentType`, `sizeBytes`, `sha256` and `contentBase64`. The ERP feed can take certificates too: add `pulaski.lot_document.` to its `EventTypes`. A certificate's later events wait behind an undelivered earlier one, as a lot's do. Documents carried to other lots by a split or merge send nothing of their own.
+- **Maintenance requests to a CMMS** (#127). Tick *Maintenance requests* to send each request as it is raised (`pulaski.maintenance.request_raised.v1`, with its number such as MR-000042, the machine's code, priority, what needs looking at and the stop it came from), started and closed. The CMMS answers by posting to `/api/integrations/{feed}/maintenance-requests`, signed as acknowledgements are: `{"number": "MR-000042", "action": "accepted", "reference": "WO-1234"}` records its own work order number for the request (shown on the Maintenance tab as *CMMS WO-1234*); `"action": "started"` starts it and `"action": "closed"` with `"resolution": "…"` closes it, as the receiver (`receiver:{feed}`). Sending an answer again changes nothing, so a CMMS can repeat it safely. Requests started and closed by the CMMS are sent back to it like any others; a CMMS ignores what it did itself.
 - **An MQTT feed** publishes each event as the same CloudEvents JSON a webhook gets, with quality of service 1, on the topic from its template: `{type}` becomes the event type with slashes for dots (`pulaski/lot/received/v1`), and `{subjectType}` and `{subject}` are filled in too. It uses MQTT 5: the event id goes as the `Idempotency-Key` user property, and with a secret the timestamp and signature as `X-Pulaski-Timestamp` and `X-Pulaski-Signature`. An event counts as delivered when the broker accepts it; a broker that refuses it (not allowed, bad topic) fails it at once, and one that is busy or unreachable is retried. Whatever reads from the broker can post an acknowledgement back to the feed's address, as a webhook receiver can.
 - **Delivered rows are cleared** after 90 days (`Retention:DeliveredDays` in the API's configuration, at least 7). Failed, waiting and skipped deliveries stay until someone deals with them, and the events themselves are always kept.
 - **Several API servers** share the work safely: only one sends each feed at a time.
@@ -2398,12 +2413,13 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; changeover rules; materials; allocating lots to jobs. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results. |
-| **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off; record quality results. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results; request maintenance and start and close requests. |
+| **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off; record quality results; request maintenance. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, and characteristics and specifications. |
+| **Maintenance** | Start and close maintenance requests, and raise them; code machine stops; answer andon calls; write handover notes. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
 Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
@@ -2422,6 +2438,7 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications (to look at). |
 | **Quality** | Overview, Floor, Machines, Inventory, Quality, Materials, Specifications. |
 | **Process engineer** | Equipment, Materials, Processes and BOMs, Specifications, Units, Schedule, Changeovers. |
+| **Maintenance** | Overview, Floor, Machines, Equipment (to look at). |
 
 - **Start page.** After signing in you land on the Overview, or, if you can't see it, the first screen in the menu you can.
 - **A screen you can't see** isn't in the menu, links to it show as plain text and buttons for it are left out. Typing its address shows **Page not found**.
@@ -3137,6 +3154,65 @@ A dash means there is nothing to measure that figure against, such as performanc
 - **The trend** uses the rows of the **By shift** (or **By day**) table. By day adds a day's shifts up from their hours, as the totals do, never averaging percentages. Output reported on a day outside every shift is in the totals but not in the trend.
 - **Worked out when you ask:** up to 31 days nothing is stored, so coding a stop, changing a reason's class or correcting a shift schedule changes the report at once.
 
+### Maintenance requests
+
+A **maintenance request** asks maintenance to look at a line or machine, and keeps track of it until it is closed with what was done.
+An andon call brings someone to the line now; a request is work to do and to follow up.
+
+**Request maintenance for a stop:**
+
+1. On the **Stops** tab, click **Request maintenance** on the stop.
+2. Choose the **Priority** (normal, high or low), say **What needs looking at**, and click **Request**.
+3. Pulaski gives the request a number, such as **MR-000042**, and says it is waiting. **See the Maintenance tab** takes you to it.
+
+**Request maintenance on its own** (a noise, a leak, a guard that is loose):
+
+1. Open the **Maintenance** tab and click **Request maintenance**.
+2. Choose the **Line or machine**, the **Priority**, say what needs looking at, and click **Request**.
+
+**Work a request** (Maintenance and Supervisor roles):
+
+1. On the **Maintenance** tab, the requests not closed are listed, the ones waiting first and high priority first among them.
+2. Click **Start** when you begin: the request shows **In progress** and who is on it.
+3. Click **Close**, say **What was done** (or why nothing was), and click **Close**. It moves to **Closed in the last 7 days**, with who
+   closed it and how long it took.
+
+In detail:
+
+- **One request per stop.** While a stop's request isn't closed, asking again from the same stop gives the same request, and nothing new is
+  recorded. Once it is closed, the stop can have a new one. A stop that is later split or merged keeps its request, which still names it.
+- **Where.** A request is for equipment below an area: a line, a machine, a unit or a feed point that is switched on. Raised from a stop, it
+  is for the stop's machine.
+- **Closing one nobody started** starts it at the same moment, by the same person. A closed request stays closed; nothing is deleted. Each
+  step is recorded in the event log.
+- **Waiting** counts from when it was raised until someone starts it; **Took** counts until it was closed.
+- **Who:** anyone who can see machines sees requests. Raising one needs *Request maintenance* (Operator, Supervisor, Maintenance); starting
+  and closing needs *Work maintenance requests* (Supervisor, Maintenance). The Maintenance role comes with a new Pulaski and is added to
+  an existing one by its upgrade.
+- The tab refreshes itself, as the Andon page does. **Equipment** narrows it to a line or machine; a line includes its machines' requests.
+**Plan maintenance by run hours or counts** (Maintenance and Supervisor roles):
+
+1. On the **Maintenance** tab, under **Preventive plans**, click **Add a plan**.
+2. Choose the **Line or machine**, say **What is done** (such as *Grease the gearbox*), and set **Every** so many **run hours** or
+   **machine counts**, and the **Priority**.
+3. Click **Save**. **So far** shows how far its meter has got, and its share of the interval.
+
+When the meter reaches the interval, Pulaski raises a request by itself, with the plan's words, marked **Preventive** and raised by **Its plan**.
+
+- **Run hours** are the time the line or machine spent executing (PackML Execute), from its machine state; **machine counts** are what its
+  counter tag counted. Equipment that reports neither never reaches its interval.
+- **One at a time.** While a plan's request is open, its meter waits (**Waiting for its request**). Once the request is closed, the meter
+  starts again from then, so time or counts before the close don't count towards the next one.
+- **Change** a plan's words, interval or priority, or switch it **Off**. Its meter (run hours or counts) is fixed once made; make another
+  plan for the other. Switched on again, its meter starts from then. Plans are never deleted, since their requests name them.
+- Pulaski checks the plans every 10 minutes (`Maintenance:Plans:PollMinutes` in the API's settings; `Maintenance:Plans:Enabled` = false stops
+  it), so a request comes up to 10 minutes after its interval is reached.
+
+- **A CMMS** can take requests on: send them through a delivery feed with *Maintenance requests* ticked, and it answers with its own number,
+  and can start and close them (see [Send movements to the ERP and certificates to a document system](#send-movements-to-the-erp-and-certificates-to-a-document-system)). Its number shows as **CMMS …** under the request's.
+- **Elsewhere:** a line's open requests show on its [operator station](#use-an-operator-station), where they can be raised too, and on its
+  [line board](#show-a-line-board-on-a-tv); requests nobody has started are in the [Inbox](#your-inbox) of whoever may work them.
+
 ---
 
 ## 22. Reference
@@ -3221,6 +3297,10 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Languages:** alert e-mails are in English, and so is what Pulaski keeps as history: a connection run's summary, why a planning rate was
   put up for review, a delivery's error. Dates and quantities inside a message keep Pulaski's usual form (*2026-11-24*, *1,234.5*), and the
   screens that haven't moved to regional formats yet still write them that way.
+- **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
+  waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
+  and machine counts, not days on the calendar.
+- **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).
 - **The inbox** gathers five kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It

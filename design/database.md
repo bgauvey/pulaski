@@ -41,7 +41,7 @@ Orders & scheduling                       Execution & inventory
                                                 lot_attribute(_class, _value), lot_document(_content, _link)
       └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ material_spec(_version, _item), control_limit,
- scheduling_policy, run_standard,             spc_rule, spc_alert, andon_type ─ andon_call,
+ scheduling_policy, run_standard,             spc_rule, spc_alert, andon_type ─ andon_call, maintenance_request,
  alert_subscription ─ alert_sent, handover_entry, language ─ translation,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
@@ -1679,6 +1679,50 @@ The kinds of help a line can call for at a site. Kept on Site settings; switched
 | `sort_order` | integer | no | Order offered. |
 | `is_active` | boolean | no | Offered for new calls. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.maintenance_plan — preventive maintenance plans (#127d, D-115) · *In use*
+
+Every so many run hours or machine counts, a request for the equipment is raised by itself (`MaintenancePlanService` in the API). The meter
+counts from `started_at`, or from its last request's close if later; while a request of the plan is open, no other is raised
+(`maintenance_request_plan_uq`). Switched off rather than deleted, since requests refer to it.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The equipment's site. |
+| `equipment_id` | uuid → equipment | no | The line or machine (below an area). |
+| `name` | text | no | What is done, at most 200 characters; each request's description. |
+| `meter` | text | no | `run_hours` (time in PackML Execute, from `ts.equipment_state_change`) or `counts` (processed machine counts, `ts.production_count`). Fixed once made. |
+| `interval_value` | numeric(18,3) | no | Every so many: above 0, at most 100,000 run hours or 1,000,000,000 counts. |
+| `priority` | text | no | The requests' priority: `low`, `normal` or `high`. |
+| `is_active` | boolean | no | Switched on; switching it on again sets `started_at` to then. |
+| `started_at` | timestamptz | no | Where the meter counts from, unless its last request was closed later. |
+| `created_at`, `created_by`, `updated_at` | timestamptz, text, timestamptz | | Row timestamps and who made it. |
+
+### core.maintenance_request — maintenance requests (#127, D-115) · *In use*
+
+A request for maintenance to look at a line or machine, raised on its own or from one of its stops: open → in progress → closed with what was
+done. One not closed per stop (`maintenance_request_stop_uq`); asking again from the stop is the same request. Never deleted. Lives in `core`
+because it changes as it is worked and is referred to, by a CMMS too (D-010). Numbers come from the sequence `core.maintenance_request_no`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The equipment's site. |
+| `equipment_id` | uuid → equipment | no | The line or machine (below an area, active when raised). |
+| `number` | text | no | `MR-000042`, unique: what people and a CMMS call it. |
+| `status` | text | no | `open`, `in_progress` or `closed`; `started_at` is set exactly when not open, `closed_at` and `resolution` exactly when closed. |
+| `priority` | text | no | `low`, `normal` (default) or `high`. |
+| `description` | text | no | What needs looking at, at most 1000 characters. |
+| `raised_at`, `raised_by` | timestamptz, text | no | When and by whom (actor as on `evt.event`). |
+| `raised_from` | text | yes | The operator station's code, when raised there. |
+| `downtime_id`, `downtime_started_at` | uuid, timestamptz | yes | The stop it was raised from: `ts.downtime` (id, started_at), no FK (partitioned). Both or neither. |
+| `started_at`, `started_by` | timestamptz, text | yes | When someone started on it; closing one nobody started sets them to the close. |
+| `closed_at`, `closed_by` | timestamptz, text | yes | When and by whom it was closed. |
+| `resolution` | text | yes | What was done, at most 1000 characters; needed to close. |
+| `maintenance_plan_id` | uuid → maintenance_plan | yes | The preventive plan that raised it (#127d); one not closed per plan. |
+| `external_system`, `external_reference` | text | yes | The delivery feed a CMMS took it on through and the CMMS's own number (#127c), at most 100 characters. Both or neither. |
+| `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
 
 ### core.andon_call — andon calls (#125, D-108) · *In use*
 
