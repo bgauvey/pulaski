@@ -1806,13 +1806,13 @@ public sealed class InventoryTests(DatabaseFixture db)
         var csv = $"lot_number,mfi,grade\r\nav-a-{_suffix},11.2,a\r\nAV-B-{_suffix},eleven,\r\n";
         var bad = await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, csv, DryRun: false));
         Assert.False(bad.Applied);
-        Assert.Contains("MFI", Assert.Single(bad.Rows, r => r.Action == "error").Message, StringComparison.Ordinal);
+        Assert.Contains("MFI", Assert.Single(bad.Rows, r => r.Action == "error").Message?.Text, StringComparison.Ordinal);
         Assert.Empty(await QueryAsync<ListLotAttributeValuesQuery, IReadOnlyList<LotAttributeExportDto>>(new ListLotAttributeValuesQuery(plant.Site))
             .ContinueWith(t => t.Result.Where(v => v.LotId == a.LotId).ToList()));
 
         // Unknown columns are refused before any row.
         var unknown = await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, "lot_number,colour\r\nX,red\r\n", DryRun: true));
-        Assert.Contains(unknown.FileProblems, p => p.Contains("colour", StringComparison.Ordinal));
+        Assert.Contains(unknown.FileProblems, p => p.Text.Contains("colour", StringComparison.Ordinal));
 
         // A dry run reports and keeps nothing; the real run sets what is given, leaves blank cells alone and clears (clear).
         csv = $"lot_number,material_code,mfi,grade\r\nAV-A-{_suffix},RESIN-{_suffix},11.2,a\r\nAV-B-{_suffix},,9.5,(clear)\r\n";
@@ -1871,7 +1871,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         // An unknown location is an error, and nothing is saved, not even the other lot's attribute.
         var bad = await db.SendAsync(new ImportB2mmlLotsCommand(plant.Site, File(Lot("BX-A-" + _suffix, null, "5", "11"), Lot("BX-B-" + _suffix, "NOWHERE", "250", "9")), DryRun: false));
         Assert.Equal((false, 1), (bad.Applied, bad.Errors));
-        Assert.Contains("NOWHERE", Assert.Single(bad.Rows, r => r.Action == "error").Message, StringComparison.Ordinal);
+        Assert.Contains("NOWHERE", Assert.Single(bad.Rows, r => r.Action == "error").Message?.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(await QueryAsync<ListLotAttributeValuesQuery, IReadOnlyList<LotAttributeExportDto>>(new ListLotAttributeValuesQuery(plant.Site)), v => v.LotId == known.LotId);
 
         var file = File(Lot("bx-a-" + _suffix, null, "5", "11"), Lot("BX-B-" + _suffix, plant.StoresCode, "250", "9.5"));

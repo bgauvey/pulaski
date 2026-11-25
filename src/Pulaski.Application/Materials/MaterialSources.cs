@@ -1,6 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Materials;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -41,7 +42,7 @@ internal sealed class CsvMaterialSource : IMaterialSourceAdapter
 
     public string DisplayName => "CSV";
 
-    public string Description => "A spreadsheet saved as CSV; the first line names the columns.";
+    public string Description => Term.Mark("A spreadsheet saved as CSV; the first line names the columns.");
 
     public IReadOnlyList<string> FileTypes { get; } = [".csv", "text/csv", "text/plain"];
 
@@ -61,7 +62,7 @@ internal sealed class B2mmlMaterialSource : IMaterialSourceAdapter
 
     public string DisplayName => "B2MML";
 
-    public string Description => "ISA-95 material information (MaterialDefinition elements) in MESA B2MML XML.";
+    public string Description => Term.Mark("ISA-95 material information (MaterialDefinition elements) in MESA B2MML XML.");
 
     public IReadOnlyList<string> FileTypes { get; } = [".xml", "application/xml", "text/xml"];
 

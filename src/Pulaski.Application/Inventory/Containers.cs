@@ -1,9 +1,10 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Inventory;
-using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Inventory;
 
@@ -141,17 +142,19 @@ internal sealed class ResolveScanHandler(IContainerReadStore store, ILabelReadSt
         {
             var (found, materialId, materialCode) = await store.FindScannedAsync(query.SiteId, read, cancellationToken);
             var parsed = LabelRules.ToDto(read) with { MaterialId = materialId, MaterialCode = materialCode ?? read.MaterialCode };
-            var what = read.Source == "gs1" ? "GS1 code" : $"{read.Source} code";
+            var what = read.Source == "gs1" ? UserMessage.Of("GS1 code") : UserMessage.From($"{read.Source} code");
             return found.Count switch
             {
                 1 => new ScanResultDto { Code = text, Status = "found", Matches = found, Parsed = parsed },
-                > 1 => new ScanResultDto { Code = text, Status = "ambiguous", Matches = found, Parsed = parsed, Message = $"{found.Count} things match this {what}; choose one." },
+                > 1 => new ScanResultDto { Code = text, Status = "ambiguous", Matches = found, Parsed = parsed, Message = Notes.Of($"{found.Count} things match this {what}; choose one.") },
                 _ when materialId is not null => new ScanResultDto
                 {
                     Code = text,
                     Status = "receivable",
                     Parsed = parsed,
-                    Message = $"A {what} for {materialCode}{LotText(read)}, not at this site yet: receive it?",
+                    Message = (read.LotNumber ?? read.SupplierLot) is { } lot
+                        ? Notes.Of($"A {what} for {materialCode}, lot {lot}, not at this site yet: receive it?")
+                        : Notes.Of($"A {what} for {materialCode}, not at this site yet: receive it?"),
                 },
                 _ => new ScanResultDto
                 {
@@ -159,8 +162,8 @@ internal sealed class ResolveScanHandler(IContainerReadStore store, ILabelReadSt
                     Status = "not_found",
                     Parsed = parsed,
                     Message = read.Gtin is { } gtin && read.MaterialCode is null
-                        ? $"No material has GTIN {gtin}; set it on the material's page."
-                        : $"Nothing at this site matches this {what}.",
+                        ? Notes.Of($"No material has GTIN {gtin}; set it on the material's page.")
+                        : Notes.Of($"Nothing at this site matches this {what}."),
                 },
             };
         }
@@ -174,14 +177,12 @@ internal sealed class ResolveScanHandler(IContainerReadStore store, ILabelReadSt
                 Code = text,
                 Status = "not_found",
                 Message = code.Kind == ScanCode.FreeText
-                    ? $"Nothing at this site has the number {text}."
-                    : $"{text} is a Pulaski label, but nothing at this site has it: it may be from another site, or used up.",
+                    ? Notes.Of($"Nothing at this site has the number {text}.")
+                    : Notes.Of($"{text} is a Pulaski label, but nothing at this site has it: it may be from another site, or used up."),
             },
-            _ => new ScanResultDto { Code = text, Status = "ambiguous", Matches = matches, Message = $"{matches.Count} things match {text}; choose one." },
+            _ => new ScanResultDto { Code = text, Status = "ambiguous", Matches = matches, Message = Notes.Of($"{matches.Count} things match {text}; choose one.") },
         };
     }
-
-    private static string LotText(ScannedLot read) => (read.LotNumber ?? read.SupplierLot) is { } lot ? $", lot {lot}" : "";
 
     private async Task<ScannedLot?> ReadAsync(Guid siteId, string text, CancellationToken cancellationToken)
     {

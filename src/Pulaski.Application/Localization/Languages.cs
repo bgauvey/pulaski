@@ -223,13 +223,13 @@ internal static class TranslationWrites
     public static async Task<IReadOnlyList<(string Term, string? Text)>> CheckAsync(
         ILanguageRepository languages, string code, IReadOnlyList<TranslationInput> items, CancellationToken cancellationToken)
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         var wanted = new Dictionary<string, string?>(StringComparer.Ordinal);
         foreach (var item in items)
         {
             if (!TermCatalog.Contains(item.Term))
             {
-                problems.Add($"\"{Short(item.Term)}\" isn't a term the screens use.");
+                problems.Add(UserMessage.From($"\"{Short(item.Term)}\" isn't a term the screens use."));
                 continue;
             }
 
@@ -240,25 +240,25 @@ internal static class TranslationWrites
             }
             catch (DomainRuleException ex)
             {
-                problems.Add($"\"{Short(item.Term)}\": {ex.Message}");
+                problems.Add(UserMessage.From($"\"{Short(item.Term)}\": {ex.UserMessage}"));
                 continue;
             }
 
             if (text is not null && !LanguageRules.KeepsPlaceholders(item.Term, text))
             {
-                problems.Add($"\"{Short(item.Term)}\": the translation must keep the placeholders {{0}}, {{1}}… of the English, and no others.");
+                problems.Add(UserMessage.From($"\"{Short(item.Term)}\": the translation must keep the placeholders {{0}}, {{1}}… of the English, and no others."));
                 continue;
             }
 
             if (!wanted.TryAdd(item.Term, text))
             {
-                problems.Add($"\"{Short(item.Term)}\" is given twice.");
+                problems.Add(UserMessage.From($"\"{Short(item.Term)}\" is given twice."));
             }
         }
 
         if (problems.Count > 0)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Items"] = [.. problems.Take(20)] });
+            throw ValidationException.Field("Items", problems.Take(20));
         }
 
         var current = await languages.GetForUpdateAsync(code, [.. wanted.Keys], cancellationToken);

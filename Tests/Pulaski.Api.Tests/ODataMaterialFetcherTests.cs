@@ -36,13 +36,13 @@ public sealed class ODataMaterialFetcherTests
     public async Task A_refusal_too_many_items_or_an_answer_that_isnt_a_collection_is_a_problem_not_an_exception()
     {
         var refused = await Fetcher(new Pages(HttpStatusCode.Unauthorized, "no")).FetchAsync(Connection, 5000, CancellationToken.None);
-        Assert.Equal(["ERP-ITEMS: the service answered 401: no."], refused.Problems);
+        Assert.Equal(["ERP-ITEMS: the service answered 401: no."], refused.Problems.Select(p => p?.Text));
 
         var many = await Fetcher(new Pages("""{"value": [{"Id": 1}, {"Id": 2}]}""")).FetchAsync(Connection, 1, CancellationToken.None);
-        Assert.Contains("more than 1 items", Assert.Single(many.Problems), StringComparison.Ordinal);
+        Assert.Contains("more than 1 items", Assert.Single(many.Problems)?.Text, StringComparison.Ordinal);
 
         var odd = await Fetcher(new Pages("""{"items": []}""")).FetchAsync(Connection, 5000, CancellationToken.None);
-        Assert.Contains("isn't an OData collection", Assert.Single(odd.Problems), StringComparison.Ordinal);
+        Assert.Contains("isn't an OData collection", Assert.Single(odd.Problems)?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public sealed class ODataMaterialFetcherTests
         Assert.Equal("https://erp.example/api/items?plant=1000&page=2", handler.Requests[1].RequestUri!.ToString());
 
         var wrong = await Fetcher(new Pages("""{"data": {}}""")).FetchAsync(rest, 5000, CancellationToken.None);
-        Assert.Contains("no array at 'data.items'", Assert.Single(wrong.Problems), StringComparison.Ordinal);
+        Assert.Contains("no array at 'data.items'", Assert.Single(wrong.Problems)?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class ODataMaterialFetcherTests
         var fault = await Fetcher(new Pages(HttpStatusCode.InternalServerError,
             """<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><s:Fault><faultstring>No plant</faultstring></s:Fault></s:Body></s:Envelope>"""))
             .FetchAsync(soap, 5000, CancellationToken.None);
-        Assert.Contains("SOAP fault: No plant", Assert.Single(fault.Problems), StringComparison.Ordinal);
+        Assert.Contains("SOAP fault: No plant", Assert.Single(fault.Problems)?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class ODataMaterialFetcherTests
 
         var result = await fetcher.FetchAsync(database, 5000, CancellationToken.None);
 
-        Assert.Contains("no connection string is configured", Assert.Single(result.Problems), StringComparison.Ordinal);
+        Assert.Contains("no connection string is configured", Assert.Single(result.Problems)?.Text, StringComparison.Ordinal);
         Assert.False(fetcher.HasCredentials("ERP-ITEMS"));
         Assert.True(Fetcher(new Pages(), ("MaterialConnections:ERP-ITEMS:ConnectionString", "Host=erp")).HasCredentials("ERP-ITEMS"));
     }
@@ -128,7 +128,7 @@ public sealed class ODataMaterialFetcherTests
         var empty = await Fetcher(new Pages("""{"totalResults": 0}""")).FetchAsync(scim, 5000, CancellationToken.None);
         Assert.Equal((0, 0), (empty.Items.Count, empty.Problems.Count));
         var odd = await Fetcher(new Pages("""[{"id": "u1"}]""")).FetchAsync(scim, 5000, CancellationToken.None);
-        Assert.Contains("isn't a SCIM ListResponse", Assert.Single(odd.Problems), StringComparison.Ordinal);
+        Assert.Contains("isn't a SCIM ListResponse", Assert.Single(odd.Problems)?.Text, StringComparison.Ordinal);
     }
 
     private static ODataMaterialFetcher Fetcher(Pages handler, params (string Key, string Value)[] settings) => new(

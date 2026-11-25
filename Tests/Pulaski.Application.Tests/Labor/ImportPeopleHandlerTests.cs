@@ -38,7 +38,7 @@ public class ImportPeopleHandlerTests
 
         // Without a system there is no telling who is missing.
         var noSystem = await RunAsync("employee_number,name\n1001,Ana Ng\n", system: null, switchOffMissing: true);
-        Assert.Contains("external system", Assert.Single(noSystem.FileProblems), StringComparison.Ordinal);
+        Assert.Contains("external system", Assert.Single(noSystem.FileProblems)?.Text, StringComparison.Ordinal);
 
         var full = await RunAsync("employee_number,name,external_key\n1001,Ana Ng,W-1\n", switchOffMissing: true);
 
@@ -61,7 +61,7 @@ public class ImportPeopleHandlerTests
         await Labor.InsertQualificationAsync(fork, HandlerFixture.Now, CancellationToken.None);
 
         var bad = await RunAsync("employee_number,name,external_key,qualifications\n9001,Di Oh,W-9,WELD\n");
-        Assert.Contains("no qualification WELD", Assert.Single(bad.Rows).Message, StringComparison.Ordinal);
+        Assert.Contains("no qualification WELD", Assert.Single(bad.Rows).Message?.Text, StringComparison.Ordinal);
 
         var first = await RunAsync("employee_number,name,external_key,qualifications\n1001,Ana Ng,W-1,fork\n");
         Assert.Contains("Granted qualification FORK until 2027-10-11.", Assert.Single(first.Rows).Notes.Select(n => n.Text));
@@ -130,7 +130,7 @@ public class ImportPeopleHandlerTests
         Assert.NotNull(ByNumber("3001").Value.AppUserId);
 
         var local = await RunAsync("employee_number,name\n3001,Cy\n", system: null);
-        Assert.Contains("comes from HR1", Assert.Single(local.Rows).Message, StringComparison.Ordinal);
+        Assert.Contains("comes from HR1", Assert.Single(local.Rows).Message?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -152,11 +152,11 @@ public class ImportPeopleHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(["create", "error", "error", "error", "error", "error"], result.Rows.Select(r => r.Action));
-        Assert.Contains("no crew MISSING", result.Rows[1].Message, StringComparison.Ordinal);
-        Assert.Contains("another site", result.Rows[2].Message, StringComparison.Ordinal);
-        Assert.Contains("still clocked on", result.Rows[3].Message, StringComparison.Ordinal);
-        Assert.Contains("origin", result.Rows[4].Message, StringComparison.Ordinal);
-        Assert.Contains("appears earlier", result.Rows[5].Message, StringComparison.Ordinal);
+        Assert.Contains("no crew MISSING", result.Rows[1].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("another site", result.Rows[2].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("still clocked on", result.Rows[3].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("origin", result.Rows[4].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("appears earlier", result.Rows[5].Message?.Text, StringComparison.Ordinal);
         Assert.True(Labor.Person(openId).Value.IsActive);
     }
 

@@ -58,8 +58,8 @@ public sealed class CurrentUser
     /// <summary>The first screen in the menu the user may see; null when there is none.</summary>
     public string? FirstScreen => Screens.FirstOrDefault(s => Can(s.Permission)) is { Permission: not null } first ? first.Href : null;
 
-    /// <summary>The roles as one line, such as "Supervisor at PLANT1, Quality at PLANT2".</summary>
-    public string RoleSummary => Me is null
+    /// <summary>The roles as one line in the reader's language, such as "Supervisor at PLANT1, Quality at PLANT2" (#188).</summary>
+    public string RoleSummary(Localization.Text l) => Me is null
         ? ""
-        : string.Join(", ", Me.Roles.Select(r => r.SiteCode is null ? r.RoleName : $"{r.RoleName} at {r.SiteCode}"));
+        : string.Join(", ", Me.Roles.Select(r => r.SiteCode is null ? r.RoleName : l["{0} at {1}", r.RoleName, r.SiteCode]));
 }

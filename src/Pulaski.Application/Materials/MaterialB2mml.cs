@@ -1,7 +1,8 @@
 using System.Globalization;
-using System.Xml;
 using System.Xml.Linq;
+using System.Xml;
 using Pulaski.Contracts.ReferenceData;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -61,7 +62,7 @@ public static class MaterialB2mml
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return new MaterialImportSource([], ["The file is empty."]);
+            return new MaterialImportSource([], [UserMessage.Of("The file is empty.")]);
         }
 
         XDocument document;
@@ -72,19 +73,19 @@ public static class MaterialB2mml
         }
         catch (XmlException ex)
         {
-            return new MaterialImportSource([], [$"The file isn't well-formed XML: {ex.Message}"]);
+            return new MaterialImportSource([], [UserMessage.From($"The file isn't well-formed XML: {ex.Message}")]);
         }
 
         var definitions = document.Descendants().Where(e => e.Name.LocalName == "MaterialDefinition").ToList();
         var hasClasses = document.Descendants().Any(e => e.Name.LocalName == "MaterialClass");
         if (definitions.Count == 0 && !hasClasses)
         {
-            return new MaterialImportSource([], ["The file has no MaterialDefinition elements; B2MML material information has one per material."]);
+            return new MaterialImportSource([], [UserMessage.Of("The file has no MaterialDefinition elements; B2MML material information has one per material.")]);
         }
 
         if (definitions.Count > MaterialImportFields.MaxRows)
         {
-            return new MaterialImportSource([], [$"The file has {definitions.Count} materials; import at most {MaterialImportFields.MaxRows} at a time."]);
+            return new MaterialImportSource([], [UserMessage.From($"The file has {definitions.Count} materials; import at most {MaterialImportFields.MaxRows} at a time.")]);
         }
 
         // MaterialClass elements are classes in their own right (#72): ID the code, the first Description the name.
@@ -100,7 +101,7 @@ public static class MaterialB2mml
 
     private static MaterialImportRow ToRow(XElement definition, string? system)
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
         string? First(XElement parent, string name) => Children(parent, name).FirstOrDefault()?.Value.Trim();
 
@@ -112,7 +113,7 @@ public static class MaterialB2mml
         }
         else
         {
-            problems.Add("Description is missing; it is the material's name.");
+            problems.Add(UserMessage.Of("Description is missing; it is the material's name."));
         }
 
         if (First(definition, "MaterialClassID") is { } classCode)
@@ -144,7 +145,7 @@ public static class MaterialB2mml
             // The class may come from MaterialClassID or a property, not both.
             if (!fields.TryAdd(field, text))
             {
-                problems.Add($"{field} is given twice (property '{propertyId}').");
+                problems.Add(UserMessage.From($"{field} is given twice (property '{propertyId}')."));
             }
         }
 

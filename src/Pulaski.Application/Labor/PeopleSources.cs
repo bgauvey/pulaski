@@ -1,6 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Labor;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Labor;
 
@@ -33,7 +34,7 @@ internal sealed class CsvPeopleSource : IPeopleSourceAdapter
 
     public string DisplayName => "CSV";
 
-    public string Description => "A spreadsheet or HR report saved as CSV; the first line names the columns.";
+    public string Description => Term.Mark("A spreadsheet or HR report saved as CSV; the first line names the columns.");
 
     public IReadOnlyList<string> FileTypes { get; } = [".csv", "text/csv", "text/plain"];
 
@@ -47,7 +48,7 @@ internal sealed class ScimPeopleSource : IPeopleSourceAdapter
 
     public string DisplayName => "SCIM";
 
-    public string Description => "SCIM 2.0 users (RFC 7643) in JSON: a ListResponse, an array of users, or one user.";
+    public string Description => Term.Mark("SCIM 2.0 users (RFC 7643) in JSON: a ListResponse, an array of users, or one user.");
 
     public IReadOnlyList<string> FileTypes { get; } = [".json", "application/scim+json", "application/json"];
 

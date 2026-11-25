@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+
 namespace Pulaski.Contracts.WorkOrders;
 
 /// <summary>One work order as the ERP sends it (D-066). Codes are matched in Pulaski: the site, material, unit and (optionally) process.</summary>
@@ -37,7 +39,7 @@ public sealed record ErpOrderResultDto
     public required string OrderNumber { get; init; }
     public required string Action { get; init; }
     public Guid? WorkOrderId { get; init; }
-    public IReadOnlyList<string> Messages { get; init; } = [];
+    public IReadOnlyList<MessageDto> Messages { get; init; } = [];
 }
 
 public sealed record ImportWorkOrdersResponse
@@ -48,7 +50,7 @@ public sealed record ImportWorkOrdersResponse
     public bool DryRun { get; init; }
 
     /// <summary>What was wrong with a file as a whole (not XML, no orders, too many); no order was read (D-102).</summary>
-    public IReadOnlyList<string> FileProblems { get; init; } = [];
+    public IReadOnlyList<MessageDto> FileProblems { get; init; } = [];
 }
 
 /// <summary>A change from the ERP to a dispatched order, waiting for a planner (D-066).</summary>

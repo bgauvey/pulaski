@@ -50,7 +50,7 @@ else
                     var kind = _alerts.Kinds.FirstOrDefault(k => k.Code == s.Kind);
                     <tr @key="s.Id" class="@(s.IsActive ? "" : "text-muted")">
                         <td>
-                            @(kind?.Name ?? s.Kind)
+                            @(kind is null ? s.Kind : L[kind.Name])
                             @if (!s.CanSee)
                             {
                                 <div class="small text-warning-strong">@L["You can't see this at {0} any more, so it isn't sent.", s.SiteCode]</div>
@@ -60,11 +60,11 @@ else
                         <td class="inv-num">
                             @if (kind?.MinutesMeans is { } means && _editing == s.Id)
                             {
-                                <input type="number" inputmode="numeric" class="form-control form-control-sm d-inline-block w-auto" min="1" max="10080" aria-label="@means" @bind="_editMinutes" />
+                                <input type="number" inputmode="numeric" class="form-control form-control-sm d-inline-block w-auto" min="1" max="10080" aria-label="@L[means]" @bind="_editMinutes" />
                             }
                             else if (kind?.MinutesMeans is { } m)
                             {
-                                <span title="@m">@s.Minutes</span>
+                                <span title="@L[m]">@s.Minutes</span>
                             }
                         </td>
                         <td>@(s.IsActive ? L["Yes"] : L["Switched off"])</td>
@@ -101,7 +101,7 @@ else
                 <select id="alert-kind" class="form-select form-select-sm" value="@_kind" @onchange="OnKindChanged">
                     @foreach (var k in _alerts.Kinds)
                     {
-                        <option value="@k.Code">@k.Name</option>
+                        <option value="@k.Code">@L[k.Name]</option>
                     }
                 </select>
             </div>
@@ -130,7 +130,7 @@ else
             @if (SelectedKind?.MinutesMeans is { } minutesMeans)
             {
                 <div class="col-6 col-md-2">
-                    <label class="form-label small fw-semibold" for="alert-minutes">@L["Minutes"] <span class="fw-normal text-muted">(@minutesMeans)</span></label>
+                    <label class="form-label small fw-semibold" for="alert-minutes">@L["Minutes"] <span class="fw-normal text-muted">(@L[minutesMeans])</span></label>
                     <input id="alert-minutes" type="number" inputmode="numeric" class="form-control form-control-sm" min="1" max="10080" @bind="_minutes" />
                 </div>
             }

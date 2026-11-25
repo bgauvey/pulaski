@@ -67,7 +67,7 @@
                                         <a href="inventory/lots/@a.LotId">@a.LotLabel</a>
                                         @if (a.AlternateMaterialCode is { } alternate)
                                         {
-                                            <div class="small text-muted">@alternate, an approved alternate (@InventoryView.Qty(a.Ratio ?? 1m) per 1)</div>
+                                            <div class="small text-muted">@L["{0}, an approved alternate ({1} per 1)", alternate, InventoryView.Qty(a.Ratio ?? 1m)]</div>
                                         }
                                         @if (a.Problem is { } issue)
                                         {
@@ -106,7 +106,7 @@
                                     </td>
                                     <td>@r.LocationCode</td>
                                     <td class="inv-num">@InventoryView.Qty(r.Quantity) @r.UomCode</td>
-                                    <td class="small">@r.Reason</td>
+                                    <td class="small">@(r.ReasonMessage is { } why ? L.Of(why) : r.Reason)</td>
                                     <td class="text-end">
                                         @if (_view.CanAllocate && CanAllocate)
                                         {
@@ -126,7 +126,7 @@
                 @if (c.Excluded.Count > 0)
                 {
                     <details class="px-3 pb-2">
-                        <summary class="small text-muted">@c.Excluded.Count lot(s) not suggested</summary>
+                        <summary class="small text-muted">@(c.Excluded.Count == 1 ? L["1 lot not suggested"] : L["{0} lots not suggested", c.Excluded.Count])</summary>
                         <ul class="small mb-0">
                             @foreach (var x in c.Excluded)
                             {

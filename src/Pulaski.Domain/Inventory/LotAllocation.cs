@@ -107,7 +107,7 @@ public sealed record AllocationCandidate(
 }
 
 /// <summary>A suggested lot and quantity, and why it comes where it does.</summary>
-public sealed record LotPick(AllocationCandidate Lot, decimal Quantity, string Reason);
+public sealed record LotPick(AllocationCandidate Lot, decimal Quantity, UserMessage Reason);
 
 /// <summary>A lot of the material that wasn't suggested, and why.</summary>
 public sealed record LotExclusion(AllocationCandidate Lot, UserMessage Reason);
@@ -189,20 +189,24 @@ public static class LotRecommendation
         return ordered.ThenBy(c => c.ReceivedAt).ThenBy(c => c.Label, StringComparer.Ordinal);
     }
 
-    private static string Why(AllocationCandidate lot, DateTimeOffset? firstExpiry, string unitCode, IReadOnlyList<string> preferences, decimal left)
+    /// <summary>"Expires 3 Dec 2026, the earliest; at the line; received 1 Nov 2026; 40 kg free.", each part translated on its own (#188).</summary>
+    private static UserMessage Why(AllocationCandidate lot, DateTimeOffset? firstExpiry, string unitCode, IReadOnlyList<string> preferences, decimal left)
     {
         var order = lot.ExpiresAt is { } expires
-            ? $"Expires {Day(expires)}{(expires == firstExpiry ? ", the earliest" : "")}"
-            : "No expiry";
+            ? expires == firstExpiry ? UserMessage.From($"Expires {Day(expires)}, the earliest") : UserMessage.From($"Expires {Day(expires)}")
+            : UserMessage.Of("No expiry");
         var favoured = preferences.Select(p => p switch
         {
-            AllocationPreferences.NearLine when lot.NearLine => "at the line",
-            AllocationPreferences.InContainer when lot.InContainer => "in a container",
-            AllocationPreferences.WholeLot when lot.Free >= left => "covers the rest alone",
-            AllocationPreferences.PartLotsFirst when lot.Free < left => "a part lot, used up first",
+            AllocationPreferences.NearLine when lot.NearLine => UserMessage.Of("at the line"),
+            AllocationPreferences.InContainer when lot.InContainer => UserMessage.Of("in a container"),
+            AllocationPreferences.WholeLot when lot.Free >= left => UserMessage.Of("covers the rest alone"),
+            AllocationPreferences.PartLotsFirst when lot.Free < left => UserMessage.Of("a part lot, used up first"),
             _ => null,
-        }).OfType<string>().ToList();
-        return $"{order}{(favoured.Count > 0 ? "; " + string.Join(", ", favoured) : "")}; received {Day(lot.ReceivedAt)}; {Qty(lot.Free)} {unitCode} free.";
+        }).OfType<UserMessage>().ToList();
+        var (received, free) = (Day(lot.ReceivedAt), Qty(lot.Free));
+        return favoured.Count > 0
+            ? UserMessage.From($"{order}; {UserMessage.Join(favoured, ", ")}; received {received}; {free} {unitCode} free.")
+            : UserMessage.From($"{order}; received {received}; {free} {unitCode} free.");
     }
 
     private static string Day(DateTimeOffset at) => at.UtcDateTime.ToString("d MMM yyyy", CultureInfo.InvariantCulture);

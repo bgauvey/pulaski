@@ -39,8 +39,8 @@ public class RateRefreshTests
     {
         var result = RunHistoryRate.Calculate([Run(1, 4, 300m, null), Run(2, 4, 300m, 3.75m), Run(3, 4, 300m, 1m)], From, To, takeOutStops: true);
 
-        Assert.StartsWith("No machine state", result.Runs.Single(r => r.Run.JobNumber == "J-1").Excluded, StringComparison.Ordinal);
-        Assert.StartsWith("Ran under 30 minutes", result.Runs.Single(r => r.Run.JobNumber == "J-2").Excluded, StringComparison.Ordinal);
+        Assert.StartsWith("No machine state", result.Runs.Single(r => r.Run.JobNumber == "J-1").Excluded?.Text, StringComparison.Ordinal);
+        Assert.StartsWith("Ran under 30 minutes", result.Runs.Single(r => r.Run.JobNumber == "J-2").Excluded?.Text, StringComparison.Ordinal);
         Assert.True(result.Runs.Single(r => r.Run.JobNumber == "J-3").IsUsed);
     }
 

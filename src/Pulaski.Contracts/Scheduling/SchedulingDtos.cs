@@ -212,7 +212,7 @@ public sealed record RunHistorySampleDto
     public decimal Hours { get; init; }
     public decimal? GoodQty { get; init; }
     public decimal? RatePerHour { get; init; }
-    public string? Excluded { get; init; }
+    public MessageDto? Excluded { get; init; }
 
     /// <summary>Hours it was stopped (#70); null when its stops aren't known.</summary>
     public decimal? StoppedHours { get; init; }

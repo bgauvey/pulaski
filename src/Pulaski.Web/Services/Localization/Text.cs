@@ -144,13 +144,13 @@ public sealed class Text(TranslationCache? cache)
     /// <summary>
     /// A code inside a sentence (#188): its label in the reader's language, starting lower case as a word mid-sentence does ('on_hold' → 'on hold').
     /// </summary>
-    public string Word(string code)
-    {
-        var label = Label(code);
-        return label.Length > 1 && char.IsUpper(label[0]) && !char.IsUpper(label[1])
-            ? char.ToLower(label[0], CultureInfo.CurrentCulture) + label[1..]
-            : label;
-    }
+    public string Word(string code) => Lower(Label(code));
+
+    /// <summary>Text going mid-sentence, starting lower case ('See the schedule' → 'see the schedule'); an acronym (SPC) stays as it is.</summary>
+    public static string Lower(string text) =>
+        text.Length > 1 && char.IsUpper(text[0]) && !char.IsUpper(text[1])
+            ? char.ToLower(text[0], CultureInfo.CurrentCulture) + text[1..]
+            : text;
 
     /// <summary>A refusal in one line: its message, else its title, in the reader's language.</summary>
     public string Problem(ApiException error) => Message(error) ?? Title(error);

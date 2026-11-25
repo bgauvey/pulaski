@@ -33,7 +33,7 @@ public class SecurityViewTests
         Assert.True(user.Can(PermissionCodes.JobExecute));
         Assert.True(user.Can(PermissionCodes.Units, PlantB));
         Assert.False(user.Can(PermissionCodes.InventoryCorrect, PlantA));
-        Assert.Equal("Supervisor at PLT1", user.RoleSummary);
+        Assert.Equal("Supervisor at PLT1", user.RoleSummary(Pulaski.Web.Services.Localization.Text.English));
         Assert.False(new CurrentUser().Can(PermissionCodes.Units));
     }
 

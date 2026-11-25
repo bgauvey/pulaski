@@ -19,7 +19,7 @@ public sealed record RunSample(Guid RunId, string JobNumber, int RunNo, DateTime
 }
 
 /// <summary>A run as the calculation saw it: its rate, and why it was left out, if it was.</summary>
-public sealed record RunSampleVerdict(RunSample Run, decimal? RatePerHour, string? Excluded)
+public sealed record RunSampleVerdict(RunSample Run, decimal? RatePerHour, UserMessage? Excluded)
 {
     public bool IsUsed => Excluded is null;
 }
@@ -91,8 +91,8 @@ public static class RunHistoryRate
             fast = Math.Max(q3 + 1.5m * (q3 - q1), median * (1 + MinFenceSpread));
             verdicts = [.. verdicts.Select(v => v switch
             {
-                { IsUsed: true, RatePerHour: var r } when r < slow => v with { Excluded = $"Unusually slow: under {Rate(slow.Value)} an hour" },
-                { IsUsed: true, RatePerHour: var r } when r > fast => v with { Excluded = $"Unusually fast: over {Rate(fast.Value)} an hour" },
+                { IsUsed: true, RatePerHour: var r } when r < slow => v with { Excluded = UserMessage.From($"Unusually slow: under {Rate(slow.Value)} an hour") },
+                { IsUsed: true, RatePerHour: var r } when r > fast => v with { Excluded = UserMessage.From($"Unusually fast: over {Rate(fast.Value)} an hour") },
                 _ => v,
             })];
         }
@@ -130,27 +130,27 @@ public static class RunHistoryRate
     {
         if (run.GoodQty is not { } good)
         {
-            return new(run, null, "The job's unit doesn't convert to the planning rate's unit");
+            return new(run, null, UserMessage.Of("The job's unit doesn't convert to the planning rate's unit"));
         }
 
         if (run.EndedAt - run.StartedAt < MinRunLength)
         {
-            return new(run, null, "Shorter than 30 minutes");
+            return new(run, null, UserMessage.Of("Shorter than 30 minutes"));
         }
 
         if (good <= 0)
         {
-            return new(run, null, "No good output");
+            return new(run, null, UserMessage.Of("No good output"));
         }
 
         var hours = run.RateHours(takeOutStops);
         if (takeOutStops && run.StoppedHours is null)
         {
-            return new(run, null, "No machine state for this run, so its stops aren't known");
+            return new(run, null, UserMessage.Of("No machine state for this run, so its stops aren't known"));
         }
 
         return hours < (decimal)MinRunLength.TotalHours
-            ? new(run, null, takeOutStops ? "Ran under 30 minutes once its stops are taken out" : "Shorter than 30 minutes")
+            ? new(run, null, takeOutStops ? UserMessage.Of("Ran under 30 minutes once its stops are taken out") : UserMessage.Of("Shorter than 30 minutes"))
             : new(run, Math.Round(good / hours, 4), null);
     }
 

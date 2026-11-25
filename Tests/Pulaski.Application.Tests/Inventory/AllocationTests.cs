@@ -29,8 +29,8 @@ public class AllocationTests
         var (picks, excluded) = LotRecommendation.Recommend(180m, [noExpiryNew, later, held, noExpiryOld, taken, soon, tooSoon], Now.AddDays(3), "kg");
 
         Assert.Equal([("SOON", 50m), ("LATER", 50m), ("OLD", 80m)], picks.Select(p => (p.Lot.Label, p.Quantity)));
-        Assert.Contains("the earliest", picks[0].Reason, StringComparison.Ordinal);
-        Assert.StartsWith("No expiry", picks[2].Reason, StringComparison.Ordinal);
+        Assert.Contains("the earliest", picks[0].Reason?.Text, StringComparison.Ordinal);
+        Assert.StartsWith("No expiry", picks[2].Reason?.Text, StringComparison.Ordinal);
         Assert.Contains("before the job needs it", excluded.Single(e => e.Lot.Label == "GONE").Reason?.Text, StringComparison.Ordinal);
         Assert.Contains("on hold", excluded.Single(e => e.Lot.Label == "HELD").Reason?.Text, StringComparison.Ordinal);
         Assert.Contains("other jobs", excluded.Single(e => e.Lot.Label == "TAKEN").Reason?.Text, StringComparison.Ordinal);
@@ -99,7 +99,7 @@ public class AllocationTests
 
         var whole = LotRecommendation.Recommend(450m, [part, store, line], Now, "kg", [AllocationPreferences.WholeLot]).Picks;
         Assert.Equal("STORE", whole[0].Lot.Label);
-        Assert.Contains("covers the rest alone", whole[0].Reason, StringComparison.Ordinal);
+        Assert.Contains("covers the rest alone", whole[0].Reason?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class AllocationTests
         var plan = Assert.Single(AllocationPlanner.Plan(source, units, [], Now));
         Assert.Equal([("OWN", 60m), ("ALT", 60m)], plan.Picks.Select(p => (p.Pick.Lot.Label, p.Pick.Quantity)));
         Assert.Equal(100m, plan.Suggested);
-        Assert.StartsWith("Alternate for RESIN (1.5 kg per kg)", plan.Picks[1].Pick.Reason, StringComparison.Ordinal);
+        Assert.StartsWith("Alternate for RESIN (1.5 kg per kg)", plan.Picks[1].Pick.Reason?.Text, StringComparison.Ordinal);
 
         // Allocated, 60 kg of RESIN2 covers 40 kg of the component.
         var allocation = new LotAllocation(Guid.CreateVersion7(), site, job.Id, second, alt.LotId, 60m, 60m, AllocationStatus.Active, AllocationBasis.Recommended,

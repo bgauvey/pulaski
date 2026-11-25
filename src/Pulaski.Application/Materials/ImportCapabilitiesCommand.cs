@@ -1,12 +1,12 @@
-using Pulaski.Contracts.Common;
-using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Units;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Materials;
-using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
 using Pulaski.Domain.Materials;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -44,7 +44,7 @@ internal sealed class ImportCapabilitiesHandler(
     {
         if (command.Rows.Problems.Count > 0)
         {
-            return new ImportMaterialsResponse { FileProblems = command.Rows.Problems, Errors = command.Rows.Problems.Count };
+            return new ImportMaterialsResponse { FileProblems = [.. command.Rows.Problems.Select(Notes.Of)], Errors = command.Rows.Problems.Count };
         }
 
         var now = timeProvider.GetUtcNow();
@@ -70,7 +70,7 @@ internal sealed class ImportCapabilitiesHandler(
             }
             catch (Exception ex) when (ex is DomainRuleException or ValidationException or NotFoundException)
             {
-                results.Add(new ImportRowResultDto { Line = row.Line, Code = label, Action = Error, Message = Message(ex) });
+                results.Add(new ImportRowResultDto { Line = row.Line, Code = label, Action = Error, Message = Notes.Of(ex) });
             }
         }
 
@@ -307,10 +307,4 @@ internal sealed class ImportCapabilitiesHandler(
         Add(before.EffectiveTo != after.EffectiveTo, "effective_to");
         return changes;
     }
-
-    private static string Message(Exception ex) => ex switch
-    {
-        ValidationException v => string.Join(" ", v.Errors.SelectMany(e => e.Value.Select(m => $"{e.Key}: {m}"))),
-        _ => ex.Message,
-    };
 }

@@ -18,12 +18,12 @@ public sealed record AlertKind(string Code, string Name, string? MinutesMeans, i
     /// <summary>Every kind, in the order offered; one not offered (<see cref="IsBuilt"/> false) keeps its rows valid but takes no new ones.</summary>
     public static readonly IReadOnlyList<AlertKind> All =
     [
-        new(LongStop, "A machine stopped longer than", "minutes stopped", 15, Permissions.MachinesView, true),
-        new(UncodedStop, "A stop still without a reason", "minutes after it ended", 30, Permissions.MachinesView, true),
-        new(AndonEscalated, "An andon call escalated", null, null, Permissions.FloorView, true),
-        new(SpcAlert, "A control chart signalled (SPC alert)", null, null, Permissions.QualityView, true),
-        new(LotHold, "A lot put on hold", null, null, Permissions.InventoryView, true),
-        new(Shortage, "A job will be short of a component", "minutes before it is needed", 480, Permissions.InventoryView, true),
+        new(LongStop, Term.Mark("A machine stopped longer than"), Term.Mark("minutes stopped"), 15, Permissions.MachinesView, true),
+        new(UncodedStop, Term.Mark("A stop still without a reason"), Term.Mark("minutes after it ended"), 30, Permissions.MachinesView, true),
+        new(AndonEscalated, Term.Mark("An andon call escalated"), null, null, Permissions.FloorView, true),
+        new(SpcAlert, Term.Mark("A control chart signalled (SPC alert)"), null, null, Permissions.QualityView, true),
+        new(LotHold, Term.Mark("A lot put on hold"), null, null, Permissions.InventoryView, true),
+        new(Shortage, Term.Mark("A job will be short of a component"), Term.Mark("minutes before it is needed"), 480, Permissions.InventoryView, true),
     ];
 
     public static AlertKind? Find(string? code) => All.FirstOrDefault(k => k.Code == code);

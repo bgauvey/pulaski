@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -31,11 +32,11 @@ public sealed record MaterialImportRow
     public Supplied<bool>? IsActive { get; init; }
 
     /// <summary>What the source couldn't read in this row, such as "lot_tracked: 'maybe' isn't yes or no"; the row is then an error.</summary>
-    public IReadOnlyList<string> Problems { get; init; } = [];
+    public IReadOnlyList<UserMessage> Problems { get; init; } = [];
 }
 
 /// <summary>Rows from a source, and what was wrong with the source as a whole (a missing or unknown column).</summary>
-public sealed record MaterialImportSource(IReadOnlyList<MaterialImportRow> Rows, IReadOnlyList<string> Problems)
+public sealed record MaterialImportSource(IReadOnlyList<MaterialImportRow> Rows, IReadOnlyList<UserMessage> Problems)
 {
     /// <summary>Classes the source states as records of their own (#72: B2MML <c>MaterialClass</c>), added or renamed before the materials.</summary>
     public IReadOnlyList<MaterialClassImportRow> Classes { get; init; } = [];

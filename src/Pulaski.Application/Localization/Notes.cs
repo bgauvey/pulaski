@@ -26,6 +26,17 @@ public static class Notes
     /// <summary>A note already made as a <see cref="UserMessage"/> (a domain rule's, say).</summary>
     public static MessageDto Of(UserMessage message) => Dto(message);
 
+    /// <summary>Why an import row failed (#188): a refusal's own message, each field check as "field: message", else the exception's text.</summary>
+    public static MessageDto Of(Exception ex) => Dto(Message(ex));
+
+    /// <inheritdoc cref="Of(Exception)"/>
+    public static UserMessage Message(Exception ex) => ex switch
+    {
+        Errors.ValidationException v => UserMessage.Join(v.Messages.SelectMany(e => e.Value.Select(m => UserMessage.From($"{e.Key}: {m}")))),
+        IHasUserMessage { UserMessage: var message } => message,
+        _ => UserMessage.Of(ex.Message),
+    };
+
     /// <summary>An inventory warning with its code (the screens compare codes, never words).</summary>
     public static InventoryWarningDto Inventory(string code, string message) => Inventory(code, UserMessage.Of(message));
 

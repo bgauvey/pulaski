@@ -242,7 +242,7 @@ internal sealed class GetRunHistoryRateHandler(
                 StoppedHours = v.Run.StoppedHours is { } stopped ? Math.Round(stopped, 2) : null,
                 GoodQty = v.Run.GoodQty,
                 RatePerHour = v.RatePerHour is { } r ? Math.Round(r, 2) : null,
-                Excluded = v.Excluded,
+                Excluded = v.Excluded is { } why ? Notes.Of(why) : null,
             })],
         };
     }

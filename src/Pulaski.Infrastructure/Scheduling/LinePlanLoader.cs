@@ -1,11 +1,12 @@
 using Dapper;
 using Npgsql;
 using Pulaski.Application.Scheduling;
-using Pulaski.Application.Units;
-using Pulaski.Infrastructure.Units;
 using Pulaski.Application.Shifts;
+using Pulaski.Application.Units;
 using Pulaski.Domain.Shifts;
+using Pulaski.Domain;
 using Pulaski.Infrastructure.Shifts;
+using Pulaski.Infrastructure.Units;
 
 namespace Pulaski.Infrastructure.Scheduling;
 
@@ -245,6 +246,7 @@ internal static class LinePlanLoader
             HasShiftCalendar = hasCalendar,
             Shifts = shifts,
             CalendarName = calendarName,
+            IsAroundTheClock = calendar is { Mode: CalendarModes.AroundTheClock },
             Exceptions = await ListAsync<WindowRow>(Exceptions, args),
             Runners = runners,
         };
@@ -252,19 +254,19 @@ internal static class LinePlanLoader
 
     // Working time comes from the schedule, worked out for the window and a month past it, so work running past the
     // horizon still lands in shifts. Chosen around-the-clock time is a calendar too: it isn't warned about.
-    private static (bool HasCalendar, IReadOnlyList<WindowRow> Shifts, string? Name) Shifts(CalendarRow? calendar, DateTimeOffset from, DateTimeOffset to)
+    private static (bool HasCalendar, IReadOnlyList<WindowRow> Shifts, UserMessage? Name) Shifts(CalendarRow? calendar, DateTimeOffset from, DateTimeOffset to)
     {
         switch (calendar)
         {
             case { Mode: CalendarModes.AroundTheClock }:
-                return (true, [new WindowRow { StartsAt = DateTimeOffset.MinValue, EndsAt = DateTimeOffset.MaxValue }], $"Around the clock, from {calendar.SourceCode}");
+                return (true, [new WindowRow { StartsAt = DateTimeOffset.MinValue, EndsAt = DateTimeOffset.MaxValue }], UserMessage.From($"Around the clock, from {calendar.SourceCode}"));
             case { Mode: CalendarModes.Schedule, Code: { } code, TimeZone: { } timeZone }:
                 var schedule = ShiftMapping.ToDomain(code, calendar.Name ?? code, calendar.CycleDays, calendar.CycleStart, ShiftSql.Read(calendar.ShiftsJson ?? "[]"),
                     ShiftSql.ReadOverrides(calendar.OverridesJson));
                 var windows = schedule.Expand(TimeZoneInfo.FindSystemTimeZoneById(timeZone), from, to.AddDays(31))
                     .Select(o => new WindowRow { StartsAt = o.Start, EndsAt = o.End })
                     .ToList();
-                return (true, windows, $"{code} · {calendar.Name}, from {calendar.SourceCode}");
+                return (true, windows, UserMessage.From($"{code} · {calendar.Name}, from {calendar.SourceCode}"));
             default:
                 return (false, [], null);
         }

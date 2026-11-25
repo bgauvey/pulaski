@@ -1,6 +1,7 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Materials;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
@@ -8,10 +9,10 @@ using Pulaski.Application.Scheduling;
 using Pulaski.Application.Units;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.WorkOrders;
-using Pulaski.Domain;
 using Pulaski.Domain.Materials;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Domain.WorkOrders;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.WorkOrders;
 
@@ -112,7 +113,7 @@ internal sealed class ErpOrderWriter(
     /// whole batches of each job's line size unless held; components scale with each job; a new start moves every job's hold-until by as
     /// much, and a new due date ends department windows. Only while no job has started, and only when the jobs still match the process.
     /// </summary>
-    public async Task<IReadOnlyList<string>> ReplanAsync(
+    public async Task<IReadOnlyList<MessageDto>> ReplanAsync(
         WorkOrder order, IReadOnlyList<Job> jobs, decimal quantity, bool held, TimeSpan startShift, DateTimeOffset? dueAt, DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -129,7 +130,7 @@ internal sealed class ErpOrderWriter(
         var sizes = batching is null || lineBatches is null
             ? new Dictionary<Guid, decimal>()
             : await lineBatches.GetAsync(order.MaterialId, [.. jobs.Select(j => j.EquipmentId).Distinct()], now, cancellationToken);
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         foreach (var op in definition.InFlowOrder())
         {
             var opJobs = jobs.Where(j => j.ProcessOperationId == op.Id).OrderBy(j => j.JobNumber, StringComparer.Ordinal).ToList();
@@ -183,7 +184,7 @@ internal sealed class ErpOrderWriter(
                 }
 
                 await eventLog.AppendAsync(envelope, cancellationToken);
-                notes.Add($"{job.JobNumber}: {Batching.Qty(job.PlannedQty ?? 0m)} → {Batching.Qty(after.PlannedQty!.Value)}.");
+                notes.Add(Notes.Of($"{job.JobNumber}: {Batching.Qty(job.PlannedQty ?? 0m)} → {Batching.Qty(after.PlannedQty!.Value)}."));
             }
         }
 
@@ -215,12 +216,12 @@ internal sealed class ErpOrderWriter(
     }
 
     /// <summary>Applies an ERP change to the order now (D-066): its fields, its jobs re-planned, and how the quantity was taken.</summary>
-    public async Task<(long Version, IReadOnlyList<string> Notes)> ApplyAsync(
+    public async Task<(long Version, IReadOnlyList<MessageDto> Notes)> ApplyAsync(
         WorkOrder order, IReadOnlyList<Job> jobs, ErpOrderChange change, string eventType, string? reason, DateTimeOffset now, CancellationToken cancellationToken)
     {
         if (change.Cancelled)
         {
-            return (await CancelAsync(order, jobs, reason ?? "Cancelled in the ERP", cancellationToken), ["Cancelled, with its jobs."]);
+            return (await CancelAsync(order, jobs, reason ?? "Cancelled in the ERP", cancellationToken), [Notes.Of("Cancelled, with its jobs.")]);
         }
 
         if (change.UomId != order.UomId)
@@ -232,7 +233,7 @@ internal sealed class ErpOrderWriter(
         var (planned, taken) = await QuantityAsync(order.SiteId, order.MaterialId, change.Quantity, change.UomId, UserMessage.From($"Work order {order.OrderNumber}"), cancellationToken);
         var held = taken.Adjustment == BatchAdjustment.Held;
         var startShift = order.PlannedStart is { } start ? change.PlannedStart - start : TimeSpan.Zero;
-        var notes = new List<string>();
+        var notes = new List<MessageDto>();
         if (planned != order.PlannedQty || startShift != TimeSpan.Zero || change.DueAt != order.DueAt || held != order.QuantityHeld)
         {
             notes.AddRange(await ReplanAsync(order, jobs, planned, held, startShift, change.DueAt, now, cancellationToken));
@@ -240,7 +241,7 @@ internal sealed class ErpOrderWriter(
 
         if (taken.Note is { } note)
         {
-            notes.Add(note.Text);
+            notes.Add(Notes.Of(note));
         }
 
         var after = order with
@@ -305,7 +306,7 @@ internal sealed class ImportWorkOrdersHandler(
             }
             catch (Exception ex) when (ex is DomainRuleException or ValidationException or ConflictException or NotFoundException or ForbiddenException)
             {
-                results.Add(new ErpOrderResultDto { ExternalKey = order.ExternalKey, OrderNumber = order.OrderNumber, Action = ErpOrderAction.Refused, Messages = [Message(ex)] });
+                results.Add(new ErpOrderResultDto { ExternalKey = order.ExternalKey, OrderNumber = order.OrderNumber, Action = ErpOrderAction.Refused, Messages = [Notes.Of(ex)] });
             }
         }
 
@@ -357,7 +358,7 @@ internal sealed class ImportWorkOrdersHandler(
     {
         if (change.Cancelled)
         {
-            return new ErpOrderResultDto { ExternalKey = key, OrderNumber = number, Action = ErpOrderAction.Unchanged, Messages = ["Cancelled in the ERP before Pulaski had it; nothing to do."] };
+            return new ErpOrderResultDto { ExternalKey = key, OrderNumber = number, Action = ErpOrderAction.Unchanged, Messages = [Notes.Of("Cancelled in the ERP before Pulaski had it; nothing to do.")] };
         }
 
         if (await workOrders.NumberExistsAsync(siteId, number, cancellationToken))
@@ -396,7 +397,7 @@ internal sealed class ImportWorkOrdersHandler(
             OrderNumber = number,
             Action = ErpOrderAction.Created,
             WorkOrderId = order.Id,
-            Messages = [$"Made from process {chosen.Code}.", .. taken.Note is { } note ? new[] { note.Text } : []],
+            Messages = [Notes.Of($"Made from process {chosen.Code}."), .. taken.Note is { } note ? new[] { Notes.Of(note) } : []],
         };
     }
 
@@ -405,17 +406,17 @@ internal sealed class ImportWorkOrdersHandler(
     {
         var (locked, _, jobs) = await writer.LockAsync(id, cancellationToken);
         var order = locked.Value;
-        ErpOrderResultDto Result(string action, params string[] messages) =>
+        ErpOrderResultDto Result(string action, params MessageDto[] messages) =>
             new() { ExternalKey = order.ExternalKey!, OrderNumber = order.OrderNumber, Action = action, WorkOrderId = order.Id, Messages = messages };
 
         if (change.Version is not null && change.Version == order.ExternalVersion)
         {
-            return Result(ErpOrderAction.Unchanged, $"Version {change.Version} was applied already.");
+            return Result(ErpOrderAction.Unchanged, Notes.Of($"Version {change.Version} was applied already."));
         }
 
         if (order.Status is WorkOrderStatus.Closed or WorkOrderStatus.Cancelled or WorkOrderStatus.Completed)
         {
-            return Result(ErpOrderAction.Unchanged, $"{order.OrderNumber} is {UserMessage.Code(order.Status)} in Pulaski; the ERP's change comes too late and is left out.");
+            return Result(ErpOrderAction.Unchanged, Notes.Of($"{order.OrderNumber} is {UserMessage.Code(order.Status)} in Pulaski; the ERP's change comes too late and is left out."));
         }
 
         if (materialId != order.MaterialId)
@@ -433,7 +434,7 @@ internal sealed class ImportWorkOrdersHandler(
                 await workOrders.UpdateFromErpAsync(order with { ExternalVersion = change.Version, ImportedAt = change.ReceivedAt }, now, cancellationToken);
             }
 
-            return Result(ErpOrderAction.Unchanged, "Nothing changed.");
+            return Result(ErpOrderAction.Unchanged, Notes.Of("Nothing changed."));
         }
 
         // While the order is planned, the ERP's word applies; once dispatched it waits for a planner (D-066).
@@ -447,16 +448,11 @@ internal sealed class ImportWorkOrdersHandler(
         var envelope = events.Create(EventTypes.WorkOrderErpChangePending, "work_order", order.Id, new { Erp = change, order.Status }, row.ExternalSystem.Trim());
         await workOrders.UpdateFromErpAsync(pending, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        return Result(ErpOrderAction.Pending, $"{order.OrderNumber} is {UserMessage.Code(order.Status)}; the change waits for a planner to accept or reject it.");
+        return Result(ErpOrderAction.Pending, Notes.Of($"{order.OrderNumber} is {UserMessage.Code(order.Status)}; the change waits for a planner to accept or reject it."));
     }
 
     private static string? InventoryText(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static string Message(Exception ex) => ex switch
-    {
-        ValidationException v => string.Join(" ", v.Errors.SelectMany(e => e.Value.Select(m => $"{e.Key}: {m}"))),
-        _ => ex.Message,
-    };
 }
 
 internal sealed class AcceptErpChangeHandler(
@@ -547,7 +543,7 @@ internal sealed class SetWorkOrderQuantityHandler(
             ErpUomId = order.IsFromErp && command.Quantity != erpQty ? order.ErpUomId ?? order.UomId : null,
         };
         var envelope = events.Create(EventTypes.WorkOrderQuantitySet, "work_order", order.Id,
-            new { Before = ErpOrderWriter.Fields(order), After = ErpOrderWriter.Fields(after), Jobs = notes });
+            new { Before = ErpOrderWriter.Fields(order), After = ErpOrderWriter.Fields(after), Jobs = notes.Select(n => n.Text).ToList() });
         var version = await workOrders.UpdateFromErpAsync(after, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -617,7 +613,7 @@ internal sealed class ImportB2mmlWorkOrdersHandler(ICommandHandler<ImportWorkOrd
         var source = WorkOrderB2mml.Parse(command.Text, command.ExternalSystem.Trim(), command.SiteCode);
         if (source.Problems.Count > 0)
         {
-            return new ImportWorkOrdersResponse { DryRun = command.DryRun, FileProblems = source.Problems };
+            return new ImportWorkOrdersResponse { DryRun = command.DryRun, FileProblems = [.. source.Problems.Select(Notes.Of)] };
         }
 
         var orders = source.Rows.Where(r => r.Order is not null).Select(r => r.Order!).ToList();
@@ -634,7 +630,7 @@ internal sealed class ImportB2mmlWorkOrdersHandler(ICommandHandler<ImportWorkOrd
                 ExternalKey = r.RequestId.Length > 0 ? r.RequestId : $"line {r.Line}",
                 OrderNumber = r.RequestId,
                 Action = ErpOrderAction.Refused,
-                Messages = r.Problems,
+                Messages = [.. r.Problems.Select(Notes.Of)],
             }).ToList();
         return new ImportWorkOrdersResponse { DryRun = command.DryRun, Results = results };
     }

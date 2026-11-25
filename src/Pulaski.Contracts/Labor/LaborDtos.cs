@@ -1,4 +1,5 @@
 using Pulaski.Contracts.Common;
+
 namespace Pulaski.Contracts.Labor;
 
 // ---- People and crews (D-040) ----
@@ -578,7 +579,7 @@ public sealed record ImportPeopleResponse
     public int Errors { get; init; }
 
     /// <summary>Problems with the file as a whole, such as a missing or unknown column.</summary>
-    public IReadOnlyList<string> FileProblems { get; init; } = [];
+    public IReadOnlyList<MessageDto> FileProblems { get; init; } = [];
     public IReadOnlyList<Materials.ImportRowResultDto> Rows { get; init; } = [];
 }
 

@@ -69,14 +69,14 @@
     else if (Source.Name == B2mml)
     {
         <p class="small text-muted mb-2">
-            @Source.Description @L["Each MaterialDefinition is one material: its ID is the code, its Description the name and its MaterialClassID the class. Type, base unit, lot tracking, shelf life and active come from properties with those IDs, such as MaterialType and BaseUnit. Each MaterialClass (its ID the code, its Description the name) is added if it is new and renamed if its name differs, whatever Create missing classes says. Export B2MML on this page writes this format."]
+            @L[Source.Description] @L["Each MaterialDefinition is one material: its ID is the code, its Description the name and its MaterialClassID the class. Type, base unit, lot tracking, shelf life and active come from properties with those IDs, such as MaterialType and BaseUnit. Each MaterialClass (its ID the code, its Description the name) is added if it is new and renamed if its name differs, whatever Create missing classes says. Export B2MML on this page writes this format."]
             @(Source.TakesExternalSystem ? L["With an external system, the materials are that system's items, matched on their ID; without one, they are Pulaski materials matched on their code. "] : "")
             @L["Nothing is saved until every material is valid."]
         </p>
     }
     else
     {
-        <p class="small text-muted mb-2">@Source.Description Nothing is saved until every material is valid.</p>
+        <p class="small text-muted mb-2">@L[Source.Description] @L["Nothing is saved until every material is valid."]</p>
     }
 
     <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -109,7 +109,7 @@
                 }
                 else if (r.FileProblems.Count > 0)
                 {
-                    @(L["{0} can't be imported: {1}", _fileName, string.Join(" ", r.FileProblems)])
+                    @(L["{0} can't be imported: {1}", _fileName, string.Join(" ", L.Notes(r.FileProblems))])
                 }
                 else if (r.Errors > 0)
                 {
@@ -153,7 +153,7 @@
                                 <td class="fw-semibold">@row.Code</td>
                                 <td>@ActionLabel(row.Action, r.Applied)</td>
                                 <td class="small">
-                                    @(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? L["Changed: {0}", string.Join(", ", row.Changes)] : L["Changes: {0}", string.Join(", ", row.Changes)]) : ""))
+                                    @(row.Message is { } why ? L.Of(why) : (row.Changes.Count > 0 ? (r.Applied ? L["Changed: {0}", string.Join(", ", row.Changes)] : L["Changes: {0}", string.Join(", ", row.Changes)]) : ""))
                                     @foreach (var note in row.Notes)
                                     {
                                         <div class="text-muted">@L.Of(note)</div>

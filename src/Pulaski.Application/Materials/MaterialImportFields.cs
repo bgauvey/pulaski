@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Application.Abstractions;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -39,9 +40,9 @@ public static class MaterialImportFields
     /// One row from its fields. <paramref name="field"/> gives a field's trimmed text by canonical name: null when the source
     /// doesn't supply it (the material keeps what it has), empty when it supplies a blank (an optional field is cleared).
     /// </summary>
-    public static MaterialImportRow ToRow(int line, Func<string, string?> field, IEnumerable<string>? problems = null)
+    public static MaterialImportRow ToRow(int line, Func<string, string?> field, IEnumerable<UserMessage>? problems = null)
     {
-        var rowProblems = new List<string>(problems ?? []);
+        var rowProblems = new List<UserMessage>(problems ?? []);
         string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
         Supplied<bool>? Flag(string name)
@@ -58,7 +59,7 @@ public static class MaterialImportFields
                 case "false" or "no" or "n" or "0":
                     return new(false);
                 default:
-                    rowProblems.Add($"{name}: '{value}' isn't yes or no.");
+                    rowProblems.Add(UserMessage.From($"{name}: '{value}' isn't yes or no."));
                     return null;
             }
         }
@@ -76,7 +77,7 @@ public static class MaterialImportFields
             }
             else
             {
-                rowProblems.Add($"shelf_life_days: '{days}' isn't a whole number of days.");
+                rowProblems.Add(UserMessage.From($"shelf_life_days: '{days}' isn't a whole number of days."));
             }
         }
 

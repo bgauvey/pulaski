@@ -3,6 +3,7 @@ using Pulaski.Application.Units;
 using Pulaski.Contracts.Scheduling;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Domain.Units;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Scheduling;
 
@@ -141,7 +142,10 @@ public sealed record LinePlanSource
     public bool HasShiftCalendar { get; init; }
 
     /// <summary>What the line's working time comes from, e.g. "2X8 · Two shifts, from PLT1"; null with no calendar.</summary>
-    public string? CalendarName { get; init; }
+    public UserMessage? CalendarName { get; init; }
+
+    /// <summary>It works around the clock by choice.</summary>
+    public bool IsAroundTheClock { get; init; }
 
     public IReadOnlyList<WindowRow> Shifts { get; init; } = [];
     public IReadOnlyList<WindowRow> Exceptions { get; init; } = [];

@@ -3114,10 +3114,19 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   and feed checks) return `UserMessage`; `NotEnough` (control limits, capability, run-history rates), allocation problems and exclusion
   reasons reach the screens as `MessageDto`. Permission refusals name the permission by its description (*it needs the permission
   "See the schedule"*). A code's label may not agree in gender with the sentence it is in; a translator words around it.
+- **Imports, scans and the rest (#188, part 2):** import rows' and sources' `Problems` are `UserMessage`s (CSV, B2MML, SCIM and connection
+  parsers alike); results carry `MessageDto`: `ImportRowResultDto.Message`, `ProfileImportRowDto.Message`, every `FileProblems`,
+  `ErpOrderResultDto.Messages`; a failed row's message is `Notes.Of(ex)` (a refusal's own message, field checks as *field: message*). Scan
+  answers (`ScanResultDto.Message`), unit conversions, why a lot was suggested (`LotRecommendationDto.ReasonMessage`), why a run was left out
+  of a rate, the translations import's problems and the line's calendar (`LineTimelineDto.Calendar`, `IsAroundTheClock`) are messages too.
+  Text the server keeps for the screens to show is marked with the Domain's `Term.Mark("…")` (permission areas and descriptions, alert kinds,
+  import source descriptions, the password-reset answer); the catalog takes them and the screens show `L[…]`. The role line
+  (`CurrentUser.RoleSummary(l)`) and Blazor's reconnect dialog are worded on the web; `<html lang>` follows the reader. Event payloads,
+  stored history (connection runs, rate review reasons, delivery errors) and e-mails stay English.
 - **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens, terminals and server messages; #175 office screens,
   split by area: #178 Overview, Inbox, Machines, Quality, Labor; #179 inventory and lots; #180 planning; #181 configuration, My alerts and the password reset pages. With #181 every screen is translated. Then the server's own text: #189 field
-  checks (then notes, warnings and draft-check problems), #188 refusals worded in parts, words inside messages, other server text and the
-  reconnect banner.
+  checks (then notes, warnings and draft-check problems), #188 refusals worded in parts and words inside messages, then imports, scans,
+  the server's other text and the reconnect banner. With #188 #128 is done.
 
 ## Application architecture
 

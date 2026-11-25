@@ -88,7 +88,7 @@ public sealed class ChangeoverRuleTests(DatabaseFixture db)
 
         var bad = await db.SendAsync(new ImportChangeoverRulesCommand(site.Id, ChangeoverRuleCsv.Parse(file + "NOPE,,,,5,\n"), DryRun: false));
         Assert.Equal((false, 1), (bad.Applied, bad.Errors));
-        Assert.Contains("There is no line NOPE at this site.", bad.Rows.Single(r => r.Action == "error").Message, StringComparison.Ordinal);
+        Assert.Contains("There is no line NOPE at this site.", bad.Rows.Single(r => r.Action == "error").Message?.Text, StringComparison.Ordinal);
 
         var applied = await db.SendAsync(new ImportChangeoverRulesCommand(site.Id, ChangeoverRuleCsv.Parse(file), DryRun: false));
         Assert.True(applied.Applied);

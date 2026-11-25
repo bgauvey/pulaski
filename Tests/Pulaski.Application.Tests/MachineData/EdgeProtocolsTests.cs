@@ -38,7 +38,7 @@ public class EdgeProtocolsTests
             ["publishingIntervalMs"] = "5",
         }).Count);
         Assert.Contains(EdgeProtocols.SettingsProblems("opc_ua", new Dictionary<string, string> { ["host"] = "x", ["endpoint"] = "opc.tcp://a:1" }),
-            p => p.Contains("isn't a OPC UA setting", StringComparison.Ordinal));
+            p => p.Text.Contains("isn't a OPC UA setting", StringComparison.Ordinal));
     }
 
     [Fact]

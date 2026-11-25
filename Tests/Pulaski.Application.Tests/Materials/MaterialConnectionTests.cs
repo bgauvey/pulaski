@@ -53,8 +53,8 @@ public class MaterialConnectionTests
 
         // A value that isn't one, or doesn't read, is the row's problem; the import then refuses the row.
         var second = source.Rows[1];
-        Assert.Contains(second.Problems, p => p.Contains("description: Text isn't a single value", StringComparison.Ordinal));
-        Assert.Contains(second.Problems, p => p.Contains("shelf_life_days", StringComparison.Ordinal));
+        Assert.Contains(second.Problems, p => p.Text.Contains("description: Text isn't a single value", StringComparison.Ordinal));
+        Assert.Contains(second.Problems, p => p.Text.Contains("shelf_life_days", StringComparison.Ordinal));
         Assert.Equal(2, second.Line);
     }
 
@@ -95,11 +95,11 @@ public class MaterialConnectionTests
         Assert.Equal(EventTypes.MaterialConnectionAdded, f.Stores.Events.Appended[^1].Type);
 
         // A fetch that fails is the import's problem, and only an import (not a check) is recorded.
-        f.Stores.MaterialConnectionFetcher.Problems["ERP-ITEMS"] = "ERP-ITEMS: the service answered 401.";
+        f.Stores.MaterialConnectionFetcher.Problems["ERP-ITEMS"] = Pulaski.Domain.UserMessage.Of("ERP-ITEMS: the service answered 401.");
         var run = new RunMaterialConnectionHandler(
             f.Stores.UnitOfWork, store, f.Stores.MaterialConnectionFetcher, new ThrowingImport(), new FixedRequestContext("ops"), f.Ids, f.Time);
         var checkResult = await run.HandleAsync(new RunMaterialConnectionCommand(created.Id, DryRun: true, CreateClasses: false), CancellationToken.None);
-        Assert.Equal(["ERP-ITEMS: the service answered 401."], checkResult.FileProblems);
+        Assert.Equal(["ERP-ITEMS: the service answered 401."], checkResult.FileProblems.Select(p => p?.Text));
         Assert.Empty(await store.LastRunsAsync(CancellationToken.None));
         await run.HandleAsync(new RunMaterialConnectionCommand(created.Id, DryRun: false, CreateClasses: false), CancellationToken.None);
         Assert.Equal("ops", (await store.LastRunsAsync(CancellationToken.None))[created.Id].By);
@@ -140,13 +140,13 @@ public class MaterialConnectionTests
         Assert.Equal("A", Assert.Single(ConnectionItems.Rest(answer.RootElement, "data/items").Items!).GetProperty("No").GetString());
         Assert.Equal("?page=2", ConnectionItems.NextLink(answer.RootElement, "next"));
         Assert.Null(ConnectionItems.NextLink(answer.RootElement, null));
-        Assert.Contains("isn't an array", ConnectionItems.Rest(answer.RootElement, "").Problem, StringComparison.Ordinal);
+        Assert.Contains("isn't an array", ConnectionItems.Rest(answer.RootElement, "").Problem?.Text, StringComparison.Ordinal);
 
         var (items, problem) = ConnectionItems.Soap("<r><Item><No>A</No><No>ignored</No><Empty/></Item><Item><No>B</No></Item></r>", "Item");
         Assert.Null(problem);
         Assert.Equal(["A", "B"], items!.Select(i => i.GetProperty("No").GetString()));
         Assert.Equal(JsonValueKind.Null, items![0].GetProperty("Empty").ValueKind);
-        Assert.Contains("well-formed", ConnectionItems.Soap("<!DOCTYPE r [<!ENTITY x \"y\">]><r/>", "Item").Problem, StringComparison.Ordinal);
+        Assert.Contains("well-formed", ConnectionItems.Soap("<!DOCTYPE r [<!ENTITY x \"y\">]><r/>", "Item").Problem?.Text, StringComparison.Ordinal);
 
         var row = ConnectionItems.Row([("code", "PP-1"), ("shelf", 180), ("lot", true), ("price", 1.5m), ("none", DBNull.Value)]);
         var source = ODataMaterialRows.Read([row], Connection(new Dictionary<string, string> { ["code"] = "code", ["external_key"] = "code", ["shelf_life_days"] = "shelf", ["lot_tracked"] = "lot" }));
@@ -221,7 +221,7 @@ public class MaterialConnectionTests
         Assert.Equal(HandlerFixture.Now.AddHours(12), (await store.GetForUpdateAsync(created.Id, CancellationToken.None))!.Value.NextRunAt);
 
         // A source that can't be read is a failed run, visible on the list; the schedule carries on.
-        f.Stores.MaterialConnectionFetcher.Problems["HR"] = "HR: the service answered 503.";
+        f.Stores.MaterialConnectionFetcher.Problems["HR"] = Pulaski.Domain.UserMessage.Of("HR: the service answered 503.");
         f.Time.Advance(TimeSpan.FromHours(6));
         Assert.Equal(1, await scheduler.RunDueAsync(CancellationToken.None));
         Assert.Equal("failed", store.Runs[^1].Outcome);

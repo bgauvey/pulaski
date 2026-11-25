@@ -31,7 +31,7 @@ public class RunHistoryRateTests
         // Oldest first.
         Assert.Equal(
             [null, "The job's unit doesn't convert to the planning rate's unit", "No good output", "Shorter than 30 minutes"],
-            result.Runs.Select(r => r.Excluded));
+            result.Runs.Select(r => r.Excluded?.Text));
         Assert.Null(result.RatePerHour);
         Assert.Equal("Only 1 usable run; a rate needs at least 5.", result.NotEnough?.Text);
     }
@@ -45,8 +45,8 @@ public class RunHistoryRateTests
         var result = RunHistoryRate.Calculate(runs, From, To);
 
         Assert.Equal(9, result.UsedRuns);
-        Assert.StartsWith("Unusually slow", result.Runs.Single(r => r.Run.JobNumber == "J-20").Excluded, StringComparison.Ordinal);
-        Assert.StartsWith("Unusually fast", result.Runs.Single(r => r.Run.JobNumber == "J-21").Excluded, StringComparison.Ordinal);
+        Assert.StartsWith("Unusually slow", result.Runs.Single(r => r.Run.JobNumber == "J-20").Excluded?.Text, StringComparison.Ordinal);
+        Assert.StartsWith("Unusually fast", result.Runs.Single(r => r.Run.JobNumber == "J-21").Excluded?.Text, StringComparison.Ordinal);
         Assert.InRange(result.RatePerHour!.Value, 99m, 103m);
         Assert.True(result.SlowFence < 99m && result.FastFence > 103m);
     }

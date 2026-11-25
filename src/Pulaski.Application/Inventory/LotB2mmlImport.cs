@@ -1,11 +1,11 @@
-using Pulaski.Contracts.Common;
-using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Units;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Materials;
-using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Inventory;
 
@@ -46,7 +46,7 @@ internal sealed class ImportB2mmlLotsHandler(
         var source = LotB2mml.Parse(command.Text);
         if (source.Problems.Count > 0)
         {
-            return new ImportMaterialsResponse { FileProblems = source.Problems, Errors = source.Problems.Count };
+            return new ImportMaterialsResponse { FileProblems = [.. source.Problems.Select(Notes.Of)], Errors = source.Problems.Count };
         }
 
         var attributes = (await records.ListAttributeDefinitionsAsync(command.SiteId, cancellationToken))
@@ -218,7 +218,7 @@ internal sealed class ImportB2mmlLotsHandler(
 
         public string Action { get; set; } = Unchanged;
 
-        public string? Message { get; private set; }
+        public MessageDto? Message { get; private set; }
 
         public bool SkipAttributes { get; set; }
 
@@ -229,7 +229,7 @@ internal sealed class ImportB2mmlLotsHandler(
         public void Fail(Exception ex)
         {
             Action = Error;
-            Message = ex is ValidationException v ? string.Join(" ", v.Errors.SelectMany(e => e.Value.Select(m => $"{e.Key}: {m}"))) : ex.Message;
+            Message = Localization.Notes.Of(ex);
         }
 
         public ImportRowResultDto ToResult() => new()

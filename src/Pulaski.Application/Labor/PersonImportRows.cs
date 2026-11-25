@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Labor;
 
@@ -34,14 +35,14 @@ public sealed record PersonImportRow
     public IReadOnlyList<QualificationImportItem>? Qualifications { get; init; }
 
     /// <summary>Problems reading the row's values, such as a yes/no that is neither.</summary>
-    public IReadOnlyList<string> Problems { get; init; } = [];
+    public IReadOnlyList<UserMessage> Problems { get; init; } = [];
 }
 
 /// <summary>A qualification a person holds by their source (#71): its code at the site, and the grant's days when the source gives them.</summary>
 public sealed record QualificationImportItem(string Code, DateOnly? ValidFrom, DateOnly? ExpiresOn);
 
 /// <summary>The rows a source produced, and any problem with the source as a whole (then there are no rows).</summary>
-public sealed record PersonImportSource(IReadOnlyList<PersonImportRow> Rows, IReadOnlyList<string> Problems);
+public sealed record PersonImportSource(IReadOnlyList<PersonImportRow> Rows, IReadOnlyList<UserMessage> Problems);
 
 /// <summary>
 /// The fields a person import row is read from (D-054), by canonical name, and how their text becomes a <see cref="PersonImportRow"/>;
@@ -71,7 +72,7 @@ public static class PersonImportFields
     /// Reads a qualifications value (#71): codes separated by <c>;</c> or <c>|</c>, each optionally with its grant's days as
     /// <c>CODE:valid-from:expires-on</c> (<c>yyyy-MM-dd</c>, either may be blank), such as <c>FORKLIFT; FIRST-AID:2026-03-01:2028-02-29</c>.
     /// </summary>
-    public static IReadOnlyList<QualificationImportItem> Qualifications(string text, List<string> problems)
+    public static IReadOnlyList<QualificationImportItem> Qualifications(string text, List<UserMessage> problems)
     {
         var items = new List<QualificationImportItem>();
         foreach (var part in text.Split([';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -89,13 +90,13 @@ public static class PersonImportFields
                     return day;
                 }
 
-                problems.Add($"qualifications: '{bits[i]}' in '{part}' isn't a yyyy-MM-dd date.");
+                problems.Add(UserMessage.From($"qualifications: '{bits[i]}' in '{part}' isn't a yyyy-MM-dd date."));
                 return null;
             }
 
             if (bits.Length > 3 || bits[0].Length == 0)
             {
-                problems.Add($"qualifications: '{part}' isn't CODE or CODE:valid-from:expires-on.");
+                problems.Add(UserMessage.From($"qualifications: '{part}' isn't CODE or CODE:valid-from:expires-on."));
                 continue;
             }
 
@@ -113,9 +114,9 @@ public static class PersonImportFields
     /// One row from its fields. <paramref name="field"/> gives a field's trimmed text by canonical name: null when the source doesn't
     /// supply it (the person keeps what they have), empty when it supplies a blank.
     /// </summary>
-    public static PersonImportRow ToRow(int line, Func<string, string?> field, IEnumerable<string>? problems = null)
+    public static PersonImportRow ToRow(int line, Func<string, string?> field, IEnumerable<UserMessage>? problems = null)
     {
-        var rowProblems = new List<string>(problems ?? []);
+        var rowProblems = new List<UserMessage>(problems ?? []);
         string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
         Supplied<bool>? active = null;
@@ -130,7 +131,7 @@ public static class PersonImportFields
                     active = new(false);
                     break;
                 default:
-                    rowProblems.Add($"active: '{value}' isn't yes or no.");
+                    rowProblems.Add(UserMessage.From($"active: '{value}' isn't yes or no."));
                     break;
             }
         }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Labor;
 
@@ -20,7 +21,7 @@ public static class PeopleScim
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return new PersonImportSource([], ["The file is empty."]);
+            return new PersonImportSource([], [UserMessage.Of("The file is empty.")]);
         }
 
         JsonDocument document;
@@ -30,7 +31,7 @@ public static class PeopleScim
         }
         catch (JsonException ex)
         {
-            return new PersonImportSource([], [$"The file isn't valid JSON: {ex.Message}"]);
+            return new PersonImportSource([], [UserMessage.From($"The file isn't valid JSON: {ex.Message}")]);
         }
 
         using (document)
@@ -46,12 +47,12 @@ public static class PeopleScim
 
             if (users.Count == 0)
             {
-                return new PersonImportSource([], ["The file has no SCIM users; give a ListResponse with Resources, an array of users, or one user."]);
+                return new PersonImportSource([], [UserMessage.Of("The file has no SCIM users; give a ListResponse with Resources, an array of users, or one user.")]);
             }
 
             if (users.Count > PersonImportFields.MaxRows)
             {
-                return new PersonImportSource([], [$"The file has {users.Count} users; import at most {PersonImportFields.MaxRows} at a time."]);
+                return new PersonImportSource([], [UserMessage.From($"The file has {users.Count} users; import at most {PersonImportFields.MaxRows} at a time.")]);
             }
 
             var system = string.IsNullOrWhiteSpace(externalSystem) ? null : externalSystem.Trim();
@@ -62,22 +63,22 @@ public static class PeopleScim
     /// <summary>Users a SCIM connection fetched (#71), every one that system's person.</summary>
     public static PersonImportSource Read(IReadOnlyList<JsonElement> users, string externalSystem) =>
         users.Count > PersonImportFields.MaxRows
-            ? new PersonImportSource([], [$"The service sent {users.Count} users; one import takes at most {PersonImportFields.MaxRows}. Narrow it with a filter."])
+            ? new PersonImportSource([], [UserMessage.From($"The service sent {users.Count} users; one import takes at most {PersonImportFields.MaxRows}. Narrow it with a filter.")])
             : new PersonImportSource([.. users.Select((u, i) => ToRow(u, i + 1, externalSystem.Trim()))], []);
 
     private static PersonImportRow ToRow(JsonElement user, int position, string? system)
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
         if (user.ValueKind != JsonValueKind.Object)
         {
-            return PersonImportFields.ToRow(position, _ => null, ["It isn't a SCIM user (a JSON object)."]);
+            return PersonImportFields.ToRow(position, _ => null, [UserMessage.Of("It isn't a SCIM user (a JSON object).")]);
         }
 
         if (Get(user, "schemas") is { ValueKind: JsonValueKind.Array } schemas
             && !schemas.EnumerateArray().Any(s => s.ValueKind == JsonValueKind.String && string.Equals(s.GetString(), UserSchema, StringComparison.OrdinalIgnoreCase)))
         {
-            problems.Add("It isn't a SCIM User: its schemas don't include the core User schema.");
+            problems.Add(UserMessage.Of("It isn't a SCIM User: its schemas don't include the core User schema."));
         }
 
         if (Text(Get(Get(user, EnterpriseSchema), "employeeNumber")) is { Length: > 0 } number)
@@ -86,7 +87,7 @@ public static class PeopleScim
         }
         else
         {
-            problems.Add("employeeNumber (enterprise extension) is missing; it is the person's employee number.");
+            problems.Add(UserMessage.Of("employeeNumber (enterprise extension) is missing; it is the person's employee number."));
         }
 
         var name = Text(Get(user, "displayName")) is { Length: > 0 } display ? display
@@ -98,7 +99,7 @@ public static class PeopleScim
         }
         else
         {
-            problems.Add("displayName and name are missing; one is the person's name.");
+            problems.Add(UserMessage.Of("displayName and name are missing; one is the person's name."));
         }
 
         switch (Get(user, "active"))

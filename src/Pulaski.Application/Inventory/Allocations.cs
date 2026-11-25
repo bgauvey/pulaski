@@ -196,7 +196,7 @@ internal static class AllocationPlanner
                     Math.Round(left * alternate.Ratio, 6, MidpointRounding.AwayFromZero), alternateLots.Select(l => l.Candidate), neededBy, alternate.BaseUomCode, source.Preferences);
                 foreach (var pick in alternatePicks)
                 {
-                    chosen.Add((pick with { Reason = $"Alternate for {first.MaterialCode} ({alternate.Ratio:0.######} {alternate.BaseUomCode} per {first.BaseUomCode}): {pick.Reason}" },
+                    chosen.Add((pick with { Reason = UserMessage.From($"Alternate for {first.MaterialCode} ({alternate.Ratio:0.######} {alternate.BaseUomCode} per {first.BaseUomCode}): {pick.Reason}") },
                         byLot[pick.Lot.LotId], alternate));
                     left -= Math.Round(pick.Quantity / alternate.Ratio, 6, MidpointRounding.AwayFromZero);
                 }
@@ -308,7 +308,8 @@ internal sealed class GetJobAllocationsHandler(IAllocationReadStore store, IUnit
                     Free = x.Lot.Candidate.Free,
                     ExpiresAt = x.Lot.Candidate.ExpiresAt,
                     ReceivedAt = x.Lot.Candidate.ReceivedAt,
-                    Reason = x.Pick.Reason,
+                    Reason = x.Pick.Reason.Text,
+                    ReasonMessage = Notes.Of(x.Pick.Reason),
                 })],
                 Excluded = [.. p.Excluded.Select(x => new LotExclusionDto
                 {
@@ -443,7 +444,7 @@ internal sealed class AllocationWriter(
             {
                 foreach (var (pick, lot, alternate) in plan.Picks)
                 {
-                    await AllocateAsync(source, lot.MaterialId, lot.Candidate.LotId, pick.Quantity, AllocationBasis.Recommended, pick.Reason, cancellationToken,
+                    await AllocateAsync(source, lot.MaterialId, lot.Candidate.LotId, pick.Quantity, AllocationBasis.Recommended, pick.Reason.Text, cancellationToken,
                         alternate?.ComponentId, alternate?.Ratio);
                     allocated++;
                 }

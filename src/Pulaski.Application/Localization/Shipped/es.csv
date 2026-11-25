@@ -30,6 +30,10 @@ term,translation
  · version {0}, · versión {0}
 """A whole lot"" and ""part lots first"" pull opposite ways; the earlier one decides.","""Un lote completo"" y ""lotes parciales primero"" tiran en sentidos opuestos; decide el que va antes."
 """Followed by"" lists equipment that has the schedule as its own; equipment below it inherits it unless it has its own.","""Seguido por"" lista los equipos que tienen el horario como propio; los equipos debajo lo heredan salvo que tengan uno propio."
+"""{0}"" is given twice.","""{0}"" se da dos veces."
+"""{0}"" isn't a term the screens use.","""{0}"" no es un término que usen las pantallas."
+"""{0}"": the translation must keep the placeholders {{0}}, {{1}}… of the English, and no others.","""{0}"": la traducción debe conservar los marcadores {{0}}, {{1}}… del inglés, y ningún otro."
+"""{0}"": {1}","""{0}"": {1}"
 '{0}' is not a known IANA time zone.,'{0}' no es una zona horaria IANA conocida.
 '{0}' is not a link type.,'{0}' no es un tipo de vínculo.
 '{0}' is not a non-production job type.,'{0}' no es un tipo de trabajo no productivo.
@@ -38,10 +42,13 @@ term,translation
 '{0}' isn't a container kind; use {1}.,'{0}' no es un tipo de contenedor; use {1}.
 '{0}' isn't a kind of event.,'{0}' no es un tipo de evento.
 '{0}' isn't a material type; use {1}.,'{0}' no es un tipo de material; use {1}.
+'{0}' isn't a protocol Pulaski Edge reads ({1}).,'{0}' no es un protocolo que lea Pulaski Edge ({1}).
 '{0}' isn't a role.,'{0}' no es un rol.
+'{0}' isn't a {1} setting ({2}).,'{0}' no es un ajuste de {1} ({2}).
 '{0}' isn't an attribute type; use {1}.,'{0}' no es un tipo de atributo; use {1}.
 '{0}' isn't an import field; the fields are {1}.,'{0}' no es un campo de importación; los campos son {1}.
 "'{0}' isn't an operation: such as default, lot or lot.produced.","'{0}' no es una operación: como default, lot o lot.produced."
+'{0}' isn't one of the site's lot attributes ({1}).,'{0}' no es uno de los atributos de lote del sitio ({1}).
 "(0 to 17, or a name such as Execute).","(0 a 17, o un nombre como Execute)."
 (?<{0}>…) isn't a part Pulaski reads; use {1}.,(?<{0}>…) no es una parte que Pulaski lea; use {1}.
 "(dates, numbers)","(fechas, números)"
@@ -105,6 +112,7 @@ term,translation
 1 BarTender document,1 documento de BarTender
 1 delivery goes again on the next round.,1 entrega se reenvía en la siguiente ronda.
 1 lot is still to count; enter 0 for a lot that isn't there.,Falta contar 1 lote; ingrese 0 para un lote que no está.
+1 lot not suggested,1 lote no sugerido
 1 month,1 mes
 1 of it is how many {0},1 de él son cuántos {0}
 1 open item,1 asunto abierto
@@ -145,7 +153,9 @@ term,translation
 "; {0} centre {1}, up to {2}","; {0} centro {1}, hasta {2}"
 A BTXML script's root element is XMLScript.,El elemento raíz de un script BTXML es XMLScript.
 A BarTender document ends in .btw.,Un documento de BarTender termina en .btw.
+"A ControlLogix needs its CIP path, such as 1,0 (backplane, slot 0).","Un ControlLogix necesita su ruta CIP, como 1,0 (backplane, ranura 0)."
 "A GTIN of 8, 12, 13 or 14 digits whose last digit is its check digit.","Un GTIN de 8, 12, 13 o 14 dígitos cuyo último dígito es su dígito verificador."
+A MaterialLotProperty has no ID.,Una MaterialLotProperty no tiene ID.
 "A PDF, PNG or JPEG file.","Un archivo PDF, PNG o JPEG."
 A PIN is 4 to 8 digits.,Un PIN tiene de 4 a 8 dígitos.
 "A PackML state, 0 to 17.","Un estado PackML, 0 a 17."
@@ -176,6 +186,7 @@ A choice attribute needs at least one choice.,Un atributo de opciones necesita a
 "A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's configuration, never here.","Una conexión se ejecuta al hacer clic en Importar, o según su programación. Las credenciales y cadenas de conexión a bases de datos se guardan en la configuración de la API, nunca aquí."
 A connection's code is fixed once made: it names its credentials in the configuration ({0}).,El código de una conexión es fijo una vez creada: nombra sus credenciales en la configuración ({0}).
 A connection's kind is fixed once made ({0}); add another connection instead.,El tipo de una conexión es fijo una vez creada ({0}); agregue otra conexión en su lugar.
+A control chart signalled (SPC alert),Un gráfico de control dio una señal (alerta SPC)
 A conversion needs two different units.,Una conversión necesita dos unidades distintas.
 A count can't be negative.,Un conteo no puede ser negativo.
 "A count can't go below zero, so neither can its lower limit.","Una cuenta no puede bajar de cero, y su límite inferior tampoco."
@@ -198,6 +209,7 @@ A job has a schedule warning or overlaps other work.,Un trabajo tiene una advert
 A job of {0} has started; change its jobs on the schedule instead.,Un trabajo de {0} ya empezó; cambie sus trabajos en el programa.
 A job overlaps other work on its line.,Un trabajo se traslapa con otro trabajo en su línea.
 A job planned to a group needs a finish-by time: its window must have an end.,Un trabajo planeado a un grupo necesita una hora límite: su ventana debe tener fin.
+A job will be short of a component,A un trabajo le faltará un componente
 "A label from the item master, such as its MRP class; it drives no rules.","Una etiqueta del maestro de artículos, como su clase MRP; no rige ninguna regla."
 A label to scan when moving stock here,Una etiqueta para escanear al mover existencia aquí
 "A language code is two or three letters, optionally with a region, such as es or pt-BR.","Un código de idioma tiene dos o tres letras, opcionalmente con una región, como es o pt-BR."
@@ -209,10 +221,12 @@ A lot attribute belongs to a site; choose one.,Un atributo de lote pertenece a u
 "A lot can be set to available, on hold or quarantine, not {0}.","Un lote puede quedar disponible, retenido o en cuarentena, no {0}."
 A lot can't be merged into itself.,Un lote no puede fusionarse consigo mismo.
 A lot needs a number.,Un lote necesita un número.
+A lot put on hold,Un lote puesto en retención
 A lot that covers what is needed alone,Un lote que cubra solo lo necesario
 "A lot's age must be more than 0 and at most {0} hours, or blank.","La antigüedad de un lote debe ser mayor que 0 y como máximo {0} horas, o en blanco."
 "A lot's size must be greater than zero, or blank.","El tamaño de un lote debe ser mayor que cero, o en blanco."
 A machine profile belongs to a site; choose one.,Un perfil de máquina pertenece a un sitio; elija uno.
+A machine stopped longer than,Una máquina parada más de
 A material class of the rule doesn't exist.,Una clase de material de la regla no existe.
 A material of the rule doesn't exist.,Un material de la regla no existe.
 "A measured characteristic is charted on an individuals, X-bar and R, or X-bar and S chart.","Una característica medida se grafica en un gráfico de individuales, X-barra y R, o X-barra y S."
@@ -256,12 +270,15 @@ A shift schedule,Un horario de turnos
 A shift schedule belongs to a site; choose one.,Un horario de turnos pertenece a un sitio; elija uno.
 "A short while after stock, jobs or orders change, every open job's allocations are refreshed, as Refresh on the Shortages page does.","Poco después de que cambian existencias, trabajos u órdenes, se actualizan las asignaciones de cada trabajo abierto, como lo hace Actualizar en la página de Faltantes."
 A site needs a time zone.,Un sitio necesita una zona horaria.
+A spreadsheet or HR report saved as CSV; the first line names the columns.,Una hoja de cálculo o reporte de RR. HH. guardado como CSV; la primera línea nombra las columnas.
+A spreadsheet saved as CSV; the first line names the columns.,Una hoja de cálculo guardada como CSV; la primera línea nombra las columnas.
 A start time as HH:mm.,Una hora de inicio como HH:mm.
 "A stop entered by hand is removed, not undone.","Una parada ingresada a mano se elimina, no se deshace."
 A stop entered by hand must have ended: it can't end in the future.,Un paro ingresado a mano debe haber terminado: no puede terminar en el futuro.
 A stop must end after it starts.,Un paro debe terminar después de empezar.
 A stop needs its reason,Un paro necesita su motivo
 "A stop reason, alarm or warning.","Un motivo de paro, alarma o advertencia."
+A stop still without a reason,Una parada aún sin motivo
 A tree has at most {0} levels.,Un árbol tiene como máximo {0} niveles.
 A utilization reason's class says what the time means for OEE:,La clase de un motivo de utilización indica qué significa el tiempo para el OEE:
 A warning:,Una advertencia:
@@ -269,6 +286,8 @@ A webhook (HTTPS),Un webhook (HTTPS)
 A weekly schedule repeats every 7 days; a rotation such as four crews on 12-hour shifts repeats every 28. A shift belongs to the day it starts on.,Un horario semanal se repite cada 7 días; una rotación como cuatro cuadrillas en turnos de 12 horas se repite cada 28. Un turno pertenece al día en que empieza.
 A work order cannot move from '{0}' to '{1}'.,Una orden de trabajo no puede pasar de '{0}' a '{1}'.
 A {0} file names its external system in its own columns.,Un archivo {0} nombra su sistema externo en sus propias columnas.
+"A {0} for {1}, lot {2}, not at this site yet: receive it?","Un {0} de {1}, lote {2}, que aún no está en este sitio: ¿recibirlo?"
+"A {0} for {1}, not at this site yet: receive it?","Un {0} de {1}, que aún no está en este sitio: ¿recibirlo?"
 A {0} movement can't be reversed; put it right with another movement.,Un movimiento {0} no puede revertirse; corríjalo con otro movimiento.
 A {0} needs a parent.,Un {0} necesita un padre.
 Accept,Aceptar
@@ -329,6 +348,7 @@ Add edge node,Agregar nodo de borde
 Add enterprise,Agregar empresa
 Add exception,Agregar excepción
 Add job at the end of the line,Agregar trabajo al final de la línea
+Add languages and keep their translations,Agregar idiomas y mantener sus traducciones
 Add line,Agregar línea
 Add lines that run jobs on the,Agregue líneas que ejecuten trabajos en la página
 Add one,Agregar uno
@@ -357,6 +377,7 @@ Added: {0}.,Agregado: {0}.
 Address,Dirección
 Address of {0} {1},Dirección de {0} {1}
 Adjusted,Ajustado
+Administration,Administración
 "Administrator holds every permission at every site and can't be changed, so someone can always manage users.","Administrador tiene todos los permisos en todos los sitios y no puede cambiarse, para que siempre haya alguien que pueda administrar usuarios."
 Administrators and service accounts:,Administradores y cuentas de servicio:
 After,Después
@@ -396,6 +417,7 @@ All statuses,Todos los estados
 All types,Todos los tipos
 Allocate,Asignar
 Allocate all suggested,Asignar todos los sugeridos
+"Allocate lots to jobs, release allocations and refresh them","Asignar lotes a trabajos, liberar asignaciones y actualizarlas"
 Allocated lot,Lote asignado
 Allocated to jobs,Asignado a trabajos
 Allocation {0} of that job wasn't found.,No se encontró la asignación {0} de ese trabajo.
@@ -406,10 +428,12 @@ Already at the job's line (picked from nearest),Ya en la línea del trabajo (tom
 Already in the list,Ya está en la lista
 Also works at,También trabaja en
 Alternate,Alterno
+Alternate for {0} ({1:0.######} {2} per {3}): {4},Alternativo de {0} ({1:0.######} {2} por {3}): {4}
 Alternate material,Material alterno
 An MQTT broker,Un broker MQTT
 An X-bar and R chart takes subgroups of 2 to {0}.,Un gráfico X-barra y R usa subgrupos de 2 a {0}.
 An X-bar and S chart takes subgroups of 2 to {0}.,Un gráfico X-barra y S usa subgrupos de 2 a {0}.
+An andon call escalated,Una llamada andon escaló
 "An e-mail address, or blank.","Un correo electrónico, o en blanco."
 An edge node belongs to a site; choose one.,Un nodo de borde pertenece a un sitio; elija uno.
 An enterprise has no parent.,Una empresa no tiene padre.
@@ -437,6 +461,7 @@ Another material already has that external key.,Otro material ya tiene esa clave
 Another material already has the code {0} ({1} key {2}).,Otro material ya tiene el código {0} (clave {2} de {1}).
 Another material already has the code {0}.,Otro material ya tiene el código {0}.
 Another version of this process was released at the same time. Reload and try again.,Se liberó otra versión de este proceso al mismo tiempo. Recargue e inténtelo de nuevo.
+Answer andon calls: acknowledge them on arrival and resolve them,Atender llamadas andon: confirmarlas al llegar y resolverlas
 Answered by,Atendida por
 "Answered in, on average","Atendida en, en promedio"
 Any,Cualquiera
@@ -453,6 +478,8 @@ Applied,Aplicado
 Applies to,Se aplica a
 Approval note,Nota de aprobación
 Approve,Aprobar
+Approve a shift's labor and correct approved labor,Aprobar la mano de obra de un turno y corregir la mano de obra aprobada
+Approve or reject partial batches (not one's own),Aprobar o rechazar tandas parciales (no las propias)
 Approve these limits,Aprobar estos límites
 Approved,Aprobado
 Approved by {0},Aprobados por {0}
@@ -461,6 +488,7 @@ Approved the limits for {0}{1}.,Se aprobaron los límites de {0}{1}.
 Approving ends the open sessions when the shift ended.,Aprobar termina las sesiones abiertas cuando terminó el turno.
 Area,Área
 Around the clock,Todo el día
+"Around the clock, from {0}","Las 24 horas, de {0}"
 Around the clock: no shift schedule is set here or above,Las 24 horas: no hay horario de turnos aquí ni por encima
 Arrange,Acomodar
 As it was,Como estaba
@@ -535,6 +563,7 @@ Back to sign in,Volver a iniciar sesión
 Back to the Floor,Volver al Piso
 Back to the ideal rate,Volver a la tasa ideal
 Back to {0},Volver a {0}
+"Back-date receipts, consumption, production, write-ups and write-offs by up to 31 days","Fechar con retroactividad recepciones, consumos, producción, ajustes positivos y bajas hasta 31 días"
 Back-dated: it counts from the time above,Con fecha anterior: cuenta desde la hora de arriba
 "Back-dated: recorded at the time above, counts from this one","Con fecha anterior: registrado a la hora de arriba, cuenta desde esta"
 Back-dated; recorded {0},Con fecha anterior; registrado {0}
@@ -650,6 +679,7 @@ Calendar exception {0} not found.,Excepción de calendario {0} no encontrada.
 Calendar exceptions: holidays and shutdowns,Excepciones de calendario: días festivos y paros
 Call,Llamada
 Call for help,Pedir ayuda
+"Call for help from a line: maintenance, quality, materials or a supervisor","Pedir ayuda desde una línea: mantenimiento, calidad, materiales o un supervisor"
 Call type {0} not found.,Tipo de llamada {0} no encontrado.
 Callback,Devolución de llamada
 Called,Llamada a las
@@ -667,12 +697,15 @@ Can't be negative.,No puede ser negativo.
 Can't be used: {0},No puede usarse: {0}
 Can't place here: {0},No puede colocarse aquí: {0}
 Cancel,Cancelar
+Cancel and close work orders,Cancelar y cerrar órdenes de trabajo
 Cancel count,Cancelar conteo
 Cancel job…,Cancelar trabajo…
 Cancel this work order?,¿Cancelar esta orden de trabajo?
 Cancel {0},Cancelar {0}
 Cancel {0} work orders?,¿Cancelar {0} órdenes de trabajo?
 Cancelled,Cancelado
+Cancelled in the ERP before Pulaski had it; nothing to do.,Cancelada en el ERP antes de que Pulaski la tuviera; no hay nada que hacer.
+"Cancelled, with its jobs.","Cancelada, con sus trabajos."
 Cancel…,Cancelar…
 Cap,Tope
 Capabilities,Capacidades
@@ -857,6 +890,7 @@ Clock off (since {0}),Salir (desde {0})
 Clock off {0},Salir de {0}
 Clock on,Entrar
 Clock on {0},Entrar a {0}
+Clock yourself on and off lines and jobs,Registrar su propia entrada y salida en líneas y trabajos
 Clocked on by {0},Entrada registrada por {0}
 Close,Cerrar
 Close alert,Cerrar alerta
@@ -878,12 +912,16 @@ Coc,Certificado de conformidad
 Code,Código
 Code (optional),Código (opcional)
 Code and kind can't change once created; switch one off instead.,El código y el tipo no pueden cambiar una vez creados; desactive uno en su lugar.
+Code machine stops: confirm or change their reason,Codificar paradas de máquina: confirmar o cambiar su motivo
 "Code, name, base unit and type come from {0}","El código, nombre, unidad base y tipo vienen de {0}"
 Codes starting PUL1 are Pulaski's barcodes.,Los códigos que empiezan con PUL1 son códigos de barras de Pulaski.
 Collapse,Contraer
 Collapse all,Contraer todo
 "Collects PackML machine state, so downtime and OEE are recorded for it.","Recolecta el estado PackML de la máquina, así que se registran su tiempo parado y su OEE."
 Colour theme,Tema de color
+Column 'lot_number' appears twice.,La columna 'lot_number' aparece dos veces.
+Column 'material_code' appears twice.,La columna 'material_code' aparece dos veces.
+Column '{0}' appears twice.,La columna '{0}' aparece dos veces.
 Columns:,Columnas:
 Comes with a permission to change it,Viene con un permiso para cambiarlo
 Comes with {0},Viene con {0}
@@ -903,6 +941,7 @@ Components,Componentes
 Components are planned when a work order is made from a BOM. Jobs with nothing left to consume don't show.,Los componentes se planean cuando se crea una orden de trabajo desde una lista de materiales. Los trabajos sin nada por consumir no aparecen.
 "Components marked backflush or time window in a BOM are consumed from here as production is reported, and a feed point's consumed counter takes what it counts.","Los componentes marcados con consumo automático o ventana de tiempo en una lista de materiales se consumen de aquí al reportar producción, y el contador de consumo de un punto de alimentación toma lo que cuenta."
 Computed,Calculado
+Configuration,Configuración
 Configure,Configurar
 Configure → Users,Configurar → Usuarios
 Configured,Configurado
@@ -949,6 +988,7 @@ Convert,Convertir
 Copies,Copias
 Correct,Corregir
 Correct details,Corregir detalles
+"Correct inventory: write up, write off, correct, reverse, split and merge lots","Corregir inventario: ajustar, dar de baja, corregir, revertir, dividir y combinar lotes"
 Correct report,Corregir reporte
 Corrected,Corregido
 Corrected {0}'s time.,Se corrigió el tiempo de {0}.
@@ -993,6 +1033,7 @@ Create one,Crear una
 Create role,Crear rol
 Create schedule,Crear horario
 Create user,Crear usuario
+"Create work orders, dispatch, un-dispatch and firm them","Crear órdenes de trabajo, despacharlas, deshacer su despacho y ponerlas en firme"
 Created,Creado
 Created in Pulaski.,Creado en Pulaski.
 "Created {0}. Choose it for a site, area or line on Equipment.","Se creó {0}. Elíjalo para un sitio, área o línea en Equipos."
@@ -1054,6 +1095,7 @@ Department,Departamento
 Department window,Ventana del departamento
 Description,Descripción
 Description (optional),Descripción (opcional)
+Description is missing; it is the material's name.,Falta Description; es el nombre del material.
 Details,Detalles
 Device,Dispositivo
 Difference,Diferencia
@@ -1178,6 +1220,7 @@ Enter at least one value.,Ingrese al menos un valor.
 Enter by hand instead,Ingresar a mano
 Enter how many were inspected (at least 1).,Ingrese cuántos se inspeccionaron (al menos 1).
 Enter limits by hand,Ingresar límites a mano
+"Enter machine stops by hand, and split or merge stops","Ingresar paradas de máquina a mano, y dividir o combinar paradas"
 "Enter the lower, centre and upper limits.","Ingrese los límites inferior, central y superior."
 Enter your user name and password.,Escriba su nombre de usuario y contraseña.
 Entered,Ingresado
@@ -1249,11 +1292,13 @@ Exact,Exacta
 Exact batches; partials need approval,Tandas exactas; las parciales necesitan aprobación
 "Exact: every batch is exactly the batch size, and a partial batch waits on hold until approved (finished goods can't be sold as partials). Near: a batch may differ by the tolerance, and a partial batch is accepted because it will be used.","Exacta: cada tanda es exactamente del tamaño de tanda, y una tanda parcial espera retenida hasta aprobarse (los productos terminados no pueden venderse como parciales). Aproximada: una tanda puede diferir según la tolerancia, y una tanda parcial se acepta porque se usará."
 "Exactly what is left, even a partial batch","Exactamente lo que queda, aunque sea una tanda parcial"
+Exclude quality results and reject held lots on quality,Excluir resultados de calidad y rechazar lotes retenidos por calidad
 Expand,Expandir
 Expand all,Expandir todo
 Expect a delivery,Esperar una entrega
 Expected,Esperado
 Expected receipt {0} not found.,Recepción esperada {0} no encontrada.
+ExpirationTime '{0}' isn't a date or an ISO 8601 time.,ExpirationTime '{0}' no es una fecha ni una hora ISO 8601.
 Expired,Vencido
 Expired 1 day ago,Venció hace 1 día
 "Expired on {0}: it can't be consumed, shipped or merged. If quality has extended it, use Correct… to set the new expiry.","Venció el {0}: no puede consumirse, enviarse ni unirse. Si calidad lo extendió, use Corregir… para fijar el nuevo vencimiento."
@@ -1262,6 +1307,8 @@ Expires,Vence
 Expires in 1 day,Vence en 1 día
 Expires in {0} days,Vence en {0} días
 Expires today,Vence hoy
+Expires {0},Vence {0}
+"Expires {0}, the earliest","Vence {0}, el primero"
 Expiring in 30 days,Por vencer en 30 días
 Expiring within 30 days,Vence en 30 días
 Expiring within 7 days,Vence en 7 días
@@ -1276,6 +1323,8 @@ Extra shift {0},Turno extra {0}
 Extra wait after the start or end before the next operation begins.,Espera adicional después del inicio o del fin antes de que empiece la siguiente operación.
 Extrude and Pack,Extruir y empacar
 Failed,Fallido
+Failed to rejoin.,No se pudo reconectar.
+Failed to resume the session.,No se pudo reanudar la sesión.
 False,Falso
 Feed,Canal
 Feed point,Punto de alimentación
@@ -1326,6 +1375,7 @@ First operation,Primera operación
 First short,Primer faltante
 Fits the window,Cabe en la ventana
 Fix the items listed below first.,Corrija primero los puntos de abajo.
+"Fix what the check found, then pick the file again.",Corrija lo que encontró la revisión y vuelva a elegir el archivo.
 Fixed,Fijo
 Flags,Señales
 Floor,Piso
@@ -1367,6 +1417,7 @@ From {0},De {0}
 "From {0}, key {1}: its name and whether they are active change there","De {0}, clave {1}: su nombre y si está activa cambian allá"
 GS1 DataMatrix,GS1 DataMatrix
 "GS1 barcodes are always read. For a supplier's own barcodes, add a pattern (a regular expression) naming its parts:","Los códigos de barras GS1 siempre se leen. Para los códigos de barras propios de un proveedor, agregue un patrón (una expresión regular) que nombre sus partes:"
+GS1 code,código GS1
 GS1 company prefix,Prefijo de empresa GS1
 GS1-128,GS1-128
 GTIN,GTIN
@@ -1376,9 +1427,12 @@ Give at least one target.,Indique al menos una meta.
 "Give both BeforeAt and BeforeId, or neither.","Dé BeforeAt y BeforeId, o ninguno."
 "Give both external_system and external_key, or neither.","Dé external_system y external_key, o ninguno."
 Give each shift a start time as HH:mm.,Dé a cada turno una hora de inicio como HH:mm.
+"Give or take away a role held at every site, rather than at one","Dar o quitar un rol que se tiene en todos los sitios, en lugar de en uno"
 "Give the .btw document for at least one operation, such as default.","Dé el documento .btw para al menos una operación, como default."
 Give the .btw document's path.,Indique la ruta del documento .btw.
 Give the BTXML template; start from the standard one.,Indique la plantilla BTXML; parta de la estándar.
+"Give the PLC's address (gateway), such as 10.0.0.20.","Indique la dirección del PLC (gateway), como 10.0.0.20."
+Give the broker's host.,Indique el host del broker.
 "Give the call type a name of at most {0} characters, such as Maintenance.","Dé al tipo de llamada un nombre de como máximo {0} caracteres, como Mantenimiento."
 "Give the daily times as hours and minutes in UTC, such as 02:00, 14:30.","Escriba las horas diarias como horas y minutos en UTC, como 02:00, 14:30."
 "Give the language a name of at most 100 characters, as its speakers write it, such as Español.","Dé al idioma un nombre de como máximo 100 caracteres, como lo escriben sus hablantes, por ejemplo Español."
@@ -1386,6 +1440,7 @@ Give the language a name of at most 100 characters.,Dé al idioma un nombre de c
 Give the language's code and name.,Indique el código y el nombre del idioma.
 Give the reason,Dar el motivo
 Give the receiver's address before switching the feed on.,Indique la dirección del receptor antes de activar el canal.
+"Give the server's endpoint, such as opc.tcp://plc1:4840.","Indique el endpoint del servidor, como opc.tcp://plc1:4840."
 "Give the time in whole minutes, from 0 to {0} (7 days).","Indique el tiempo en minutos enteros, de 0 a {0} (7 días)."
 Give the time in whole minutes.,Indique el tiempo en minutos enteros.
 "Give the topic to publish to, such as pulaski/{{type}}, without # or + and not starting with /.","Indique el tema donde publicar, como pulaski/{{type}}, sin # ni + y sin empezar por /."
@@ -1481,7 +1536,11 @@ I'm here,Ya estoy aquí
 I'm on it,Voy en camino
 "IANA time zone the site's shifts and reports use, e.g. America/Chicago.","Zona horaria IANA que usan los turnos y reportes del sitio, p. ej. America/Chicago."
 "IANA time zone the site's shifts and reports use, e.g. America/Chicago. Set when the site is created.","Zona horaria IANA que usan los turnos y reportes del sitio, p. ej. America/Chicago. Se fija al crear el sitio."
+ID is missing; it is the lot number.,Falta ID; es el número de lote.
+ID is missing; it is the order number.,Falta ID; es el número de orden.
+ID {0} appears more than once in the file; only the first is imported.,El ID {0} aparece más de una vez en el archivo; solo se importa el primero.
 ISA-95 level. A child sits below its parent's level. Fixed once created.,Nivel ISA-95. Un hijo queda debajo del nivel de su padre. Fijo una vez creado.
+ISA-95 material information (MaterialDefinition elements) in MESA B2MML XML.,Información de materiales ISA-95 (elementos MaterialDefinition) en XML B2MML de MESA.
 ISA-95 role within the level. Fixed once created.,Rol ISA-95 dentro del nivel. Fijo una vez creado.
 ISA-95 role within the level. Fixed once created. Changing it resets the capabilities to the role's defaults.,Rol ISA-95 dentro del nivel. Fijo una vez creado. Cambiarlo restablece las capacidades a las predeterminadas del rol.
 Id,Id
@@ -1492,6 +1551,7 @@ Identify with,Identificarse con
 Identity,Identidad
 Idle,Inactiva
 "Idle is direct time on a line while nothing ran on it. Every kind of time is worked time: breaks are left out of it and shown on their own, paid and unpaid.","Inactivo es tiempo directo en una línea mientras nada se ejecutaba en ella. Todo tipo de tiempo es tiempo trabajado: los descansos se excluyen y se muestran aparte, pagados y no pagados."
+"If that matches a Pulaski account with an e-mail address, a link to choose a new password is on its way. It works once, for a short time.","Si coincide con una cuenta de Pulaski con dirección de correo, va en camino un enlace para elegir una contraseña nueva. Funciona una vez, por poco tiempo."
 "If the line has no planning rate for {0} yet, the ideal rate becomes it.","Si la línea aún no tiene tasa de planeación para {0}, la tasa ideal se vuelve esa."
 Import,Importar
 Import 1 person,Importar 1 persona
@@ -1512,7 +1572,9 @@ Imported,Importado
 "Imported from {0}: {1} created, {2} updated, {3} unchanged.","Importado de {0}: {1} creados, {2} actualizados, {3} sin cambio."
 "Imported {0}: {1} created, {2} updated, {3} unchanged.","{0} importado: {1} creados, {2} actualizados, {3} sin cambio."
 Imported {0}: {1}.,Se importó {0}: {1}.
+Imported. Pick another file to import more.,Importado. Elija otro archivo para importar más.
 "Imported: {0} added, {1} changed, {2} unchanged.","Importado: {0} agregados, {1} cambiados, {2} sin cambio."
+Imported: {0}.,Importado: {0}.
 In,En
 In BOM of,En la lista de materiales de
 In a container (one move fetches it),En un contenedor (un movimiento lo trae)
@@ -1575,6 +1637,8 @@ It is accepted: it will be used.,Se acepta: se usará.
 It is empty.,Está vacío.
 "It is there already: it feeds from now, and the lot of its material loaded before it stops feeding.","Ya está allí: alimenta desde ahora, y el lote de su material cargado antes deja de alimentar."
 It is {0}; only available stock is allocated.,Está {0}; solo se asigna existencia disponible.
+It isn't a SCIM User: its schemas don't include the core User schema.,No es un SCIM User: sus esquemas no incluyen el esquema User básico.
+It isn't a SCIM user (a JSON object).,No es un usuario SCIM (un objeto JSON).
 "It joined the balance at {0}, where lots mix; its properties aren't recorded.","Se sumó al saldo en {0}, donde los lotes se mezclan; sus propiedades no se registran."
 "It joins the end of that line. To put it elsewhere in the line, drag it onto the line on the Gantt.","Se une al final de esa línea. Para ponerlo en otro lugar de la línea, arrástrelo a la línea en el Gantt."
 It keeps its reason and coding; the new times may not overlap another stop of the machine.,Conserva su motivo y codificación; las horas nuevas no pueden traslaparse con otro paro de la máquina.
@@ -1584,6 +1648,7 @@ It makes {0}.,Hace {0}.
 It must end after it starts.,Debe terminar después de empezar.
 It overlaps the stop from {0:u} to {1:u}; split or merge that one instead.,Se superpone con la parada de {0:u} a {1:u}; divida o combine esa en su lugar.
 It overlaps the stop open since {0:u}.,Se superpone con la parada abierta desde {0:u}.
+It produces {0} materials; a work order makes one.,Produce {0} materiales; una orden de trabajo hace uno.
 It reverses 1 movement:,Revierte 1 movimiento:
 "It reverses these movements, latest first: {0}","Revierte estos movimientos, del más reciente al más antiguo: {0}"
 "It starts on {0:yyyy-MM-dd}; end it on a later day, or set new targets from that day.","Empieza el {0:yyyy-MM-dd}; termínelo un día posterior, o fije nuevas metas desde ese día."
@@ -1902,10 +1967,22 @@ Made by,Hecho por
 Made by {0},Hecho por {0}
 Made continuously,Hecho de forma continua
 Made from,Hecho de
+Made from process {0}.,Hecha con el proceso {0}.
 Made from:,Hecho de:
 "Made in batches of this size: orders and jobs are whole batches, and production is reported batch by batch. A batch cut short when the line stops is a partial batch. Leave blank for a material made continuously.","Hecho en tandas de este tamaño: las órdenes y los trabajos son tandas completas, y la producción se reporta tanda por tanda. Una tanda que se corta cuando la línea se detiene es una tanda parcial. Déjelo en blanco para un material hecho de forma continua."
 Made in batches of {0} {1}: plan whole batches.,Hecho en tandas de {0} {1}: planee tandas completas.
 Main,Principal
+Maintain changeover rules: how long each change of material takes on a line,Mantener reglas de cambio: cuánto tarda cada cambio de material en una línea
+"Maintain equipment: sites, lines, locations, machine profiles, edge nodes and tags","Mantener equipos: sitios, líneas, ubicaciones, perfiles de máquina, nodos de borde y etiquetas"
+Maintain lot attribute definitions,Mantener definiciones de atributos de lote
+"Maintain materials, classes, conversions, batching and shelf life; import materials","Mantener materiales, clases, conversiones, tandas y vida útil; importar materiales"
+Maintain people and crews,Mantener personas y cuadrillas
+"Maintain processes, BOMs and capabilities","Mantener procesos, listas de materiales y capacidades"
+Maintain quality characteristics and material specifications,Mantener características de calidad y especificaciones de material
+Maintain reason codes,Mantener códigos de motivo
+Maintain shift schedules and choose which one equipment follows,Mantener calendarios de turnos y elegir cuál sigue cada equipo
+Maintain units of measure,Mantener unidades de medida
+"Maintain users, roles and what each role may do","Mantener usuarios, roles y lo que puede hacer cada rol"
 Maintained in Pulaski,Mantenido en Pulaski
 Maintenance,Mantenimiento
 Make a material class…,Hacer una clase de material…
@@ -1939,6 +2016,7 @@ Material specifications and quality characteristics,Especificaciones de material
 Material {0} is not set up to run on {1}; add a capability for it first.,El material {0} no está configurado para ejecutarse en {1}; agregue primero una capacidad para él.
 Material {0} not found or inactive.,Material {0} no encontrado o inactivo.
 Material {0} not found.,Material {0} no encontrado.
+MaterialDefinitionID is missing; it names the lot's material.,Falta MaterialDefinitionID; nombra el material del lote.
 Materials,Materiales
 Materials and classes,Materiales y clases
 Materials and lots,Materiales y lotes
@@ -1981,6 +2059,7 @@ Months valid,Meses de validez
 Most defects,Máximo de defectos
 Most defects allowed,Máximo de defectos permitido
 Move,Mover
+Move lots between locations,Mover lotes entre ubicaciones
 Move the window,Mover la ventana
 Move what is in {0} out first: {1}.,Saque primero lo que hay en {0}: {1}.
 Move with what it holds,Mover con lo que contiene
@@ -2009,10 +2088,12 @@ Must be in the past; the lot's page shows it now.,Debe estar en el pasado; la p�
 Must be in the past; today's stock is on the Stock tab.,Debe estar en el pasado; la existencia de hoy está en la pestaña Existencias.
 My alerts,Mis alertas
 Name,Nombre
+Name at least one lot attribute in the header.,Nombre al menos un atributo de lote en el encabezado.
 "Name at least one part that finds a lot or a material: (?<lot>…), (?<supplier_lot>…), (?<material>…) or (?<gtin>…).","Nombre al menos una parte que encuentre un lote o un material: (?<lot>…), (?<supplier_lot>…), (?<material>…) o (?<gtin>…)."
 Name of state {0},Nombre del estado {0}
 Name of {0},Nombre de {0}
 Name on the controller,Nombre en el controlador
+Name the ERP the orders come from first.,Nombre primero el ERP del que vienen las órdenes.
 "Name, e.g. Case packer, vendor A","Nombre, p. ej. Encajonadora, proveedor A"
 "Name, e.g. Damaged in handling","Nombre, p. ej. Dañado en el manejo"
 "Name, e.g. Extruded profiles","Nombre, p. ej. Perfiles extruidos"
@@ -2129,6 +2210,7 @@ No expiry,Sin vencimiento
 No feed points at this site,No hay puntos de alimentación en este sitio
 No feed points at this site. Add equipment with the role Feed point below a line on the Equipment screen.,No hay puntos de alimentación en este sitio. Agregue equipo con el rol Punto de alimentación debajo de una línea en la pantalla Equipos.
 No free stock to suggest for the {0} {1} still needed.,No hay existencia libre que sugerir para los {0} {1} que aún se necesitan.
+No good output,Sin producción buena
 No identity provider '{0}'.,No hay proveedor de identidad '{0}'.
 No imports yet. Checks aren't recorded.,Aún no hay importaciones. Las revisiones no se registran.
 No job,Sin trabajo
@@ -2167,6 +2249,8 @@ No lot is being filled: the next report starts one.,No hay un lote en llenado: e
 No lots found,No se encontraron lotes
 No lots on hand.,No hay lotes en existencia.
 "No machine profiles at {0} yet. Add one for each kind of machine, then import its definitions from a CSV file.",Aún no hay perfiles de máquina en {0}. Agregue uno por cada tipo de máquina y luego importe sus definiciones desde un archivo CSV.
+"No machine state for this run, so its stops aren't known","Sin estado de máquina para esta corrida, así que no se conocen sus paradas"
+No material has GTIN {0}; set it on the material's page.,Ningún material tiene el GTIN {0}; asígnelo en la página del material.
 No material source '{0}'.,No hay fuente de materiales '{0}'.
 No material source '{0}'. The sources are {1}.,No hay fuente de materiales '{0}'. Las fuentes son {1}.
 No message in the machine profile,Sin mensaje en el perfil de máquina
@@ -2190,6 +2274,7 @@ No process can run this material yet; see below,Ningún proceso puede ejecutar e
 No process value or level tags on this equipment. Bind them on its edge node.,No hay etiquetas de valor de proceso ni de nivel en este equipo. Asócielas en su nodo de borde.
 No process-value tags yet: bind one to a machine on Configure → Edge nodes.,Aún no hay etiquetas de valor de proceso: asocie una a una máquina en Configurar → Nodos de borde.
 No processes yet,Aún no hay procesos
+No produced material: give a SegmentRequirement a MaterialProducedRequirement (or a MaterialRequirement with MaterialUse Produced).,Sin material producido: dé a un SegmentRequirement un MaterialProducedRequirement (o un MaterialRequirement con MaterialUse Produced).
 No production reported for these days.,No hay producción reportada para estos días.
 "No proposals. The scheduled recalculation is set up under Site settings; a rate can also be worked out any time from a material's line, under Rate.","No hay propuestas. El recálculo programado se configura en Ajustes del sitio; una tasa también puede calcularse en cualquier momento desde la línea de un material, en Tasa."
 No qualifications at this site yet.,Aún no hay calificaciones en este sitio.
@@ -2226,6 +2311,7 @@ No sign-in,Sin inicio de sesión
 No signal,Sin señal
 No site to show.,No hay sitio que mostrar.
 No site yet,Aún no hay sitio
+"No site: give the request or its schedule a HierarchyScope with the site's EquipmentID, or name the site in the import.","Sin sitio: dé a la solicitud o a su programa un HierarchyScope con el EquipmentID del sitio, o nombre el sitio en la importación."
 No size,Sin tamaño
 No specifications yet,Aún no hay especificaciones
 No standard crew size for the job running,Sin tamaño de cuadrilla estándar para el trabajo en ejecución
@@ -2301,6 +2387,9 @@ Notes about the process.,Notas sobre el proceso.
 Notes for planners and operators.,Notas para planeadores y operadores.
 Notes for the people who use it. Kept in Pulaski.,Notas para las personas que lo usan. Se guardan en Pulaski.
 Nothing,Nada
+Nothing at this site has the number {0}.,Nada en este sitio tiene el número {0}.
+Nothing at this site matches this {0}.,Nada en este sitio coincide con este {0}.
+Nothing changed.,No cambió nada.
 Nothing delivered to show.,No hay entregados que mostrar.
 Nothing expires in the next 30 days.,Nada vence en los próximos 30 días.
 Nothing failed to show.,No hay fallidos que mostrar.
@@ -2588,6 +2677,7 @@ Permission,Permiso
 Permissions,Permisos
 Person,Persona
 Person {0} not found.,Persona {0} no encontrada.
+"Pick a file first: Pulaski checks it, then you import it.",Elija primero un archivo: Pulaski lo revisa y luego usted lo importa.
 Pick lots.,Elija lotes.
 Pick only lots {0} used; one of those picked wasn't used by it.,Elija solo lotes que usó {0}; uno de los elegidos no lo usó.
 Pick what it was made from…,Elegir de qué se hizo…
@@ -2596,6 +2686,7 @@ Pins,Fijados
 Place on a line or plan to a department,Colocar en una línea o planear a un departamento
 Placed by planners,Colocados por los planeadores
 Placing {0} on a line needs permission to plan jobs at this site.,Colocar {0} en una línea necesita permiso para planear trabajos en este sitio.
+"Plan jobs: create, sequence, pin, assign to lines and cancel them","Planear trabajos: crearlos, secuenciarlos, fijarlos, asignarlos a líneas y cancelarlos"
 Plan to {0},Planear a {0}
 Planned,Planeado
 Planned break,Descanso planeado
@@ -2615,6 +2706,7 @@ Planned to,Planeado a
 "Planned, {0}","Planeado, {0}"
 Planned:,Planeados:
 "Planners add changeover jobs themselves. Pulaski sizes them from the rules unless they have their own length, and warns","Los planeadores agregan ellos mismos los trabajos de cambio. Pulaski les da su duración según las reglas, salvo que tengan una propia, y avisa"
+Planning,Planeación
 Planning rate,Tasa de planeación
 Planning rate for {0} on {1},Tasa de planeación de {0} en {1}
 Planning rate now {0}.,Tasa de planeación ahora {0}.
@@ -2629,6 +2721,8 @@ Planning rates to review,Tasas de planeación por revisar
 Plans for 1 line,Planea para 1 línea
 Plans for children,Planea para los hijos
 Plans for {0} lines,Planea para {0} líneas
+Please reload the page.,Recargue la página.
+Please retry or reload the page.,Intente de nuevo o recargue la página.
 Points of the trend,Puntos de la tendencia
 Policy,Política
 Poll ms,Sondeo ms
@@ -2663,6 +2757,7 @@ Printer {0} not found.,Impresora {0} no encontrada.
 Printer {0} saved.,Se guardó la impresora {0}.
 Printers,Impresoras
 Priority,Prioridad
+Priority '{0}' isn't a whole number.,La prioridad '{0}' no es un número entero.
 Priority {0},Prioridad {0}
 Process,Proceso
 Process cell,Celda de proceso
@@ -2742,6 +2837,7 @@ Pulaski user name,Nombre de usuario de Pulaski
 Pulaski's translation,Traducción de Pulaski
 "Purchases and transfers expected to arrive, so the shortage check can show them beside stock. Pulaski doesn't order anything: the ERP sends these, or you enter them. Receiving a lot against one closes it.","Compras y traslados que se espera que lleguen, para que la revisión de faltantes pueda mostrarlos junto a la existencia. Pulaski no ordena nada: el ERP los envía, o usted los ingresa. Recibir un lote contra uno lo cierra."
 Put back,Restaurar
+Put lots on hold or in quarantine and release them,Poner lotes en retención o cuarentena y liberarlos
 Put the calendar exception back.,Se restauró la excepción de calendario.
 Put {0} and all it holds inside…,Poner {0} y todo lo que contiene dentro de…
 Qualification,Calificación
@@ -2759,6 +2855,7 @@ Quality results,Resultados de calidad
 Quality results: record and review what was measured or inspected,Resultados de calidad: registrar y revisar lo medido o inspeccionado
 Quantities are per,Las cantidades son por
 Quantity,Cantidad
+Quantity '{0}' isn't a number.,La cantidad '{0}' no es un número.
 Quantity (optional),Cantidad (opcional)
 Quantity ({0}),Cantidad ({0})
 Quantity and share of output,Cantidad y porcentaje de la producción
@@ -2775,6 +2872,7 @@ REST (JSON),REST (JSON)
 Raised,Generada
 Raised {0}.,Generada el {0}.
 Ran on,Se ejecutó en
+Ran under 30 minutes once its stops are taken out,Funcionó menos de 30 minutos al quitar sus paradas
 Range,Rango
 Rank by,Ordenar por
 Rank by number of stops,Ordenar por número de paros
@@ -2795,6 +2893,7 @@ Reads {0},Lee {0}
 Ready,Lista
 Ready at {0}.,Listo a las {0}.
 Ready transitioning,Lista en transición
+Ready: {0}.,Listo: {0}.
 Reason,Motivo
 Reason codes,Códigos de motivo
 Reason for rejecting,Motivo del rechazo
@@ -2817,6 +2916,7 @@ Receive,Recibir
 Receive a lot,Recibir un lote
 Receive here…,Recibir aquí…
 Receive it…,Recibirlo…
+Receive lots,Recibir lotes
 Receive lots from a B2MML file,Recibir lotes desde un archivo B2MML
 Received,Recibido
 Receiver's address,Dirección del receptor
@@ -2826,7 +2926,10 @@ Recommended,Recomendado
 Record,Registrar
 Record a result,Registrar un resultado
 Record consumption,Registrar consumo
+Record labor for others and check crews onto lines,Registrar mano de obra de otros y registrar cuadrillas en líneas
+Record lot attributes and attach or withdraw certificates,Registrar atributos de lote y adjuntar o retirar certificados
 Record production,Registrar producción
+Record quality results against runs and lots,Registrar resultados de calidad de corridas y lotes
 Recorded,Registrado
 Recorded as {0}.,Registrado como {0}.
 "Recorded late, into a run that has ended.","Registrado tarde, en una corrida que ya terminó."
@@ -2840,6 +2943,7 @@ Refuse the order,Rechazar la orden
 Refuse the order: the ERP must send whole batches,Rechazar la orden: el ERP debe enviar tandas completas
 Region,Región
 Register a terminal,Registrar una terminal
+Register and enrol shop-floor terminals,Registrar e inscribir terminales de piso
 Register terminal,Registrar terminal
 Reject,Rechazar
 Reject and write off,Rechazar y dar de baja
@@ -2850,6 +2954,8 @@ Rejected batches,Tandas rechazadas
 Rejected the proposal for {0} on {1}; its rate stays as it is.,Se rechazó la propuesta para {0} en {1}; su tasa queda como está.
 "Rejecting writes off all {0} {1} as scrap. If the lot was made in a run, that quantity moves from good to scrap there, at the time it was made, so it shows in OEE quality.","Rechazar da de baja todos los {0} {1} como desperdicio. Si el lote se hizo en una corrida, esa cantidad pasa de bueno a desperdicio allí, a la hora en que se hizo, así que aparece en la calidad del OEE."
 Reject…,Rechazar…
+Rejoin failed... trying again in {0} seconds.,No se pudo reconectar... se intentará de nuevo en {0} segundos.
+Rejoining the server...,Reconectando con el servidor...
 Release,Liberar
 Release note,Nota de liberación
 Release note: {0},Nota de liberación: {0}
@@ -2877,9 +2983,11 @@ Removed {0}'s time.,Se quitó el tiempo de {0}.
 Renew,Renovar
 Renewing {0} for {1}: check the days and click Grant.,Renovando {0} para {1}: revise los días y haga clic en Otorgar.
 Reopen,Reabrir
+Reopen a completed job,Reabrir un trabajo completado
 Repeats,Se repite
 Repeats every (days),Se repite cada (días)
 Replace,Reemplazar
+"Replace a cancelled job with exactly what is left, even when that isn't whole batches","Reemplazar un trabajo cancelado con exactamente lo que falta, aunque no sean tandas completas"
 "Replace exactly what is left, or round it down, not both.","Reemplace exactamente lo que falta, o redondee hacia abajo, no ambos."
 Replace it with a job for the quantity not yet made,Reemplazarlo con un trabajo por la cantidad aún no hecha
 Replaced,Reemplazado
@@ -2887,6 +2995,7 @@ Report,Reportar
 Report a good or scrap quantity greater than zero.,Reporte una cantidad buena o de desperdicio mayor que cero.
 "Report batches or quantities, not both.","Reporte tandas o cantidades, no ambos."
 Report production,Reportar producción
+Report production and consumption into a job's runs,Reportar producción y consumo en las corridas de un trabajo
 Report production for {0},Reportar producción de {0}
 Report the machine's count,Reportar la cuenta de la máquina
 Report these figures,Reportar estas cifras
@@ -2944,9 +3053,11 @@ Retime,Cambiar horas
 Retire,Retirar
 Retry,Reintentar
 Retry all failed,Reintentar todos los fallidos
+Retry or skip failed deliveries to the ERP,Reintentar u omitir entregas fallidas al ERP
 Retrying,Reintentando
 Reverse,Revertir
 Reverse a movement,Revertir un movimiento
+"Reverse production reports: their counts, the run's totals and the lots they made","Revertir reportes de producción: sus conteos, los totales de la corrida y los lotes que hicieron"
 Reverse report,Revertir reporte
 Reversed,Revertido
 Reversed: its counts are offset and its lots taken back,Revertido: sus cuentas se compensan y sus lotes se retiran
@@ -3014,6 +3125,7 @@ Runs under {0} or over {1} {2}/h count as unusual.,Las corridas de menos de {0} 
 Runtime,Tiempo productivo
 "Runtime, downtime or planned.","Funcionamiento, paro o planeado."
 SAP-PRD,SAP-PRD
+"SCIM 2.0 users (RFC 7643) in JSON: a ListResponse, an array of users, or one user.","Usuarios SCIM 2.0 (RFC 7643) en JSON: un ListResponse, un arreglo de usuarios o un usuario."
 SCIM base address,Dirección base de SCIM
 SCIM filter,Filtro SCIM
 SCIM users are read as a SCIM file is: the enterprise extension's,Los usuarios SCIM se leen como un archivo SCIM: los campos de la extensión enterprise
@@ -3130,8 +3242,24 @@ Search,Buscar
 Search properties,Buscar propiedades
 Search terms,Buscar términos
 Security,Seguridad
+"See a site's settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions","Ver los ajustes de un sitio: modo de cambio, tolerancias de reporte, metas de OEE y excepciones de calendario"
+"See inventory: stock, lots, movements, counts, shortages and reports","Ver inventario: existencias, lotes, movimientos, conteos, faltantes y reportes"
+"See labor: who is on, shift review and labor reports","Ver mano de obra: quién está, revisión de turno y reportes de mano de obra"
+See machines: their live state and their stops,Ver máquinas: su estado en vivo y sus paradas
+"See materials, their classes, capabilities and rates","Ver materiales, sus clases, capacidades y tasas"
+See outbound deliveries to the ERP and how they went,Ver entregas salientes al ERP y cómo salieron
+See processes and BOMs,Ver procesos y listas de materiales
+See reason codes,Ver códigos de motivo
+See shift schedules,Ver calendarios de turnos
+"See specifications, characteristics and quality results","Ver especificaciones, características y resultados de calidad"
+See the Overview,Ver el Resumen
 See the chart,Ver el gráfico
+See the equipment hierarchy and its settings,Ver la jerarquía de equipos y sus ajustes
+"See the floor and job pages: runs, reports and partial batches","Ver el piso y las páginas de trabajo: corridas, reportes y tandas parciales"
+See the schedule,Ver el programa
 See them,Verlos
+See units and material conversions,Ver unidades y conversiones de materiales
+See work orders and their progress,Ver órdenes de trabajo y su avance
 Seen,Vistos
 Select,Elegir
 Select equipment to see its properties.,Seleccione un equipo para ver sus propiedades.
@@ -3139,6 +3267,7 @@ Select visible ({0}),Elegir los visibles ({0})
 Select {0},Elegir {0}
 Self,Uno mismo
 Send a certificate's file with its event,Enviar el archivo de un certificado con su evento
+Send machine data as a Pulaski Edge node: read its configuration and forward what it collects,Enviar datos de máquina como nodo de Pulaski Edge: leer su configuración y reenviar lo que recoge
 Send the link,Enviar el enlace
 Send to this receiver,Enviar a este receptor
 Sends,Envía
@@ -3157,6 +3286,8 @@ Sessions,Sesiones
 Sessions: {0},Sesiones: {0}
 "Sessions: {0}, oldest {1}","Sesiones: {0}, la más antigua {1}"
 Set,Fijar
+"Set a site's changeover mode, reporting tolerances, OEE targets and calendar exceptions","Fijar el modo de cambio, las tolerancias de reporte, las metas de OEE y las excepciones de calendario de un sitio"
+Set and clear the modified planning rate,Fijar y borrar la tasa de planeación modificada
 Set by {0}{1}; calculated {2},Fijada por {0}{1}; calculada {2}
 Set modified rate,Fijar tasa modificada
 Set quantity,Fijar cantidad
@@ -3200,6 +3331,7 @@ Shifts in effect,Turnos vigentes
 Shifts of the last two weeks that have ended with labor no one has approved yet.,Turnos de las últimas dos semanas que terminaron con mano de obra que nadie ha aprobado aún.
 Shifts: {0},Turnos: {0}
 Ship,Enviar
+Ship lots,Enviar lotes
 Shipped,Enviado
 Shipping all of it,Enviar todo
 Shop order {0} downloaded.,Se descargó la orden de taller {0}.
@@ -3209,6 +3341,7 @@ Short only,Solo faltantes
 Shortage,Faltante
 Shortages,Faltantes
 Shortages · Inventory,Faltantes · Inventario
+Shorter than 30 minutes,Menos de 30 minutos
 Shortfall {0} not found.,Faltante {0} no encontrado.
 Show,Mostrar
 Show all,Mostrar todo
@@ -3304,6 +3437,9 @@ Start break,Iniciar descanso
 Start it (,Inícielo (
 Start paid break,Iniciar descanso pagado
 Start {0},Iniciar {0}
+"Start, enter, post and cancel stock counts","Iniciar, ingresar, contabilizar y cancelar conteos de existencia"
+"Start, pause, resume and complete jobs","Iniciar, pausar, reanudar y completar trabajos"
+StartTime is missing (or a SegmentRequirement's EarliestStartTime); it is the order's planned start.,Falta StartTime (o el EarliestStartTime de un SegmentRequirement); es el inicio planeado de la orden.
 Started,Iniciado
 Started (UTC),Inició (UTC)
 Started.,Iniciado.
@@ -3385,6 +3521,7 @@ Switched off; nothing more is sent for it.,Desactivada; ya no se envía nada por
 Switched on again.,Activada de nuevo.
 Switched {0} on again.,Se volvió a activar {0}.
 "Switched-off roles aren't shown. To add a role or change its name, use","Los roles desactivados no se muestran. Para agregar un rol o cambiar su nombre, use"
+Switching off people who are missing needs every row to be one external system's person: name the system and give each an external_key.,Desactivar a las personas que faltan requiere que cada fila sea una persona de un mismo sistema externo: nombre el sistema y dé a cada una un external_key.
 Synthesized,Sintetizado
 Table,Tabla
 Tag,Etiqueta
@@ -3510,6 +3647,7 @@ The batch size must be greater than zero.,El tamaño de tanda debe ser mayor que
 The batch tolerance must be between 0 and 50 percent.,La tolerancia de tanda debe estar entre 0 y 50 por ciento.
 The binding was changed by someone else. Reload and try again.,Alguien más cambió la asociación. Recargue e intente de nuevo.
 The board can't be shown,El tablero no puede mostrarse
+The browse depth,La profundidad de exploración
 "The calculated planning rate for {0} on {1} is now {2} {3}/h, {4}.","La tasa de planeación calculada para {0} en {1} ahora es {2} {3}/h, {4}."
 The calculated planning rate on {0} follows the ideal rate again.,La tasa de planeación calculada en {0} sigue de nuevo a la tasa ideal.
 "The calculated planning rate on {0} is now {1} {2}/h, {3}.","La tasa de planeación calculada en {0} ahora es {1} {2}/h, {3}."
@@ -3531,6 +3669,7 @@ The default document,El documento predeterminado
 The document's own,El propio del documento
 The earlier operation.,La operación anterior.
 The edge node already has a connection with that code.,El nodo de borde ya tiene una conexión con ese código.
+"The endpoint is an opc.tcp:// address, such as opc.tcp://plc1:4840.","El endpoint es una dirección opc.tcp://, como opc.tcp://plc1:4840."
 "The equipment that uses this profile; give equipment its profile on the Equipment screen, under Machine data. A machine whose stop code means something else than on the others can take its own reason for it here.","Los equipos que usan este perfil; asigne a los equipos su perfil en la pantalla Equipos, en Datos de máquina. Una máquina cuyo código de paro significa algo distinto que en las demás puede tomar aquí su propio motivo."
 The equipment this sits under.,El equipo bajo el que está.
 The equipment this will sit under.,El equipo bajo el que estará.
@@ -3538,14 +3677,29 @@ The expected quantity must be greater than zero.,La cantidad esperada debe ser m
 The expected receipt was changed by someone else. Reload and try again.,Otra persona cambió la recepción esperada. Recargue e intente de nuevo.
 "The expiry's date format must be a .NET date format with year, month and day, such as yyMMdd.","El formato de fecha del vencimiento debe ser un formato de fecha de .NET con año, mes y día, como yyMMdd."
 The factor must be greater than zero.,El factor debe ser mayor que cero.
+The file changes nothing.,El archivo no cambia nada.
+The file has a header but no rows.,El archivo tiene encabezado pero no filas.
+The file has no MaterialDefinition elements; B2MML material information has one per material.,El archivo no tiene elementos MaterialDefinition; la información de materiales B2MML tiene uno por material.
+The file has no MaterialLot elements; B2MML material information has one per lot.,El archivo no tiene elementos MaterialLot; la información de materiales B2MML tiene uno por lote.
+The file has no ProductionRequest elements; a B2MML production schedule has one per order.,El archivo no tiene elementos ProductionRequest; un programa de producción B2MML tiene uno por orden.
+"The file has no SCIM users; give a ListResponse with Resources, an array of users, or one user.","El archivo no tiene usuarios SCIM; dé un ListResponse con Resources, un arreglo de usuarios o un usuario."
+The file has {0} lots; import at most {1} at a time.,El archivo tiene {0} lotes; importe como máximo {1} a la vez.
+The file has {0} materials; import at most {1} at a time.,El archivo tiene {0} materiales; importe como máximo {1} a la vez.
+The file has {0} orders; import at most {1} at a time.,El archivo tiene {0} órdenes; importe como máximo {1} a la vez.
+The file has {0} rows; import at most {1} at a time.,El archivo tiene {0} filas; importe como máximo {1} a la vez.
+The file has {0} users; import at most {1} at a time.,El archivo tiene {0} usuarios; importe como máximo {1} a la vez.
 The file is all of the system's people: switch off those it doesn't list,El archivo tiene a todas las personas del sistema: desactivar a las que no aparecen
+The file is empty.,El archivo está vacío.
 The file is empty; export the language first to see the columns.,El archivo está vacío; exporte primero el idioma para ver las columnas.
 The file is larger than {0} MB; split it.,El archivo es mayor de {0} MB; divídalo.
+The file isn't valid JSON: {0},El archivo no es JSON válido: {0}
+The file isn't well-formed XML: {0},El archivo no es XML bien formado: {0}
 The finish-by time must be after the earliest start.,La hora límite debe ser después del inicio más temprano.
 "The first line names the columns: term,translation.","La primera línea nombra las columnas: term,translation."
 "The first line names the columns; code, name, type and base_unit are required. A column left out keeps what each material already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code. A class that doesn't exist is an error unless Create missing classes is ticked (class_name names it). Nothing is saved until every row is valid.","La primera línea nombra las columnas; code, name, type y base_unit son obligatorios. Una columna omitida conserva lo que ya tiene cada material. Las filas con external_system y external_key son artículos del ERP; las demás se emparejan por su código. Una clase que no existe es un error salvo que esté marcado Crear clases faltantes (class_name la nombra). No se guarda nada hasta que todas las filas sean válidas."
 "The first line names the columns; employee_number and name are required. A column left out keeps what each person already has. Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that key; the others are matched on their employee number.","La primera línea nombra las columnas; employee_number y name son obligatorias. Una columna que falte conserva lo que cada persona ya tiene. Las filas con external_key son personas del sistema externo (nombrado arriba, o en una columna external_system), emparejadas por esa clave; las demás se emparejan por su número de empleado."
 "The first time it's switched on, start from now (not the whole history)","La primera vez que se active, empezar desde ahora (no todo el historial)"
+"The group id has no '/', '+', '#' or ':'.","El group id no tiene '/', '+', '#' ni ':'."
 "The ideal rate is in {0}, which doesn't convert to {1}; the rate wasn't checked.","La tasa ideal está en {0}, que no se convierte a {1}; la tasa no se revisó."
 The ideal rate must be greater than zero.,La tasa ideal debe ser mayor que cero.
 The item or part number.,El número de artículo o pieza.
@@ -3557,6 +3711,7 @@ The job is {0}; nothing more is declared on it.,El trabajo está {0}; ya no se d
 The job is {0}; only planned and firmed jobs change line.,El trabajo está {0}; solo los trabajos planeados y en firme cambian de línea.
 The job isn't ready to start yet.,El trabajo aún no está listo para iniciar.
 "The job makes no material, so there is nothing to check the result against.","El trabajo no hace material, así que no hay contra qué revisar el resultado."
+The job's unit doesn't convert to the planning rate's unit,La unidad del trabajo no se convierte a la unidad de la tasa de planeación
 "The kinds of help an operator can call for from a line, such as maintenance, quality or a supervisor. A call nobody has answered within its escalation time is shown as escalated. Switch a type off to stop offering it; its calls stay in the history.","Los tipos de ayuda que un operador puede pedir desde una línea, como mantenimiento, calidad o un supervisor. Una llamada que nadie atiende dentro de su tiempo de escalamiento se muestra como escalada. Desactive un tipo para dejar de ofrecerlo; sus llamadas quedan en el historial."
 The labor of {0} is approved already.,La mano de obra de {0} ya está aprobada.
 The labor of {0} is approved already; a supervisor can correct it.,La mano de obra de {0} ya está aprobada; un supervisor puede corregirla.
@@ -3624,13 +3779,19 @@ The period ends after it starts.,El periodo termina después de empezar.
 The planning rate follows the ideal rate as on the material page. Nothing is saved until every row is valid.,La tasa de planeación sigue a la tasa ideal como en la página del material. No se guarda nada hasta que todas las filas sean válidas.
 The planning rate has a modified rate in the old unit; clear it before changing the rate unit.,La tasa de planeación tiene una tasa modificada en la unidad anterior; bórrela antes de cambiar la unidad de la tasa.
 "The planning rate is calculated from run history, so the ideal rate doesn't change it.","La tasa de planeación se calcula del historial de corridas, así que la tasa ideal no la cambia."
+The poll interval,El intervalo de sondeo
+The port,El puerto
 The printer's host name or address.,El nombre de host o la dirección de la impresora.
 The process decides where the order runs: each of its operations becomes a job on its lines or departments.,El proceso decide dónde se ejecuta la orden: cada una de sus operaciones se vuelve un trabajo en sus líneas o departamentos.
 The process has no released version yet; release it first.,El proceso aún no tiene versión liberada; libérelo primero.
 "The process no longer makes {0}, so order creation won't offer it.","El proceso ya no hace {0}, así que la creación de órdenes no lo ofrecerá."
+The produced material has no MaterialDefinitionID.,El material producido no tiene MaterialDefinitionID.
+The produced material has no Quantity.,El material producido no tiene Quantity.
 The profile already has state value {0}; change it in the list.,El perfil ya tiene el valor de estado {0}; cámbielo en la lista.
 The profile already has {0} {1}; change it in the list.,El perfil ya tiene {0} {1}; cámbielo en la lista.
+The publishing interval,El intervalo de publicación
 The quantity goes back to the balance it came from; the receiving balance must still hold it.,La cantidad vuelve al saldo del que vino; el saldo que la recibió debe seguir teniéndola.
+The quantity has no UnitOfMeasure.,La cantidad no tiene UnitOfMeasure.
 The quantity must be greater than zero.,La cantidad debe ser mayor que cero.
 The range can be at most 366 days.,El rango puede ser como máximo de 366 días.
 The reasons in bold make up the first 80% of the stops. Code stops on the Stops tab to move time out of Uncoded.,Los motivos en negrita forman el primer 80% de los paros. Codifique paros en la pestaña Paros para sacar tiempo de Sin codificar.
@@ -3639,21 +3800,31 @@ The reasons in bold make up the first 80% of the time. Code stops on the Stops t
 The receiver won't get this event. Put it right there by hand first; the later events of the same lot or certificate are sent next.,El receptor no recibirá este evento. Corríjalo allá a mano primero; los eventos posteriores del mismo lote o certificado se envían después.
 "The released version names operation {0}, which {1}'s released version no longer has,","La versión liberada nombra la operación {0}, que la versión liberada de {1} ya no tiene,"
 "The report is reversed and the figures above reported in its place, at its time, in one go: its lots give their quantity back and new lots are made. ","El reporte se revierte y las cifras de arriba se reportan en su lugar, a su hora, de una vez: sus lotes devuelven su cantidad y se hacen lotes nuevos."
+The required column 'lot_number' is missing.,Falta la columna obligatoria 'lot_number'.
+The required column 'minutes' is missing.,Falta la columna obligatoria 'minutes'.
+The required column '{0}' is missing.,Falta la columna obligatoria '{0}'.
 The result is already left out.,El resultado ya está excluido.
 The run history gives no rate.,El historial de corridas no da una tasa.
 The run history has changed since it was reviewed: it now gives {0} an hour. Review it again.,El historial de corridas cambió desde que se revisó: ahora da {0} por hora. Revíselo de nuevo.
 The run standard was changed by someone else. Reload and try again.,Alguien más cambió el estándar de corrida. Recargue e intente de nuevo.
+The run stopped: {0},La ejecución se detuvo: {0}
 The same characteristic is listed twice.,La misma característica aparece dos veces.
 The same figures as the {0} table; a day adds its shifts' hours up.,Las mismas cifras que la tabla {0}; un día suma las horas de sus turnos.
 The same line and sides appear earlier in the file.,La misma línea y lados aparecen antes en el archivo.
 The same lot appears earlier in the file.,El mismo lote aparece antes en el archivo.
 The sample doesn't match the pattern.,El ejemplo no coincide con el patrón.
+The sampling interval,El intervalo de muestreo
 The scale factor isn't zero.,El factor de escala no es cero.
 "The schedule shows a change on its next refresh, for every line in the site. How long each changeover takes is set on","El programa muestra un cambio en su siguiente actualización, para cada línea del sitio. Cuánto dura cada cambio se configura en"
 The scheduling policy for {0} was changed by someone else. Reload and try again.,Alguien más cambió la política de programación de {0}. Recargue e intente de nuevo.
 The scope names a material class or material that doesn't exist.,El alcance nombra una clase de material o un material que no existe.
 The script needs a Print command with a Format (use {{{{BtwPath}}}} for the .btw document).,El script necesita un comando Print con un Format (use {{{{BtwPath}}}} para el documento .btw).
 "The secret isn't set in the API's configuration, so nothing is sent until it is.","El secreto no está en la configuración de la API, así que no se envía nada hasta que esté."
+The service sent more than {0} pages; narrow it with a filter.,El servicio envió más de {0} páginas; acótelo con un filtro.
+The service sent {0} items; one import takes at most {1}. Narrow it with a filter.,El servicio envió {0} elementos; una importación acepta como máximo {1}. Acótelo con un filtro.
+The service sent {0} people; one import takes at most {1}. Narrow it with a filter.,El servicio envió {0} personas; una importación acepta como máximo {1}. Acótelo con un filtro.
+The service sent {0} users; one import takes at most {1}. Narrow it with a filter.,El servicio envió {0} usuarios; una importación acepta como máximo {1}. Acótelo con un filtro.
+The session has been paused by the server.,El servidor pausó la sesión.
 The share of their time is more than 0% and at most 100%.,La parte de su tiempo es más de 0% y como máximo 100%.
 The shares must add up to 100% before the version can be released.,Los porcentajes deben sumar 100% antes de que la versión pueda liberarse.
 The shift hasn't ended yet; approve it once it has.,El turno aún no termina; apruébelo cuando termine.
@@ -3694,6 +3865,7 @@ The tag was changed by someone else. Reload and try again.,Alguien más cambió 
 The target is outside the limits.,El objetivo está fuera de los límites.
 The template isn't well-formed XML once filled in: {0},La plantilla no es XML bien formado una vez completada: {0}
 The template set '{0}' has no template for a {1} label.,El juego de plantillas '{0}' no tiene plantilla para una etiqueta de {1}.
+The timeout,El tiempo de espera
 The timeout must be 1 to 120 seconds.,El tiempo de espera debe ser de 1 a 120 segundos.
 The top equipment of each group; choose one piece of equipment to see its shifts alone.,El equipo principal de cada grupo; elija un equipo para ver solo sus turnos.
 The two new passwords don't match.,Las dos contraseñas nuevas no coinciden.
@@ -3906,6 +4078,7 @@ Unit…,Unidad…
 Unknown calculation basis '{0}'.,Base de cálculo desconocida '{0}'.
 Unknown changeover mode '{0}'.,Modo de cambio desconocido '{0}'.
 Unknown chart '{0}'.,Gráfico desconocido '{0}'.
+Unknown column '{0}'. The columns are {1}.,Columna desconocida '{0}'. Las columnas son {1}.
 Unknown dimension '{0}'.,Dimensión desconocida '{0}'.
 Unknown equipment,Equipo desconocido
 Unknown job type '{0}'.,Tipo de trabajo desconocido '{0}'.
@@ -3918,6 +4091,8 @@ Unpaid breaks,Descansos no pagados
 Unsaved,Sin guardar
 Until,Hasta
 Untranslated,Sin traducir
+Unusually fast: over {0} an hour,Inusualmente rápida: más de {0} por hora
+Unusually slow: under {0} an hour,Inusualmente lenta: menos de {0} por hora
 Up to 30 days,Hasta 30 días
 Up to {0} MB.,Hasta {0} MB.
 Up to {0} {1} more fits this run at the line's rate.,Caben hasta {0} {1} más en esta corrida a la tasa de la línea.
@@ -3977,6 +4152,7 @@ Version {0} of BOM {1} not found.,No se encontró la versión {0} de la lista de
 Version {0} of process {1} not found.,No se encontró la versión {0} del proceso {1}.
 Version {0} of specification {1} not found.,No se encontró la versión {0} de la especificación {1}.
 Version {0} released,Versión {0} liberada
+Version {0} was applied already.,La versión {0} ya se aplicó.
 Version {0} was changed by someone else. Reload and try again.,Alguien más cambió la versión {0}. Recargue e intente de nuevo.
 Version {0} was released{1},La versión {0} se liberó{1}
 Version {0} · {1},Versión {0} · {1}
@@ -3984,6 +4160,7 @@ Version {0} · {1} characteristics,Versión {0} · {1} características
 Version {0} · {1} components,Versión {0} · {1} componentes
 Versions,Versiones
 View,Ver
+Viewing,Consulta
 Volume,Volumen
 Waited,Esperó
 Waiting,En espera
@@ -4141,6 +4318,7 @@ Worst of its machines (series),El peor de sus máquinas (serie)
 Would,Haría
 Would change: {0}. Unchanged: {1}.,Cambiarían: {0}. Sin cambio: {1}.
 Write off,Dar de baja
+"Write shift handover notes and open items for lines, and close open items","Escribir notas de entrega de turno y asuntos abiertos para líneas, y cerrar asuntos abiertos"
 Write the item first.,Escriba primero el asunto.
 Write the note first.,Escriba primero la nota.
 Write up,Ajuste positivo
@@ -4206,6 +4384,7 @@ Your session ended. Sign in again to carry on.,Su sesión terminó. Vuelva a ini
 "Zero or more, or blank.","Cero o más, o en blanco."
 Zoom,Zoom
 "a job may consume a component beyond its plan (scaled up when it makes more than planned) × this percentage, and the report says so.","un trabajo puede consumir un componente más allá de su plan (escalado si produce más de lo planeado) × este porcentaje, y el reporte lo indica."
+"a part lot, used up first","un lote parcial, que se usa primero"
 a run can't report more than its length × the line's ideal rate for the material × this percentage.,una corrida no puede reportar más que su duración × la tasa ideal de la línea para el material × este porcentaje.
 a shift,un turno
 about the same as the rate in force.,casi igual que la tasa vigente.
@@ -4214,6 +4393,7 @@ about {0} on {1},cerca de {0} en {1}
 accept or reject proposals,aceptar o rechazar propuestas
 accepted or rejected.,accepted o rejected.
 active,activo
+active: '{0}' isn't yes or no.,active: '{0}' no es sí ni no.
 after end,después del fin
 after start,después del inicio
 against the rate in force.,contra la tasa vigente.
@@ -4232,6 +4412,7 @@ as publishing,igual que la publicación
 at a site or every site,en un sitio o en todos
 at a site or every site ({0} everywhere),en un sitio o en todos ({0} en todas partes)
 at the end,al final
+at the line,en la línea
 at their published times,en sus horas publicadas
 at {0} UTC,a las {0} UTC
 balance,saldo
@@ -4240,16 +4421,19 @@ balance,saldo
 before {0},antes de {0}
 below {0},debajo de {0}
 best offered,la mejor ofrecida
+"browseRoot is a node id, such as ns=2;s=Line1 or i=85.","browseRoot es un id de nodo, como ns=2;s=Line1 o i=85."
 by a {0},por un {0}
 "by {0}, {1}{2}","por {0}, {1}{2}"
 c chart,gráfico c
 c: defects a sample,c: defectos por muestra
 call for help,pedir ayuda
 can't be used for {0}:,no puede usarse para {0}:
+category: at most {0} characters.,category: como máximo {0} caracteres.
 change changeover rules,cambiar reglas de cambio
 change the site's settings,cambiar los ajustes del sitio
 change what each role may do,cambiar lo que puede hacer cada rol
 changed since counted,cambió desde que se contó
+changeover_minutes: '{0}' isn't a whole number of minutes.,changeover_minutes: '{0}' no es un número entero de minutos.
 characteristics,características
 close alerts,cerrar alertas
 cloudevents or b2mml.,cloudevents o b2mml.
@@ -4260,11 +4444,13 @@ container,contenedor
 corrected,corregido
 count stock,contar existencia
 counts from {0},cuenta desde {0}
+covers the rest alone,cubre solo el resto
 create work orders,crear órdenes de trabajo
 data.items (blank: the whole answer),data.items (en blanco: toda la respuesta)
 days,días
 default,predeterminado
 department,departamento
+displayName and name are missing; one is the person's name.,Faltan displayName y name; uno es el nombre de la persona.
 down {0} min this shift,parada {0} min este turno
 downtime,tiempo parado
 duration unknown (no run standard),duración desconocida (sin estándar de corrida)
@@ -4286,6 +4472,8 @@ e.g. j.smith,p. ej. j.smith
 e.g. line_lead,p. ej. line_lead
 e.g. pulaski,p. ej. pulaski
 "each time a production job's totals change (it starts, pauses, completes, is reopened, closed or cancelled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML","cada vez que cambian los totales de un trabajo de producción (empieza, se pausa, termina, se reabre, se cierra o se cancela; se captura, corrige o revierte un reporte; se produce o consume un lote para él; se decide una tanda parcial), el B2MML del trabajo"
+effective_to must be after effective_from.,effective_to debe ser posterior a effective_from.
+employeeNumber (enterprise extension) is missing; it is the person's employee number.,Falta employeeNumber (extensión enterprise); es el número de empleado de la persona.
 everywhere,en todas partes
 exact or near.,exact o near.
 expired {0:yyyy-MM-dd},vencida el {0:yyyy-MM-dd}
@@ -4311,6 +4499,7 @@ held,retenido
 held at a site,se tiene en un sitio
 "hr or erp, for a person from an external system.","hr o erp, para una persona de un sistema externo."
 https://…,https://…
+in a container,en un contenedor
 inspected,inspeccionada
 is,es
 "is an unplanned stop that counts against availability, and","es un paro no planeado que cuenta contra la disponibilidad, y"
@@ -4323,6 +4512,7 @@ it holds {0} {1},contiene {0} {1}
 it is {0} h old,tiene {0} h
 job,trabajo
 just now,justo ahora
+kind: '{0}' isn't one of {1}.,kind: '{0}' no es uno de {1}.
 last heard from {0},última comunicación {0}
 late,atrasada
 limits {0} to {1},límites {0} a {1}
@@ -4356,13 +4546,20 @@ mapped,asignado
 material {0},material {0}
 material's,del material
 min,min
+minutes after it ended,minutos después de que terminó
+minutes before it is needed,minutos antes de que se necesite
+minutes stopped,minutos parada
+minutes: '{0}' isn't a whole number of minutes.,minutes: '{0}' no es un número entero de minutos.
+minutes: required.,minutes: obligatorio.
 modified {0} in force,modificada {0} vigente
 move,traslado
 moved to {0},movido a {0}
+"name: required, at most {0} characters.","name: obligatorio, como máximo {0} caracteres."
 never,nunca
 next {0},siguiente {0}
 no,no
 no BOM,sin lista de materiales
+no connection string is configured ({0}:{1}:ConnectionString).,no hay cadena de conexión configurada ({0}:{1}:ConnectionString).
 no limits in force,sin límites vigentes
 no line has a rate,ninguna línea tiene tasa
 no location,sin ubicación
@@ -4391,23 +4588,32 @@ overlaps a firmed job,se traslapa con un trabajo en firme
 p chart,gráfico p
 p: proportion defective,p: proporción defectuosa
 packing,empaque
+"packml_state: '{0}' isn't a PackML state (0 to 17, or a name such as Execute).","packml_state: '{0}' no es un estado PackML (0 a 17, o un nombre como Execute)."
+packml_state: a state row needs the PackML state it means.,packml_state: una fila de estado necesita el estado PackML que significa.
+packml_state: only a state row has one; is a column missing before '{0}'?,packml_state: solo una fila de estado lo tiene; ¿falta una columna antes de '{0}'?
 page.,.
 paid,pagado
+"path is the CIP route to the CPU, such as 1,0.","path es la ruta CIP a la CPU, como 1,0."
 pause jobs,pausar trabajos
 per {0} {1},por {0} {1}
 plan jobs,planear trabajos
 planned,planeado
+plc is {0}.,plc es {0}.
 proposed {0},propuesta {0}
 "pulaski, gs1_128 or gs1_datamatrix.","pulaski, gs1_128 o gs1_datamatrix."
 pushes {0} back {1},retrasa {0} por {1}
 "pushes {0} jobs back, up to {1}","retrasa {0} trabajos, hasta {1}"
 put on hold,retenido
+qualifications: '{0}' in '{1}' isn't a yyyy-MM-dd date.,qualifications: '{0}' en '{1}' no es una fecha yyyy-MM-dd.
+qualifications: '{0}' isn't CODE or CODE:valid-from:expires-on.,qualifications: '{0}' no es CÓDIGO ni CÓDIGO:válido-desde:vence-el.
 quantity {0},cantidad {0}
 quarantined,puesto en cuarentena
 rate not checked,tasa no revisada
 "raw_tcp, drop_folder or bartender.","raw_tcp, drop_folder o bartender."
+reason: {0} isn't an active utilization reason of the site.,reason: {0} no es un motivo de utilización activo del sitio.
 record expected deliveries,registrar entregas esperadas
 recorded {0},registrado {0}
+refused (not imported),rechazadas (no importadas)
 "reject, round_up, round_down or hold.","reject, round_up, round_down o hold."
 "reject, round_up, round_down or hold; blank for the site's.","reject, round_up, round_down o hold; en blanco para el del sitio."
 released,liberado
@@ -4421,7 +4627,10 @@ role at this site. Sign in once as that user and set its password.,en este sitio
 room for {0} more at the line's rate,cabe {0} más a la tasa de la línea
 run {0},corrida {0}
 runtime,tiempo productivo
+securityMode is {0}.,securityMode es {0}.
 sent {0},envió {0}
+serverThumbprint is the server certificate's SHA-1 thumbprint: 40 hexadecimal digits.,serverThumbprint es la huella SHA-1 del certificado del servidor: 40 dígitos hexadecimales.
+shelf_life_days: '{0}' isn't a whole number of days.,shelf_life_days: '{0}' no es un número entero de días.
 shift {0} on {1:yyyy-MM-dd},el turno {0} del {1:yyyy-MM-dd}
 shipped on {0},enviado el {0}
 since the last report from the machine ({0}),desde el último reporte de la máquina ({0})
@@ -4438,19 +4647,36 @@ stock,existencia
 substitution,sustitución
 supplier lot {0},lote del proveedor {0}
 target {0},meta {0}
+the answer has no array at '{0}'.,la respuesta no tiene un arreglo en '{0}'.
+the answer isn't JSON.,la respuesta no es JSON.
+the answer isn't a SCIM ListResponse.,la respuesta no es un ListResponse de SCIM.
+the answer isn't an array; give the path to the items.,la respuesta no es un arreglo; indique la ruta a los elementos.
+the answer isn't well-formed XML: {0},la respuesta no es XML bien formado: {0}
 the changeover before {0},el cambio antes de {0}
 "the code of the utilization reason it counts as. Each kind in the file replaces that list: entries it leaves out are switched off, and kinds it doesn't mention stay as they are. Nothing is saved until every row is valid.","el código del motivo de utilización que cuenta. Cada tipo en el archivo reemplaza esa lista: las entradas que omite se desactivan, y los tipos que no menciona quedan como están. No se guarda nada hasta que todas las filas sean válidas."
+the connection string isn't usable: {0},la cadena de conexión no se puede usar: {0}
+the database refused the query: {0},la base de datos rechazó la consulta: {0}
 the line,la línea
 the machine says {0},la máquina dice {0}
 the name and,el nombre y
+the query returns more than {0} rows; one import takes at most that.,la consulta devuelve más de {0} filas; una importación acepta como máximo eso.
+the service answered with a SOAP fault{0}.,el servicio respondió con un error SOAP{0}.
+the service has more than {0} items; one import takes at most that.,el servicio tiene más de {0} elementos; una importación acepta como máximo eso.
+the service has more than {0} users; one import takes at most that. Narrow it with a filter.,el servicio tiene más de {0} usuarios; una importación acepta como máximo eso. Acótelo con un filtro.
+the service sent more than {0} items; one import takes at most that.,el servicio envió más de {0} elementos; una importación acepta como máximo eso.
+the service sent more than {0} pages.,el servicio envió más de {0} páginas.
 the shift changes,cambia el turno
 the site,el sitio
 this site,este sitio
 to,a
+to cancel,por cancelar
 to confirm,por confirmar
+to create,por crear
 "to keep long lists tidy: people choose from the reasons, listed under their groups, never a group itself. Moving a reason doesn't change what history recorded.","para mantener ordenadas las listas largas: las personas eligen entre los motivos, listados bajo sus grupos, nunca un grupo en sí. Mover un motivo no cambia lo que registró el historial."
 to place work on a line.,para colocar trabajo en una línea.
 to plan them.,para planearlos.
+to update,por actualizar
+to wait for a planner,que esperan a un planificador
 to {0},a {0}
 today,hoy
 took in 1 lot,recibió 1 lote
@@ -4462,10 +4688,12 @@ unpacking,desempaque
 until,hasta
 uses,usa
 valid only from {0:yyyy-MM-dd},válida solo desde el {0:yyyy-MM-dd}
+value: '{0}' isn't a whole number.,value: '{0}' no es un número entero.
 variable or attribute.,variable o attribute.
 "version {0} released, {1} components","versión {0} liberada, {1} componentes"
 via {0},vía {0}
 waiting for a line,esperando una línea
+waiting for a planner,esperando a un planificador
 waiting {0},esperando {0}
 waiting {0}: escalated,esperando {0}: escalada
 webhook or mqtt.,webhook o mqtt.
@@ -4484,6 +4712,7 @@ yes,sí
 "{0:0.######} has arrived already; expect more than that, or close it as complete.",Ya llegaron {0:0.######}; espere más que eso o ciérrela como completa.
 "{0:ddd d MMM}, lines without shifts","{0:ddd d MMM}, líneas sin turnos"
 {0:yyyy-MM-dd} hasn't ended yet; approve it once it has.,{0:yyyy-MM-dd} aún no termina; apruébelo cuando termine.
+{0} '{1}' isn't an ISO 8601 time.,{0} '{1}' no es una hora ISO 8601.
 {0} (not made),{0} (no se hace)
 {0} (switched off),{0} (desactivado)
 {0} (the material's),{0} (el del material)
@@ -4531,6 +4760,7 @@ yes,sí
 {0} can't record time at {1}.,{0} no puede registrar tiempo en {1}.
 {0} can't run jobs; pick a line.,{0} no ejecuta trabajos; elija una línea.
 {0} can't start yet. {1},{0} aún no puede iniciar. {1}
+{0} cancelled,{0} canceladas
 {0} cancelled and replaced for exactly the rest of its quantity.,{0} cancelado y reemplazado por exactamente el resto de su cantidad.
 {0} cancelled and replaced for the rest of its quantity.,{0} cancelado y reemplazado por el resto de su cantidad.
 {0} cancelled and replaced for the whole batches left; the order may end short.,{0} cancelado y reemplazado por las tandas completas que quedan; la orden puede terminar con faltante.
@@ -4538,6 +4768,7 @@ yes,sí
 {0} centre,{0} centro
 {0} changed after it was counted; count it again.,{0} cambió después de contarse; cuéntelo de nuevo.
 {0} closed and {1} cancelled.,{0} cerradas y {1} canceladas.
+{0} code,código {0}
 "{0} comes from {1} (key {2}); give its external_system and external_key to import it, or change it there.","{0} viene de {1} (clave {2}); indique su external_system y external_key para importarlo, o cámbielo allí."
 "{0} comes from {1}: change their name and whether they are active there, and import again.","{0} viene de {1}: cambie allí su nombre y si está activo, e importe de nuevo."
 "{0} comes from {1}: its code, name, base unit and type change there, not here.","{0} viene de {1}: su código, nombre, unidad base y tipo cambian allí, no aquí."
@@ -4545,12 +4776,14 @@ yes,sí
 "{0} could run here: {1}, {2} ({3} – {4}). Drag it onto a line to assign it.","{0} podría ejecutarse aquí: {1}, {2} ({3} – {4}). Arrástrelo a una línea para asignarlo."
 {0} couldn't be read: {1},{0} no pudo leerse: {1}
 "{0} counted {1} good and {2} scrap {3} {4}, to {5}{6}.","{0} contó {1} buenos y {2} de desperdicio {3} {4}, hasta las {5}{6}."
+{0} created,{0} creadas
 {0} created on {1} for {2}.,{0} creado en {1} por {2}.
 {0} days,{0} días
 {0} days aren't included because their rollups are being worked out again: {1}. Try again shortly.,No se incluyen {0} días porque sus acumulados se están recalculando: {1}. Intente de nuevo en un momento.
 {0} deliveries go again on the next round.,{0} entregas se reenvían en la siguiente ronda.
 "{0} doesn't convert to the job's unit, so the run's good output wasn't changed.","{0} no se convierte a la unidad del trabajo, así que la producción buena de la corrida no cambió."
 {0} doesn't convert to {1} for this material; add a conversion for it.,{0} no se convierte a {1} para este material; agregue una conversión.
+{0} doesn't convert to {1} without a material; pick one.,{0} no se convierte a {1} sin un material; elija uno.
 "{0} doesn't convert to {1}, the base unit of {2}; choose another unit, or add a conversion for {3} on the Units page.","{0} no se convierte a {1}, la unidad base de {2}; elija otra unidad, o agregue una conversión para {3} en la página Unidades."
 "{0} doesn't convert to {1}, the base unit of {2}; enter the quantity in another unit, or add a conversion for {3} on the Units page.","{0} no se convierte a {1}, la unidad base de {2}; ingrese la cantidad en otra unidad, o agregue una conversión para {3} en la página Unidades."
 "{0} doesn't convert to {1}, the unit of {2}; enter it in another unit.","{0} no se convierte a {1}, la unidad de {2}; ingrésela en otra unidad."
@@ -4638,9 +4871,11 @@ yes,sí
 {0} incoming,{0} entrantes
 {0} instead of {1},{0} en lugar de {1}
 {0} is 15 minutes to 24 hours long.,{0} dura de 15 minutos a 24 horas.
+"{0} is a Pulaski label, but nothing at this site has it: it may be from another site, or used up.","{0} es una etiqueta de Pulaski, pero nada en este sitio la tiene: puede ser de otro sitio o estar agotada."
 "{0} is a group: a job planned to it gets a window, not a slot on a line.","{0} es un grupo: un trabajo planeado a él recibe una ventana, no un lugar en una línea."
 {0} is a group; only production jobs are planned to it. Put {1} jobs on a line.,{0} es un grupo; solo se le planean trabajos de producción. Ponga los trabajos de {1} en una línea.
 {0} is a group; plan a new job to it instead of moving one there.,{0} es un grupo; planéele un trabajo nuevo en lugar de mover uno allí.
+{0} is a whole number from {1} to {2}.,{0} es un número entero de {1} a {2}.
 {0} is a {1} job; consumption and production are declared against production jobs.,{0} es un trabajo de {1}; el consumo y la producción se declaran contra trabajos de producción.
 {0} is above the sites; calendar exceptions are set for a site or something in it.,{0} está por encima de los sitios; las excepciones de calendario se fijan para un sitio o algo dentro de él.
 "{0} is above the sites; schedules belong to a site, so choose them for the sites or below.","{0} está por encima de los sitios; los horarios pertenecen a un sitio, así que elíjalos para los sitios o debajo."
@@ -4660,6 +4895,7 @@ yes,sí
 {0} is at another location; move it there first.,{0} está en otra ubicación; muévalo allí primero.
 {0} is at another site than the person.,{0} está en otro sitio que la persona.
 {0} is at another site than {1}.,{0} está en otro sitio que {1}.
+{0} is at most 200 characters.,{0} tiene como máximo 200 caracteres.
 {0} is at several sites ({1}); give the site.,{0} está en varios sitios ({1}); indique el sitio.
 "{0} is back on {1}, waiting for a line.","{0} vuelve a {1}, esperando una línea."
 {0} is called.,Se llamó a {0}.
@@ -4670,6 +4906,7 @@ yes,sí
 {0} is empty; there is nothing to write off.,{0} está vacío; no hay nada que dar de baja.
 {0} is for another material or site.,{0} es de otro material o sitio.
 {0} is for another site.,{0} es de otro sitio.
+{0} is given twice (property '{1}').,{0} se da dos veces (propiedad '{1}').
 "{0} is held at a site; choose one, or allow it at every site on the Roles tab.","{0} se tiene en un sitio; elija uno, o permítalo en todos los sitios en la pestaña Roles."
 {0} is held at a site; choose one.,{0} se tiene en un sitio; elija uno.
 "{0} is held everywhere, not at a site.","{0} se tiene en todas partes, no en un sitio."
@@ -4731,10 +4968,12 @@ yes,sí
 {0} is switched off; switch it on on the Roles screen first.,{0} está desactivado; actívelo primero en la pantalla Roles.
 {0} is switched off; switch it on to add a line.,{0} está desactivado; actívelo para agregar una línea.
 {0} is switched off; switch it on to take its data.,{0} está desactivado; actívelo para tomar sus datos.
-{0} is switched off; write handover notes for a line.,{0} está desactivada; escriba notas de relevo para una línea.
+{0} is switched off; write handover notes for a line.,{0} está desactivada; escriba notas de entrega de turno para una línea.
 {0} is too small to record in {1}.,{0} es demasiado pequeño para registrarse en {1}.
+{0} is true or false.,{0} es true o false.
 {0} is up to date: {1} unchanged.,{0} está al día: {1} sin cambio.
 {0} is {1} and the stock it joins is {2}; lots merge only in the same status. Release or hold one of them first.,{0} está {1} y la existencia a la que se une está {2}; los lotes se unen solo en el mismo estado. Libere o retenga uno de ellos primero.
+{0} is {1} in Pulaski; the ERP's change comes too late and is left out.,{0} está {1} en Pulaski; el cambio del ERP llega tarde y se deja fuera.
 "{0} is {1} now, not {2}; reverse what changed it first.","{0} está {1} ahora, no {2}; revierta primero lo que lo cambió."
 "{0} is {1}, so it wasn't put on hold.","{0} está {1}, así que no se retuvo."
 {0} is {1}; it can't be cancelled.,{0} está {1}; no se puede cancelar.
@@ -4758,13 +4997,14 @@ yes,sí
 "{0} is {1}; only available stock goes into {2}, where lots mix.","{0} está {1}; solo la existencia disponible entra en {2}, donde los lotes se mezclan."
 "{0} is {1}; only planned, unlocked jobs move in time.",{0} está {1}; solo los trabajos planeados y desbloqueados se mueven en el tiempo.
 {0} is {1}; stock can't be added to it.,{0} está {1}; no puede agregársele existencia.
+{0} is {1}; the change waits for a planner to accept or reject it.,{0} está {1}; el cambio espera a que un planificador lo acepte o rechace.
 {0} isn't a feed point; lots are loaded where they enter a line.,{0} no es un punto de alimentación; los lotes se cargan donde entran a una línea.
 {0} isn't a group: only a group holds other reasons.,{0} no es un grupo: solo un grupo contiene otros motivos.
 {0} isn't a language the screens are translated into.,{0} no es un idioma al que estén traducidas las pantallas.
 {0} isn't a line of the department {1} was planned to.,{0} no es una línea del departamento al que se planeó {1}.
 {0} isn't a line of {1}'s group that can run it.,{0} no es una línea del grupo de {1} que pueda ejecutarlo.
 {0} isn't a line; call for help from a line.,{0} no es una línea; pida ayuda desde una línea.
-{0} isn't a line; write handover notes for a line.,{0} no es una línea; escriba notas de relevo para una línea.
+{0} isn't a line; write handover notes for a line.,{0} no es una línea; escriba notas de entrega de turno para una línea.
 {0} isn't a number; use a decimal point.,{0} no es un número; use punto decimal.
 "{0} isn't a region this server knows, such as en-US or es-MX.","{0} no es una región que este servidor conozca, como en-US o es-MX."
 {0} isn't a {1}.,{0} no es un {1}.
@@ -4773,6 +5013,7 @@ yes,sí
 {0} isn't counted yet; enter 0 if it isn't there.,{0} aún no se cuenta; ingrese 0 si no está.
 {0} isn't in a container.,{0} no está en un contenedor.
 {0} isn't in that container any more; reverse what took it out first.,{0} ya no está en ese contenedor; revierta primero lo que lo sacó.
+{0} isn't in the file.,{0} no está en el archivo.
 "{0} isn't in the source any more, so is switched off.","{0} ya no está en la fuente, así que se desactiva."
 "{0} isn't in the source but is clocked on, so stays on until a later import.","{0} no está en la fuente pero tiene entrada registrada, así que sigue activo hasta una importación posterior."
 {0} isn't inside another container.,{0} no está dentro de otro contenedor.
@@ -4799,12 +5040,14 @@ yes,sí
 {0} loaded at {1}.,{0} cargado en {1}.
 {0} locked.,{0} bloqueado.
 "{0} lots have errors, so nothing can be imported yet. Fix them and pick the file again.","{0} lotes tienen errores, así que aún no se puede importar nada. Corríjalos y elija el archivo de nuevo."
+{0} lots not suggested,{0} lotes no sugeridos
 {0} makes another material in Pulaski; the ERP can't change an order's product. Cancel it and send a new order.,{0} hace otro material en Pulaski; el ERP no puede cambiar el producto de una orden. Cancélela y envíe una orden nueva.
 "{0} makes {1} in batches of {2} (the material's are {3}). Open jobs keep their quantity; new jobs, moves and reports use the new size.","{0} hace {1} en tandas de {2} (las del material son de {3}). Los trabajos abiertos conservan su cantidad; los trabajos nuevos, movimientos y reportes usan el tamaño nuevo."
 {0} match,{0} coinciden
 {0} match {1}; choose one.,{0} coinciden con {1}; elija uno.
 {0} matches the profile already; there is nothing to import.,{0} ya coincide con el perfil; no hay nada que importar.
 {0} material,Material de {0}
+{0} may: {1},{0} puede: {1}
 {0} min,{0} min
 {0} min ago,hace {0} min
 {0} months,{0} meses
@@ -4867,6 +5110,8 @@ yes,sí
 {0} queued or retrying,{0} en cola o reintentando
 "{0} queued or retrying, {1} of them held","{0} en cola o reintentando, {1} de ellos retenidos"
 {0} quiet,{0} inactivo
+{0} refused,{0} rechazadas
+{0} refused (not imported),{0} rechazadas (no importadas)
 {0} released,{0} liberados
 {0} results; no control limits in force for them.,{0} resultados; sin límites de control vigentes para ellos.
 "{0} results; {1} beyond the limits, {2} breaking a run rule.","{0} resultados; {1} fuera de los límites, {2} rompen una regla de corrida."
@@ -4894,18 +5139,27 @@ yes,sí
 {0} subgroups give rough limits; {1} or more are better.,{0} subgrupos dan límites aproximados; {1} o más son mejores.
 {0} tag for {1} was permanently deleted. Machine history is retained.,Se eliminó permanentemente la etiqueta {0} de {1}. El historial de la máquina se conserva.
 {0} taken out of {1}.,{0} sacado de {1}.
+{0} things match this {1}; choose one.,{0} cosas coinciden con este {1}; elija una.
+{0} things match {1}; choose one.,{0} cosas coinciden con {1}; elija una.
+{0} to cancel,{0} por cancelar
 {0} to code,{0} por codificar
+{0} to create,{0} por crear
 {0} to make,{0} por hacer
+{0} to update,{0} por actualizar
+{0} to wait for a planner,{0} que esperan a un planificador
 {0} to {1},{0} a {1}
 {0} to {1} days.,{0} a {1} días.
 {0} trimmed,{0} recortados
+{0} unchanged,{0} sin cambios
 {0} uncoded,{0} sin codificar
 {0} unlocked.,{0} desbloqueado.
 {0} unpacked from {1}.,{0} desempacado de {1}.
+{0} updated,{0} actualizadas
 {0} upper,{0} superior
 {0} users hold {1} at every site; take those away or give it at a site first.,{0} usuarios tienen {1} en todos los sitios; quíteselos o déselo en un sitio primero.
 {0} users hold {1}; give them another role and take this one away first.,{0} usuarios tienen {1}; deles otro rol y quíteles este primero.
 {0} waiting,{0} en espera
+{0} waiting for a planner,{0} esperando a un planificador
 {0} waits for a line in its window; change the window in its editor.,{0} espera una línea en su ventana; cambie la ventana en su editor.
 {0} was already on.,{0} ya tenía entrada registrada.
 {0} was called already; that call is still being answered.,Ya se había llamado a {0}; esa llamada todavía se está atendiendo.
@@ -4926,6 +5180,7 @@ yes,sí
 {0} would move {1} later: {2},{0} movería {1} después: {2}
 {0} written off,{0} dado de baja
 {0} {1} ({2}),{0} {1} ({2})
+{0} {1} appears earlier in the file.,{0} {1} aparece antes en el archivo.
 {0} {1} available,{0} {1} disponibles
 {0} {1} good,{0} {1} buenos
 "{0} {1} good, {2} scrap","{0} {1} buenos, {2} de desperdicio"
@@ -4946,6 +5201,7 @@ yes,sí
 {0} · running now,{0} · en curso
 {0} · unsaved,{0} · sin guardar
 {0} · {1} on {2},{0} · {1} en {2}
+"{0} · {1}, from {2}","{0} · {1}, de {2}"
 {0}% defective ({1} ppm): {2} defective in {3} inspected,{0}% defectuoso ({1} ppm): {2} defectuosos en {3} inspeccionados
 {0}% defects a unit ({1} ppm): {2} defects in {3} inspected,{0}% defectos por unidad ({1} ppm): {2} defectos en {3} inspeccionados
 {0}% faster than the rate in force.,{0}% más rápida que la tasa vigente.
@@ -4963,6 +5219,7 @@ yes,sí
 {0}'s stops can no longer be taken out; review the rate again.,Ya no se pueden quitar los paros de {0}; revise la tasa de nuevo.
 {0}'s window is now {1} to {2}.,La ventana de {0} ahora es de {1} a {2}.
 "{0}, a lot: {1}","{0}, un lote: {1}"
+"{0}, an approved alternate ({1} per 1)","{0}, un alternativo aprobado ({1} por 1)"
 "{0}, down {1} min this shift","{0}, parada {1} min este turno"
 "{0}, enjoy your break (paid).","{0}, disfrute su descanso (pagado)."
 "{0}, enjoy your break.","{0}, disfrute su descanso."
@@ -4977,18 +5234,25 @@ yes,sí
 "{0}, {1}: {2}","{0}, {1}: {2}"
 {0}. The specification allows at most {1} a sample.,{0}. La especificación permite como máximo {1} por muestra.
 {0}: '{1}' isn't a date (yyyy-MM-dd).,{0}: '{1}' no es una fecha (yyyy-MM-dd).
+{0}: '{1}' isn't a date; use yyyy-MM-dd.,{0}: '{1}' no es una fecha; use yyyy-MM-dd.
 {0}: '{1}' isn't a number; use a decimal point and no thousands separator.,{0}: '{1}' no es un número; use punto decimal y sin separador de miles.
 "{0}: '{1}' isn't a property name (letters, digits and _, with / for a property of a property).","{0}: '{1}' no es un nombre de propiedad (letras, dígitos y _, con / para una propiedad de una propiedad)."
 {0}: '{1}' isn't one of {2}.,{0}: '{1}' no es uno de {2}.
 {0}: '{1}' isn't yes or no.,{0}: '{1}' no es sí o no.
 "{0}: anything, a material or a class","{0}: cualquier cosa, un material o una clase"
 {0}: at most {1} characters.,{0}: como máximo {1} caracteres.
+{0}: couldn't reach the service: {1},{0}: no se pudo contactar el servicio: {1}
 {0}: each planned break needs a name of up to 40 characters.,{0}: cada descanso planeado necesita un nombre de hasta 40 caracteres.
 "{0}: give a lower limit, an upper limit or both.","{0}: dé un límite inferior, uno superior o ambos."
 {0}: give the most defects a sample may have (0 for none).,{0}: dé el máximo de defectos que puede tener una muestra (0 para ninguno).
 "{0}: items with errors: {1}. Nothing can be imported yet; fix them at the source or in the field map, then check again.","{0}: elementos con errores: {1}. Aún no se puede importar nada; corríjalos en el origen o en el mapa de campos, luego revise de nuevo."
 {0}: nothing to measure,{0}: nada que medir
 {0}: rows with errors: {1}. Nothing can be imported yet; fix them and pick the file again.,{0}: filas con errores: {1}. Aún no se puede importar nada; corríjalas y elija el archivo de nuevo.
+{0}: the answer isn't JSON.,{0}: la respuesta no es JSON.
+"{0}: the answer isn't an OData collection (no ""value"" array).","{0}: la respuesta no es una colección OData (no hay arreglo ""value"")."
+{0}: the service answered {1}{2}.,{0}: el servicio respondió {1}{2}.
+{0}: the service didn't answer in time.,{0}: el servicio no respondió a tiempo.
+{0}: the service has more than {1} items; one import takes at most that. Narrow it with a filter.,{0}: el servicio tiene más de {1} elementos; una importación acepta como máximo eso. Acótelo con un filtro.
 {0}: this run now has {1} good and {2} scrap.,{0}: esta corrida ahora tiene {1} buenos y {2} de desperdicio.
 {0}: translations,{0}: traducciones
 {0}: {1},{0}: {1}
@@ -4999,6 +5263,7 @@ yes,sí
 {0}: {1} is 5 minutes to 4 hours long.,{0}: {1} dura de 5 minutos a 4 horas.
 "{0}: {1} is planned in {2}, which doesn't convert to {3}; it was left out.","{0}: {1} está planeado en {2}, que no se convierte a {3}; se dejó fuera."
 {0}: {1} is still {2} {3} short of free stock.,{0}: a {1} todavía le faltan {2} {3} de existencia libre.
+{0}: {1} isn't a single value.,{0}: {1} no es un valor único.
 "{0}: {1} lots to change, {2} unchanged.","{0}: {1} lotes por cambiar, {2} sin cambio."
 "{0}: {1} to add, {2} to change, {3} unchanged.","{0}: {1} por agregar, {2} por cambiar, {3} sin cambio."
 "{0}: {1} to receive, {2} to update, {3} unchanged.","{0}: {1} por recibir, {2} por actualizar, {3} sin cambio."
@@ -5012,7 +5277,10 @@ yes,sí
 "{0}: {1} {2} is {3} batches of {4} {5}, and this site takes only whole batches from the ERP. Send {6} or {7} {8}.","{0}: {1} {2} son {3} tandas de {4} {5}, y este sitio solo acepta tandas completas del ERP. Envíe {6} o {7} {8}."
 {0}: {1} {2} is {3} batches of {4} {5}; rounded down it would be nothing. Send at least {6} {7}.,{0}: {1} {2} son {3} tandas de {4} {5}; redondeado hacia abajo no sería nada. Envíe al menos {6} {7}.
 {0}: {1} {2} isn't whole batches of {3} {4}. Plan {5} or {6} {7}.,{0}: {1} {2} no son tandas completas de {3} {4}. Planee {5} o {6} {7}.
+{0}: {1} → {2}.,{0}: {1} → {2}.
 {0}: {1}; {2} planned jobs between {3} and {4},{0}: {1}; {2} trabajos planeados entre {3} y {4}
+{0}; received {1}; {2} {3} free.,{0}; recibido el {1}; {2} {3} libres.
+{0}; {1}; received {2}; {3} {4} free.,{0}; {1}; recibido el {2}; {3} {4} libres.
 {0}{1}. Its share of the operation's quantity; it becomes its own job for that share.,{0}{1}. Su porcentaje de la cantidad de la operación; se vuelve su propio trabajo por ese porcentaje.
 ~{0} on {1},~{0} en {1}
 · last at {0} UTC,· la última a las {0} UTC

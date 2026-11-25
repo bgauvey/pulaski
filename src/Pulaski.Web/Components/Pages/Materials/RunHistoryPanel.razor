@@ -108,7 +108,7 @@
                                 }
                                 <td class="inv-num">@(run.GoodQty is { } g ? Qty(g) : "—")</td>
                                 <td class="inv-num">@(run.RatePerHour is { } rate ? Qty(rate) : "—")</td>
-                                <td>@(run.Excluded is { } why ? L["Left out: {0}", why] : L["Used"])</td>
+                                <td>@(run.Excluded is { } why ? L["Left out: {0}", L.Of(why)] : L["Used"])</td>
                             </tr>
                         }
                     </tbody>

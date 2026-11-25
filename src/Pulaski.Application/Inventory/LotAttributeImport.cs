@@ -1,9 +1,10 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Materials;
-using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Inventory;
 
@@ -46,7 +47,7 @@ internal sealed class ImportLotAttributeValuesHandler(
         var source = LotAttributeCsv.Parse(command.Csv, [.. attributes.Keys]);
         if (source.Problems.Count > 0)
         {
-            return new ImportMaterialsResponse { FileProblems = source.Problems, Errors = source.Problems.Count };
+            return new ImportMaterialsResponse { FileProblems = [.. source.Problems.Select(Notes.Of)], Errors = source.Problems.Count };
         }
 
         // Find every lot first, then lock them all in id order (D-030), as any change to several lots does.
@@ -82,7 +83,7 @@ internal sealed class ImportLotAttributeValuesHandler(
             }
             catch (DomainRuleException ex)
             {
-                results.Add(new ImportRowResultDto { Line = row.Line, Code = row.LotNumber, Action = Error, Message = ex.Message });
+                results.Add(new ImportRowResultDto { Line = row.Line, Code = row.LotNumber, Action = Error, Message = Notes.Of(ex) });
             }
         }
 

@@ -77,7 +77,7 @@ public class WorkOrderB2mmlTests
         Assert.Equal("IMPORT", Assert.Single(WorkOrderB2mml.Parse($"<ProductionSchedule>{Request("C", null)}</ProductionSchedule>", "ERP", "IMPORT").Rows).Order!.SiteCode);
         var none = Assert.Single(WorkOrderB2mml.Parse($"<ProductionSchedule>{Request("D", null)}</ProductionSchedule>", "ERP", null).Rows);
         Assert.Null(none.Order);
-        Assert.Contains(none.Problems, p => p.StartsWith("No site", StringComparison.Ordinal));
+        Assert.Contains(none.Problems, p => p.Text.StartsWith("No site", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -108,10 +108,10 @@ public class WorkOrderB2mmlTests
         var bad = rows[0];
         Assert.Null(bad.Order);
         Assert.Equal(3, bad.Line);
-        Assert.Contains("ID is missing; it is the order number.", bad.Problems);
-        Assert.Contains("It produces 2 materials; a work order makes one.", bad.Problems);
-        Assert.Contains("StartTime 'next week' isn't an ISO 8601 time.", bad.Problems);
-        Assert.Contains("Priority 'high' isn't a whole number.", bad.Problems);
+        Assert.Contains("ID is missing; it is the order number.", bad.Problems.Select(p => p.Text));
+        Assert.Contains("It produces 2 materials; a work order makes one.", bad.Problems.Select(p => p.Text));
+        Assert.Contains("StartTime 'next week' isn't an ISO 8601 time.", bad.Problems.Select(p => p.Text));
+        Assert.Contains("Priority 'high' isn't a whole number.", bad.Problems.Select(p => p.Text));
         Assert.Equal("OK-1", rows[1].Order!.OrderNumber);
     }
 
@@ -130,7 +130,7 @@ public class WorkOrderB2mmlTests
         var twice = WorkOrderB2mml.Parse($"<ProductionSchedule>{Request("Released")}{Request("Released")}</ProductionSchedule>", "ERP", "PLT1").Rows;
         Assert.NotNull(twice[0].Order);
         Assert.Null(twice[1].Order);
-        Assert.Contains("appears more than once", Assert.Single(twice[1].Problems), StringComparison.Ordinal);
+        Assert.Contains("appears more than once", Assert.Single(twice[1].Problems)?.Text, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -143,6 +143,6 @@ public class WorkOrderB2mmlTests
         var source = WorkOrderB2mml.Parse(text, "ERP", "PLT1");
 
         Assert.Empty(source.Rows);
-        Assert.StartsWith(problem, Assert.Single(source.Problems), StringComparison.Ordinal);
+        Assert.StartsWith(problem, Assert.Single(source.Problems)?.Text, StringComparison.Ordinal);
     }
 }

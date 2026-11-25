@@ -14,7 +14,7 @@ public class MaterialConnectionViewTests
             MaterialConnectionView.Summary(Text.English, "ERP", new ImportMaterialsResponse { Created = 2, Updated = 1, Unchanged = 5 }));
         Assert.Equal("ERP is up to date: 5 unchanged.", MaterialConnectionView.Summary(Text.English, "ERP", new ImportMaterialsResponse { Unchanged = 5 }));
         Assert.StartsWith("ERP: items with errors: 1.", MaterialConnectionView.Summary(Text.English, "ERP", new ImportMaterialsResponse { Errors = 1 }), StringComparison.Ordinal);
-        Assert.Equal("ERP can't be imported: down.", MaterialConnectionView.Summary(Text.English, "ERP", new ImportMaterialsResponse { FileProblems = ["down."] }));
+        Assert.Equal("ERP can't be imported: down.", MaterialConnectionView.Summary(Text.English, "ERP", new ImportMaterialsResponse { FileProblems = [new Pulaski.Contracts.Common.MessageDto("down.")] }));
         Assert.StartsWith("Imported from ERP: 2 created", MaterialConnectionView.Summary(Text.English, "ERP", new ImportMaterialsResponse { Applied = true, Created = 2 }), StringComparison.Ordinal);
     }
 

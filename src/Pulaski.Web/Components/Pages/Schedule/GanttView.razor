@@ -99,7 +99,7 @@
                         else if (line.Timeline.CalendarName is { } calendar)
                         {
                             @* Where its working time comes from (D-038), such as "2X8 · Two shifts, from PLT1". *@
-                            <span class="chip chip-muted" title="@L["Shifts: {0}", calendar]">@(calendar.StartsWith("Around the clock", StringComparison.Ordinal) ? "24/7" : calendar.Split(' ')[0])</span>
+                            <span class="chip chip-muted" title="@L["Shifts: {0}", line.Timeline.Calendar is { } words ? L.Of(words) : calendar]">@(line.Timeline.IsAroundTheClock ? "24/7" : calendar.Split(' ')[0])</span>
                         }
                         @{ var overlaps = Controller.Board.Overlaps.Count(o => o.Line.Id == line.Id); }
                         @if (overlaps > 0)

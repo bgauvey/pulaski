@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.ReferenceData;
 
 namespace Pulaski.Application.Units;
@@ -30,8 +31,8 @@ internal sealed class ConvertQuantityHandler(IUnitReadStore store) : IQueryHandl
             {
                 Converts = false,
                 Message = query.MaterialId is null
-                    ? $"{converter.Code(query.FromUomId)} doesn't convert to {converter.Code(query.ToUomId)} without a material; pick one."
-                    : $"{converter.Code(query.FromUomId)} doesn't convert to {converter.Code(query.ToUomId)} for this material; add a conversion for it.",
+                    ? Notes.Of($"{converter.Code(query.FromUomId)} doesn't convert to {converter.Code(query.ToUomId)} without a material; pick one.")
+                    : Notes.Of($"{converter.Code(query.FromUomId)} doesn't convert to {converter.Code(query.ToUomId)} for this material; add a conversion for it."),
             };
         }
 

@@ -2,10 +2,12 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
-using Pulaski.Domain;
 using Pulaski.Application.Labor;
+using Pulaski.Application.Localization;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.Materials;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -106,12 +108,12 @@ internal static class ConnectionRuns
     public static string Reason(MaterialConnection connection, string trigger) =>
         trigger == ConnectionTriggers.Schedule ? $"{connection.Name} import (scheduled)" : $"{connection.Name} import";
 
-    public static string Outcome(bool applied, IReadOnlyList<string> problems) =>
+    public static string Outcome(bool applied, IReadOnlyList<MessageDto> problems) =>
         problems.Count > 0 ? ConnectionOutcomes.Failed : applied ? ConnectionOutcomes.Applied : ConnectionOutcomes.NotApplied;
 
     public static async Task RecordAsync(
         IUnitOfWork unitOfWork, IMaterialConnectionStore store, IIdGenerator ids, TimeProvider time, Guid connectionId, string trigger, DateTimeOffset started,
-        string actor, bool applied, int created, int updated, int unchanged, int errors, IReadOnlyList<string> problems, CancellationToken cancellationToken)
+        string actor, bool applied, int created, int updated, int unchanged, int errors, IReadOnlyList<MessageDto> problems, CancellationToken cancellationToken)
     {
         var summary = MaterialConnectionRules.Summary(applied, created, updated, unchanged, errors, problems);
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -142,13 +144,13 @@ public static class ConnectionPeopleRows
     {
         if (items.Count > PersonImportFields.MaxRows)
         {
-            return new PersonImportSource([], [$"The service sent {items.Count} people; one import takes at most {PersonImportFields.MaxRows}. Narrow it with a filter."]);
+            return new PersonImportSource([], [UserMessage.From($"The service sent {items.Count} people; one import takes at most {PersonImportFields.MaxRows}. Narrow it with a filter.")]);
         }
 
         var rows = new List<PersonImportRow>(items.Count);
         for (var i = 0; i < items.Count; i++)
         {
-            var problems = new List<string>();
+            var problems = new List<UserMessage>();
             var item = items[i];
             var values = PersonImportFields.Names.Keys.ToDictionary(
                 name => name, name => name == "external_system" ? connection.ExternalSystem : ConnectionFields.Text(item, connection.FieldMap, name, problems),
@@ -181,7 +183,7 @@ internal sealed class RunPeopleConnectionHandler(
             ? PeopleScim.Read(fetched.Items, connection.ExternalSystem)
             : ConnectionPeopleRows.Read(fetched.Items, connection);
         var result = fetched.Problems.Count > 0
-            ? new ImportPeopleResponse { FileProblems = fetched.Problems, Errors = fetched.Problems.Count }
+            ? new ImportPeopleResponse { FileProblems = [.. fetched.Problems.Select(Notes.Of)], Errors = fetched.Problems.Count }
             : await import.HandleAsync(
                 new ImportPeopleCommand(connection.SiteId!.Value, source, command.DryRun, ConnectionRuns.Reason(connection, command.Trigger))
                 {
@@ -259,7 +261,7 @@ public sealed class ScheduledConnections(
                 logger?.LogError(ex, "Scheduled run of connection {Code} failed.", connection.Code);
                 await ConnectionRuns.RecordAsync(
                     unitOfWork, store, ids, time, connection.Id, ConnectionTriggers.Schedule, started, request.ActorId, false, 0, 0, 0, 0,
-                    [$"The run stopped: {ex.Message}"], cancellationToken);
+                    [Notes.Of($"The run stopped: {ex.Message}")], cancellationToken);
             }
         }
 

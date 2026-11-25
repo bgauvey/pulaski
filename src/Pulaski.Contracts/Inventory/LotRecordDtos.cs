@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+
 namespace Pulaski.Contracts.Inventory;
 
 /// <summary>A lot attribute definition (D-056).</summary>
@@ -247,7 +249,7 @@ public sealed record ScanResultDto
     /// </summary>
     public required string Status { get; init; }
     public IReadOnlyList<ScanMatchDto> Matches { get; init; } = [];
-    public string? Message { get; init; }
+    public MessageDto? Message { get; init; }
 
     /// <summary>What a GS1 or supplier code said (#75); null for a Pulaski label or plain text.</summary>
     public ScannedLotDto? Parsed { get; init; }

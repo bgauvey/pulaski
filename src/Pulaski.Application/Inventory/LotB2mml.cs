@@ -1,6 +1,7 @@
 using System.Globalization;
-using System.Xml;
 using System.Xml.Linq;
+using System.Xml;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Inventory;
 
@@ -15,9 +16,9 @@ public sealed record LotB2mmlRow(
     DateTimeOffset? ExpiresAt,
     string? SupplierLot,
     IReadOnlyList<(string Id, string Value)> Properties,
-    IReadOnlyList<string> Problems);
+    IReadOnlyList<UserMessage> Problems);
 
-public sealed record LotB2mmlSource(IReadOnlyList<LotB2mmlRow> Rows, IReadOnlyList<string> Problems);
+public sealed record LotB2mmlSource(IReadOnlyList<LotB2mmlRow> Rows, IReadOnlyList<UserMessage> Problems);
 
 /// <summary>
 /// Reads ISA-95 material lots in B2MML XML (#72): every <c>MaterialLot</c>, whatever wraps it, matched by local name in any namespace.
@@ -60,7 +61,7 @@ public static class LotB2mml
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return new LotB2mmlSource([], ["The file is empty."]);
+            return new LotB2mmlSource([], [UserMessage.Of("The file is empty.")]);
         }
 
         XDocument document;
@@ -71,33 +72,33 @@ public static class LotB2mml
         }
         catch (XmlException ex)
         {
-            return new LotB2mmlSource([], [$"The file isn't well-formed XML: {ex.Message}"]);
+            return new LotB2mmlSource([], [UserMessage.From($"The file isn't well-formed XML: {ex.Message}")]);
         }
 
         var lots = document.Descendants().Where(e => e.Name.LocalName == "MaterialLot").ToList();
         return lots.Count switch
         {
-            0 => new LotB2mmlSource([], ["The file has no MaterialLot elements; B2MML material information has one per lot."]),
-            > MaxRows => new LotB2mmlSource([], [$"The file has {lots.Count} lots; import at most {MaxRows} at a time."]),
+            0 => new LotB2mmlSource([], [UserMessage.Of("The file has no MaterialLot elements; B2MML material information has one per lot.")]),
+            > MaxRows => new LotB2mmlSource([], [UserMessage.From($"The file has {lots.Count} lots; import at most {MaxRows} at a time.")]),
             _ => new LotB2mmlSource([.. lots.Select(ToRow)], []),
         };
     }
 
     private static LotB2mmlRow ToRow(XElement lot)
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         string? First(XElement parent, string name) => Children(parent, name).FirstOrDefault()?.Value.Trim() is { Length: > 0 } v ? v : null;
 
         var number = First(lot, "ID") ?? "";
         if (number.Length == 0)
         {
-            problems.Add("ID is missing; it is the lot number.");
+            problems.Add(UserMessage.Of("ID is missing; it is the lot number."));
         }
 
         var material = First(lot, "MaterialDefinitionID") ?? "";
         if (material.Length == 0)
         {
-            problems.Add("MaterialDefinitionID is missing; it names the lot's material.");
+            problems.Add(UserMessage.Of("MaterialDefinitionID is missing; it names the lot's material."));
         }
 
         decimal? quantity = null;
@@ -114,7 +115,7 @@ public static class LotB2mml
                 }
                 else
                 {
-                    problems.Add($"Quantity '{amount}' isn't a number.");
+                    problems.Add(UserMessage.From($"Quantity '{amount}' isn't a number."));
                 }
             }
         }
@@ -129,7 +130,7 @@ public static class LotB2mml
             switch (Normalize(id))
             {
                 case "":
-                    problems.Add("A MaterialLotProperty has no ID.");
+                    problems.Add(UserMessage.Of("A MaterialLotProperty has no ID."));
                     break;
                 case "supplierlot" or "vendorlot":
                     supplierLot = value.Length == 0 ? null : value;
@@ -148,7 +149,7 @@ public static class LotB2mml
     }
 
     // A date alone is midnight UTC on that day; a time without an offset is UTC.
-    private static DateTimeOffset? Expiry(string? text, List<string> problems)
+    private static DateTimeOffset? Expiry(string? text, List<UserMessage> problems)
     {
         if (text is null)
         {
@@ -160,7 +161,7 @@ public static class LotB2mml
             return at;
         }
 
-        problems.Add($"ExpirationTime '{text}' isn't a date or an ISO 8601 time.");
+        problems.Add(UserMessage.From($"ExpirationTime '{text}' isn't a date or an ISO 8601 time."));
         return null;
     }
 

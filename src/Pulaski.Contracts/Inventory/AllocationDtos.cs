@@ -54,6 +54,9 @@ public sealed record LotRecommendationDto
     public DateTimeOffset? ExpiresAt { get; init; }
     public DateTimeOffset ReceivedAt { get; init; }
     public required string Reason { get; init; }
+
+    /// <summary><see cref="Reason"/> with its template, for the reader's language (#188).</summary>
+    public MessageDto? ReasonMessage { get; init; }
 }
 
 /// <summary>A lot of the component that wasn't suggested, and why.</summary>

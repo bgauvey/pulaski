@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Materials;
 using Pulaski.Domain;
@@ -64,7 +65,7 @@ public sealed record MaterialConnection(
 }
 
 /// <summary>What a pull fetched: the items as the service sent them, and problems with the fetch as a whole.</summary>
-public sealed record MaterialConnectionFetch(IReadOnlyList<JsonElement> Items, IReadOnlyList<string> Problems);
+public sealed record MaterialConnectionFetch(IReadOnlyList<JsonElement> Items, IReadOnlyList<UserMessage> Problems);
 
 /// <summary>Material connections, read and written in the command's transaction (D-068).</summary>
 public interface IMaterialConnectionStore
@@ -131,14 +132,14 @@ public static class ODataMaterialRows
     {
         if (items.Count > MaterialImportFields.MaxRows)
         {
-            return new MaterialImportSource([], [$"The service sent {items.Count} items; one import takes at most {MaterialImportFields.MaxRows}. Narrow it with a filter."]);
+            return new MaterialImportSource([], [UserMessage.From($"The service sent {items.Count} items; one import takes at most {MaterialImportFields.MaxRows}. Narrow it with a filter.")]);
         }
 
         var rows = new List<MaterialImportRow>(items.Count);
         for (var i = 0; i < items.Count; i++)
         {
             var item = items[i];
-            var problems = new List<string>();
+            var problems = new List<UserMessage>();
             string? Field(string name) => name == "external_system" ? connection.ExternalSystem : ConnectionFields.Text(item, connection.FieldMap, name, problems);
 
             // Every field read first, so a value that isn't one is among the problems ToRow starts from.
@@ -165,7 +166,7 @@ public static class ODataMaterialRows
 public static partial class ConnectionFields
 {
     /// <summary>The field's text, or null when the map doesn't name it or the item doesn't have it.</summary>
-    public static string? Text(JsonElement item, IReadOnlyDictionary<string, string> map, string name, List<string> problems)
+    public static string? Text(JsonElement item, IReadOnlyDictionary<string, string> map, string name, List<UserMessage> problems)
     {
         if (!map.TryGetValue(name, out var path) || Resolve(item, path) is not { } value)
         {
@@ -185,7 +186,7 @@ public static partial class ConnectionFields
             case JsonValueKind.False:
                 return "false";
             default:
-                problems.Add($"{name}: {path} isn't a single value.");
+                problems.Add(UserMessage.From($"{name}: {path} isn't a single value."));
                 return null;
         }
     }
@@ -309,10 +310,11 @@ internal static partial class MaterialConnectionRules
     public static string Summary(ImportMaterialsResponse result) =>
         Summary(result.Applied, result.Created, result.Updated, result.Unchanged, result.Errors, result.FileProblems);
 
-    public static string Summary(bool applied, int created, int updated, int unchanged, int errors, IReadOnlyList<string> problems) =>
+    /// <summary>A run's summary as recorded (English, like the rest of the run's history).</summary>
+    public static string Summary(bool applied, int created, int updated, int unchanged, int errors, IReadOnlyList<MessageDto> problems) =>
         applied
             ? $"{created} created, {updated} updated, {unchanged} unchanged."
-            : problems.Count > 0 ? string.Join(" ", problems) : $"Not imported: {errors} items with errors.";
+            : problems.Count > 0 ? string.Join(" ", problems.Select(p => p.Text)) : $"Not imported: {errors} items with errors.";
 }
 
 internal sealed class ListMaterialConnectionsHandler(IUnitOfWork unitOfWork, IMaterialConnectionStore store, IMaterialConnectionFetcher fetcher)
@@ -518,7 +520,7 @@ internal sealed class RunMaterialConnectionHandler(
         var started = time.GetUtcNow();
         var fetched = await fetcher.FetchAsync(connection, MaterialImportFields.MaxRows, cancellationToken);
         var result = fetched.Problems.Count > 0
-            ? new ImportMaterialsResponse { FileProblems = fetched.Problems }
+            ? new ImportMaterialsResponse { FileProblems = [.. fetched.Problems.Select(Notes.Of)] }
             : await import.HandleAsync(
                 new ImportMaterialsCommand(
                     ODataMaterialRows.Read(fetched.Items, connection), command.DryRun, ConnectionRuns.Reason(connection, command.Trigger),

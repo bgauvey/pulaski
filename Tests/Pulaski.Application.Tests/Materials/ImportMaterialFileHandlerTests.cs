@@ -51,7 +51,7 @@ public class ImportMaterialFileHandlerTests
 
         // Without the system the same ID is a Pulaski code, and that code belongs to the ERP's item.
         var local = await RunAsync("b2mml", Item("Resin, natural"));
-        Assert.Contains("comes from ERP1", Assert.Single(local.Rows).Message, StringComparison.Ordinal);
+        Assert.Contains("comes from ERP1", Assert.Single(local.Rows).Message?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
