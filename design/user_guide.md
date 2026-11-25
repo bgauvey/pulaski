@@ -157,7 +157,24 @@ In detail: each kind shows only where you hold the permission that decides it (*
 *work orders: manage*, *rates: modify*, *Work maintenance requests*, *Give setup and first-article checklists their second sign-off*). A maintenance request shows by its
 number and machine with what was asked, until someone starts it; it opens the **Maintenance** tab of Machines. A checklist shows by its job and
 instruction, with the line and who answered it, until it is signed off or rejected; it opens the job's page. Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
-does. The page refreshes every 30 seconds; the menu's number every minute, and when you move to another page.
+does. The page updates [by itself](#screens-that-update-themselves) when something arrives, and every 30 seconds; the menu's number every minute,
+and when you move to another page.
+
+### Screens that update themselves
+
+The floor screens show what happens elsewhere within a few seconds, without reloading: a report entered at one terminal, a job started at a
+station, a machine stopping, an andon call. This works on the **Overview**, **Floor**, a job's page, **Machines**, **Andon**, **Handover** and
+the **Inbox**.
+
+In detail:
+
+- **What triggers it:** anything recorded (every change Pulaski keeps as an event) and anything a machine reports (its state, a stop, its
+  counts, an alarm) at a site you can see. Screens then read their figures again, so they show only what you may see, as they always do.
+- **While you are typing,** nothing is reloaded under you: the Floor waits while a form is open, the job page while you report or stop a job
+  or reverse a report, Machines while you code or adjust a stop.
+- **How often:** a page reloads at most once a second (Machines every 2 seconds, the Overview every 10), however much changes. The timers stay
+  as well (every 15 or 30 seconds), so a page catches up by itself if the live connection drops; when it comes back, every open page reloads once.
+- Process values alone don't trigger a reload.
 
 ### How saving works
 
@@ -290,7 +307,7 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 
 ### The Overview page
 
-**Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It refreshes itself every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites whose Overview you may see, pick one at the top.
+**Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It [updates by itself](#screens-that-update-themselves) within seconds of a change, and every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites whose Overview you may see, pick one at the top.
 
 **Diagonal hatching means "no data".** A part of the board that has nothing to show yet (machine figures when no line reports its state, say) sits where it will be, hatched and greyed, with a plug symbol saying what will fill it, so the page won't move around when the data arrives. A dash or hatching means *not measured*; a 0 means measured and none.
 
@@ -959,7 +976,7 @@ Pulaski lays work end to end on each line, so two jobs on a line only overlap wh
 
 ### The board
 
-Each line is a card. A running line shows its job with the run's length, good quantity against the plan (with a bar), scrap, and how much more the run can hold at the line's rate. Below it, **Next** lists the line's other open jobs in sequence, each with its status and, when it can't start yet, why (*Waiting for operation 10 Extrude to end*) and when (*Ready at 14:30*). Departments with jobs waiting on them have a card of their own. The board refreshes every 15 seconds while no form is open.
+Each line is a card. A running line shows its job with the run's length, good quantity against the plan (with a bar), scrap, and how much more the run can hold at the line's rate. Below it, **Next** lists the line's other open jobs in sequence, each with its status and, when it can't start yet, why (*Waiting for operation 10 Extrude to end*) and when (*Ready at 14:30*). Departments with jobs waiting on them have a card of their own. The board shows changes [within seconds](#screens-that-update-themselves), and refreshes every 15 seconds, while no form is open.
 
 ### Use an operator station
 
@@ -1070,7 +1087,8 @@ maintenance requests that aren't closed, its machines' too, show under them with
 2. Click **I'm on it** when you go to a call.
 3. When it's done, click **Resolve**, say what was done, and click **Resolved**.
 
-In detail: the page refreshes itself every 30 seconds (the live pill says when it last did). Below, **Resolved in the last day** lists the calls
+In detail: the page updates [by itself](#screens-that-update-themselves) as calls are raised and answered, and every 30 seconds (the live pill
+says when it last did). Below, **Resolved in the last day** lists the calls
 resolved in the last 24 hours, with who resolved them, how long they took to answer and to resolve, and what was done. Seeing the page needs
 **floor: view**; answering needs **andon: respond**. Calls are raised at the line's [operator station](#use-an-operator-station).
 
@@ -1101,7 +1119,7 @@ In detail:
 - The **Overview** shows *1 open item* (or more) under a line's name, linking here, and the [line boards](#show-a-line-board-on-a-tv) list a
   line's first three open items.
 - Writing and closing needs *handover: write* (Operator, Supervisor and Quality have it); anyone who sees the Floor can read it. The page
-  refreshes every 30 seconds.
+  updates [by itself](#screens-that-update-themselves) when a note is written or an item closed, and every 30 seconds.
 
 ### Use a touch screen
 
@@ -3157,7 +3175,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 4. A line sits first in its row, with the machines below it. A line set to take its state from its machines says so: **Worst of its machines** (series), **Best of its machines** (parallel) or **Its constraint machine**.
 5. **… stops to code** on a tile opens that machine's stops. **… quiet** means its edge node hasn't been heard from for 2 minutes.
 
-The board refreshes every 5 seconds.
+The board refreshes every 5 seconds, and [within seconds](#screens-that-update-themselves) of a machine's change.
 
 ### Code stops
 
@@ -3406,6 +3424,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
   show, or the next job's while nothing runs. A failed or rejected checklist only holds up the job; it doesn't put lots on hold or raise a quality
   alert, and nothing e-mails anyone about a checklist waiting for its sign-off (it is in the Inbox). Who may give the second sign-off is one
   permission for every checklist, not chosen per checklist. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
+- **Live updates** reach the Overview, Floor, job pages, Machines, Andon, Handover and the Inbox; line boards and operator stations still reload
+  on their timers, and the Schedule, Inventory and Quality pages show what was there when they were opened (charts and alerts every 30 seconds).
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).

@@ -1,6 +1,7 @@
 @page "/floor"
 @attribute [RequiresView(PermissionCodes.FloorView)]
 @implements IDisposable
+@inject LiveFeed LiveFeed
 @using Pulaski.Web.Services.Execution
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
@@ -308,8 +309,28 @@ else
         _ = TickAsync(_cts.Token);
     }
 
+
+    // Live updates (#143): reload when something it shows changes, as the timer does.
+    private IDisposable? _liveFeed;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _liveFeed = LiveFeed.Subscribe(LiveFilters.At(() => Sites.SiteId, "job", "work_order", "partial_batch", "labor_session", "equipment", LiveFilters.Machine), () => InvokeAsync(async () =>
+            {
+                if (!FormOpen && !_busy)
+                {
+                    await LoadAsync();
+                    StateHasChanged();
+                }
+            }));
+        }
+    }
+
     public void Dispose()
     {
+        _liveFeed?.Dispose();
         _cts.Cancel();
         _cts.Dispose();
     }

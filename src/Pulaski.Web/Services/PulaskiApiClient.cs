@@ -1832,6 +1832,30 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         }
     }
 
+    /// <summary>
+    /// The API's live changes (#143) as they come: the open response, read as server-sent events by <see cref="Live.LiveFeed"/>; the caller
+    /// disposes it. Reading isn't bound by the client's timeout once the headers are in.
+    /// </summary>
+    public async Task<HttpResponseMessage> OpenLiveAsync(CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/live");
+        request.Headers.Accept.ParseAdd("text/event-stream");
+        if (await session.TokenAsync() is { } token)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var status = (int)response.StatusCode;
+            response.Dispose();
+            throw new ApiException(status, Term.Mark("Live updates aren't available."), null, null);
+        }
+
+        return response;
+    }
+
     private async Task<HttpResponseMessage> SendCoreAsync(HttpRequestMessage request, CancellationToken ct, bool signedIn = true)
     {
         using (request)

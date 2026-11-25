@@ -18,7 +18,7 @@
     <div class="inv-head-tools">
         @if (_handover is not null)
         {
-            <LiveStatus OnRefresh="RefreshAsync" LoadedAt="_loadedAt" TimeZone="@_handover.TimeZone" />
+            <LiveStatus OnRefresh="RefreshAsync" Relevant="@(LiveFilters.At(() => Sites.SiteId, "handover_entry"))" LoadedAt="_loadedAt" TimeZone="@_handover.TimeZone" />
         }
         @if (Sites.Sites.Count > 1)
         {

@@ -1943,6 +1943,7 @@ Lines without shifts
 Line…
 Link
 Live
+Live updates aren't available.
 Live · updated {0} site time
 Live, updated {0}
 Load

@@ -3236,6 +3236,28 @@ that was.
   with the version shown; (c) checklists for setup and first article in a version; (d) sign-off by the operator, with an optional second, kept
   against the run.
 
+### D-117 · Live updates on floor screens (#143) · *Proposed, in pieces*
+
+**Context.** Floor screens polled every 15–30 s, so a report or a stop on one screen took up to half a minute to show on another. Pulaski already
+writes an event for every change in the same transaction (D-007); machine ingest writes no events (telemetry stays out of `evt.event`).
+
+**Decision.**
+- **The database says what changed.** `EventLog.AppendAsync` sends `pg_notify('pulaski_live', {type, kind, id})` (the event's type, subject type
+  and subject) beside its insert; ingest sends `{machine, machine, equipmentId}` for each machine whose state, stops, counts or alarms changed
+  (`ILiveSignals`, process values alone don't). PostgreSQL delivers notices on commit, never on rollback, and drops repeats within one
+  transaction. App code, not a trigger; no schema change. Notices carry no data.
+- **The API fans out.** `LiveListener` (hosted, `Live:Enabled`) LISTENs on its own connection, finds each change's site through the
+  permission lookups (`LiveSites.For` → `ISiteLookup`, cached; kinds without a site go to everyone) and hands it to the `LiveHub` (in memory,
+  per process; each subscriber a bounded queue dropping its oldest). Losing the connection it retries every 5 s and then publishes `resync`.
+  `GET /api/live` (`RequireAnyView`) streams server-sent events: a `changes` event per batch (gathered for 250 ms, repeats once), filtered to
+  the sites the caller sees (`LiveSites.Visible`), a comment every 20 s.
+- **Screens read again.** The web keeps one stream per circuit, as the user (`LiveFeed`, scoped; reconnects with a growing pause, then has
+  every page reload). A page subscribes with what it cares about (`LiveFilters.At(site, kinds…)`, `LiveFilters.To(kind, id)`) and reloads
+  through its own API calls, so permissions are as ever: at most every second by default (Machines 2 s, the Overview 10 s), never two at
+  once, and not while a form is open. The timers stay as the fallback. `LiveStatus` takes `Relevant` for pages it drives.
+- **Pieces:** (a) the channel, the stream and the signed-in pages (Overview, Floor, job page, Machines, Andon, Handover, Inbox); (b) line boards
+  and operator stations (static pages): boards reload at once, a station only while nobody is typing in one of its forms.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
