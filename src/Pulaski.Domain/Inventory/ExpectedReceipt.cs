@@ -45,9 +45,9 @@ public sealed record ExpectedReceipt(
 
         if (ReceivedQty > 0 && (uomId != UomId || quantity <= ReceivedQty))
         {
-            throw new DomainRuleException(uomId != UomId
-                ? "Part of it has arrived, so its unit stays as it is."
-                : $"{ReceivedQty:0.######} has arrived already; expect more than that, or close it as complete.");
+            throw uomId != UomId
+                ? new DomainRuleException("Part of it has arrived, so its unit stays as it is.")
+                : new DomainRuleException($"{ReceivedQty:0.######} has arrived already; expect more than that, or close it as complete.");
         }
 
         return this with { Quantity = quantity, UomId = uomId, ExpectedAt = expectedAt, Reference = reference, Supplier = supplier, Note = note };
@@ -93,7 +93,16 @@ public sealed record ExpectedReceipt(
     {
         if (!IsOpen)
         {
-            throw new DomainRuleException($"{Reference ?? "This expected receipt"} is {Status}; it can't be {what}.");
+            // Each action its own sentence, for translation (#188).
+            var name = (object?)Reference ?? UserMessage.Of("This expected receipt");
+            var status = UserMessage.Code(Status);
+            throw what switch
+            {
+                "cancelled" => new DomainRuleException($"{name} is {status}; it can't be cancelled."),
+                "received against" => new DomainRuleException($"{name} is {status}; it can't be received against."),
+                "closed" => new DomainRuleException($"{name} is {status}; it can't be closed."),
+                _ => new DomainRuleException($"{name} is {status}; it can't be changed."),
+            };
         }
     }
 }

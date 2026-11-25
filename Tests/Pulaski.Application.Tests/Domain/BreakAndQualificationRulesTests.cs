@@ -67,7 +67,7 @@ public class BreakAndQualificationRulesTests
         ];
 
         var missing = QualificationRules.Missing([fork, crane, lift, fork], grants, day, T0);
-        Assert.Equal(["expired 2026-10-01", "revoked", "valid only from 2026-11-01"], missing.Select(m => m.Why));
+        Assert.Equal(["expired 2026-10-01", "revoked", "valid only from 2026-11-01"], missing.Select(m => m.Why.Text));
         Assert.Contains("FORK Forklift (expired 2026-10-01)", QualificationRules.Describe("Lee", "EXT-01", missing).Text, StringComparison.Ordinal);
 
         var renewed = QualificationRules.Missing([fork], [.. grants, new(fork.QualificationId, new DateOnly(2026, 10, 2), new DateOnly(2027, 10, 1), null)], day, T0);

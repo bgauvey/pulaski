@@ -117,9 +117,9 @@ internal sealed class ImportLotAttributeValuesHandler(
         return matches.Count switch
         {
             1 => matches[0],
-            0 => throw new DomainRuleException(row.MaterialCode.Length == 0
-                ? $"There is no lot {row.LotNumber} at this site."
-                : $"There is no lot {row.LotNumber} of {row.MaterialCode} at this site."),
+            0 => throw (row.MaterialCode.Length == 0
+                ? new DomainRuleException($"There is no lot {row.LotNumber} at this site.")
+                : new DomainRuleException($"There is no lot {row.LotNumber} of {row.MaterialCode} at this site.")),
             _ => throw new DomainRuleException($"Lots of {string.Join(", ", matches.Select(m => m.MaterialCode))} are numbered {row.LotNumber}; fill in material_code."),
         };
     }

@@ -78,6 +78,14 @@ public sealed class EndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
         var planning = await _client.PostAsJsonAsync(uri, new ChangeWorkOrderStatusRequest { Version = 5, Status = "dispatched" });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, planning.StatusCode);
 
+        // Status codes inside a message go as codes (#188), for the screens to word.
+        using (var problem = System.Text.Json.JsonDocument.Parse(await planning.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("planned", problem.RootElement.GetProperty("values")[0].GetProperty("code").GetString());
+            Assert.Equal("dispatched", problem.RootElement.GetProperty("values")[1].GetProperty("code").GetString());
+            Assert.StartsWith("Moving a work order from 'planned' to 'dispatched'", problem.RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        }
+
         var ok = await _client.PostAsJsonAsync(uri, new ChangeWorkOrderStatusRequest { Version = 5, Status = "cancelled" });
         Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
         Assert.Equal(6, (await ok.Content.ReadFromJsonAsync<VersionResponse>())!.Version);

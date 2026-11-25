@@ -37,7 +37,7 @@ public sealed record RunHistoryResult(
     decimal? SlowFence,
     decimal? FastFence,
     decimal? RatePerHour,
-    string? NotEnough)
+    UserMessage? NotEnough)
 {
     public int UsedRuns => Runs.Count(r => r.IsUsed);
 
@@ -101,9 +101,11 @@ public static class RunHistoryRate
         var hours = used.Sum(v => v.Run.RateHours(takeOutStops));
         var good = used.Sum(v => v.Run.GoodQty!.Value);
         var notEnough = used.Count < MinRuns
-            ? $"Only {used.Count} usable {(used.Count == 1 ? "run" : "runs")}; a rate needs at least {MinRuns}."
+            ? used.Count == 1
+                ? UserMessage.From($"Only 1 usable run; a rate needs at least {MinRuns}.")
+                : UserMessage.From($"Only {used.Count} usable runs; a rate needs at least {MinRuns}.")
             : hours < MinHours
-                ? $"Only {Rate(hours)} hours of usable runs; a rate needs at least {MinHours.ToString(CultureInfo.InvariantCulture)}."
+                ? UserMessage.From($"Only {Rate(hours)} hours of usable runs; a rate needs at least {MinHours.ToString(CultureInfo.InvariantCulture)}.")
                 : null;
 
         return new RunHistoryResult(

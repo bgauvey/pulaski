@@ -93,7 +93,7 @@ public class ControlLimitsTests
     {
         var thin = ControlLimits.Compute(ChartTypes.IMr, Measured(19, i => [i]), 1);
         Assert.Null(thin.Limits);
-        Assert.Equal("Only 19 usable subgroups; limits need at least 20.", thin.NotEnough);
+        Assert.Equal("Only 19 usable subgroups; limits need at least 20.", thin.NotEnough?.Text);
 
         var mixed = Measured(22, _ => [1, 2, 3, 4, 5]);
         mixed.Add(SpcSubgroup.Measured(Guid.CreateVersion7(), Start.AddDays(2), 1, 2, 3));

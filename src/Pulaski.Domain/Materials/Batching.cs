@@ -80,7 +80,7 @@ public sealed record Batching(decimal Size, decimal TolerancePct, string Rule)
     /// <param name="what">What is being planned, for the message, such as "Work order WO-1".</param>
     /// <param name="unitCode">The base unit's code, for the message.</param>
     /// <exception cref="DomainRuleException">It would need a partial batch.</exception>
-    public void EnsureWholeBatches(decimal quantity, string what, string unitCode)
+    public void EnsureWholeBatches(decimal quantity, UserMessage what, string unitCode)
     {
         if (WholeBatches(quantity) is not null)
         {
@@ -89,9 +89,13 @@ public sealed record Batching(decimal Size, decimal TolerancePct, string Rule)
 
         var below = Math.Floor(quantity / Size);
         var above = below + 1;
-        throw new DomainRuleException(
-            $"{what}: {Qty(quantity)} {unitCode} is {Qty(quantity / Size)} batches of {Qty(Size)} {unitCode}, and only whole batches are planned. " +
-            (below > 0 ? $"Plan {Qty(below * Size)} or {Qty(above * Size)} {unitCode}." : $"Plan at least {Qty(Size)} {unitCode}."));
+        throw below > 0
+            ? new DomainRuleException(
+                $"{what}: {Qty(quantity)} {unitCode} is {Qty(quantity / Size)} batches of {Qty(Size)} {unitCode}, and only whole batches are planned. " +
+                $"Plan {Qty(below * Size)} or {Qty(above * Size)} {unitCode}.")
+            : new DomainRuleException(
+                $"{what}: {Qty(quantity)} {unitCode} is {Qty(quantity / Size)} batches of {Qty(Size)} {unitCode}, and only whole batches are planned. " +
+                $"Plan at least {Qty(Size)} {unitCode}.");
     }
 
     /// <summary>Whether one reported batch weighs what a batch should.</summary>
@@ -102,10 +106,12 @@ public sealed record Batching(decimal Size, decimal TolerancePct, string Rule)
     {
         if (!IsBatch(quantity))
         {
-            throw new DomainRuleException(IsExact
-                ? $"{Qty(quantity)} {unitCode} isn't a batch: every batch is exactly {Qty(Size)} {unitCode}. A short batch is reported as a partial batch when the line stops."
-                : $"{Qty(quantity)} {unitCode} isn't a batch: a batch is {Qty(Low)} to {Qty(High)} {unitCode} ({Qty(Size)} ± {Qty(TolerancePct)}%). " +
-                  "A short batch is reported as a partial batch when the line stops.");
+            throw IsExact
+                ? new DomainRuleException(
+                    $"{Qty(quantity)} {unitCode} isn't a batch: every batch is exactly {Qty(Size)} {unitCode}. A short batch is reported as a partial batch when the line stops.")
+                : new DomainRuleException(
+                    $"{Qty(quantity)} {unitCode} isn't a batch: a batch is {Qty(Low)} to {Qty(High)} {unitCode} ({Qty(Size)} ± {Qty(TolerancePct)}%). " +
+                    $"A short batch is reported as a partial batch when the line stops.");
         }
     }
 
@@ -168,7 +174,7 @@ public sealed record Batching(decimal Size, decimal TolerancePct, string Rule)
     /// <param name="unitCode">The unit's code, for the message.</param>
     /// <returns>Each share's number of batches.</returns>
     /// <exception cref="DomainRuleException">No whole batches add up to the quantity; the message names the nearest quantities that do.</exception>
-    public static IReadOnlyList<int> ShareBySize(decimal quantity, IReadOnlyList<(decimal Percent, decimal Size)> shares, string what, string unitCode)
+    public static IReadOnlyList<int> ShareBySize(decimal quantity, IReadOnlyList<(decimal Percent, decimal Size)> shares, UserMessage what, string unitCode)
     {
         if (shares.Select(s => s.Size).Distinct().Count() == 1)
         {
@@ -230,10 +236,17 @@ public sealed record Batching(decimal Size, decimal TolerancePct, string Rule)
         }
 
         var sizes = string.Join(", ", shares.Select(s => $"{Qty(s.Size)}"));
-        var nearest = string.Join(" or ", new[] { below, above }.Where(q => q is not null).Select(q => Qty(q!.Value)));
-        throw new DomainRuleException(
-            $"{what}: {Qty(quantity)} {unitCode} can't be shared in whole batches of each line's size ({sizes} {unitCode}). " +
-            $"Plan {nearest} {unitCode}, or change the shares.");
+        throw (below, above) switch
+        {
+            ({ } b, { } a) => new DomainRuleException(
+                $"{what}: {Qty(quantity)} {unitCode} can't be shared in whole batches of each line's size ({sizes} {unitCode}). " +
+                $"Plan {Qty(b)} or {Qty(a)} {unitCode}, or change the shares."),
+            _ when (below ?? above) is { } q => new DomainRuleException(
+                $"{what}: {Qty(quantity)} {unitCode} can't be shared in whole batches of each line's size ({sizes} {unitCode}). " +
+                $"Plan {Qty(q)} {unitCode}, or change the shares."),
+            _ => new DomainRuleException(
+                $"{what}: {Qty(quantity)} {unitCode} can't be shared in whole batches of each line's size ({sizes} {unitCode}). Change the shares."),
+        };
     }
 
     /// <summary>The fewest whole batches that hold <paramref name="quantity"/>.</summary>
@@ -296,16 +309,16 @@ public sealed record PartialBatch(
     /// <summary>Its report was reversed (D-063). A rejected one was written off, so its report can't be until that is reversed.</summary>
     /// <exception cref="DomainRuleException">It was rejected or reversed already.</exception>
     public PartialBatch Reverse() => Status is PartialBatchStatus.Rejected or PartialBatchStatus.Reversed
-        ? throw new DomainRuleException($"This partial batch was {Status}; its report can't be reversed while it is.")
+        ? throw new DomainRuleException($"This partial batch was {UserMessage.Code(Status)}; its report can't be reversed while it is.")
         : this with { Status = PartialBatchStatus.Reversed };
 
     private void EnsurePending()
     {
         if (Status != PartialBatchStatus.Pending)
         {
-            throw new DomainRuleException(Status == PartialBatchStatus.Accepted
-                ? "This partial batch didn't need approval; it was accepted when reported."
-                : $"This partial batch was already {Status}.");
+            throw Status == PartialBatchStatus.Accepted
+                ? new DomainRuleException("This partial batch didn't need approval; it was accepted when reported.")
+                : new DomainRuleException($"This partial batch was already {UserMessage.Code(Status)}.");
         }
     }
 }

@@ -119,7 +119,7 @@ public static class ControlChartView
     {
         if (c.DefectRate is not { } rate)
         {
-            return c.NotEnough ?? "";
+            return c.NotEnough is { } why ? l.Of(why) : "";
         }
 
         var pct = (rate * 100).ToString("0.00", CultureInfo.CurrentCulture);

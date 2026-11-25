@@ -93,7 +93,7 @@ internal sealed class ErpOrderWriter(
 
     /// <summary>The quantity to plan for the ERP's, in the order's unit, under the ERP batch rule in force.</summary>
     public async Task<(decimal Planned, ErpQuantity Taken)> QuantityAsync(
-        Guid siteId, Guid materialId, decimal quantity, Guid uomId, string what, CancellationToken cancellationToken)
+        Guid siteId, Guid materialId, decimal quantity, Guid uomId, UserMessage what, CancellationToken cancellationToken)
     {
         var material = (await boms.GetMaterialsAsync([materialId], cancellationToken)).Single();
         var converter = UnitConversions.For(materialId, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([materialId], cancellationToken));
@@ -144,7 +144,7 @@ internal sealed class ErpOrderWriter(
             {
                 decimal Size(Job job) => converter.Convert(sizes.TryGetValue(job.EquipmentId, out var own) ? own : batching.Size, material.BaseUomId, order.UomId);
                 var counts = Batching.ShareBySize(
-                    quantity, [.. opJobs.Select((j, i) => (op.Equipment[i].SharePercent, Size(j)))], $"Work order {order.OrderNumber}, operation {op.Number}", converter.Code(order.UomId));
+                    quantity, [.. opJobs.Select((j, i) => (op.Equipment[i].SharePercent, Size(j)))], UserMessage.From($"Work order {order.OrderNumber}, operation {op.Number}"), converter.Code(order.UomId));
                 for (var i = 0; i < opJobs.Count; i++)
                 {
                     shares[i] = Math.Round(counts[i] * Size(opJobs[i]), Domain.Processes.ProcessJobPlan.QuantityScale);
@@ -229,7 +229,7 @@ internal sealed class ErpOrderWriter(
             throw new DomainRuleException($"{order.OrderNumber} is in {unit}; the ERP must keep sending that unit.");
         }
 
-        var (planned, taken) = await QuantityAsync(order.SiteId, order.MaterialId, change.Quantity, change.UomId, $"Work order {order.OrderNumber}", cancellationToken);
+        var (planned, taken) = await QuantityAsync(order.SiteId, order.MaterialId, change.Quantity, change.UomId, UserMessage.From($"Work order {order.OrderNumber}"), cancellationToken);
         var held = taken.Adjustment == BatchAdjustment.Held;
         var startShift = order.PlannedStart is { } start ? change.PlannedStart - start : TimeSpan.Zero;
         var notes = new List<string>();
@@ -240,7 +240,7 @@ internal sealed class ErpOrderWriter(
 
         if (taken.Note is { } note)
         {
-            notes.Add(note);
+            notes.Add(note.Text);
         }
 
         var after = order with
@@ -377,14 +377,14 @@ internal sealed class ImportWorkOrdersHandler(
         var chosen = candidates switch
         {
             [var only] => only,
-            [] => throw new DomainRuleException(InventoryText(row.ProcessCode) is { } code
-                ? $"There is no released process {code} at {row.SiteCode.Trim()} that makes {row.MaterialCode.Trim()}."
-                : $"No released process at {row.SiteCode.Trim()} makes {row.MaterialCode.Trim()}; release one, or send the process code."),
+            [] => throw (InventoryText(row.ProcessCode) is { } code
+                ? new DomainRuleException($"There is no released process {code} at {row.SiteCode.Trim()} that makes {row.MaterialCode.Trim()}.")
+                : new DomainRuleException($"No released process at {row.SiteCode.Trim()} makes {row.MaterialCode.Trim()}; release one, or send the process code.")),
             _ => throw new DomainRuleException(
                 $"Several processes make {row.MaterialCode.Trim()} ({string.Join(", ", candidates.Select(c => c.Code))}); send the process code, or set the material's default process."),
         };
 
-        var (planned, taken) = await writer.QuantityAsync(siteId, materialId, change.Quantity, change.UomId, $"Work order {number}", cancellationToken);
+        var (planned, taken) = await writer.QuantityAsync(siteId, materialId, change.Quantity, change.UomId, UserMessage.From($"Work order {number}"), cancellationToken);
         var maker = new CreateWorkOrderHandler(unitOfWork, workOrders, processes, boms, units, materials, scheduling, eventLog, events, ids, timeProvider, lineBatches);
         var (order, _) = await maker.MakeAsync(
             new CreateWorkOrderCommand(chosen.Id, number, materialId, planned, change.UomId, change.PlannedStart, change.DueAt, change.Priority, InventoryText(row.Notes)),
@@ -396,7 +396,7 @@ internal sealed class ImportWorkOrdersHandler(
             OrderNumber = number,
             Action = ErpOrderAction.Created,
             WorkOrderId = order.Id,
-            Messages = [$"Made from process {chosen.Code}.", .. taken.Note is { } note ? new[] { note } : []],
+            Messages = [$"Made from process {chosen.Code}.", .. taken.Note is { } note ? new[] { note.Text } : []],
         };
     }
 
@@ -415,7 +415,7 @@ internal sealed class ImportWorkOrdersHandler(
 
         if (order.Status is WorkOrderStatus.Closed or WorkOrderStatus.Cancelled or WorkOrderStatus.Completed)
         {
-            return Result(ErpOrderAction.Unchanged, $"{order.OrderNumber} is {order.Status} in Pulaski; the ERP's change comes too late and is left out.");
+            return Result(ErpOrderAction.Unchanged, $"{order.OrderNumber} is {UserMessage.Code(order.Status)} in Pulaski; the ERP's change comes too late and is left out.");
         }
 
         if (materialId != order.MaterialId)
@@ -447,7 +447,7 @@ internal sealed class ImportWorkOrdersHandler(
         var envelope = events.Create(EventTypes.WorkOrderErpChangePending, "work_order", order.Id, new { Erp = change, order.Status }, row.ExternalSystem.Trim());
         await workOrders.UpdateFromErpAsync(pending, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        return Result(ErpOrderAction.Pending, $"{order.OrderNumber} is {order.Status}; the change waits for a planner to accept or reject it.");
+        return Result(ErpOrderAction.Pending, $"{order.OrderNumber} is {UserMessage.Code(order.Status)}; the change waits for a planner to accept or reject it.");
     }
 
     private static string? InventoryText(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -527,7 +527,7 @@ internal sealed class SetWorkOrderQuantityHandler(
         var order = locked.Value;
         if (order.Status != WorkOrderStatus.Planned)
         {
-            throw new DomainRuleException($"{order.OrderNumber} is {order.Status}; only a planned order's quantity is changed here.");
+            throw new DomainRuleException($"{order.OrderNumber} is {UserMessage.Code(order.Status)}; only a planned order's quantity is changed here.");
         }
 
         if (order.IsFromErp && !order.QuantityHeld)

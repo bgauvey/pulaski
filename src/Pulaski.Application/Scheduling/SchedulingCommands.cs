@@ -110,12 +110,12 @@ internal sealed class CreateJobHandler(
             // A dispatched order's plan is published; un-dispatch it to change its jobs (D-018).
             if (workOrder.Status != WorkOrderStatus.Planned)
             {
-                throw new DomainRuleException($"Work order {workOrder.OrderNumber} is {workOrder.Status}; only planned orders get new jobs.");
+                throw new DomainRuleException($"Work order {workOrder.OrderNumber} is {UserMessage.Code(workOrder.Status)}; only planned orders get new jobs.");
             }
 
             await SchedulingRules.EnsureCanRunAsync(scheduling, line, workOrder.MaterialId, at, cancellationToken);
             await BatchPlanning.EnsureWholeAsync(
-                boms, units, workOrder.MaterialId, command.PlannedQty!.Value, workOrder.UomId, $"Job {command.JobNumber.Trim()}",
+                boms, units, workOrder.MaterialId, command.PlannedQty!.Value, workOrder.UomId, UserMessage.From($"Job {command.JobNumber.Trim()}"),
                 lineBatches, line.IsGroup ? null : line.Id, at, cancellationToken);
         }
         else if (line.IsGroup)
@@ -239,7 +239,7 @@ internal sealed class SequenceJobHandler(
         if (boms is not null && units is not null && job.PlannedQty is { } quantity && job.UomId is { } uomId)
         {
             await BatchPlanning.EnsureWholeAsync(
-                boms, units, job.MaterialId!.Value, quantity, uomId, $"Job {job.JobNumber} on {target.Code}", lineBatches, target.Id, at, cancellationToken);
+                boms, units, job.MaterialId!.Value, quantity, uomId, UserMessage.From($"Job {job.JobNumber} on {target.Code}"), lineBatches, target.Id, at, cancellationToken);
         }
     }
 
@@ -338,7 +338,7 @@ internal sealed class AssignJobHandler(
                 if (boms is not null && units is not null && job.PlannedQty is { } quantity && job.UomId is { } uomId && !job.PartialBatchPlanned)
                 {
                     await BatchPlanning.EnsureWholeAsync(
-                        boms, units, material, quantity, uomId, $"Job {job.JobNumber} on {target.Code}", lineBatches, target.Id, at, cancellationToken);
+                        boms, units, material, quantity, uomId, UserMessage.From($"Job {job.JobNumber} on {target.Code}"), lineBatches, target.Id, at, cancellationToken);
                 }
             }
         }
@@ -604,7 +604,7 @@ internal static class BatchPlanning
     /// <param name="cancellationToken">Cancels the read.</param>
     /// <exception cref="DomainRuleException">The quantity would need a partial batch on that line.</exception>
     public static async Task EnsureWholeAsync(
-        IBomRepository boms, IUnitRepository units, Guid materialId, decimal quantity, Guid uomId, string what,
+        IBomRepository boms, IUnitRepository units, Guid materialId, decimal quantity, Guid uomId, UserMessage what,
         ILineBatchSizes? lineBatches, Guid? lineId, DateTimeOffset at, CancellationToken cancellationToken)
     {
         if (await OnLineAsync(boms, lineBatches, materialId, lineId, at, cancellationToken) is not var (batching, material))

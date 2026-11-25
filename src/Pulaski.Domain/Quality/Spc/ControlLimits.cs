@@ -32,7 +32,7 @@ public sealed record LimitResult(
     int? SubgroupSize,
     IReadOnlyList<(SpcSubgroup Subgroup, string Reason)> LeftOut,
     IReadOnlyList<UserMessage> Warnings,
-    string? NotEnough);
+    UserMessage? NotEnough);
 
 /// <summary>
 /// Shewhart control charts (D-099): each subgroup's plotted statistic, and limits worked out from a baseline of them. Pure. Sigma is estimated
@@ -110,7 +110,9 @@ public static class ControlLimits
         if (used.Count < MinSubgroups)
         {
             return new(chartType, null, used.Count, Size(chartType, subgroupSize), leftOut, warnings,
-                $"Only {used.Count} usable {(used.Count == 1 ? "subgroup" : "subgroups")}; limits need at least {MinSubgroups}.");
+                used.Count == 1
+                    ? UserMessage.From($"Only 1 usable subgroup; limits need at least {MinSubgroups}.")
+                    : UserMessage.From($"Only {used.Count} usable subgroups; limits need at least {MinSubgroups}."));
         }
 
         if (used.Count < RecommendedSubgroups)

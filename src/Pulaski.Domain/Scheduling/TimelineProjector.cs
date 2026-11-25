@@ -263,9 +263,9 @@ public static class TimelineProjector
             // Firmed means it keeps its time (D-019), so a link it can't meet is reported, not fixed (D-046).
             if (job.LinkReadyAt is { } ready && ready > from)
             {
-                warnings.Add(new ScheduleWarning(
-                    ScheduleWarningCode.LinkNotMet,
-                    $"Firmed to start {from:u}, but {job.LinkLabel ?? "the operation it follows"} lets it start only at {ready:u}."));
+                warnings.Add(job.LinkLabel is { } link
+                    ? new ScheduleWarning(ScheduleWarningCode.LinkNotMet, $"Firmed to start {from:u}, but {link} lets it start only at {ready:u}.")
+                    : new ScheduleWarning(ScheduleWarningCode.LinkNotMet, $"Firmed to start {from:u}, but the operation it follows lets it start only at {ready:u}."));
             }
         }
         else if (!started)

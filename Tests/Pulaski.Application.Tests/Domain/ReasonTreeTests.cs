@@ -25,11 +25,11 @@ public class ReasonTreeTests
         Assert.Null(ReasonTree.WhyNotUnder(tree, leaf, everywhere.Id));
         Assert.Null(ReasonTree.WhyNotUnder(tree, leaf, siteGroup.Id));
         Assert.Null(ReasonTree.WhyNotUnder(tree, leaf, null));
-        Assert.Contains("another site", ReasonTree.WhyNotUnder(tree, other, siteGroup.Id), StringComparison.Ordinal);
-        Assert.Contains("for every site can only go under", ReasonTree.WhyNotUnder(tree, everywhere with { Id = Guid.CreateVersion7() }, siteGroup.Id), StringComparison.Ordinal);
-        Assert.Contains("isn't a group", ReasonTree.WhyNotUnder(tree, leaf, notGroup.Id), StringComparison.Ordinal);
-        Assert.Contains("isn't one of this kind's", ReasonTree.WhyNotUnder([.. tree, wrongKind], leaf, wrongKind.Id), StringComparison.Ordinal);
-        Assert.Contains("isn't one of this kind's", ReasonTree.WhyNotUnder(tree, leaf, Guid.CreateVersion7()), StringComparison.Ordinal);
+        Assert.Contains("another site", ReasonTree.WhyNotUnder(tree, other, siteGroup.Id)?.Text, StringComparison.Ordinal);
+        Assert.Contains("for every site can only go under", ReasonTree.WhyNotUnder(tree, everywhere with { Id = Guid.CreateVersion7() }, siteGroup.Id)?.Text, StringComparison.Ordinal);
+        Assert.Contains("isn't a group", ReasonTree.WhyNotUnder(tree, leaf, notGroup.Id)?.Text, StringComparison.Ordinal);
+        Assert.Contains("isn't one of this kind's", ReasonTree.WhyNotUnder([.. tree, wrongKind], leaf, wrongKind.Id)?.Text, StringComparison.Ordinal);
+        Assert.Contains("isn't one of this kind's", ReasonTree.WhyNotUnder(tree, leaf, Guid.CreateVersion7())?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -40,19 +40,19 @@ public class ReasonTreeTests
         var bottom = R("C", parent: middle.Id, group: true);
         ReasonCode[] tree = [top, middle, bottom];
 
-        Assert.Contains("is inside it", ReasonTree.WhyNotUnder(tree, top, bottom.Id), StringComparison.Ordinal);
-        Assert.Contains("is inside it", ReasonTree.WhyNotUnder(tree, top, top.Id), StringComparison.Ordinal);
+        Assert.Contains("is inside it", ReasonTree.WhyNotUnder(tree, top, bottom.Id)?.Text, StringComparison.Ordinal);
+        Assert.Contains("is inside it", ReasonTree.WhyNotUnder(tree, top, top.Id)?.Text, StringComparison.Ordinal);
         Assert.Equal([middle.Id, top.Id], ReasonTree.Ancestors(tree, bottom).Select(r => r.Id));
 
         // A, B, C, D, E is five levels; one more is too many, whether added at the bottom or by moving a branch under it.
         var d = R("D", parent: bottom.Id, group: true);
         var e = R("E", parent: d.Id, group: true);
         ReasonCode[] deep = [.. tree, d, e];
-        Assert.Contains("at most 5", ReasonTree.WhyNotUnder(deep, R("F"), e.Id), StringComparison.Ordinal);
+        Assert.Contains("at most 5", ReasonTree.WhyNotUnder(deep, R("F"), e.Id)?.Text, StringComparison.Ordinal);
         var branch = R("X", group: true);
         ReasonCode[] withBranch = [.. tree, d, branch, R("Y", parent: branch.Id)];
         Assert.Null(ReasonTree.WhyNotUnder(withBranch, branch, bottom.Id));
-        Assert.Contains("6 levels", ReasonTree.WhyNotUnder(withBranch, branch, d.Id), StringComparison.Ordinal);
+        Assert.Contains("6 levels", ReasonTree.WhyNotUnder(withBranch, branch, d.Id)?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -63,13 +63,13 @@ public class ReasonTreeTests
         var off = R("C2", parent: group.Id, active: false);
         ReasonCode[] tree = [group, child, off];
 
-        Assert.Contains("C1", ReasonTree.WhyNotActive(tree, group, false), StringComparison.Ordinal);
+        Assert.Contains("C1", ReasonTree.WhyNotActive(tree, group, false)?.Text, StringComparison.Ordinal);
         Assert.Null(ReasonTree.WhyNotActive(tree, child, false));
         Assert.Null(ReasonTree.WhyNotActive([group, child with { IsActive = false }, off], group, false));
 
         var groupOff = group with { IsActive = false };
-        Assert.Contains("switched off", ReasonTree.WhyNotActive([groupOff, off], off, true), StringComparison.Ordinal);
-        Assert.Contains("switched off", ReasonTree.WhyNotUnder([groupOff, child], child, groupOff.Id), StringComparison.Ordinal);
+        Assert.Contains("switched off", ReasonTree.WhyNotActive([groupOff, off], off, true)?.Text, StringComparison.Ordinal);
+        Assert.Contains("switched off", ReasonTree.WhyNotUnder([groupOff, child], child, groupOff.Id)?.Text, StringComparison.Ordinal);
         Assert.Null(ReasonTree.WhyNotUnder([groupOff, off], off, groupOff.Id));
     }
 
@@ -82,8 +82,8 @@ public class ReasonTreeTests
         var tree = new[] { group, jam, spare };
 
         Assert.Null(ReasonTree.WhyNotConvert(tree, spare, toGroup: true, []));
-        Assert.Contains("ts.downtime", ReasonTree.WhyNotConvert(tree, jam, toGroup: true, ["ts.downtime"]), StringComparison.Ordinal);
-        Assert.Contains("JAM", ReasonTree.WhyNotConvert(tree, group, toGroup: false, []), StringComparison.Ordinal);
+        Assert.Contains("ts.downtime", ReasonTree.WhyNotConvert(tree, jam, toGroup: true, ["ts.downtime"])?.Text, StringComparison.Ordinal);
+        Assert.Contains("JAM", ReasonTree.WhyNotConvert(tree, group, toGroup: false, [])?.Text, StringComparison.Ordinal);
         Assert.Null(ReasonTree.WhyNotConvert(tree, R("EMPTY", group: true), toGroup: false, []));
         Assert.Null(ReasonTree.WhyNotConvert(tree, spare, toGroup: false, ["ts.downtime"]));   // already a reason: nothing to do
     }

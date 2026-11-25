@@ -24,7 +24,7 @@ internal static class PasswordResets
     public const string Answer =
         "If that matches a Pulaski account with an e-mail address, a link to choose a new password is on its way. It works once, for a short time.";
 
-    public const string Expired = "This link has expired or was already used. Ask for a new one on the sign-in page.";
+    public static UserMessage Expired { get; } = UserMessage.Of("This link has expired or was already used. Ask for a new one on the sign-in page.");
 
     /// <summary>At most this many links per user in <see cref="Window"/>, and none sooner than <see cref="Gap"/> after the last.</summary>
     public const int MaxPerWindow = 3;

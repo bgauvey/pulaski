@@ -50,10 +50,10 @@ public static class ConnectionSchedule
     public const int MaxDailyTimes = 4;
 
     /// <summary>Why the schedule can't be saved; null when it can.</summary>
-    public static string? Problem(ConnectionScheduleSpec spec) =>
-        spec.EveryHours is not null && spec.DailyAt.Count > 0 ? "Run every so many hours or at daily times, not both."
-        : spec.EveryHours is < 1 or > 168 ? "Every 1 to 168 hours."
-        : spec.DailyAt.Count > MaxDailyTimes ? $"At most {MaxDailyTimes} daily times."
+    public static UserMessage? Problem(ConnectionScheduleSpec spec) =>
+        spec.EveryHours is not null && spec.DailyAt.Count > 0 ? UserMessage.Of("Run every so many hours or at daily times, not both.")
+        : spec.EveryHours is < 1 or > 168 ? UserMessage.Of("Every 1 to 168 hours.")
+        : spec.DailyAt.Count > MaxDailyTimes ? UserMessage.From($"At most {MaxDailyTimes} daily times.")
         : null;
 
     /// <summary>
@@ -136,7 +136,7 @@ public static class ConnectionPeopleRows
     /// <summary>Fields every people connection maps: who the person is here, and the key the source knows them by.</summary>
     public static IReadOnlyList<string> Required { get; } = ["employee_number", "name", "external_key"];
 
-    public static IReadOnlyList<string> Problems(IReadOnlyDictionary<string, string> map) => ConnectionFields.Problems(map, Mappable, Required);
+    public static IReadOnlyList<UserMessage> Problems(IReadOnlyDictionary<string, string> map) => ConnectionFields.Problems(map, Mappable, Required);
 
     public static PersonImportSource Read(IReadOnlyList<JsonElement> items, MaterialConnection connection)
     {

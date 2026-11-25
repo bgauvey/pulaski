@@ -144,7 +144,7 @@ internal sealed class SaveProcessDraftHandler(
         var equipment = await processes.GetEquipmentAsync(ProcessRules.EquipmentIds(definition), cancellationToken);
         if (ProcessRules.EquipmentProblems(definition, process.SiteId, equipment, malformedOnly: true) is { Count: > 0 } malformed)
         {
-            throw new DomainRuleException(malformed[0].Message);
+            throw new DomainRuleException(malformed[0].Text);
         }
 
         var saved = current.SaveDraft(definition);
@@ -181,7 +181,7 @@ internal sealed class ReleaseProcessVersionHandler(
         var equipment = await processes.GetEquipmentAsync(ProcessRules.EquipmentIds(draft.Definition), cancellationToken);
         if (ProcessRules.EquipmentProblems(draft.Definition, process.SiteId, equipment, malformedOnly: false) is { Count: > 0 } problems)
         {
-            throw new DomainRuleException(string.Join(" ", problems.Select(p => p.Message)));
+            throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
         }
 
         var at = timeProvider.GetUtcNow();

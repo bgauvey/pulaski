@@ -24,11 +24,11 @@ public static class SupplierBarcodes
     private static readonly TimeSpan Limit = TimeSpan.FromMilliseconds(100);
 
     /// <summary>What is wrong with a format; empty when it can be saved.</summary>
-    public static IReadOnlyList<string> Problems(string? pattern, string? expiryFormat)
+    public static IReadOnlyList<UserMessage> Problems(string? pattern, string? expiryFormat)
     {
         if (string.IsNullOrWhiteSpace(pattern) || pattern.Length > MaxPattern)
         {
-            return [$"A pattern of 1 to {MaxPattern} characters."];
+            return [UserMessage.From($"A pattern of 1 to {MaxPattern} characters.")];
         }
 
         Regex regex;
@@ -38,24 +38,24 @@ public static class SupplierBarcodes
         }
         catch (ArgumentException ex)
         {
-            return [$"The pattern doesn't read as a regular expression: {ex.Message}"];
+            return [UserMessage.From($"The pattern doesn't read as a regular expression: {ex.Message}")];
         }
 
         var groups = regex.GetGroupNames().Where(g => !int.TryParse(g, out _)).ToList();
-        List<string> problems = [];
+        List<UserMessage> problems = [];
         if (!groups.Any(g => g is "lot" or "supplier_lot" or "material" or "gtin"))
         {
-            problems.Add("Name at least one part that finds a lot or a material: (?<lot>…), (?<supplier_lot>…), (?<material>…) or (?<gtin>…).");
+            problems.Add(UserMessage.Of("Name at least one part that finds a lot or a material: (?<lot>…), (?<supplier_lot>…), (?<material>…) or (?<gtin>…)."));
         }
 
         if (groups.FirstOrDefault(g => !Parts.Contains(g)) is { } unknown)
         {
-            problems.Add($"(?<{unknown}>…) isn't a part Pulaski reads; use {string.Join(", ", Parts)}.");
+            problems.Add(UserMessage.From($"(?<{unknown}>…) isn't a part Pulaski reads; use {string.Join(", ", Parts)}."));
         }
 
         if (groups.Contains("expiry") && !ValidDateFormat(expiryFormat ?? DefaultExpiryFormat))
         {
-            problems.Add("The expiry's date format must be a .NET date format with year, month and day, such as yyMMdd.");
+            problems.Add(UserMessage.Of("The expiry's date format must be a .NET date format with year, month and day, such as yyMMdd."));
         }
 
         return problems;

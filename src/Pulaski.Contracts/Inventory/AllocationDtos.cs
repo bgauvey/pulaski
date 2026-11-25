@@ -32,7 +32,7 @@ public sealed record LotAllocationDto
     public string? CreatedBy { get; init; }
 
     /// <summary>Why it is no longer good (the lot is on hold, expires first, or no longer holds it); null while it is. Refresh puts it right.</summary>
-    public string? Problem { get; init; }
+    public MessageDto? Problem { get; init; }
 }
 
 /// <summary>A lot suggested for a component, and why it comes where it does (D-064).</summary>
@@ -64,6 +64,9 @@ public sealed record LotExclusionDto
     public string? LocationCode { get; init; }
     public decimal Quantity { get; init; }
     public required string Reason { get; init; }
+
+    /// <summary><see cref="Reason"/> with its template, for the reader's language (#188).</summary>
+    public MessageDto? ReasonMessage { get; init; }
 }
 
 /// <summary>One component of a job: what it needs, what is set aside for it, and what to use next.</summary>
@@ -84,7 +87,7 @@ public sealed record ComponentAllocationDto
 
     /// <summary>Still to allocate: need less consumed less allocated, at least zero.</summary>
     public decimal RemainingQty { get; init; }
-    public string? Problem { get; init; }
+    public MessageDto? Problem { get; init; }
     public IReadOnlyList<LotAllocationDto> Allocations { get; init; } = [];
     public IReadOnlyList<LotRecommendationDto> Recommendations { get; init; } = [];
     public IReadOnlyList<LotExclusionDto> Excluded { get; init; } = [];

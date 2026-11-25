@@ -84,12 +84,15 @@ internal static class RunReporting
         if (at is { } then)
         {
             return await execution.GetRunAtForUpdateAsync(job.Id, then, cancellationToken)
-                ?? throw new DomainRuleException($"{job.JobNumber} wasn't running at {Backdated(then)}, so {what} can't count from then.");
+                ?? throw (what == "consumption"
+                    ? new DomainRuleException($"{job.JobNumber} wasn't running at {Backdated(then)}, so consumption can't count from then.")
+                    : new DomainRuleException($"{job.JobNumber} wasn't running at {Backdated(then)}, so production can't count from then."));
         }
 
         return await execution.GetOpenRunForUpdateAsync(job.Id, cancellationToken)
-            ?? throw new DomainRuleException(
-                $"{job.JobNumber} isn't running, so {what} can't be recorded now. Start the job, or choose the run it belongs to.");
+            ?? throw (what == "consumption"
+                ? new DomainRuleException($"{job.JobNumber} isn't running, so consumption can't be recorded now. Start the job, or choose the run it belongs to.")
+                : new DomainRuleException($"{job.JobNumber} isn't running, so production can't be recorded now. Start the job, or choose the run it belongs to."));
     }
 
     private static string Backdated(DateTimeOffset at) => at.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", System.Globalization.CultureInfo.InvariantCulture);
@@ -388,9 +391,9 @@ internal sealed class ProductionReporter(
         // A job planned with a partial last batch (D-067) reports it as it comes; any other partial is an exception for a line that stopped.
         if (!onStop && !job.PartialBatchPlanned && (run.IsOpen || run.EndReasonCodeId is null))
         {
-            throw new DomainRuleException(run.IsOpen
-                ? "A partial batch is reported when the line stops: pause or complete the job with a reason, and report it there."
-                : $"Run {run.RunNo} ended without a reason, so it can't take a partial batch: a partial batch is an exception for a line that stopped.");
+            throw run.IsOpen
+                ? new DomainRuleException("A partial batch is reported when the line stops: pause or complete the job with a reason, and report it there.")
+                : new DomainRuleException($"Run {run.RunNo} ended without a reason, so it can't take a partial batch: a partial batch is an exception for a line that stopped.");
         }
 
         if (await execution.RunHasPartialBatchAsync(run.Id, cancellationToken))
@@ -425,10 +428,12 @@ internal sealed class ProductionReporter(
         await execution.InsertPartialBatchAsync(partial, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
-        var label = $"{Batching.Qty(quantity)} {material.BaseUomCode} of a {Batching.Qty(batching.Size)} {material.BaseUomCode} batch";
+        var label = UserMessage.From($"{Batching.Qty(quantity)} {material.BaseUomCode} of a {Batching.Qty(batching.Size)} {material.BaseUomCode} batch");
         if (!batching.IsExact)
         {
-            return Notes.Inventory("partial_batch", $"Partial batch recorded: {label}, in lot {lot.LotNumber ?? "its balance"}.");
+            return lot.LotNumber is { } number
+                ? Notes.Inventory("partial_batch", $"Partial batch recorded: {label}, in lot {number}.")
+                : Notes.Inventory("partial_batch", $"Partial batch recorded: {label}, in its balance.");
         }
 
         var current = await InventoryRules.LotAsync(inventory, lot.LotId, null, cancellationToken);

@@ -1,17 +1,18 @@
 using Pulaski.Application.Abstractions;
-using Pulaski.Application.Execution;
 using Pulaski.Application.Boms;
 using Pulaski.Application.Errors;
-using Pulaski.Contracts.Common;
+using Pulaski.Application.Execution;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Processes;
 using Pulaski.Application.ReferenceData;
 using Pulaski.Application.Scheduling;
 using Pulaski.Application.Units;
-using Pulaski.Domain;
+using Pulaski.Contracts.Common;
 using Pulaski.Domain.Boms;
 using Pulaski.Domain.Processes;
 using Pulaski.Domain.Scheduling;
 using Pulaski.Domain.WorkOrders;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.WorkOrders;
 
@@ -127,7 +128,7 @@ internal sealed class CreateWorkOrderHandler(
             if (lineSizes.Count == 0)
             {
                 batching.EnsureWholeBatches(
-                    converter.Convert(command.PlannedQty, command.UomId, output.BaseUomId), $"Work order {orderNumber}", converter.Code(output.BaseUomId));
+                    converter.Convert(command.PlannedQty, command.UomId, output.BaseUomId), UserMessage.From($"Work order {orderNumber}"), converter.Code(output.BaseUomId));
             }
 
             batchQuantity = converter.Convert(batching.Size, output.BaseUomId, command.UomId);
@@ -156,11 +157,11 @@ internal sealed class CreateWorkOrderHandler(
         // The same rules the order form checks before submitting (ProcessOrderRules).
         var at = timeProvider.GetUtcNow();
         var equipmentRows = await processes.GetOrderEquipmentAsync(route.Version.Id, command.MaterialId, at, cancellationToken);
-        var problems = ProcessOrderRules.Problems(equipmentRows, process.SiteId).Select(p => p.Message).ToList();
+        var problems = ProcessOrderRules.Problems(equipmentRows, process.SiteId).Select(Notes.Message).ToList();
         problems.AddRange(DepartmentProblems(plan, lines, command.DueAt));
         if (problems.Count > 0)
         {
-            throw new DomainRuleException(string.Join(" ", problems));
+            throw new DomainRuleException(UserMessage.Join(problems));
         }
 
         // Read FOR SHARE after the lines and the route, so the BOM can't be replaced while it is used.
@@ -243,19 +244,20 @@ internal sealed class CreateWorkOrderHandler(
     }
 
     /// <summary>A job on a department waits in a window that ends at the order's due date (D-022).</summary>
-    private static IEnumerable<string> DepartmentProblems(
+    private static IEnumerable<UserMessage> DepartmentProblems(
         IReadOnlyList<OperationJob> plan, Dictionary<Guid, SchedulingLine> lines, DateTimeOffset? dueAt)
     {
         foreach (var job in plan.Where(j => lines.GetValueOrDefault(j.EquipmentId)?.IsGroup == true))
         {
-            var op = $"Operation {job.Operation.Number} ({job.Operation.Name}):";
+            var (number, name) = (job.Operation.Number, job.Operation.Name);
             if (dueAt is not { } due)
             {
-                yield return $"{op} {lines[job.EquipmentId].Code} is a department, so its job needs a finish-by; give the order a due date.";
+                yield return UserMessage.From(
+                    $"Operation {number} ({name}): {lines[job.EquipmentId].Code} is a department, so its job needs a finish-by; give the order a due date.");
             }
             else if (due <= job.EarliestStart)
             {
-                yield return $"{op} the due date must be after the operation's earliest start, {job.EarliestStart:u}.";
+                yield return UserMessage.From($"Operation {number} ({name}): the due date must be after the operation's earliest start, {job.EarliestStart:u}.");
             }
         }
     }
@@ -289,7 +291,7 @@ internal sealed class ChangeWorkOrderStatusHandler(
         if (WorkOrderStatus.IsPlanningTransition(current.Value.Status, command.Status))
         {
             throw new DomainRuleException(
-                $"Moving a work order from '{current.Value.Status}' to '{command.Status}' also changes its jobs; use the dispatch, un-dispatch or firm command.");
+                $"Moving a work order from '{UserMessage.Code(current.Value.Status)}' to '{UserMessage.Code(command.Status)}' also changes its jobs; use the dispatch, un-dispatch or firm command.");
         }
 
         if (WorkOrderStatus.IsExecutionTransition(current.Value.Status, command.Status))

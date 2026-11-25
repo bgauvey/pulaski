@@ -234,7 +234,7 @@ internal sealed class ListLineLaborHandler(ILaborReadStore store, TimeProvider t
         var requirements = (await store.ListLineRequirementsAsync(query.SiteId, cancellationToken)).ToLookup(r => r.LineId, r => r.Qualification);
         var grants = (requirements.Count == 0 ? [] : await store.ListSiteGrantsAsync(query.SiteId, cancellationToken)).ToLookup(g => g.PersonId, g => g.Grant);
         IReadOnlyList<string> Missing(SessionRow r) => [.. QualificationRules.Missing(requirements[r.Session.EquipmentId], [.. grants[r.Session.PersonId]], today, now)
-            .Select(m => $"{m.Qualification.Code} {m.Qualification.Name} ({m.Why})")];
+            .Select(m => QualificationRules.Item(m).Text)];
 
         return [.. lines.Select(line =>
         {

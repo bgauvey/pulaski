@@ -4,6 +4,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Execution;
 using Pulaski.Contracts.Execution;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.WorkOrders;
 
@@ -61,7 +62,7 @@ internal sealed class GetJobProductionPerformanceHandler(
         var job = await execution.GetJobAsync(query.JobId, now, cancellationToken) ?? throw new NotFoundException($"Job {query.JobId} not found.");
         if (job.JobType != "production")
         {
-            throw ValidationException.Field("jobId", $"Job {job.JobNumber} is a {job.JobType} job; only production jobs have production performance.");
+            throw ValidationException.Field("jobId", $"Job {job.JobNumber} is a {UserMessage.Code(job.JobType)} job; only production jobs have production performance.");
         }
 
         var facts = await store.GetJobFactsAsync(query.JobId, cancellationToken) ?? throw new NotFoundException($"Job {query.JobId} not found.");

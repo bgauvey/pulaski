@@ -10,7 +10,7 @@ public sealed record QualificationGrant(Guid QualificationId, DateOnly ValidFrom
 public sealed record RequiredQualification(Guid QualificationId, string Code, string Name);
 
 /// <summary>What a person is missing for a line, and why: never held, expired, revoked or not valid yet.</summary>
-public sealed record MissingQualification(RequiredQualification Qualification, string Why);
+public sealed record MissingQualification(RequiredQualification Qualification, UserMessage Why);
 
 /// <summary>Grant states as the screens show them (D-048).</summary>
 public static class GrantStatus
@@ -62,9 +62,9 @@ public static class QualificationRules
     }
 
     /// <returns>What is wrong with a grant's days; null when it can be saved.</returns>
-    public static string? GrantProblem(DateOnly validFrom, DateOnly? expiresOn) =>
-        validFrom == default ? "Choose the day it is valid from."
-        : expiresOn is { } e && e < validFrom ? "It expires on or after the day it is valid from."
+    public static UserMessage? GrantProblem(DateOnly validFrom, DateOnly? expiresOn) =>
+        validFrom == default ? UserMessage.Of("Choose the day it is valid from.")
+        : expiresOn is { } e && e < validFrom ? UserMessage.Of("It expires on or after the day it is valid from.")
         : null;
 
     /// <summary>The required qualifications the person holds no valid grant of on that day, each with why.</summary>
@@ -81,12 +81,12 @@ public static class QualificationRules
             }
 
             var why = held.Count == 0
-                ? "not held"
+                ? UserMessage.Of("not held")
                 : held.Where(g => Status(g, day, at) == GrantStatus.Expired).Max(g => g.ExpiresOn) is { } expired
-                    ? $"expired {expired:yyyy-MM-dd}"
+                    ? UserMessage.From($"expired {expired:yyyy-MM-dd}")
                     : held.Any(g => Status(g, day, at) == GrantStatus.NotYet)
-                        ? $"valid only from {held.Min(g => g.ValidFrom):yyyy-MM-dd}"
-                        : "revoked";
+                        ? UserMessage.From($"valid only from {held.Min(g => g.ValidFrom):yyyy-MM-dd}")
+                        : UserMessage.Of("revoked");
             missing.Add(new MissingQualification(q, why));
         }
 
@@ -95,5 +95,8 @@ public static class QualificationRules
 
     /// <summary>"Lee Park isn't qualified for EXT-01: FORK Forklift (expired 2026-10-01)."</summary>
     public static UserMessage Describe(string personName, string lineCode, IReadOnlyList<MissingQualification> missing) =>
-        UserMessage.From($"{personName} isn't qualified for {lineCode}: {string.Join("; ", missing.Select(m => $"{m.Qualification.Code} {m.Qualification.Name} ({m.Why})"))}.");
+        UserMessage.From($"{personName} isn't qualified for {lineCode}: {UserMessage.Join(missing.Select(Item), "; ")}.");
+
+    /// <summary>"FORK Forklift (expired 2026-10-01)", the why translated on its own (#188).</summary>
+    public static UserMessage Item(MissingQualification m) => UserMessage.From($"{m.Qualification.Code} {m.Qualification.Name} ({m.Why})");
 }

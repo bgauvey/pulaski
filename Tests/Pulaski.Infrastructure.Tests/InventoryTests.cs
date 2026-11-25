@@ -1607,7 +1607,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         // Stock written off below what is allocated shows as a problem until a refresh trims it; a release gives the rest back.
         await db.SendAsync(new WriteOffLotCommand(old.LotId, await VersionAsync(old.LotId), 400m, plant.Kg, count));
         view = await QueryAsync<GetJobAllocationsQuery, JobAllocationsDto>(new GetJobAllocationsQuery(plant.Job));
-        Assert.Contains("only 600 kg", view.Components[0].Allocations.Single(a => a.LotId == old.LotId).Problem, StringComparison.Ordinal);
+        Assert.Contains("only 600 kg", view.Components[0].Allocations.Single(a => a.LotId == old.LotId).Problem?.Text, StringComparison.Ordinal);
         var refreshed = await db.SendAsync(new RefreshAllocationsCommand(plant.Job));
         Assert.Equal(1, refreshed.Trimmed);
         view = await QueryAsync<GetJobAllocationsQuery, JobAllocationsDto>(new GetJobAllocationsQuery(plant.Job));

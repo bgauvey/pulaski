@@ -114,7 +114,9 @@ internal sealed class ImportCapabilitiesHandler(
         var line = Line(row, lines);
         if (command.Sites is { } sites && (line.SiteId is not { } siteId || !sites.Contains(siteId)))
         {
-            throw new DomainRuleException($"You can't change the capabilities of {line.Line.Code} at {line.SiteCode ?? "its site"}.");
+            throw line.SiteCode is { } siteCode
+                ? new DomainRuleException($"You can't change the capabilities of {line.Line.Code} at {siteCode}.")
+                : new DomainRuleException($"You can't change the capabilities of {line.Line.Code} at its site.");
         }
 
         var material = (await materials.FindByCodeForUpdateAsync(materialCode, cancellationToken))?.Value
@@ -159,7 +161,9 @@ internal sealed class ImportCapabilitiesHandler(
         {
             if (!line.Line.CanRunJob || !line.Line.IsActive)
             {
-                throw new DomainRuleException($"{line.Line.Code} {(line.Line.IsActive ? "doesn't run jobs" : "is inactive")}; a capability goes on an active line that runs jobs.");
+                throw line.Line.IsActive
+                    ? new DomainRuleException($"{line.Line.Code} doesn't run jobs; a capability goes on an active line that runs jobs.")
+                    : new DomainRuleException($"{line.Line.Code} is inactive; a capability goes on an active line that runs jobs.");
             }
 
             if (!material.IsActive)
@@ -271,7 +275,9 @@ internal sealed class ImportCapabilitiesHandler(
         return matches.Count switch
         {
             1 => matches[0],
-            0 => throw new DomainRuleException($"There is no line {code}{(site is null ? "" : $" at {site}")}."),
+            0 => throw (site is null
+                ? new DomainRuleException($"There is no line {code}.")
+                : new DomainRuleException($"There is no line {code} at {site}.")),
             _ => throw new DomainRuleException(
                 $"{code} is at several sites ({string.Join(", ", matches.Select(m => m.SiteCode))}); give the site."),
         };

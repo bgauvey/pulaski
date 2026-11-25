@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+
 namespace Pulaski.Contracts.Shifts;
 
 /// <summary>One shift of a schedule (D-038). <see cref="Start"/> is "HH:mm" in the site's time zone; days count from 0, the cycle's first day.</summary>
@@ -130,7 +132,7 @@ public sealed record SetShiftOverrideRequest
 public sealed record ShiftPreviewDto
 {
     /// <summary>What is wrong with the schedule; when there is anything, no shifts are listed.</summary>
-    public IReadOnlyList<string> Problems { get; init; } = [];
+    public IReadOnlyList<MessageDto> Problems { get; init; } = [];
     public IReadOnlyList<ShiftOccurrenceDto> Shifts { get; init; } = [];
     public decimal HoursPerCycle { get; init; }
     public string TimeZone { get; init; } = "";

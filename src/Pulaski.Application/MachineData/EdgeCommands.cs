@@ -234,7 +234,7 @@ internal static class EdgeRules
     {
         if (EdgeProtocols.SettingsProblems(protocol, settings) is { Count: > 0 } problems)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Settings"] = [.. problems] });
+            throw ValidationException.Field("Settings", problems);
         }
     }
 

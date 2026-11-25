@@ -53,9 +53,9 @@ internal sealed class CreateEquipmentHandler(
                 nameof(command.EquipmentRole),
                 $"'{command.EquipmentRole}' is not a valid role for level '{command.Level}'.")
             .Require(
-                command.ParentId.HasValue == EquipmentTypes.RequiresParent(command.Level),
                 nameof(command.ParentId),
-                EquipmentTypes.RequiresParent(command.Level) ? "Required." : "An enterprise has no parent.")
+                command.ParentId.HasValue == EquipmentTypes.RequiresParent(command.Level) ? null
+                : EquipmentTypes.RequiresParent(command.Level) ? UserMessage.Of("Required.") : UserMessage.Of("An enterprise has no parent."))
             .Require(
                 !EquipmentTypes.RequiresTimeZone(command.Level) || timeZone is not null,
                 nameof(command.TimeZone),
@@ -153,8 +153,9 @@ internal sealed class UpdateEquipmentHandler(
         var closing = before.HoldsInventory && (!after.HoldsInventory || (before.IsActive && !after.IsActive));
         if (closing && await equipment.HoldsStockAsync(after.Id, cancellationToken))
         {
-            throw new DomainRuleException(
-                $"{after.Code} holds stock; move, use or write it off before it can {(after.IsActive ? "stop holding inventory" : "be deactivated")}.");
+            throw after.IsActive
+                ? new DomainRuleException($"{after.Code} holds stock; move, use or write it off before it can stop holding inventory.")
+                : new DomainRuleException($"{after.Code} holds stock; move, use or write it off before it can be deactivated.");
         }
 
         if (after.ComminglesLots && !before.ComminglesLots && await equipment.HoldsSeparateLotsAsync(after.Id, cancellationToken))

@@ -52,7 +52,7 @@
                 </div>
                 @if (c.Problem is { } problem)
                 {
-                    <p class="small text-warning-strong px-3 mb-1">@problem</p>
+                    <p class="small text-warning-strong px-3 mb-1">@L.Of(problem)</p>
                 }
 
                 @if (c.Allocations.Count > 0)
@@ -71,7 +71,7 @@
                                         }
                                         @if (a.Problem is { } issue)
                                         {
-                                            <div class="small text-warning-strong">@issue</div>
+                                            <div class="small text-warning-strong">@L.Of(issue)</div>
                                         }
                                     </td>
                                     <td>@a.LocationCode</td>
@@ -130,7 +130,7 @@
                         <ul class="small mb-0">
                             @foreach (var x in c.Excluded)
                             {
-                                <li @key="x.LotId"><a href="inventory/lots/@x.LotId">@x.LotLabel</a> (@InventoryView.Qty(x.Quantity) @c.UomCode): @x.Reason</li>
+                                <li @key="x.LotId"><a href="inventory/lots/@x.LotId">@x.LotLabel</a> (@InventoryView.Qty(x.Quantity) @c.UomCode): @(x.ReasonMessage is { } why ? L.Of(why) : x.Reason)</li>
                             }
                         </ul>
                     </details>

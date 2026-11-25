@@ -21,9 +21,9 @@ public sealed record LotCutRule(decimal? Size, decimal? Hours, bool ByShift)
     public bool IsOn => Size is not null || Hours is not null || ByShift;
 
     /// <returns>Why the values can't be kept, or null.</returns>
-    public string? Problem() =>
-        Size is <= 0 ? "A lot's size must be greater than zero, or blank."
-        : Hours is { } hours && (hours <= 0 || hours > MaxHours) ? $"A lot's age must be more than 0 and at most {MaxHours} hours, or blank."
+    public UserMessage? Problem() =>
+        Size is <= 0 ? UserMessage.Of("A lot's size must be greater than zero, or blank.")
+        : Hours is { } hours && (hours <= 0 || hours > MaxHours) ? UserMessage.From($"A lot's age must be more than 0 and at most {MaxHours} hours, or blank.")
         : null;
 }
 

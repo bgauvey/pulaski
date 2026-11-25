@@ -177,7 +177,12 @@ internal sealed class ImportChangeoverRulesHandler(
                 }
 
                 Guid? Find(IReadOnlyDictionary<string, Guid> known, string code, string what) =>
-                    code.Length == 0 ? null : known.TryGetValue(Key(code), out var id) ? id : throw new DomainRuleException($"There is no {what} {code}.");
+                    code.Length == 0 ? null : known.TryGetValue(Key(code), out var id) ? id : throw what switch
+                    {
+                        "line at this site" => new DomainRuleException($"There is no line {code} at this site."),
+                        "material class" => new DomainRuleException($"There is no material class {code}."),
+                        _ => new DomainRuleException($"There is no material {code}."),
+                    };
                 var pattern = new ChangeoverPattern(
                     Find(lines, row.LineCode, "line at this site"),
                     Find(materials, row.FromMaterial, "material"),

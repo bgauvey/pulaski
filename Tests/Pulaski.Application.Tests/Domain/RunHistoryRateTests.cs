@@ -33,7 +33,7 @@ public class RunHistoryRateTests
             [null, "The job's unit doesn't convert to the planning rate's unit", "No good output", "Shorter than 30 minutes"],
             result.Runs.Select(r => r.Excluded));
         Assert.Null(result.RatePerHour);
-        Assert.Equal("Only 1 usable run; a rate needs at least 5.", result.NotEnough);
+        Assert.Equal("Only 1 usable run; a rate needs at least 5.", result.NotEnough?.Text);
     }
 
     [Fact]
@@ -57,6 +57,6 @@ public class RunHistoryRateTests
         var result = RunHistoryRate.Calculate([.. Enumerable.Range(1, 6).Select(d => Run(d, 1, 100))], From, To);
 
         Assert.Null(result.RatePerHour);
-        Assert.Equal("Only 6 hours of usable runs; a rate needs at least 8.", result.NotEnough);
+        Assert.Equal("Only 6 hours of usable runs; a rate needs at least 8.", result.NotEnough?.Text);
     }
 }

@@ -40,26 +40,26 @@ public static class ChartTypes
     public static bool HasDispersion(string chartType) => chartType is XbarR or XbarS or IMr;
 
     /// <returns>Why the chart doesn't fit a characteristic of <paramref name="dataKind"/> with subgroups of <paramref name="subgroupSize"/>, or null.</returns>
-    public static string? Problem(string chartType, string dataKind, int subgroupSize)
+    public static UserMessage? Problem(string chartType, string dataKind, int subgroupSize)
     {
         if (!All.Contains(chartType))
         {
-            return $"Unknown chart '{chartType}'.";
+            return UserMessage.From($"Unknown chart '{chartType}'.");
         }
 
         if (IsAttribute(chartType) != (dataKind == CharacteristicKinds.Attribute))
         {
             return dataKind == CharacteristicKinds.Attribute
-                ? "An inspected characteristic is charted on a p, np, c or u chart."
-                : "A measured characteristic is charted on an individuals, X-bar and R, or X-bar and S chart.";
+                ? UserMessage.Of("An inspected characteristic is charted on a p, np, c or u chart.")
+                : UserMessage.Of("A measured characteristic is charted on an individuals, X-bar and R, or X-bar and S chart.");
         }
 
         return chartType switch
         {
-            IMr when subgroupSize != 1 => "An individuals chart takes one value a sample.",
-            XbarR when subgroupSize is < 2 or > ChartConstants.MaxSubgroup => $"An X-bar and R chart takes subgroups of 2 to {ChartConstants.MaxSubgroup}.",
-            XbarS when subgroupSize is < 2 or > ChartConstants.MaxSubgroup => $"An X-bar and S chart takes subgroups of 2 to {ChartConstants.MaxSubgroup}.",
-            _ when subgroupSize < 1 => "The subgroup size is at least 1.",
+            IMr when subgroupSize != 1 => UserMessage.Of("An individuals chart takes one value a sample."),
+            XbarR when subgroupSize is < 2 or > ChartConstants.MaxSubgroup => UserMessage.From($"An X-bar and R chart takes subgroups of 2 to {ChartConstants.MaxSubgroup}."),
+            XbarS when subgroupSize is < 2 or > ChartConstants.MaxSubgroup => UserMessage.From($"An X-bar and S chart takes subgroups of 2 to {ChartConstants.MaxSubgroup}."),
+            _ when subgroupSize < 1 => UserMessage.Of("The subgroup size is at least 1."),
             _ => null,
         };
     }

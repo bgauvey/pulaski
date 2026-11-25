@@ -154,7 +154,7 @@ public sealed record Job(
             case JobStatus.Dispatched:
                 throw new DomainRuleException($"Job {JobNumber} is dispatched; un-dispatch its work order before moving it.");
             default:
-                throw new DomainRuleException($"Job {JobNumber} is {Status}; it can no longer be moved.");
+                throw new DomainRuleException($"Job {JobNumber} is {UserMessage.Code(Status)}; it can no longer be moved.");
         }
     }
 
@@ -175,7 +175,7 @@ public sealed record Job(
     {
         if (!IsOpen)
         {
-            throw new DomainRuleException($"Job {JobNumber} is {Status}; it can no longer be pinned.");
+            throw new DomainRuleException($"Job {JobNumber} is {UserMessage.Code(Status)}; it can no longer be pinned.");
         }
 
         EnsureWindow(earliestStart, latestEnd, IsOnGroup);
@@ -205,7 +205,7 @@ public sealed record Job(
 
         if (Status is not (JobStatus.Planned or JobStatus.Dispatched or JobStatus.Firmed))
         {
-            throw new DomainRuleException($"Job {JobNumber} is {Status}; it can no longer be moved.");
+            throw new DomainRuleException($"Job {JobNumber} is {UserMessage.Code(Status)}; it can no longer be moved.");
         }
 
         if (targetIsGroup && targetId != group)
@@ -259,7 +259,7 @@ public sealed record Job(
     {
         if (!IsOpen)
         {
-            throw new DomainRuleException($"Job {JobNumber} is {Status}; it can no longer be cancelled.");
+            throw new DomainRuleException($"Job {JobNumber} is {UserMessage.Code(Status)}; it can no longer be cancelled.");
         }
 
         return this with { Status = JobStatus.Cancelled };
@@ -287,7 +287,7 @@ public sealed record Job(
             WorkOrderStatus.Planned => JobStatus.Planned,
             WorkOrderStatus.Dispatched => JobStatus.Dispatched,
             WorkOrderStatus.Firmed or WorkOrderStatus.InProgress => JobStatus.Firmed,
-            _ => throw new DomainRuleException($"The work order is {workOrderStatus}; it can no longer get jobs."),
+            _ => throw new DomainRuleException($"The work order is {UserMessage.Code(workOrderStatus)}; it can no longer get jobs."),
         };
         var published = status != JobStatus.Planned;
 
@@ -324,12 +324,12 @@ public sealed record Job(
             : Status is JobStatus.Planned or JobStatus.Dispatched or JobStatus.Firmed or JobStatus.Paused;
         if (!startable)
         {
-            throw new DomainRuleException(Status switch
+            throw Status switch
             {
-                JobStatus.Planned or JobStatus.Dispatched => $"Job {JobNumber} is {Status}; dispatch its work order before starting it.",
-                JobStatus.Running => $"Job {JobNumber} is already running.",
-                _ => $"Job {JobNumber} is {Status}; it can no longer be started.",
-            });
+                JobStatus.Planned or JobStatus.Dispatched => new DomainRuleException($"Job {JobNumber} is {UserMessage.Code(Status)}; dispatch its work order before starting it."),
+                JobStatus.Running => new DomainRuleException($"Job {JobNumber} is already running."),
+                _ => new DomainRuleException($"Job {JobNumber} is {UserMessage.Code(Status)}; it can no longer be started."),
+            };
         }
 
         return this with { Status = JobStatus.Running };
@@ -349,7 +349,7 @@ public sealed record Job(
     {
         if (Status is not (JobStatus.Running or JobStatus.Paused))
         {
-            throw new DomainRuleException($"Job {JobNumber} is {Status}; only a running or paused job can be completed.");
+            throw new DomainRuleException($"Job {JobNumber} is {UserMessage.Code(Status)}; only a running or paused job can be completed.");
         }
 
         return this with { Status = JobStatus.Completed, CompletedAt = at };
@@ -375,7 +375,18 @@ public sealed record Job(
     {
         if (Status != expected)
         {
-            throw new DomainRuleException($"Job {JobNumber} is {Status}; only {expected} jobs can be {action}.");
+            // Each action its own sentence, for translation (#188).
+            var status = UserMessage.Code(Status);
+            throw action switch
+            {
+                "dispatched" => new DomainRuleException($"Job {JobNumber} is {status}; only planned jobs can be dispatched."),
+                "un-dispatched" => new DomainRuleException($"Job {JobNumber} is {status}; only dispatched jobs can be un-dispatched."),
+                "firmed" => new DomainRuleException($"Job {JobNumber} is {status}; only dispatched jobs can be firmed."),
+                "paused" => new DomainRuleException($"Job {JobNumber} is {status}; only running jobs can be paused."),
+                "reopened" => new DomainRuleException($"Job {JobNumber} is {status}; only completed jobs can be reopened."),
+                "closed" => new DomainRuleException($"Job {JobNumber} is {status}; only completed jobs can be closed."),
+                _ => new DomainRuleException($"Job {JobNumber} is {status}; it can't be changed now."),
+            };
         }
     }
 

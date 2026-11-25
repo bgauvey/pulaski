@@ -7,6 +7,7 @@ using Pulaski.Application.Errors;
 using Pulaski.Application.Labor;
 using Pulaski.Domain.Labor;
 using Pulaski.Domain.Security;
+using Pulaski.Domain;
 using Pulaski.Testing;
 
 namespace Pulaski.Api.Tests;
@@ -43,7 +44,7 @@ public class StationActingTests
         security.PersonAccess[person] = Access(Roles.Operator, Site);
         var (ticket, _) = tickets.Issue(_terminal.Id, person, TerminalRules.StationIdle);
 
-        var (_, access, renewed, expires) = await StationActing.BeginAsync(http, tickets, security, _clock, ticket, Permissions.JobExecute, "start jobs");
+        var (_, access, renewed, expires) = await StationActing.BeginAsync(http, tickets, security, _clock, ticket, Permissions.JobExecute, UserMessage.Of("start jobs"));
 
         Assert.Equal("olu", access.Username);
         Assert.Equal(_clock.GetUtcNow() + TerminalRules.StationIdle, expires);
@@ -64,14 +65,14 @@ public class StationActingTests
         security.PersonAccess[off] = Access(Roles.Operator, Site, active: false);
 
         Task Act(Guid person) =>
-            StationActing.BeginAsync(http, tickets, security, _clock, tickets.Issue(_terminal.Id, person, TerminalRules.StationIdle).Ticket, Permissions.JobExecute, "start jobs");
+            StationActing.BeginAsync(http, tickets, security, _clock, tickets.Issue(_terminal.Id, person, TerminalRules.StationIdle).Ticket, Permissions.JobExecute, UserMessage.Of("start jobs"));
 
         Assert.Contains("no Pulaski user", (await Assert.ThrowsAsync<ForbiddenException>(() => Act(noUser))).Message, StringComparison.Ordinal);
         Assert.Contains("doesn't let you start jobs", (await Assert.ThrowsAsync<ForbiddenException>(() => Act(planner))).Message, StringComparison.Ordinal);
         await Assert.ThrowsAsync<ForbiddenException>(() => Act(elsewhere));
         Assert.Contains("switched off", (await Assert.ThrowsAsync<ForbiddenException>(() => Act(off))).Message, StringComparison.Ordinal);
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            StationActing.BeginAsync(http, tickets, security, _clock, "expired or forged", Permissions.JobExecute, "start jobs"));
+            StationActing.BeginAsync(http, tickets, security, _clock, "expired or forged", Permissions.JobExecute, UserMessage.Of("start jobs")));
         Assert.False(http.Items.ContainsKey(StationActing.ItemKey));
     }
 

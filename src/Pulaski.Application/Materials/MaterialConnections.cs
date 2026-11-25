@@ -150,7 +150,7 @@ public static class ODataMaterialRows
     }
 
     /// <summary>Why a field map can't be used; empty when it can.</summary>
-    public static IReadOnlyList<string> Problems(IReadOnlyDictionary<string, string> map) => ConnectionFields.Problems(map, Mappable, Required);
+    public static IReadOnlyList<UserMessage> Problems(IReadOnlyDictionary<string, string> map) => ConnectionFields.Problems(map, Mappable, Required);
 
     /// <summary>The service's top-level properties the map reads, for <c>$select</c>.</summary>
     public static IReadOnlyList<string> Selected(IReadOnlyDictionary<string, string> map) =>
@@ -191,22 +191,22 @@ public static partial class ConnectionFields
     }
 
     /// <summary>Why a field map can't be used for a target with these fields; empty when it can.</summary>
-    public static IReadOnlyList<string> Problems(IReadOnlyDictionary<string, string> map, IReadOnlyList<string> mappable, IReadOnlyList<string> required)
+    public static IReadOnlyList<UserMessage> Problems(IReadOnlyDictionary<string, string> map, IReadOnlyList<string> mappable, IReadOnlyList<string> required)
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         foreach (var (field, path) in map)
         {
             if (!mappable.Contains(field))
             {
-                problems.Add($"'{field}' isn't an import field; the fields are {string.Join(", ", mappable)}.");
+                problems.Add(UserMessage.From($"'{field}' isn't an import field; the fields are {string.Join(", ", mappable)}."));
             }
             else if (!PathPattern().IsMatch(path))
             {
-                problems.Add($"{field}: '{path}' isn't a property name (letters, digits and _, with / for a property of a property).");
+                problems.Add(UserMessage.From($"{field}: '{path}' isn't a property name (letters, digits and _, with / for a property of a property)."));
             }
         }
 
-        problems.AddRange(required.Where(r => !map.ContainsKey(r)).Select(r => $"Map {r}: every connection needs it."));
+        problems.AddRange(required.Where(r => !map.ContainsKey(r)).Select(r => UserMessage.From($"Map {r}: every connection needs it.")));
         return problems;
     }
 
@@ -262,10 +262,10 @@ internal static partial class MaterialConnectionRules
     public static partial Regex ReadQuery();
 
     /// <summary>What a connection of its kind still needs; empty when it can be saved.</summary>
-    public static IReadOnlyList<string> KindProblems(MaterialConnection c)
+    public static IReadOnlyList<UserMessage> KindProblems(MaterialConnection c)
     {
-        var problems = new List<string>();
-        void Need(bool ok, string problem)
+        var problems = new List<UserMessage>();
+        void Need(bool ok, UserMessage problem)
         {
             if (!ok)
             {
@@ -277,32 +277,32 @@ internal static partial class MaterialConnectionRules
         {
             case MaterialConnectionKinds.Database:
                 Need(c.Query is { Length: > 0 and <= 4000 } q && ReadQuery().IsMatch(q) && !q.TrimEnd().TrimEnd(';').Contains(';', StringComparison.Ordinal),
-                    "Query: one SELECT (or WITH … SELECT) statement, at most 4000 characters.");
+                    UserMessage.Of("Query: one SELECT (or WITH … SELECT) statement, at most 4000 characters."));
                 break;
             case MaterialConnectionKinds.Soap:
-                Need(c.BaseUrl is { } soapUrl && IsAllowedUrl(soapUrl), "BaseUrl: the service's https address.");
-                Need(c.RequestBody is { Length: > 0 and <= 20000 } body && body.TrimStart().StartsWith('<'), "RequestBody: the SOAP envelope to post, at most 20,000 characters.");
-                Need(EntitySetPattern().IsMatch(c.EntitySet), "EntitySet: the name of the element that holds one item, such as Material.");
-                Need(c.SoapAction is null || c.SoapAction.Length <= 500, "SoapAction: at most 500 characters.");
+                Need(c.BaseUrl is { } soapUrl && IsAllowedUrl(soapUrl), UserMessage.Of("BaseUrl: the service's https address."));
+                Need(c.RequestBody is { Length: > 0 and <= 20000 } body && body.TrimStart().StartsWith('<'), UserMessage.Of("RequestBody: the SOAP envelope to post, at most 20,000 characters."));
+                Need(EntitySetPattern().IsMatch(c.EntitySet), UserMessage.Of("EntitySet: the name of the element that holds one item, such as Material."));
+                Need(c.SoapAction is null || c.SoapAction.Length <= 500, UserMessage.Of("SoapAction: at most 500 characters."));
                 break;
             case MaterialConnectionKinds.Scim:
-                Need(c.BaseUrl is { } scimUrl && IsAllowedUrl(scimUrl), "BaseUrl: the SCIM service's base address (it ends before /Users), https.");
-                Need(c.Filter is null || c.Filter.Length <= 1000, "Filter: a SCIM filter, at most 1000 characters.");
+                Need(c.BaseUrl is { } scimUrl && IsAllowedUrl(scimUrl), UserMessage.Of("BaseUrl: the SCIM service's base address (it ends before /Users), https."));
+                Need(c.Filter is null || c.Filter.Length <= 1000, UserMessage.Of("Filter: a SCIM filter, at most 1000 characters."));
                 break;
             case MaterialConnectionKinds.Rest:
-                Need(c.BaseUrl is { } restUrl && IsAllowedUrl(restUrl, allowQuery: true), "BaseUrl: the https address that answers with the items.");
-                Need(c.EntitySet.Length == 0 || PathPattern().IsMatch(c.EntitySet), "EntitySet: where the items are in the answer, such as data.items, or blank for the whole answer.");
-                Need(c.NextLinkPath is null || PathPattern().IsMatch(c.NextLinkPath), "NextLinkPath: where the answer gives the next page's address, such as links.next.");
+                Need(c.BaseUrl is { } restUrl && IsAllowedUrl(restUrl, allowQuery: true), UserMessage.Of("BaseUrl: the https address that answers with the items."));
+                Need(c.EntitySet.Length == 0 || PathPattern().IsMatch(c.EntitySet), UserMessage.Of("EntitySet: where the items are in the answer, such as data.items, or blank for the whole answer."));
+                Need(c.NextLinkPath is null || PathPattern().IsMatch(c.NextLinkPath), UserMessage.Of("NextLinkPath: where the answer gives the next page's address, such as links.next."));
                 break;
             default:
-                Need(c.BaseUrl is { } odataUrl && IsAllowedUrl(odataUrl), "BaseUrl: the service root as an https address, without a query (http only on this machine).");
-                Need(EntitySetPattern().IsMatch(c.EntitySet), "EntitySet: the entity set's name, such as Products.");
+                Need(c.BaseUrl is { } odataUrl && IsAllowedUrl(odataUrl), UserMessage.Of("BaseUrl: the service root as an https address, without a query (http only on this machine)."));
+                Need(EntitySetPattern().IsMatch(c.EntitySet), UserMessage.Of("EntitySet: the entity set's name, such as Products."));
                 break;
         }
 
-        Need(c.BaseUrl is null || c.BaseUrl.Length <= 500, "BaseUrl: at most 500 characters.");
-        Need(c.Kind is MaterialConnectionKinds.OData or MaterialConnectionKinds.Scim || c.Filter is null, "Filter: only an OData or SCIM connection takes a filter.");
-        Need(c.Kind != MaterialConnectionKinds.Scim || c.IsPeople, "Kind: a SCIM connection reads people.");
+        Need(c.BaseUrl is null || c.BaseUrl.Length <= 500, UserMessage.Of("BaseUrl: at most 500 characters."));
+        Need(c.Kind is MaterialConnectionKinds.OData or MaterialConnectionKinds.Scim || c.Filter is null, UserMessage.Of("Filter: only an OData or SCIM connection takes a filter."));
+        Need(c.Kind != MaterialConnectionKinds.Scim || c.IsPeople, UserMessage.Of("Kind: a SCIM connection reads people."));
         return problems;
     }
 
@@ -419,16 +419,16 @@ internal sealed class SaveMaterialConnectionHandler(
 
         // SCIM users are read as the SCIM file is (D-054), so a SCIM connection needs no map.
         var mapProblems = kind == MaterialConnectionKinds.Scim ? [] : people ? ConnectionPeopleRows.Problems(map) : ODataMaterialRows.Problems(map);
-        var kindProblems = MaterialConnectionKinds.All.Contains(kind) ? MaterialConnectionRules.KindProblems(asked) : ["odata, rest, soap, database or scim."];
+        var kindProblems = MaterialConnectionKinds.All.Contains(kind) ? MaterialConnectionRules.KindProblems(asked) : [UserMessage.Of("odata, rest, soap, database or scim.")];
         new Validator()
             .Require(MaterialConnectionRules.CodePattern().IsMatch(code), "Code", "Letters, digits, '-' or '_', up to 30.")
             .RequireText(name, "Name", 100)
-            .Require(kindProblems.Count == 0, "Kind", string.Join(" ", kindProblems))
+            .Require("Kind", kindProblems.Count == 0 ? null : UserMessage.Join(kindProblems))
             .Require(asked.Filter is null || asked.Filter.Length <= 1000, "Filter", "At most 1000 characters.")
             .RequireText(system, "ExternalSystem", 100)
-            .Require(mapProblems.Count == 0, "FieldMap", string.Join(" ", mapProblems))
+            .Require("FieldMap", mapProblems.Count == 0 ? null : UserMessage.Join(mapProblems))
             .Require(!people || r.SiteId is { } site && site != Guid.Empty, "SiteId", "People are imported into a site; choose one.")
-            .Require(ConnectionSchedule.Problem(schedule) is null, "Schedule", ConnectionSchedule.Problem(schedule) ?? "")
+            .Require("Schedule", ConnectionSchedule.Problem(schedule))
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -460,7 +460,7 @@ internal sealed class SaveMaterialConnectionHandler(
 
             if (current.Value.Kind != kind)
             {
-                throw new DomainRuleException($"A connection's kind is fixed once made ({current.Value.Kind}); add another connection instead.");
+                throw new DomainRuleException($"A connection's kind is fixed once made ({UserMessage.Code(current.Value.Kind)}); add another connection instead.");
             }
 
             if (current.Value.SiteId != asked.SiteId)

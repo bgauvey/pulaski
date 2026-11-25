@@ -296,8 +296,8 @@ internal sealed class IssueBadgeHandler(
     {
         var value = TerminalRules.NormalizeBadge(command.BadgeValue);
         var pin = string.IsNullOrWhiteSpace(command.Pin) ? null : command.Pin.Trim();
-        var validator = new Validator().Require(TerminalRules.BadgeProblem(value) is null, "BadgeValue", TerminalRules.BadgeProblem(value) ?? "");
-        validator.Require(pin is null || TerminalRules.PinProblem(pin) is null, "Pin", pin is null ? "" : TerminalRules.PinProblem(pin) ?? "").ThrowIfInvalid();
+        var validator = new Validator().Require("BadgeValue", TerminalRules.BadgeProblem(value));
+        validator.Require("Pin", pin is null ? null : TerminalRules.PinProblem(pin)).ThrowIfInvalid();
 
         var now = timeProvider.GetUtcNow();
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -351,7 +351,7 @@ internal sealed class IdentifyBadgeHandler(
     IUnitOfWork unitOfWork, ITerminalRepository terminals, ILaborRepository labor, IBadgeHasher badgeHasher, IPasswordHasher pinHasher, IEventLog eventLog,
     IEventFactory events, TimeProvider timeProvider) : ICommandHandler<IdentifyBadgeCommand, BadgeIdentity>
 {
-    private const string NotRecognised = "Badge not recognised. Try again, or ask a supervisor.";
+    private static readonly UserMessage NotRecognised = UserMessage.Of("Badge not recognised. Try again, or ask a supervisor.");
 
     public async Task<BadgeIdentity> HandleAsync(IdentifyBadgeCommand command, CancellationToken cancellationToken)
     {
@@ -392,9 +392,11 @@ internal sealed class IdentifyBadgeHandler(
                 await terminals.UpdateBadgeAsync(badge with { FailedPins = failed, LockedUntil = TerminalRules.LockAfter(failed, now) }, cancellationToken);
                 await eventLog.AppendAsync(events.Create(EventTypes.BadgePinFailed, "person", person.Id, new { BadgeId = badge.Id, command.Terminal.Code, Failed = failed }), cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
-                throw new DomainRuleException(badge.PinHash is null
-                    ? "This badge has no PIN yet; ask a supervisor to set one."
-                    : failed >= TerminalRules.MaxFailedPins ? "Wrong PIN. The badge is locked for 5 minutes." : $"Wrong PIN. {TerminalRules.MaxFailedPins - failed} tries left.");
+                throw badge.PinHash is null
+                    ? new DomainRuleException("This badge has no PIN yet; ask a supervisor to set one.")
+                    : failed >= TerminalRules.MaxFailedPins
+                        ? new DomainRuleException("Wrong PIN. The badge is locked for 5 minutes.")
+                        : new DomainRuleException($"Wrong PIN. {TerminalRules.MaxFailedPins - failed} tries left.");
             }
         }
 

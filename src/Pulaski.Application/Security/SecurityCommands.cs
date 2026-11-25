@@ -50,7 +50,7 @@ internal static class SecurityRules
     {
         if (PasswordRules.Problem(password, username) is { } problem)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { [field] = [problem] });
+            throw ValidationException.Field(field, problem);
         }
     }
 

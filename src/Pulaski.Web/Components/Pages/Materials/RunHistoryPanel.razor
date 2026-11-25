@@ -83,7 +83,7 @@
             }
             else
             {
-                <p class="small text-warning-strong mb-2">@L["No rate: {0} It needs {1} runs and {2} hours of usable history.", r.NotEnough, r.MinRuns, Qty(r.MinHours)]</p>
+                <p class="small text-warning-strong mb-2">@L["No rate: {0} It needs {1} runs and {2} hours of usable history.", r.NotEnough is { } why ? L.Of(why) : "", r.MinRuns, Qty(r.MinHours)]</p>
             }
 
             @if (r.Runs.Count == 0)

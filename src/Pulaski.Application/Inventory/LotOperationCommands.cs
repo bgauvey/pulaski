@@ -185,7 +185,7 @@ internal sealed class MergeLotsHandler(
             var unitCode = (await InventoryRules.MaterialAsync(inventory, target.MaterialId, cancellationToken)).BaseUomCode;
             foreach (var id in sources)
             {
-                await Backdating.EnsureLatestAsync(inventory, locked[id].Lot, effective, now, "A merge", cancellationToken);
+                await Backdating.EnsureLatestAsync(inventory, locked[id].Lot, effective, now, UserMessage.Of("A merge"), cancellationToken);
             }
 
             await Backdating.EnsureUnchangedSinceAsync(inventory, target, effective, now, cancellationToken);
@@ -271,7 +271,7 @@ internal sealed class ShipLotHandler(
         // Shipping it all ends the lot, so then it must be its latest movement (D-076).
         if (quantity == lot.Quantity && !lot.IsBulk)
         {
-            await Backdating.EnsureLatestAsync(inventory, lot, effective, now, "Shipping all of it", cancellationToken);
+            await Backdating.EnsureLatestAsync(inventory, lot, effective, now, UserMessage.Of("Shipping all of it"), cancellationToken);
         }
         else
         {

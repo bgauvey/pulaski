@@ -1,9 +1,10 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Inventory;
-using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Inventory;
 
@@ -216,7 +217,7 @@ internal sealed class SaveLabelPrinterHandler(IUnitOfWork unitOfWork, ILabelRepo
         {
             foreach (var problem in Btxml.Problems(command.BtxmlTemplate))
             {
-                validator.Require(false, "BtxmlTemplate", problem);
+                validator.Require("BtxmlTemplate", problem);
             }
 
             foreach (var (operation, path) in files)
@@ -274,7 +275,7 @@ internal sealed class SaveSupplierFormatHandler(IUnitOfWork unitOfWork, ILabelRe
         new Validator()
             .Require(command.Id is not null || LabelRules.IsCode(code), "Code", "1 to 30 letters, digits, - or _.")
             .RequireText(name, "Name", 100)
-            .Require(problems.Count == 0, "Pattern", string.Join(" ", problems))
+            .Require("Pattern", problems.Count == 0 ? null : UserMessage.Join(problems))
             .ThrowIfInvalid();
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -312,7 +313,7 @@ internal sealed class TestSupplierFormatHandler : IQueryHandler<TestSupplierForm
         var expiry = LabelRules.Text(query.ExpiryFormat);
         var problems = SupplierBarcodes.Problems(query.Pattern, expiry);
         return Task.FromResult(problems.Count > 0
-            ? new SupplierFormatTestDto { Problems = problems }
+            ? new SupplierFormatTestDto { Problems = [.. problems.Select(Notes.Of)] }
             : new SupplierFormatTestDto { Read = SupplierBarcodes.TryRead(query.Sample, query.Pattern, expiry, "test") is { } read ? LabelRules.ToDto(read) : null });
     }
 }

@@ -22,7 +22,7 @@ public sealed record StockCount(Guid Id, Guid SiteId, string Number, Guid Locati
     {
         if (Status != StockCountStatus.Open)
         {
-            throw new DomainRuleException($"Count {Number} is {Status}; it can't be changed.");
+            throw new DomainRuleException($"Count {Number} is {UserMessage.Code(Status)}; it can't be changed.");
         }
     }
 
@@ -55,21 +55,21 @@ public sealed record CountAdjustment(StockCountLine Line, Lot Lot, decimal Varia
 /// </summary>
 public static class StockCountPosting
 {
-    public static (IReadOnlyList<CountAdjustment> Adjustments, IReadOnlyList<string> Problems) Plan(
+    public static (IReadOnlyList<CountAdjustment> Adjustments, IReadOnlyList<UserMessage> Problems) Plan(
         IEnumerable<StockCountLine> lines, IReadOnlyDictionary<Guid, CountedLot> lots)
     {
         List<CountAdjustment> adjustments = [];
-        List<string> problems = [];
+        List<UserMessage> problems = [];
         foreach (var line in lines)
         {
             var current = lots[line.LotId];
             if (line.CountedQty is not { } counted)
             {
-                problems.Add($"{current.Lot.Name} isn't counted yet; enter 0 if it isn't there.");
+                problems.Add(UserMessage.From($"{current.Lot.Name} isn't counted yet; enter 0 if it isn't there."));
             }
             else if (current.UpdatedAt > line.CountedAt)
             {
-                problems.Add($"{current.Lot.Name} changed after it was counted; count it again.");
+                problems.Add(UserMessage.From($"{current.Lot.Name} changed after it was counted; count it again."));
             }
             else if (counted != current.Lot.Quantity)
             {

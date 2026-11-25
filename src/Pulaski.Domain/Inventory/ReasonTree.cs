@@ -16,50 +16,50 @@ public static class ReasonTree
     /// <param name="kindTree">Every reason of the reason's kind, including it when it already exists.</param>
     /// <param name="reason">The reason as it is to be, before the move.</param>
     /// <param name="parentId">The group it is to go under, or null for the top.</param>
-    public static string? WhyNotUnder(IReadOnlyCollection<ReasonCode> kindTree, ReasonCode reason, Guid? parentId)
+    public static UserMessage? WhyNotUnder(IReadOnlyCollection<ReasonCode> kindTree, ReasonCode reason, Guid? parentId)
     {
         if (parentId is not { } id)
         {
-            return Height(kindTree, reason.Id) > MaxLevels ? $"A tree has at most {MaxLevels} levels." : null;
+            return Height(kindTree, reason.Id) > MaxLevels ? UserMessage.From($"A tree has at most {MaxLevels} levels.") : null;
         }
 
         var parent = kindTree.FirstOrDefault(r => r.Id == id);
         if (parent is null || parent.Kind != reason.Kind)
         {
-            return "That group isn't one of this kind's reasons.";
+            return UserMessage.Of("That group isn't one of this kind's reasons.");
         }
 
         if (!parent.IsGroup)
         {
-            return $"{parent.Code} isn't a group: only a group holds other reasons.";
+            return UserMessage.From($"{parent.Code} isn't a group: only a group holds other reasons.");
         }
 
         if (parent.Id == reason.Id || Ancestors(kindTree, parent).Any(a => a.Id == reason.Id))
         {
-            return $"{reason.Code} can't go under {parent.Code}: {parent.Code} is inside it.";
+            return UserMessage.From($"{reason.Code} can't go under {parent.Code}: {parent.Code} is inside it.");
         }
 
         if (parent.SiteId is { } parentSite && parentSite != reason.SiteId)
         {
             return reason.SiteId is null
-                ? $"A reason for every site can only go under a group for every site; {parent.Code} is for one site."
-                : $"{parent.Code} is for another site.";
+                ? UserMessage.From($"A reason for every site can only go under a group for every site; {parent.Code} is for one site.")
+                : UserMessage.From($"{parent.Code} is for another site.");
         }
 
         if (!parent.IsActive && reason.IsActive)
         {
-            return $"{parent.Code} is switched off.";
+            return UserMessage.From($"{parent.Code} is switched off.");
         }
 
         var levels = Ancestors(kindTree, parent).Count + 1 + Height(kindTree, reason.Id);
-        return levels > MaxLevels ? $"That would make {levels} levels; a tree has at most {MaxLevels}." : null;
+        return levels > MaxLevels ? UserMessage.From($"That would make {levels} levels; a tree has at most {MaxLevels}.") : null;
     }
 
     /// <summary>Why <paramref name="reason"/> can't be switched on or off as asked; null when it can.</summary>
     /// <param name="kindTree">Every reason of the reason's kind.</param>
     /// <param name="reason">The reason as it is now.</param>
     /// <param name="isActive">Whether it is to be on.</param>
-    public static string? WhyNotActive(IReadOnlyCollection<ReasonCode> kindTree, ReasonCode reason, bool isActive)
+    public static UserMessage? WhyNotActive(IReadOnlyCollection<ReasonCode> kindTree, ReasonCode reason, bool isActive)
     {
         if (isActive == reason.IsActive)
         {
@@ -68,11 +68,11 @@ public static class ReasonTree
 
         if (!isActive && kindTree.Where(r => r.ParentId == reason.Id && r.IsActive).Select(r => r.Code).Order(StringComparer.Ordinal).ToList() is { Count: > 0 } on)
         {
-            return $"Switch off what is in {reason.Code} first: {string.Join(", ", on)}.";
+            return UserMessage.From($"Switch off what is in {reason.Code} first: {string.Join(", ", on)}.");
         }
 
         return isActive && kindTree.FirstOrDefault(r => r.Id == reason.ParentId) is { IsActive: false } parent
-            ? $"Its group {parent.Code} is switched off; switch it on first."
+            ? UserMessage.From($"Its group {parent.Code} is switched off; switch it on first.")
             : null;
     }
 
@@ -85,7 +85,7 @@ public static class ReasonTree
     /// <param name="reason">The reason as it is now.</param>
     /// <param name="toGroup">Whether it is to be a group.</param>
     /// <param name="uses">Where it is referred to, as table names; empty when nowhere.</param>
-    public static string? WhyNotConvert(IReadOnlyCollection<ReasonCode> kindTree, ReasonCode reason, bool toGroup, IReadOnlyCollection<string> uses)
+    public static UserMessage? WhyNotConvert(IReadOnlyCollection<ReasonCode> kindTree, ReasonCode reason, bool toGroup, IReadOnlyCollection<string> uses)
     {
         if (toGroup == reason.IsGroup)
         {
@@ -95,12 +95,12 @@ public static class ReasonTree
         if (toGroup)
         {
             return uses.Count > 0
-                ? $"{reason.Code} has been used ({string.Join(", ", uses.Order(StringComparer.Ordinal))}), so it stays a reason: what it recorded must keep its meaning. Make a new group and move {reason.Code} into it."
+                ? UserMessage.From($"{reason.Code} has been used ({string.Join(", ", uses.Order(StringComparer.Ordinal))}), so it stays a reason: what it recorded must keep its meaning. Make a new group and move {reason.Code} into it.")
                 : null;
         }
 
         return kindTree.Where(r => r.ParentId == reason.Id).Select(r => r.Code).Order(StringComparer.Ordinal).ToList() is { Count: > 0 } inside
-            ? $"Move what is in {reason.Code} out first: {string.Join(", ", inside)}."
+            ? UserMessage.From($"Move what is in {reason.Code} out first: {string.Join(", ", inside)}.")
             : null;
     }
 

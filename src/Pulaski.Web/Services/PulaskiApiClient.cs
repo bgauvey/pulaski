@@ -1801,7 +1801,10 @@ public sealed class ApiException(
 
     private sealed record FieldMessage(string? Template, JsonElement[]? Values);
 
-    /// <summary>A message's values as sent (#128): numbers as numbers, for the reader's region; the rest as text.</summary>
+    /// <summary>
+    /// A message's values as sent (#128): numbers as numbers, for the reader's region; a message or code inside it (#188) kept as sent, for
+    /// <c>Text</c> to word; the rest as text.
+    /// </summary>
     private static object?[] ValuesOf(JsonElement[]? values) =>
         values is null ? [] : [.. values.Select(v => v.ValueKind switch
         {
@@ -1809,6 +1812,7 @@ public sealed class ApiException(
             JsonValueKind.Number => v.GetDouble(),
             JsonValueKind.String => v.GetString(),
             JsonValueKind.Null => null,
+            JsonValueKind.Object => v.Clone(),
             _ => (object?)v.ToString(),
         })];
 }

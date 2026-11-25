@@ -75,7 +75,9 @@ internal sealed class AddHandoverEntryHandler(
         var line = await handover.GetLineAsync(command.LineId, cancellationToken) ?? throw new NotFoundException($"Line {command.LineId} not found.");
         if (!line.CanRunJob || !line.IsActive)
         {
-            throw new DomainRuleException($"{line.Code} {(line.IsActive ? "isn't a line" : "is switched off")}; write handover notes for a line.");
+            throw line.IsActive
+                ? new DomainRuleException($"{line.Code} isn't a line; write handover notes for a line.")
+                : new DomainRuleException($"{line.Code} is switched off; write handover notes for a line.");
         }
 
         var envelope = events.Create(EventTypes.HandoverEntryAdded, "handover_entry", ids.NewId(), new { Line = line.Code, command.Kind, Body = body });

@@ -1,4 +1,3 @@
-using Pulaski.Application.Localization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
@@ -6,6 +5,7 @@ using Pulaski.Application.Andon;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Execution;
 using Pulaski.Application.Labor;
+using Pulaski.Application.Localization;
 using Pulaski.Application.MachineData;
 using Pulaski.Application.Security;
 using Pulaski.Contracts.Andon;
@@ -13,9 +13,9 @@ using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.MachineData;
-using Pulaski.Domain;
 using Pulaski.Domain.Labor;
 using Pulaski.Domain.Security;
+using Pulaski.Domain;
 
 namespace Pulaski.Api.Endpoints;
 
@@ -134,14 +134,14 @@ internal static class TerminalEndpoints
 
         // Running jobs at the station (#147): as the badged person's user (#150), only a job of the station's line.
         terminal.MapPost("/station/start", (StationJobRequest request, HttpContext http, StationServices station, ICommandHandler<StartJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
-            StationJobAsync(http, station, request, "start jobs", () => handler.HandleAsync(new StartJobCommand(request.JobId, request.Version), ct), ct));
+            StationJobAsync(http, station, request, UserMessage.Of("start jobs"), () => handler.HandleAsync(new StartJobCommand(request.JobId, request.Version), ct), ct));
 
         terminal.MapPost("/station/pause", (StationJobRequest request, HttpContext http, StationServices station, ICommandHandler<PauseJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
-            StationJobAsync(http, station, request, "pause jobs",
+            StationJobAsync(http, station, request, UserMessage.Of("pause jobs"),
                 () => handler.HandleAsync(new PauseJobCommand(request.JobId, request.Version, request.ReasonCodeId, Text(request.Comment)), ct), ct));
 
         terminal.MapPost("/station/complete", (StationJobRequest request, HttpContext http, StationServices station, ICommandHandler<CompleteJobCommand, ExecutionResponse> handler, CancellationToken ct) =>
-            StationJobAsync(http, station, request, "complete jobs",
+            StationJobAsync(http, station, request, UserMessage.Of("complete jobs"),
                 () => handler.HandleAsync(new CompleteJobCommand(request.JobId, request.Version, request.ReasonCodeId, Text(request.Comment)), ct), ct));
 
         // Reporting at the station (#148): the running job only; from the machine, the figures the station showed, counted to their time,
@@ -151,7 +151,7 @@ internal static class TerminalEndpoints
             CancellationToken ct) =>
         {
             var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
-                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.ProductionReport, "report production");
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.ProductionReport, UserMessage.Of("report production"));
             var personId = station.Tickets.PersonOf(ticket, terminal.Id);
             var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
             if (before.RunningJob?.JobId != request.JobId || before.Report is not { } form)
@@ -192,7 +192,7 @@ internal static class TerminalEndpoints
             CancellationToken ct) =>
         {
             var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
-                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.DowntimeCode, "code stops");
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.DowntimeCode, UserMessage.Of("code stops"));
             var personId = station.Tickets.PersonOf(ticket, terminal.Id);
             var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
             var stop = before.StopsToCode.FirstOrDefault(s => s.Id == request.StopId)
@@ -214,7 +214,7 @@ internal static class TerminalEndpoints
             CancellationToken ct) =>
         {
             var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
-                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.AndonCall, "call for help");
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.AndonCall, UserMessage.Of("call for help"));
             var personId = station.Tickets.PersonOf(ticket, terminal.Id);
             var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
             var type = before.AndonTypes.FirstOrDefault(t => t.Id == request.TypeId);
@@ -231,7 +231,7 @@ internal static class TerminalEndpoints
             StationAndonRequest request, HttpContext http, StationServices station,
             ICommandHandler<AcknowledgeAndonCallCommand, AndonCallResponse> acknowledge, CancellationToken ct) =>
         {
-            var (terminal, personId, call, ticket, expires) = await StationCallAsync(http, station, request, "answer calls for help", ct);
+            var (terminal, personId, call, ticket, expires) = await StationCallAsync(http, station, request, UserMessage.Of("answer calls for help"), ct);
             await acknowledge.HandleAsync(new AcknowledgeAndonCallCommand(call.Id), ct);
             return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, Notes.Of($"You're on the {call.TypeName} call."), ct);
         });
@@ -240,7 +240,7 @@ internal static class TerminalEndpoints
             StationAndonRequest request, HttpContext http, StationServices station,
             ICommandHandler<ResolveAndonCallCommand, AndonCallResponse> resolve, CancellationToken ct) =>
         {
-            var (terminal, personId, call, ticket, expires) = await StationCallAsync(http, station, request, "answer calls for help", ct);
+            var (terminal, personId, call, ticket, expires) = await StationCallAsync(http, station, request, UserMessage.Of("answer calls for help"), ct);
             await resolve.HandleAsync(new ResolveAndonCallCommand(call.Id, Text(request.Text)), ct);
             return await StationAndonAsync(station, terminal, personId, request.Line, ticket, expires, Notes.Of($"The {call.TypeName} call is resolved."), ct);
         });
@@ -296,7 +296,7 @@ internal static class TerminalEndpoints
     }
 
     private static async Task<Ok<StationActionResponse>> StationJobAsync(
-        HttpContext http, StationServices services, StationJobRequest request, string what, Func<Task<ExecutionResponse>> act, CancellationToken ct)
+        HttpContext http, StationServices services, StationJobRequest request, UserMessage what, Func<Task<ExecutionResponse>> act, CancellationToken ct)
     {
         var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
             http, services.Tickets, services.Security, services.Time, request.Ticket, Domain.Security.Permissions.JobExecute, what);
@@ -319,7 +319,7 @@ internal static class TerminalEndpoints
 
     // A call to answer must be one of the station's line's calls.
     private static async Task<(TerminalRecord Terminal, Guid PersonId, AndonCallDto Call, string Ticket, DateTimeOffset Expires)> StationCallAsync(
-        HttpContext http, StationServices services, StationAndonRequest request, string what, CancellationToken ct)
+        HttpContext http, StationServices services, StationAndonRequest request, UserMessage what, CancellationToken ct)
     {
         var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
             http, services.Tickets, services.Security, services.Time, request.Ticket, Domain.Security.Permissions.AndonRespond, what);

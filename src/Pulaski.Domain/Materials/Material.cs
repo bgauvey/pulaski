@@ -92,8 +92,9 @@ public sealed record Material(
         EnsureBaseUnit(change.BaseUomId, use);
         if (change.IsLotTracked != IsLotTracked && use.HasStockOnHand)
         {
-            throw new DomainRuleException(
-                $"{Code} has stock on hand; use, move out or write it off before it is {(change.IsLotTracked ? "tracked by lot" : "kept as balances")}.");
+            throw change.IsLotTracked
+                ? new DomainRuleException($"{Code} has stock on hand; use, move out or write it off before it is tracked by lot.")
+                : new DomainRuleException($"{Code} has stock on hand; use, move out or write it off before it is kept as balances.");
         }
 
         return this with

@@ -87,6 +87,6 @@ public class QualityTests
         Assert.NotEqual(released.Definition.Items[0].Id, next.Definition.Items[0].Id);
         Assert.Equal(SpecVersionStatus.Obsolete, released.MakeObsolete().Status);
         Assert.Throws<DomainRuleException>(() => next.MakeObsolete());
-        Assert.Equal("Upper-case letters, digits, '-' and '_' only.", Characteristic.CodeProblem("wall"));
+        Assert.Equal("Upper-case letters, digits, '-' and '_' only.", Characteristic.CodeProblem("wall")?.Text);
     }
 }

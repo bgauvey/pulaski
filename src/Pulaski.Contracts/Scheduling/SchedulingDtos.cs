@@ -1,3 +1,4 @@
+using Pulaski.Contracts.Common;
 namespace Pulaski.Contracts.Scheduling;
 
 /// <summary>
@@ -97,7 +98,7 @@ public sealed record RunHistoryRateDto
 
     /// <summary>The rate the usable runs give (good ÷ hours); null when there are too few, with <see cref="NotEnough"/> saying why.</summary>
     public decimal? SuggestedRatePerHour { get; init; }
-    public string? NotEnough { get; init; }
+    public MessageDto? NotEnough { get; init; }
     public int UsedRuns { get; init; }
     public decimal UsedHours { get; init; }
     public decimal UsedGoodQty { get; init; }

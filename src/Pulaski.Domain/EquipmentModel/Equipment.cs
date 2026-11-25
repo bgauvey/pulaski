@@ -81,8 +81,9 @@ public sealed record Equipment(
     {
         if ((comminglesLots || singleMaterial) && !holdsInventory)
         {
-            throw new DomainRuleException(
-                $"{(comminglesLots ? "Lots can only be indistinguishable" : "One material at a time only applies")} where inventory is held; tick Holds inventory too.");
+            throw comminglesLots
+                ? new DomainRuleException("Lots can only be indistinguishable where inventory is held; tick Holds inventory too.")
+                : new DomainRuleException("One material at a time only applies where inventory is held; tick Holds inventory too.");
         }
     }
 }

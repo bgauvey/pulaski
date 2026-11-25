@@ -53,7 +53,7 @@ public static class ProcessJobPlan
 
         if (definition.ReleaseProblems() is { Count: > 0 } problems)
         {
-            throw new DomainRuleException(string.Join(" ", problems.Select(p => p.Message)));
+            throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
         }
 
         var earliest = new Dictionary<Guid, DateTimeOffset>();
@@ -68,7 +68,7 @@ public static class ProcessJobPlan
 
             decimal SizeOf(Guid equipmentId) => lineBatchQuantities?.GetValueOrDefault(equipmentId) is { } own and > 0 ? own : batchQuantity!.Value;
             var batchShares = batchQuantity is not null
-                ? Batching.ShareBySize(quantity, [.. op.Equipment.Select(e => (e.SharePercent, SizeOf(e.EquipmentId)))], $"Work order {orderNumber}, operation {op.Number}", unitCode)
+                ? Batching.ShareBySize(quantity, [.. op.Equipment.Select(e => (e.SharePercent, SizeOf(e.EquipmentId)))], UserMessage.From($"Work order {orderNumber}, operation {op.Number}"), unitCode)
                 : null;
             var remaining = quantity;
             for (var i = 0; i < op.Equipment.Count; i++)

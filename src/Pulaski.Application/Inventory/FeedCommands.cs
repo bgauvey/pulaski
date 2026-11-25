@@ -192,7 +192,7 @@ internal static class Shortfalls
 
         return current.Value.Status == FeedShortfallStatus.Open
             ? current
-            : throw new DomainRuleException($"That shortfall was {current.Value.Status} already.");
+            : throw new DomainRuleException($"That shortfall was {UserMessage.Code(current.Value.Status)} already.");
     }
 
     public static FeedShortfall Dismiss(FeedShortfall shortfall, string actorId, DateTimeOffset at, string note) =>

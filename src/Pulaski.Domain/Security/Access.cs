@@ -282,11 +282,11 @@ public static class Roles
     public static bool IsGlobal(string code) => code == Administrator;
 
     /// <returns>Why a new role's code isn't acceptable, or null: lower case letters, digits and _, starting with a letter.</returns>
-    public static string? CodeProblem(string code) =>
+    public static UserMessage? CodeProblem(string code) =>
         code.Length is < 2 or > MaxCodeLength
-            ? $"Use 2 to {MaxCodeLength} characters."
+            ? UserMessage.From($"Use 2 to {MaxCodeLength} characters.")
             : !char.IsAsciiLetterLower(code[0]) || !code.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_')
-                ? "Lower-case letters, digits and _ only, starting with a letter."
+                ? UserMessage.Of("Lower-case letters, digits and _ only, starting with a letter.")
                 : null;
 }
 
@@ -364,19 +364,19 @@ public static class PasswordRules
     public const int MinLength = 10;
 
     /// <returns>Why the password isn't acceptable, or null.</returns>
-    public static string? Problem(string password, string username)
+    public static UserMessage? Problem(string password, string username)
     {
         if (password.Length < MinLength)
         {
-            return $"Use at least {MinLength} characters.";
+            return UserMessage.From($"Use at least {MinLength} characters.");
         }
 
         if (password.Contains(username, StringComparison.OrdinalIgnoreCase))
         {
-            return "Don't use the user name in the password.";
+            return UserMessage.Of("Don't use the user name in the password.");
         }
 
         var kinds = new[] { password.Any(char.IsLower), password.Any(char.IsUpper), password.Any(char.IsDigit), password.Any(c => !char.IsLetterOrDigit(c)) }.Count(k => k);
-        return kinds < 2 ? "Mix at least two of: lower case, upper case, digits, symbols." : null;
+        return kinds < 2 ? UserMessage.Of("Mix at least two of: lower case, upper case, digits, symbols.") : null;
     }
 }

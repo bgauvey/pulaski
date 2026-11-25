@@ -63,10 +63,10 @@ public class MaterialConnectionTests
     {
         Assert.Empty(ODataMaterialRows.Problems(Map));
         var problems = ODataMaterialRows.Problems(new Dictionary<string, string> { ["colour"] = "Colour", ["name"] = "Name; drop" });
-        Assert.Contains(problems, p => p.Contains("'colour' isn't an import field", StringComparison.Ordinal));
-        Assert.Contains(problems, p => p.Contains("isn't a property name", StringComparison.Ordinal));
-        Assert.Contains(problems, p => p.Contains("Map code", StringComparison.Ordinal));
-        Assert.Contains(problems, p => p.Contains("Map external_key", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.Text.Contains("'colour' isn't an import field", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.Text.Contains("isn't a property name", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.Text.Contains("Map code", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.Text.Contains("Map external_key", StringComparison.Ordinal));
         Assert.Equal(["Batched", "Kind", "Name", "ProductID", "ProductNumber", "ShelfLife", "Text", "Unit"], ODataMaterialRows.Selected(Map));
     }
 
@@ -120,12 +120,12 @@ public class MaterialConnectionTests
 
         var rest = odata with { Kind = "rest", BaseUrl = "https://erp.example/api/items?plant=1", EntitySet = "", NextLinkPath = "links.next" };
         Assert.Empty(MaterialConnectionRules.KindProblems(rest));
-        Assert.Contains(MaterialConnectionRules.KindProblems(rest with { Filter = "x eq 1" }), p => p.StartsWith("Filter", StringComparison.Ordinal));
-        Assert.Contains(MaterialConnectionRules.KindProblems(rest with { NextLinkPath = "links next" }), p => p.StartsWith("NextLinkPath", StringComparison.Ordinal));
+        Assert.Contains(MaterialConnectionRules.KindProblems(rest with { Filter = "x eq 1" }), p => p.Text.StartsWith("Filter", StringComparison.Ordinal));
+        Assert.Contains(MaterialConnectionRules.KindProblems(rest with { NextLinkPath = "links next" }), p => p.Text.StartsWith("NextLinkPath", StringComparison.Ordinal));
 
         var soap = odata with { Kind = "soap", EntitySet = "Material", RequestBody = "<Envelope/>" };
         Assert.Empty(MaterialConnectionRules.KindProblems(soap));
-        Assert.Contains(MaterialConnectionRules.KindProblems(soap with { RequestBody = "GetMaterials" }), p => p.StartsWith("RequestBody", StringComparison.Ordinal));
+        Assert.Contains(MaterialConnectionRules.KindProblems(soap with { RequestBody = "GetMaterials" }), p => p.Text.StartsWith("RequestBody", StringComparison.Ordinal));
 
         var database = odata with { Kind = "database", BaseUrl = null, EntitySet = "", Query = "WITH i AS (SELECT 1 AS n) SELECT n FROM i;" };
         Assert.Empty(MaterialConnectionRules.KindProblems(database));

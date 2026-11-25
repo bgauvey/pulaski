@@ -49,10 +49,15 @@ public static class Notes
     public static ProcessOrderProblemDto OrderProblem(string code, ref MessageBuilder message, int? operationNumber = null, string? equipmentCode = null) =>
         OrderProblem(code, message.Build(), operationNumber, equipmentCode);
 
+    /// <summary>An order problem back as a message, for a refusal that lists them (#188).</summary>
+    public static UserMessage Message(ProcessOrderProblemDto problem) =>
+        problem.Template is { Length: > 0 } template ? new(template, problem.Values, problem.Message) : UserMessage.Of(problem.Message);
+
     private static ProcessOrderProblemDto OrderProblem(string code, UserMessage message, int? operationNumber, string? equipmentCode) =>
         new(code, message.Text, operationNumber, equipmentCode) { Template = message.Template, Values = message.Values };
 
-    private static InventoryWarningDto Inventory(string code, UserMessage message) =>
+    /// <summary>An inventory warning worked out elsewhere (a domain rule's), with its code.</summary>
+    public static InventoryWarningDto Inventory(string code, UserMessage message) =>
         new(code, message.Text) { Template = message.Template, Values = message.Values };
 
     private static ScheduleWarningDto Schedule(string code, UserMessage message) =>

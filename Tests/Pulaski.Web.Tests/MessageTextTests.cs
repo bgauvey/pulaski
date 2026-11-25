@@ -58,4 +58,25 @@ public class MessageTextTests
         Assert.Equal("As sent.", Text.English.Of(new Pulaski.Contracts.Common.MessageDto("As sent.") { Template = "{0} {1}", Values = values[..1] }));
         Assert.Equal(["J-0042 has 1,234.5 left.", "As sent."], Text.English.Notes([note, new Pulaski.Contracts.Common.MessageDto("As sent.")]));
     }
+
+    [Fact]
+    public void A_message_inside_a_message_and_a_code_are_worded_on_their_own()
+    {
+        // #188: as the API writes them, a part is {template, values, text} and a code is {code}.
+        var values = System.Text.Json.JsonSerializer.Deserialize<object?[]>(
+            """["J-1", {"code": "on_hold"}, {"template": "valid only from {0}", "values": ["2026-11-01"], "text": "valid only from 2026-11-01"}]""")!;
+        var note = new Pulaski.Contracts.Common.MessageDto("J-1 is on hold: valid only from 2026-11-01.") { Template = "{0} is {1}: {2}.", Values = values };
+        Assert.Equal("J-1 is on hold: valid only from 2026-11-01.", Text.English.Of(note));
+
+        // A part that doesn't fill shows its own English.
+        var broken = System.Text.Json.JsonSerializer.Deserialize<object?[]>("""[{"template": "{0} {1}", "values": [], "text": "As sent."}]""")!;
+        Assert.Equal("Why: As sent.", Text.English.Of(new Pulaski.Contracts.Common.MessageDto("Why: As sent.") { Template = "Why: {0}", Values = broken }));
+    }
+
+    [Fact]
+    public void A_code_mid_sentence_starts_lower_case()
+    {
+        Assert.Equal("on hold", Text.English.Word("on_hold"));
+        Assert.Equal("released", Text.English.Word("released"));
+    }
 }

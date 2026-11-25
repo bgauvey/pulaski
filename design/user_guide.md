@@ -2470,7 +2470,9 @@ In detail:
 - Changing translations needs *languages: manage*, which only administrators have until a role is given it. Changes reach the screens
   within a minute.
 - The terms are the screens' text and the server's messages. A message such as *Job {0} not found.* is one term; the screen fills in the
-  values. Refusals the server words in parts aren't terms and stay in English.
+  values. A status inside a message (*Job J-1 is {1}…*) shows as that status's own translation, starting lower case, so in some languages
+  it may not agree with the words around it; word the translation so it reads well. Some messages carry a smaller term of their own, such
+  as a qualification's *not held* or a terminal action's *report production*: translate those on their own too.
 
 ### Add or change a role (administrators)
 
@@ -3214,10 +3216,12 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Machine data:** only stops can be adjusted, not a machine's state history; a machine stop still going on over a stop entered by hand is trimmed only once it ends. Machine counts reach OEE only through production reports. The OEE report covers at most 366 days (beyond 31 it shows days, not shifts); its only chart is the trend of one figure for one piece of equipment, and the stop Pareto is a table. OPC UA's own alarms and events aren't read (alarms come from alarm-number tags), Pulaski can't write to machines, EtherNet/IP tags can't be browsed (type their names) and arrays aren't read, process values are numbers only, with no charts of their own on screen (a characteristic sampled from one has a [control chart](#control-charts)).
 - **Reports from the machine are confirmed by an operator.** Nothing reports machine counts by itself, materials made in batches can't take them, and the capabilities CSV has no units-per-count column. Reversing a report from the machine that isn't the run's latest doesn't offer its counts again; report them by hand. A corrected report's good output goes into new lots, not the old ones, and its run and time can't change.
 - **Languages:** every screen is translated, and so are refusals from the server, a form's field checks (*Reason Other needs a comment.*), the
-  notes and warnings that come back after an action (such as a missing qualification) and the problems a BOM, process or specification
-  check lists. Not yet: the errors on rows of an import, the answers of a scan, a few messages worded in parts (they stay English), or
-  words the server puts into a message (*tracked by lot*, *expired*, *the balance*). The answer after asking for a password reset link, the banner shown while the browser
-  reconnects to Pulaski, and the descriptions of the people import sources are English too. A few help paragraphs that name file columns or
+  notes and warnings that come back after an action (such as a missing qualification), the problems a BOM, process or specification
+  check lists, and the statuses and reasons inside those messages. Not yet: the errors on rows of an import, the answers of a scan, why
+  a lot was suggested or a run left out of a rate, and the names of permissions (on Configure → Users, and in *it needs the permission …*)
+  and of alert kinds. Dates inside a message keep Pulaski's usual form (*2026-11-24*). The answer after asking for a password reset link,
+  the banner shown while the browser reconnects to Pulaski, calendar names in the schedule (*Around the clock*), the role line under your
+  name, and the descriptions of the people import sources are English too. A few help paragraphs that name file columns or
   addresses are translated in pieces around them. Quantities inside a refusal keep Pulaski's usual form (*1,234.5*). Your plant's own names (reasons,
   lines, call types) are shown as entered. Dates and numbers follow the region on the translated screens; the rest still write them Pulaski's
   usual way. *Choose File* is the browser's own text.

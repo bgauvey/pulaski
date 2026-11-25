@@ -176,8 +176,9 @@ public sealed record Lot(
         EnsurePositive(quantity);
         if (kind is LotEventKind.Consumed or LotEventKind.Shipped && Status != LotStatus.Available)
         {
-            var verb = kind == LotEventKind.Shipped ? "shipped" : "consumed";
-            throw new DomainRuleException($"{Name} is {Label(Status)}; only an available lot can be {verb}. Release it first.");
+            throw kind == LotEventKind.Shipped
+                ? new DomainRuleException($"{Name} is {Label(Status)}; only an available lot can be shipped. Release it first.")
+                : new DomainRuleException($"{Name} is {Label(Status)}; only an available lot can be consumed. Release it first.");
         }
 
         EnsureOnHand(kind switch
@@ -399,7 +400,7 @@ public sealed record Lot(
     {
         if (IsBulk ? lotNumber is not null : string.IsNullOrWhiteSpace(lotNumber))
         {
-            throw new DomainRuleException(IsBulk ? "A balance has no lot number." : "A lot needs a number.");
+            throw IsBulk ? new DomainRuleException("A balance has no lot number.") : new DomainRuleException("A lot needs a number.");
         }
 
         if (lotNumber == LotNumber && supplierLot == SupplierLot && expiresAt == ExpiresAt)
@@ -421,12 +422,13 @@ public sealed record Lot(
     {
         if (!LotEventKind.Reversible.Contains(original.Kind))
         {
-            throw new DomainRuleException(original.Kind switch
+            throw original.Kind switch
             {
-                LotEventKind.Reversed => "That movement is a reversal already.",
-                LotEventKind.Consumed or LotEventKind.Produced or LotEventKind.Split or LotEventKind.Merged => "That declaration is reversed with every lot it touched.",
-                _ => $"A {Label(original.Kind)} movement can't be reversed; put it right with another movement.",
-            });
+                LotEventKind.Reversed => new DomainRuleException("That movement is a reversal already."),
+                LotEventKind.Consumed or LotEventKind.Produced or LotEventKind.Split or LotEventKind.Merged =>
+                    new DomainRuleException("That declaration is reversed with every lot it touched."),
+                _ => new DomainRuleException($"A {Label(original.Kind)} movement can't be reversed; put it right with another movement."),
+            };
         }
 
         var delta = original.QtyDelta ?? 0m;
@@ -564,7 +566,13 @@ public sealed record Lot(
     {
         if (IsBulk)
         {
-            throw new DomainRuleException($"A balance of a material that isn't lot-tracked can't be {action}; it is already one quantity per location.");
+            // Each action its own sentence, for translation (#188).
+            throw action switch
+            {
+                "packed" => new DomainRuleException("A balance of a material that isn't lot-tracked can't be packed; it is already one quantity per location."),
+                "split" => new DomainRuleException("A balance of a material that isn't lot-tracked can't be split; it is already one quantity per location."),
+                _ => new DomainRuleException("A balance of a material that isn't lot-tracked can't be merged; it is already one quantity per location."),
+            };
         }
     }
 
@@ -572,7 +580,19 @@ public sealed record Lot(
     {
         if (!LotStatus.IsOnHand(Status))
         {
-            throw new DomainRuleException($"{Name} is {Label(Status)}; it can't be {action}.");
+            var status = Label(Status);
+            throw action switch
+            {
+                "consumed" => new DomainRuleException($"{Name} is {status}; it can't be consumed."),
+                "moved" => new DomainRuleException($"{Name} is {status}; it can't be moved."),
+                "shipped" => new DomainRuleException($"{Name} is {status}; it can't be shipped."),
+                "packed" => new DomainRuleException($"{Name} is {status}; it can't be packed."),
+                "held or released" => new DomainRuleException($"{Name} is {status}; it can't be held or released."),
+                "split" => new DomainRuleException($"{Name} is {status}; it can't be split."),
+                "merged into" => new DomainRuleException($"{Name} is {status}; nothing can be merged into it."),
+                "put back" => new DomainRuleException($"{Name} is {status}; it can't be put back."),
+                _ => new DomainRuleException($"{Name} is {status}; it can't be written off."),
+            };
         }
     }
 
@@ -584,7 +604,7 @@ public sealed record Lot(
         }
     }
 
-    private static string Label(string status) => status.Replace('_', ' ');
+    private static MessageCode Label(string status) => UserMessage.Code(status);
 
     private static string Qty(decimal value) => value.ToString("0.######", CultureInfo.InvariantCulture);
 }

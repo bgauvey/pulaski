@@ -280,8 +280,9 @@ internal sealed class ImportMaterialsHandler(
     {
         if (await materials.FindByCodeForUpdateAsync(code, cancellationToken) is { } owner && owner.Value.Id != materialId)
         {
-            throw new DomainRuleException(
-                $"Another material already has the code {code}{(owner.Value.IsFromErp ? $" ({owner.Value.ExternalSystem} key {owner.Value.ExternalKey})" : "")}.");
+            throw owner.Value.IsFromErp
+                ? new DomainRuleException($"Another material already has the code {code} ({owner.Value.ExternalSystem} key {owner.Value.ExternalKey}).")
+                : new DomainRuleException($"Another material already has the code {code}.");
         }
     }
 

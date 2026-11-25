@@ -182,7 +182,7 @@ internal sealed class RecordQualityResultHandler(
 
         if (measurement.Problem(characteristic.DataKind) is { } problem)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { [characteristic.DataKind == CharacteristicKinds.Variable ? "Values" : "Inspected"] = [problem] });
+            throw ValidationException.Field(characteristic.DataKind == CharacteristicKinds.Variable ? "Values" : "Inspected", problem);
         }
 
         // The job is only read; the lot is locked, as every lot change does, since a failure may hold it.

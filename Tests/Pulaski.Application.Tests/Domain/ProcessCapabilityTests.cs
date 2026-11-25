@@ -43,8 +43,8 @@ public class ProcessCapabilityTests
     [Fact]
     public void Too_little_data_or_no_limits_gives_no_figures_with_why()
     {
-        Assert.StartsWith("Only 19 usable", ProcessCapability.Measured(ChartTypes.IMr, Measured(19, i => [i]), 1, 0, 30).NotEnough, StringComparison.Ordinal);
-        Assert.Equal("The specification gives no limits for it.", ProcessCapability.Measured(ChartTypes.IMr, Measured(30, i => [i]), 1, null, null).NotEnough);
+        Assert.StartsWith("Only 19 usable", ProcessCapability.Measured(ChartTypes.IMr, Measured(19, i => [i]), 1, 0, 30).NotEnough?.Text, StringComparison.Ordinal);
+        Assert.Equal("The specification gives no limits for it.", ProcessCapability.Measured(ChartTypes.IMr, Measured(30, i => [i]), 1, null, null).NotEnough?.Text);
         Assert.Equal(CapabilityBands.Marginal, CapabilityBands.Of(1.1));
         Assert.Null(CapabilityBands.Of(null));
     }

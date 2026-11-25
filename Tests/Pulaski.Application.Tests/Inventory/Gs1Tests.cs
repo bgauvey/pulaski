@@ -57,9 +57,9 @@ public class Gs1Tests
         const string Pattern = @"(?<material>[A-Z0-9-]+)\|(?<lot>[A-Z0-9]+)\|(?<qty>\d+(\.\d+)?)\|(?<expiry>\d{6})";
 
         Assert.Empty(SupplierBarcodes.Problems(Pattern, "yyMMdd"));
-        Assert.Contains(SupplierBarcodes.Problems(@"(?<colour>\w+)", null), p => p.Contains("isn't a part", StringComparison.Ordinal));
-        Assert.Contains(SupplierBarcodes.Problems(@"(?<qty>\d+)", null), p => p.Contains("finds a lot or a material", StringComparison.Ordinal));
-        Assert.Contains(SupplierBarcodes.Problems("(unclosed", null), p => p.Contains("regular expression", StringComparison.Ordinal));
+        Assert.Contains(SupplierBarcodes.Problems(@"(?<colour>\w+)", null), p => p.Text.Contains("isn't a part", StringComparison.Ordinal));
+        Assert.Contains(SupplierBarcodes.Problems(@"(?<qty>\d+)", null), p => p.Text.Contains("finds a lot or a material", StringComparison.Ordinal));
+        Assert.Contains(SupplierBarcodes.Problems("(unclosed", null), p => p.Text.Contains("regular expression", StringComparison.Ordinal));
 
         var read = SupplierBarcodes.TryRead("RESIN-7|B4471|25.5|271130", Pattern, "yyMMdd", "ACME")!;
         Assert.Equal(("ACME", "RESIN-7", "B4471", 25.5m, new DateOnly(2027, 11, 30)), (read.Source, read.MaterialCode, read.LotNumber, read.Quantity, read.Expiry));

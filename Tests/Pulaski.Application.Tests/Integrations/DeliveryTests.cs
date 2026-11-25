@@ -100,12 +100,12 @@ public class DeliveryTests
         Assert.Empty(With().Problems());
         Assert.Empty(With(url: "http://localhost:5000/in").Problems());
         Assert.Empty(With(enabled: false, url: null, kinds: []).Problems());
-        Assert.Contains(With(url: null).Problems(), p => p.Contains("address", StringComparison.Ordinal));
-        Assert.Contains(With(url: "http://erp.example.com/in").Problems(), p => p.Contains("https://", StringComparison.Ordinal));
-        Assert.Contains(With(url: "ftp://x/y").Problems(), p => p.Contains("full https://", StringComparison.Ordinal));
-        Assert.Contains(With(kinds: []).Problems(), p => p.Contains("at least one kind", StringComparison.Ordinal));
-        Assert.Contains(With(kinds: ["everything"]).Problems(), p => p.Contains("'everything'", StringComparison.Ordinal));
-        Assert.Contains(With(attempts: 0).Problems(), p => p.Contains("Attempts", StringComparison.Ordinal));
+        Assert.Contains(With(url: null).Problems(), p => p.Text.Contains("address", StringComparison.Ordinal));
+        Assert.Contains(With(url: "http://erp.example.com/in").Problems(), p => p.Text.Contains("https://", StringComparison.Ordinal));
+        Assert.Contains(With(url: "ftp://x/y").Problems(), p => p.Text.Contains("full https://", StringComparison.Ordinal));
+        Assert.Contains(With(kinds: []).Problems(), p => p.Text.Contains("at least one kind", StringComparison.Ordinal));
+        Assert.Contains(With(kinds: ["everything"]).Problems(), p => p.Text.Contains("'everything'", StringComparison.Ordinal));
+        Assert.Contains(With(attempts: 0).Problems(), p => p.Text.Contains("Attempts", StringComparison.Ordinal));
 
         // Saved settings take over from the configuration; the configuration's secret stays.
         var configured = new DeliveryTarget("webhook:erp", false, null, ["pulaski.lot."]) { SecretConfigured = true };
@@ -129,10 +129,10 @@ public class DeliveryTests
             new("wms", true, url, ["inventory"], false, 12, 15, 5, true, "Warehouse", DeliveryFeedKinds.Mqtt, topic);
         Assert.Empty(Mqtt().Problems());
         Assert.Empty(Mqtt(url: "mqtts://broker.example.com").Problems());
-        Assert.Contains(Mqtt(url: "https://broker").Problems(), p => p.Contains("mqtt://", StringComparison.Ordinal));
-        Assert.Contains(Mqtt(topic: "pulaski/#").Problems(), p => p.Contains("topic", StringComparison.Ordinal));
-        Assert.Contains(Mqtt(topic: null).Problems(), p => p.Contains("topic", StringComparison.Ordinal));
-        Assert.Contains((Mqtt() with { Kind = "kafka" }).Problems(), p => p.Contains("webhook or an MQTT broker", StringComparison.Ordinal));
+        Assert.Contains(Mqtt(url: "https://broker").Problems(), p => p.Text.Contains("mqtt://", StringComparison.Ordinal));
+        Assert.Contains(Mqtt(topic: "pulaski/#").Problems(), p => p.Text.Contains("topic", StringComparison.Ordinal));
+        Assert.Contains(Mqtt(topic: null).Problems(), p => p.Text.Contains("topic", StringComparison.Ordinal));
+        Assert.Contains((Mqtt() with { Kind = "kafka" }).Problems(), p => p.Text.Contains("webhook or an MQTT broker", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class DeliveryTests
         Assert.Equal(DeliveryFormats.PerformanceTriggers, feed.TypePrefixes);
         Assert.Contains("pulaski.job.production_", feed.TypePrefixes);
         Assert.DoesNotContain(feed.TypePrefixes, p => "pulaski.job.created.v1".StartsWith(p, StringComparison.Ordinal));
-        Assert.Contains((feed with { Format = "csv" }).Problems(), p => p.Contains("CloudEvents or B2MML", StringComparison.Ordinal));
+        Assert.Contains((feed with { Format = "csv" }).Problems(), p => p.Text.Contains("CloudEvents or B2MML", StringComparison.Ordinal));
         Assert.Equal(["pulaski.labor."], (feed with { Format = DeliveryFormats.CloudEvents, EventKinds = ["labor"] }).TypePrefixes);
 
         // An added feed runs on its format; a built-in one stays CloudEvents.

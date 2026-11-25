@@ -31,10 +31,10 @@ public class AllocationTests
         Assert.Equal([("SOON", 50m), ("LATER", 50m), ("OLD", 80m)], picks.Select(p => (p.Lot.Label, p.Quantity)));
         Assert.Contains("the earliest", picks[0].Reason, StringComparison.Ordinal);
         Assert.StartsWith("No expiry", picks[2].Reason, StringComparison.Ordinal);
-        Assert.Contains("before the job needs it", excluded.Single(e => e.Lot.Label == "GONE").Reason, StringComparison.Ordinal);
-        Assert.Contains("on hold", excluded.Single(e => e.Lot.Label == "HELD").Reason, StringComparison.Ordinal);
-        Assert.Contains("other jobs", excluded.Single(e => e.Lot.Label == "TAKEN").Reason, StringComparison.Ordinal);
-        Assert.Contains("Not needed", excluded.Single(e => e.Lot.Label == "NEW").Reason, StringComparison.Ordinal);
+        Assert.Contains("before the job needs it", excluded.Single(e => e.Lot.Label == "GONE").Reason?.Text, StringComparison.Ordinal);
+        Assert.Contains("on hold", excluded.Single(e => e.Lot.Label == "HELD").Reason?.Text, StringComparison.Ordinal);
+        Assert.Contains("other jobs", excluded.Single(e => e.Lot.Label == "TAKEN").Reason?.Text, StringComparison.Ordinal);
+        Assert.Contains("Not needed", excluded.Single(e => e.Lot.Label == "NEW").Reason?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class AllocationTests
         Assert.Throws<DomainRuleException>(() => allocation.Release(null).Release(null));
 
         var lot = C("L", 50m, others: 20m);
-        Assert.Contains("only 30 kg", LotRecommendation.AllocationProblem(allocation, lot, Now, "kg"), StringComparison.Ordinal);
+        Assert.Contains("only 30 kg", LotRecommendation.AllocationProblem(allocation, lot, Now, "kg")?.Text, StringComparison.Ordinal);
         Assert.Null(LotRecommendation.AllocationProblem(allocation with { Quantity = 30m }, lot, Now, "kg"));
     }
 

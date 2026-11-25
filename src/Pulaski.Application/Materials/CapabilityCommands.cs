@@ -71,7 +71,7 @@ internal sealed class CapabilityWrites(
             .Require(batchSize is null or > 0, "BatchSize", "Greater than zero, or blank for the material's batch size.")
             .Require(batchTolerancePct is null or (>= 0 and <= 50), "BatchTolerancePct", "Between 0 and 50 percent, or blank for the material's tolerance.")
             .Require(unitsPerCount is null or > 0, "UnitsPerCount", "Greater than zero, or blank for one.")
-            .Require(lotRule?.Problem() is null, "LotRule", lotRule?.Problem() ?? "")
+            .Require("LotRule", lotRule?.Problem())
             .ThrowIfInvalid();
         return new CapabilityChange(
             rate, rateUomId, changeoverMinutes is { } m ? TimeSpan.FromMinutes(m) : null, crewSize, isPreferred, from, to, batchSize, batchTolerancePct, unitsPerCount,
@@ -239,8 +239,9 @@ internal sealed class AddCapabilityHandler(
         var line = await writes.LockLineAsync(command.EquipmentId, cancellationToken);
         if (!line.CanRunJob || !line.IsActive)
         {
-            throw new DomainRuleException(
-                $"{line.Code} {(line.IsActive ? "doesn't run jobs" : "is inactive")}; a capability goes on an active line that runs jobs. A department gets its lines' capabilities.");
+            throw line.IsActive
+                ? new DomainRuleException($"{line.Code} doesn't run jobs; a capability goes on an active line that runs jobs. A department gets its lines' capabilities.")
+                : new DomainRuleException($"{line.Code} is inactive; a capability goes on an active line that runs jobs. A department gets its lines' capabilities.");
         }
 
         var material = await writes.MaterialForRateAsync(command.MaterialId, command.RateUomId, null, cancellationToken);

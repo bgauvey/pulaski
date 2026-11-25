@@ -238,7 +238,7 @@ internal sealed class RetryDeliveryHandler(IUnitOfWork unitOfWork, IDeliveryStor
         var delivery = await store.GetForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Delivery {command.Id} not found.");
         if (delivery.Status != DeliveryStatuses.Failed)
         {
-            throw new DomainRuleException($"That delivery is {delivery.Status}; only a failed one is retried.");
+            throw new DomainRuleException($"That delivery is {UserMessage.Code(delivery.Status)}; only a failed one is retried.");
         }
 
         var envelope = events.Create(EventTypes.DeliveryRetried, "delivery", delivery.Id, new { delivery.Sink, delivery.EventId, delivery.EventType, delivery.Attempts });
@@ -281,7 +281,7 @@ internal sealed class SkipDeliveryHandler(IUnitOfWork unitOfWork, IDeliveryStore
         var delivery = await store.GetForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Delivery {command.Id} not found.");
         if (delivery.Status is DeliveryStatuses.Delivered or DeliveryStatuses.Skipped)
         {
-            throw new DomainRuleException($"That delivery is {delivery.Status} already.");
+            throw new DomainRuleException($"That delivery is {UserMessage.Code(delivery.Status)} already.");
         }
 
         var envelope = events.Create(EventTypes.DeliverySkipped, "delivery", delivery.Id, new { delivery.Sink, delivery.EventId, delivery.EventType, delivery.Attempts }, reason);

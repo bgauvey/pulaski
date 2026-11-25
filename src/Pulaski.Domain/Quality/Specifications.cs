@@ -42,11 +42,11 @@ public sealed record Characteristic(Guid Id, string Code, string Name, string? D
     public static string DefaultChart(string dataKind) => dataKind == CharacteristicKinds.Variable ? Spc.ChartTypes.IMr : Spc.ChartTypes.P;
 
     /// <returns>Why the code isn't acceptable, or null: 1 to 30 upper-case letters, digits, '-' or '_', starting with a letter or digit.</returns>
-    public static string? CodeProblem(string code) =>
+    public static UserMessage? CodeProblem(string code) =>
         code.Length is < 1 or > MaxCode
-            ? $"Use 1 to {MaxCode} characters."
+            ? UserMessage.From($"Use 1 to {MaxCode} characters.")
             : !char.IsAsciiLetterOrDigit(code[0]) || !code.All(c => char.IsAsciiLetterUpper(c) || char.IsAsciiDigit(c) || c is '-' or '_')
-                ? "Upper-case letters, digits, '-' and '_' only."
+                ? UserMessage.Of("Upper-case letters, digits, '-' and '_' only.")
                 : null;
 }
 
@@ -188,7 +188,7 @@ public sealed record SpecVersion(
         EnsureDraft("changed");
         if (definition.StructuralProblems() is { Count: > 0 } problems)
         {
-            throw new DomainRuleException(problems[0].Message);
+            throw new DomainRuleException(problems[0].Text);
         }
 
         return this with { Definition = definition };
@@ -201,7 +201,7 @@ public sealed record SpecVersion(
         EnsureDraft("released");
         if (Definition.ReleaseProblems() is { Count: > 0 } problems)
         {
-            throw new DomainRuleException(string.Join(" ", problems.Select(p => p.Message)));
+            throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
         }
 
         return this with { Status = SpecVersionStatus.Released, ReleasedAt = at, ReleasedBy = by, Note = note };
@@ -211,7 +211,7 @@ public sealed record SpecVersion(
     public SpecVersion MakeObsolete() =>
         Status == SpecVersionStatus.Released
             ? this with { Status = SpecVersionStatus.Obsolete }
-            : throw new DomainRuleException($"Version {Number} is {Status}; only a released version becomes obsolete.");
+            : throw new DomainRuleException($"Version {Number} is {UserMessage.Code(Status)}; only a released version becomes obsolete.");
 
     /// <summary>The next draft: a copy with new item ids, since released items are rows that results point to.</summary>
     public SpecVersion NextDraft(Guid id, Func<Guid> newId) =>
@@ -222,7 +222,9 @@ public sealed record SpecVersion(
     {
         if (Status != SpecVersionStatus.Draft)
         {
-            throw new DomainRuleException($"Version {Number} is {Status}; start a new draft to have it {action}.");
+            throw action == "released"
+                ? new DomainRuleException($"Version {Number} is {UserMessage.Code(Status)}; start a new draft to have it released.")
+                : new DomainRuleException($"Version {Number} is {UserMessage.Code(Status)}; start a new draft to have it changed.");
         }
     }
 }
