@@ -1005,6 +1005,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ChecklistSignedOffResponse> SignOffChecklistAsync(Guid responseId, SignOffChecklistRequest request, CancellationToken ct = default) =>
         SendAsync<ChecklistSignedOffResponse>(HttpMethod.Post, $"api/checklist-responses/{responseId}/sign-off", request, ct);
 
+    /// <summary>A sample recorded at the station (#136b), as the signed-on person.</summary>
+    public Task<StationActionResponse> StationSampleAsync(string secret, StationSampleRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/sample", request, ct);
+
     /// <summary>A second sign-off at the station (#126d), as the signed-on person.</summary>
     public Task<StationActionResponse> StationChecklistSignOffAsync(string secret, StationChecklistSignOffRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/checklist/sign-off", request, ct);

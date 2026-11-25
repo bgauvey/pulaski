@@ -645,4 +645,9 @@ public sealed record DueSampleDto
     public decimal? EveryHours { get; init; }
     public decimal? EveryUnits { get; init; }
     public string? SiteTimeZone { get; init; }
+
+    /// <summary>What recording it takes (#136b): <c>variable</c> (values, <see cref="SubgroupSize"/> of them, in <see cref="CharacteristicUomCode"/>) or <c>attribute</c> (inspected and defective).</summary>
+    public string DataKind { get; init; } = "variable";
+    public int SubgroupSize { get; init; } = 1;
+    public string? CharacteristicUomCode { get; init; }
 }

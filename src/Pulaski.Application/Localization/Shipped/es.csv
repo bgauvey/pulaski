@@ -618,6 +618,7 @@ Badge in to answer it.,Registre su gafete para atenderla.
 Badge in to answer them.,Registre su gafete para atenderlas.
 Badge in to give its reason.,Registre su gafete para dar su motivo.
 Badge in to give their reasons.,Registre su gafete para dar sus motivos.
+Badge in to record a sample.,Registre su gafete para registrar una muestra.
 Badge in to request maintenance.,Pase su gafete para solicitar mantenimiento.
 Badge in to sign it off.,Registre su gafete para firmarla.
 "Badge not recognised. Try again, or ask a supervisor.",Gafete no reconocido. Intente de nuevo o pida ayuda a un supervisor.
@@ -3122,10 +3123,13 @@ Record labor for others and check crews onto lines,Registrar mano de obra de otr
 Record lot attributes and attach or withdraw certificates,Registrar atributos de lote y adjuntar o retirar certificados
 Record production,Registrar producción
 Record quality results against runs and lots,Registrar resultados de calidad de corridas y lotes
+Record the sample,Registrar la muestra
 Recorded,Registrado
 Recorded as {0}.,Registrado como {0}.
 "Recorded late, into a run that has ended.","Registrado tarde, en una corrida que ya terminó."
 Recorded.,Registrado.
+Recorded: in specification.,Registrado: dentro de especificación.
+Recorded: out of specification. Tell quality.,Registrado: fuera de especificación. Avise a calidad.
 Reference,Referencia
 Refresh,Actualizar
 Refresh allocations,Actualizar asignaciones
@@ -3343,6 +3347,7 @@ Sample every 1 to 1440 minutes.,Muestree cada 1 a 1440 minutos.
 "Sample every so many units, more than 0.","Muestree cada cierto número de unidades, más de 0."
 Sample exclusion,Exclusión de muestra
 Sample from it,Muestrear desde ella
+Sample {0},Muestra {0}
 Sample:,Muestra:
 Sampled,Muestreado
 Sampled at,Muestreado a las
@@ -3826,6 +3831,7 @@ That group isn't one of this kind's reasons.,Ese grupo no es uno de los motivos 
 That instruction has no released {0} checklist for {1}.,Esa instrucción no tiene una lista de verificación de {0} liberada para {1}.
 "That is {0}'s only role, and every user needs one. Give them another first, or switch them off.","Ese es el único rol de {0}, y todo usuario necesita uno. Dele otro primero, o desactívelo."
 That isn't a line of this site.,Esa no es una línea de este sitio.
+That isn't a sample the running job's plan asks for; record it on the Quality page.,Esa no es una muestra que pida el plan del trabajo en curso; regístrela en la página de Calidad.
 That isn't one of the instruction's targets.,Ese no es uno de los destinos de la instrucción.
 That isn't the current password.,Esa no es la contraseña actual.
 That isn't your time.,Ese tiempo no es suyo.
@@ -4412,6 +4418,7 @@ Utilization and OEE,Utilización y OEE
 Valid,Válida
 Valid from,Válida desde
 Value,Valor
+Value {0},Valor {0}
 Values a subgroup,Valores por subgrupo
 Values in bulk,Valores en masa
 Values{0},Valores{0}
@@ -4927,6 +4934,7 @@ rate not checked,tasa no revisada
 "raw_tcp, drop_folder or bartender.","raw_tcp, drop_folder o bartender."
 reason: {0} isn't an active utilization reason of the site.,reason: {0} no es un motivo de utilización activo del sitio.
 record expected deliveries,registrar entregas esperadas
+record quality results,registrar resultados de calidad
 recorded {0},registrado {0}
 refused (not imported),rechazadas (no importadas)
 "reject, round_up, round_down or hold.","reject, round_up, round_down o hold."

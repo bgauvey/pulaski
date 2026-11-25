@@ -2102,6 +2102,12 @@ In detail:
   as **missed**.
 - Only running jobs are listed; nothing is stored, so a plan changed by a new release applies at once.
 
+**At the line.** The line's [operator station](#use-an-operator-station) lists the running job's samples under **Samples**, with how each stands,
+to anyone there. Someone badged in who may record quality results (Operator, Supervisor, Quality) types the value (or each value of a
+subgroup, or how many were inspected and defective) under a sample that is due or overdue and taps **Record the sample**. The station says
+whether it is in specification and updates the list. It is recorded against the job, at the line, as that person. The line's
+[board](#show-a-line-board-on-a-tv) shows the samples due and overdue (*Sample WALL-01 · Overdue · 14:00*), overdue ones in red.
+
 ### Record a result
 
 1. Open **Operate → Quality**, and choose the site if you have more than one.
@@ -3495,8 +3501,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
   waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
   and machine counts, not days on the calendar.
-- **Sampling plans** show on the job page and the Floor; the operator station and line boards don't prompt for them yet, and nothing is
-  e-mailed about an overdue sample. A unit-based plan counts reported output, not machine counts.
+- **Sampling plans** show on the job page, the Floor, operator stations and line boards; nothing is e-mailed about an overdue sample, and a
+  sample recorded at a station can't be tied to a lot there (use the Quality page). A unit-based plan counts reported output, not machine counts.
 - **Work instructions** show on the job page and at the station, not on the Floor's board or line boards. At a station only the running job's
   show, or the next job's while nothing runs. A failed or rejected checklist only holds up the job; it doesn't put lots on hold or raise a quality
   alert, and nothing e-mails anyone about a checklist waiting for its sign-off (it is in the Inbox). Who may give the second sign-off is one

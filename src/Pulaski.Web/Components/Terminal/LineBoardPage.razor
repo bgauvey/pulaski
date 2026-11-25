@@ -99,6 +99,19 @@ else
                     <div class="board-quiet">@L["and {0} more", line.Maintenance.Count - 3]</div>
                 }
 
+                @* Samples the running job owes (#136b): overdue ones in red, due ones in the waiting colour. *@
+                @foreach (var sample in line.Samples.Take(3))
+                {
+                    <div class="board-call board-sample @(sample.Status == "overdue" ? "is-escalated" : "")" @key="sample.CharacteristicId">
+                        <span class="board-call-type">@L["Sample {0}", sample.CharacteristicCode]</span>
+                        <span class="board-call-state">@Pulaski.Web.Services.Quality.SampleView.Status(L, sample.Status)@(sample.DueAt is { } at ? $" · {Display.SiteTime(at, sample.SiteTimeZone)}" : "")</span>
+                    </div>
+                }
+                @if (line.Samples.Count > 3)
+                {
+                    <div class="board-quiet">@L["and {0} more", line.Samples.Count - 3]</div>
+                }
+
                 @if (line.Running is { } job)
                 {
                     var progress = LineDisplayView.Progress(job);

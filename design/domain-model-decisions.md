@@ -3324,6 +3324,10 @@ table of the data plotted (open, newest first). Computed on read; no schema chan
 - `GetDueSamplesQuery` (open production runs at a site or of a job; the material's released plans) → `GET /api/quality/samples-due?siteId=`
   and `/api/jobs/{id}/samples-due` (`floor.view` or `quality.view`). The job page lists them under **Samples**; the Floor's line cards flag
   due/overdue. Results have no site, so the pages reload on any `quality_result` change (D-117).
+- **At the line (b).** `StationDto.Samples` = the running job's due samples (every status), `CanRecordSamples` = `quality.record`; `POST
+  /api/terminal/station/sample` records one of them through `RecordQualityResultCommand` (against the job, no lot, source `manual`) as the badged
+  person. `DueSampleDto` carries `DataKind`, `SubgroupSize` and the characteristic's unit for the form. `LineDisplayLineDto.Samples` = those
+  due or overdue, on boards.
 - **Pieces:** (a) plans, the calculation, the job page and the Floor; (b) the operator station prompting and recording them, and line boards.
 
 ## Application architecture

@@ -64,6 +64,9 @@ public sealed record LineDisplayLineDto
 
     /// <summary>Maintenance requests not closed on the line or its machines (#127): waiting ones first, high priority first among them.</summary>
     public IReadOnlyList<Pulaski.Contracts.Maintenance.MaintenanceRequestDto> Maintenance { get; init; } = [];
+
+    /// <summary>Samples the running job owes now (#136b): due and overdue ones, overdue first.</summary>
+    public IReadOnlyList<Pulaski.Contracts.Quality.DueSampleDto> Samples { get; init; } = [];
 }
 
 public sealed record LineDisplayJobDto
@@ -155,6 +158,12 @@ public sealed record StationDto
     /// <summary>Whether the signed-on person may call for help (<c>andon.call</c>) and answer calls (<c>andon.respond</c>) here (#157).</summary>
     public bool CanCallForHelp { get; init; }
     public bool CanAnswerCalls { get; init; }
+
+    /// <summary>Every sample the running job's plans ask for (#136b), with how each stands; the signed-on person records them if they may.</summary>
+    public IReadOnlyList<Pulaski.Contracts.Quality.DueSampleDto> Samples { get; init; } = [];
+
+    /// <summary>Whether the signed-on person may record quality results here (<c>quality.record</c>, #136b).</summary>
+    public bool CanRecordSamples { get; init; }
 
     /// <summary>Whether the signed-on person may give checklists their second sign-off here (<c>checklists.sign_off</c>, #126d).</summary>
     public bool CanSignOffChecklists { get; init; }
@@ -305,6 +314,23 @@ public sealed record StationChecklistSignOffRequest
     public Guid ResponseId { get; init; }
     public bool Approve { get; init; }
     public string? Note { get; init; }
+}
+
+/// <summary>A sample recorded at the station (#136b): one the running job's plans ask for, as the signed-on person.</summary>
+public sealed record StationSampleRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public Guid JobId { get; init; }
+    public Guid CharacteristicId { get; init; }
+
+    /// <summary>A measured characteristic's values (its subgroup size of them).</summary>
+    public IReadOnlyList<decimal> Values { get; init; } = [];
+
+    /// <summary>An inspected characteristic's counts.</summary>
+    public int? Inspected { get; init; }
+    public int? Defects { get; init; }
+    public string? Comment { get; init; }
 }
 
 public sealed record StationStopRequest

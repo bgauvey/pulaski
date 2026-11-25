@@ -44,11 +44,16 @@ internal sealed class SamplingQueries(NpgsqlDataSource dataSource) : ISamplingRe
             return [];
         }
 
-        var names = (await connection.QueryAsync<(Guid Id, string Code, string Name)>(new CommandDefinition(
-            "SELECT id, code, name FROM core.quality_characteristic WHERE id = ANY(@Ids)",
+        var names = (await connection.QueryAsync<(Guid Id, string Code, string Name, string DataKind, int SubgroupSize, string? Uom)>(new CommandDefinition(
+            "SELECT c.id, c.code, c.name, c.data_kind, c.subgroup_size, u.code FROM core.quality_characteristic c LEFT JOIN core.uom u ON u.id = c.uom_id WHERE c.id = ANY(@Ids)",
             new { Ids = items.Select(i => i.Item.CharacteristicId).Distinct().ToArray() }, cancellationToken: cancellationToken))).ToDictionary(c => c.Id);
         return [.. items.Where(i => names.ContainsKey(i.Item.CharacteristicId)).Select(i =>
-            new SamplingItem(i.MaterialId, i.Item.CharacteristicId, names[i.Item.CharacteristicId].Code, names[i.Item.CharacteristicId].Name, i.Item.Sampling!, i.Item.SortOrder))];
+            new SamplingItem(i.MaterialId, i.Item.CharacteristicId, names[i.Item.CharacteristicId].Code, names[i.Item.CharacteristicId].Name, i.Item.Sampling!, i.Item.SortOrder)
+            {
+                DataKind = names[i.Item.CharacteristicId].DataKind,
+                SubgroupSize = names[i.Item.CharacteristicId].SubgroupSize,
+                UomCode = names[i.Item.CharacteristicId].Uom,
+            })];
     }
 
     public async Task<IReadOnlyList<(Guid RunId, DateTimeOffset At, decimal Quantity)>> OutputAsync(

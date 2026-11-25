@@ -617,6 +617,7 @@ Badge in to answer it.
 Badge in to answer them.
 Badge in to give its reason.
 Badge in to give their reasons.
+Badge in to record a sample.
 Badge in to request maintenance.
 Badge in to sign it off.
 Badge not recognised. Try again, or ask a supervisor.
@@ -3121,10 +3122,13 @@ Record labor for others and check crews onto lines
 Record lot attributes and attach or withdraw certificates
 Record production
 Record quality results against runs and lots
+Record the sample
 Recorded
 Recorded as {0}.
 Recorded late, into a run that has ended.
 Recorded.
+Recorded: in specification.
+Recorded: out of specification. Tell quality.
 Reference
 Refresh
 Refresh allocations
@@ -3342,6 +3346,7 @@ Sample every so many hours, more than 0 and at most {0}.
 Sample every so many units, more than 0.
 Sample exclusion
 Sample from it
+Sample {0}
 Sample:
 Sampled
 Sampled at
@@ -3825,6 +3830,7 @@ That group isn't one of this kind's reasons.
 That instruction has no released {0} checklist for {1}.
 That is {0}'s only role, and every user needs one. Give them another first, or switch them off.
 That isn't a line of this site.
+That isn't a sample the running job's plan asks for; record it on the Quality page.
 That isn't one of the instruction's targets.
 That isn't the current password.
 That isn't your time.
@@ -4411,6 +4417,7 @@ Utilization and OEE
 Valid
 Valid from
 Value
+Value {0}
 Values a subgroup
 Values in bulk
 Values{0}
@@ -4926,6 +4933,7 @@ rate not checked
 raw_tcp, drop_folder or bartender.
 reason: {0} isn't an active utilization reason of the site.
 record expected deliveries
+record quality results
 recorded {0}
 refused (not imported)
 reject, round_up, round_down or hold.

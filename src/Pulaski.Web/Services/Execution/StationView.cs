@@ -6,6 +6,13 @@ namespace Pulaski.Web.Services.Execution;
 /// <summary>What an operator station says about who is signed on (#150).</summary>
 public static class StationView
 {
+    /// <summary>A number typed at the station (#136b): in the station's culture, else with a point; blank or not a number is null.</summary>
+    public static decimal? Number(string? text) =>
+        string.IsNullOrWhiteSpace(text) ? null
+        : decimal.TryParse(text.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.CurrentCulture, out var local) ? local
+        : decimal.TryParse(text.Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var plain) ? plain
+        : null;
+
     /// <summary>
     /// Why the signed-on person can't do everything here, in a sentence; null when they can run jobs, report and code stops, or no one is
     /// signed on.

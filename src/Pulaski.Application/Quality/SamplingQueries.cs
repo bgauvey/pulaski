@@ -9,7 +9,12 @@ public sealed record SamplingRun(
     Guid RunId, Guid JobId, string JobNumber, Guid LineId, string LineCode, Guid MaterialId, DateTimeOffset StartedAt, string? UomCode, string? SiteTimeZone);
 
 /// <summary>A released spec item with a plan, for a material.</summary>
-public sealed record SamplingItem(Guid MaterialId, Guid CharacteristicId, string Code, string Name, SamplingPlan Plan, int SortOrder);
+public sealed record SamplingItem(Guid MaterialId, Guid CharacteristicId, string Code, string Name, SamplingPlan Plan, int SortOrder)
+{
+    public string DataKind { get; init; } = "variable";
+    public int SubgroupSize { get; init; } = 1;
+    public string? UomCode { get; init; }
+}
 
 /// <summary>What due samples are worked out from (#136): open production runs, their materials' released plans, output and results.</summary>
 public interface ISamplingReadStore
@@ -79,6 +84,9 @@ internal sealed class GetDueSamplesHandler(ISamplingReadStore store, TimeProvide
                     EveryHours = item.Plan.EveryHours,
                     EveryUnits = item.Plan.EveryUnits,
                     SiteTimeZone = run.SiteTimeZone,
+                    DataKind = item.DataKind,
+                    SubgroupSize = item.SubgroupSize,
+                    CharacteristicUomCode = item.UomCode,
                 };
             }))
             .OrderBy(d => SampleStatus.Rank(d.Status)).ThenBy(d => d.DueAt ?? d.NextAt).ThenBy(d => d.LineCode, StringComparer.Ordinal)];

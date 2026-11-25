@@ -1747,6 +1747,22 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Contains(await QueryAsync<Application.Quality.GetDueSamplesQuery, IReadOnlyList<Contracts.Quality.DueSampleDto>>(
             new Application.Quality.GetDueSamplesQuery(plant.Site, null)), d => d.JobId == plant.Job && d.CharacteristicId == wall.Id);
 
+        // The line's station lists every sample the running job's plan asks for; its board, those due or overdue (#136b). With the result moved an
+        // hour back (it then counts for the start) and 50 m more reported, the latest is due.
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE ts.quality_sample SET occurred_at = occurred_at - interval '1 hour' WHERE characteristic_id = @Id", new { wall.Id });
+        }
+
+        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 50m, 0m, plant.Metre, null, plant.Staging));
+        var terminal = new Application.Labor.TerminalRecord(Guid.CreateVersion7(), plant.Site, "SS-" + s, "Station", plant.Site, plant.Line, "badge", true, TestTime.Now);
+        var station = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
+        var owed = Assert.Single(station.Samples);
+        Assert.Equal((wall.Id, "variable", 1), (owed.CharacteristicId, owed.DataKind, owed.SubgroupSize));
+        Assert.False(station.CanRecordSamples);
+        var board = await QueryAsync<GetLineDisplayQuery, LineDisplayDto>(new GetLineDisplayQuery(plant.Site, plant.Site, "Hall"));
+        Assert.Contains(board.Lines.Single(l => l.LineId == plant.Line).Samples, x => x.CharacteristicId == wall.Id && x.Status is "due" or "overdue");
+
         // The plan comes back in the released version as written.
         var version = await QueryAsync<Application.Quality.GetSpecVersionQuery, Contracts.Quality.SpecVersionDto>(new Application.Quality.GetSpecVersionQuery(spec.Id, draft.Id));
         Assert.Equal((true, 50m, (decimal?)null), (version.Definition.Items[0].SampleAtStart, version.Definition.Items[0].SampleEveryUnits!.Value, version.Definition.Items[0].SampleEveryHours));
