@@ -207,6 +207,16 @@ public sealed class InMemoryInstructions : IInstructionRepository, IInstructionR
 
     public Task AttachToRunAsync(Guid jobId, Guid lineId, Guid runId, CancellationToken cancellationToken) => Task.CompletedTask;
 
+    public Task<Guid?> GetResponseJobAsync(Guid responseId, CancellationToken cancellationToken) => Task.FromResult<Guid?>(null);
+
+    public Task<ChecklistResponseState?> GetResponseForUpdateAsync(Guid responseId, CancellationToken cancellationToken) =>
+        Task.FromResult<ChecklistResponseState?>(null);
+
+    public Task SetSignOffAsync(Guid responseId, string signOff, string by, DateTimeOffset at, string? note, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task<IReadOnlyList<ChecklistRecordDto>> ChecklistHistoryAsync(Guid jobId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ChecklistRecordDto>>([]);
+
     private Task<Versioned<InstructionVersion>?> Find(Guid instructionId, string status)
     {
         lock (_lock)

@@ -1218,6 +1218,62 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_checklist_needing_a_second_sign_off_counts_only_once_someone_else_signed_it_and_the_job_keeps_its_history()
+    {
+        var plant = await PlantAsync();
+        var processId = await ScalarAsync<Guid>("SELECT id FROM core.process WHERE site_id = @Site", new { plant.Site });
+        CreatedResponse wi = await db.SendAsync(new Pulaski.Application.Instructions.CreateInstructionCommand(plant.Site, "WI-SO-" + _s, "Die setup"));
+        var draft = Assert.Single((await QueryAsync<Pulaski.Application.Instructions.GetInstructionQuery, Contracts.Instructions.InstructionDto>(
+            new Pulaski.Application.Instructions.GetInstructionQuery(wi.Id))).Versions);
+        Contracts.Instructions.ChecklistDto setup = new()
+        {
+            Phase = "setup",
+            SecondSignOff = true,
+            Items = [new() { Prompt = "Die gap set?", Kind = "yes_no", Required = true, Expected = true }],
+        };
+        var saved = await db.SendAsync(new Pulaski.Application.Instructions.SaveInstructionDraftCommand(wi.Id, draft.Version, "") { Checklists = [setup] });
+        await db.SendAsync(new Pulaski.Application.Instructions.AddInstructionTargetCommand(wi.Id, "operation", processId, 10, null, null));
+        await db.SendAsync(new Pulaski.Application.Instructions.ReleaseInstructionCommand(wi.Id, saved.Version, null));
+        var yes = new Dictionary<int, string?> { [1] = "yes" };
+
+        async Task<Contracts.Instructions.JobChecklistDto> StandingAsync() =>
+            Assert.Single(Assert.Single(await QueryAsync<Pulaski.Application.Instructions.GetJobInstructionsQuery, IReadOnlyList<Contracts.Instructions.JobInstructionDto>>(
+                new Pulaski.Application.Instructions.GetJobInstructionsQuery(plant.Extrude))).Checklists);
+
+        // Passed, it waits for a second sign-off and the start waits with it; whoever answered can't give it.
+        var answered = await db.SendAsync(new Pulaski.Application.Instructions.CompleteChecklistCommand(plant.Extrude, wi.Id, "setup", yes));
+        Assert.True(answered.WaitsForSignOff);
+        Assert.Equal(("pending", false), ((await StandingAsync()).SignOff!, (await StandingAsync()).Counts));
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude))));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Instructions.SignOffChecklistCommand(answered.Id, true, null)));
+
+        // Waiting, it is in the Inbox of those who sign off.
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var inbox = scope.ServiceProvider.GetRequiredService<Pulaski.Application.Inbox.IInboxReadStore>();
+            var item = Assert.Single(await inbox.ListAsync("checklist", [plant.Site], CancellationToken.None));
+            Assert.Equal(($"J10-{_s} · WI-SO-{_s}", $"jobs/{plant.Extrude}"), (item.Title, item.Link));
+        }
+
+        // Rejected (with a note), it doesn't count and is answered again; signed off, the job starts.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsAsync("qa-1", new Pulaski.Application.Instructions.SignOffChecklistCommand(answered.Id, false, null)));
+        await db.SendAsAsync("qa-1", new Pulaski.Application.Instructions.SignOffChecklistCommand(answered.Id, false, "Gap measured wrong"));
+        Assert.Equal(("rejected", "Gap measured wrong"), ((await StandingAsync()).SignOff!, (await StandingAsync()).SignOffNote!));
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude))));
+        var again = await db.SendAsync(new Pulaski.Application.Instructions.CompleteChecklistCommand(plant.Extrude, wi.Id, "setup", yes));
+        await db.SendAsAsync("qa-2", new Pulaski.Application.Instructions.SignOffChecklistCommand(again.Id, true, null));
+        Assert.True((await StandingAsync()).Counts);
+        var started = await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+
+        // The run's history holds both answers, latest first, with who signed or rejected them.
+        var history = await QueryAsync<Pulaski.Application.Instructions.GetJobChecklistsQuery, IReadOnlyList<Contracts.Instructions.ChecklistRecordDto>>(
+            new Pulaski.Application.Instructions.GetJobChecklistsQuery(plant.Extrude));
+        Assert.Equal([("signed", (string?)null), ("rejected", "Gap measured wrong")], history.Select(h => (h.SignOff!, h.SignOffNote)));
+        Assert.All(history, h => Assert.Equal((started.RunId, 1, "Die gap set?"), (h.RunId, h.RunNo!.Value, h.Items[0].Prompt)));
+        Assert.Equal("qa-2", await ScalarAsync<string>("SELECT sign_off_by FROM core.checklist_response WHERE id = @Id", new { again.Id }));
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

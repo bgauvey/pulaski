@@ -268,6 +268,9 @@ public static class EventTypes
 
     /// <summary>A job's setup or first-article checklist answered (#126c), passed or failed; subject the job.</summary>
     public const string ChecklistCompleted = "pulaski.job.checklist_completed.v1";
+
+    /// <summary>A checklist's second sign-off given or refused (#126d); subject the job.</summary>
+    public const string ChecklistSignedOff = "pulaski.job.checklist_signed_off.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

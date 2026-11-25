@@ -476,6 +476,24 @@ else
                                 <p class="text-muted mb-0">@L["Badge in to answer it."]</p>
                             }
                         </Answer>
+                        <SignOff Context="waiting">
+                            @if (_station.CanSignOffChecklists)
+                            {
+                                <EditForm Model="Input" FormName="@($"station-signoff-{waiting.Checklist.ResponseId:N}")" OnSubmit="ActAsync" method="post" class="mt-2">
+                                    <input type="hidden" name="Input.ResponseId" value="@waiting.Checklist.ResponseId" />
+                                    <label class="form-label" for="@($"station-so-{waiting.Checklist.ResponseId:N}")">@L["Note"] <span class="text-muted">@L["(needed to reject)"]</span></label>
+                                    <InputText id="@($"station-so-{waiting.Checklist.ResponseId:N}")" class="form-control mb-2" maxlength="500" @bind-Value="Input.Comment" />
+                                    <div class="station-actions">
+                                        <button type="submit" name="Input.Action" value="checklist-sign-off" class="btn btn-success">@L["Sign it off"]</button>
+                                        <button type="submit" name="Input.Action" value="checklist-reject" class="btn btn-outline-danger">@L["Reject"]</button>
+                                    </div>
+                                </EditForm>
+                            }
+                            else if (_station.PersonName is null)
+                            {
+                                <p class="text-muted mb-0 mt-1">@L["Badge in to sign it off."]</p>
+                            }
+                        </SignOff>
                     </JobInstructions>
                 </section>
             }
@@ -783,6 +801,32 @@ else
                 }
 
                 return;
+            case "checklist-sign-off" or "checklist-reject" when Input.ResponseId is { } responseId:
+                try
+                {
+                    var signed = await Api.StationChecklistSignOffAsync(Secret!, new StationChecklistSignOffRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        ResponseId = responseId,
+                        Approve = action == "checklist-sign-off",
+                        Note = Input.Comment,
+                    });
+                    TerminalCookie.SetStation(HttpContext, signed.Ticket, signed.TicketExpiresAt);
+                    _station = signed.Station;
+                    _notes = L.Notes(signed.Notes);
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
+                return;
             case "sign-off":
                 TerminalCookie.ClearStation(HttpContext);
                 Navigation.NavigateTo(Here, forceLoad: true);
@@ -888,5 +932,8 @@ else
         public Guid? InstructionId { get; set; }
         public string? Phase { get; set; }
         public Dictionary<int, string>? Answers { get; set; }
+
+        /// <summary>A checklist answer given its second sign-off or rejected (#126d).</summary>
+        public Guid? ResponseId { get; set; }
     }
 }

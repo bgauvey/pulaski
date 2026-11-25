@@ -56,6 +56,9 @@ public sealed record ChecklistDto
 {
     public required string Phase { get; init; }
     public IReadOnlyList<ChecklistItemDto> Items { get; init; } = [];
+
+    /// <summary>A passed one counts only once someone else holding <c>checklists.sign_off</c> signed it off (#126d).</summary>
+    public bool SecondSignOff { get; init; }
 }
 
 /// <summary>
@@ -85,11 +88,54 @@ public sealed record JobChecklistDto
 {
     public required string Phase { get; init; }
     public IReadOnlyList<ChecklistItemDto> Items { get; init; } = [];
+    public bool SecondSignOff { get; init; }
+
+    /// <summary>The answer shown: the one that counts, else one waiting for its sign-off, else the latest.</summary>
+    public Guid? ResponseId { get; init; }
     public string? Result { get; init; }
     public DateTimeOffset? CompletedAt { get; init; }
     public string? CompletedByName { get; init; }
     public IReadOnlyList<ChecklistAnswerDto> Answers { get; init; } = [];
+
+    /// <summary>Its second sign-off (#126d): null (none needed), <c>pending</c>, <c>signed</c> or <c>rejected</c>, with who, when and the note.</summary>
+    public string? SignOff { get; init; }
+    public DateTimeOffset? SignedOffAt { get; init; }
+    public string? SignedOffByName { get; init; }
+    public string? SignOffNote { get; init; }
+
+    /// <summary>Whether it counts: passed, and signed off if it needs that.</summary>
+    public bool Counts => Result == "passed" && SignOff is null or "signed";
 }
+
+/// <summary>A checklist as answered, for the job's history (#126d): by run, with its answers and sign-offs.</summary>
+public sealed record ChecklistRecordDto
+{
+    public required Guid Id { get; init; }
+    public Guid? RunId { get; init; }
+    public int? RunNo { get; init; }
+    public string LineCode { get; init; } = "";
+    public string InstructionCode { get; init; } = "";
+    public int VersionNumber { get; init; }
+    public required string Phase { get; init; }
+    public required string Result { get; init; }
+    public IReadOnlyList<ChecklistItemDto> Items { get; init; } = [];
+    public IReadOnlyList<ChecklistAnswerDto> Answers { get; init; } = [];
+    public DateTimeOffset CompletedAt { get; init; }
+    public string? CompletedByName { get; init; }
+    public string? SignOff { get; init; }
+    public DateTimeOffset? SignedOffAt { get; init; }
+    public string? SignedOffByName { get; init; }
+    public string? SignOffNote { get; init; }
+}
+
+/// <summary>A second sign-off given (<see cref="Approve"/>) or refused; a refusal needs a note.</summary>
+public sealed record SignOffChecklistRequest
+{
+    public bool Approve { get; init; }
+    public string? Note { get; init; }
+}
+
+public sealed record ChecklistSignedOffResponse(Guid Id, string SignOff);
 
 /// <summary>A checklist answered at the job: each item's answer by its number (blank = not answered).</summary>
 public sealed record CompleteChecklistRequest
@@ -99,7 +145,11 @@ public sealed record CompleteChecklistRequest
 }
 
 /// <summary>Whether the answers passed; a failed checklist is kept, and the job needs one that passes.</summary>
-public sealed record ChecklistCompletedResponse(Guid Id, bool Passed, IReadOnlyList<int> FailedItems);
+public sealed record ChecklistCompletedResponse(Guid Id, bool Passed, IReadOnlyList<int> FailedItems)
+{
+    /// <summary>It passed and now waits for its second sign-off (#126d).</summary>
+    public bool WaitsForSignOff { get; init; }
+}
 
 public sealed record InstructionFileDto
 {

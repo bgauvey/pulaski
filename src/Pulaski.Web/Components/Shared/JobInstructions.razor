@@ -14,21 +14,31 @@
                 <div class="instruction-text mt-2">@((MarkupString)InstructionText.ToHtml(wi.Body))</div>
                 @foreach (var checklist in wi.Checklists)
                 {
-                    <div class="job-checklist mt-2 @(checklist.Result switch { "passed" => "is-passed", "failed" => "is-failed", _ => "" })" @key="checklist.Phase">
-                        <div class="fw-semibold">@ChecklistView.Title(L, checklist.Phase)</div>
+                    <div class="job-checklist mt-2 @(checklist.Counts ? "is-passed" : checklist.Result == "failed" || checklist.SignOff == "rejected" ? "is-failed" : "")" @key="checklist.Phase">
+                        <div class="fw-semibold">
+                            @ChecklistView.Title(L, checklist.Phase)
+                            @if (checklist.SecondSignOff)
+                            {
+                                <span class="text-muted fw-normal small"> · @L["needs a second sign-off"]</span>
+                            }
+                        </div>
                         <div class="small mb-2">@ChecklistView.Standing(L, checklist, wi.SiteTimeZone)</div>
-                        @if (checklist.Result != "passed" && Answer is not null)
-                        {
-                            @Answer((wi, checklist))
-                        }
-                        else if (checklist.Result == "passed")
+                        @if (checklist.Result == "passed" && checklist.SignOff != "rejected")
                         {
                             <ul class="list-unstyled small mb-0">
                                 @foreach (var a in checklist.Answers)
                                 {
-                                    <li @key="a.Item">@a.Item. @(checklist.Items.ElementAtOrDefault(a.Item - 1)?.Prompt): <span class="fw-semibold">@(a.Value is "yes" ? L["Yes"] : a.Value is "no" ? L["No"] : a.Value)</span></li>
+                                    <li @key="a.Item">@a.Item. @(checklist.Items.ElementAtOrDefault(a.Item - 1)?.Prompt): <span class="fw-semibold">@ChecklistView.Answer(L, a.Value)</span></li>
                                 }
                             </ul>
+                            @if (checklist.SignOff == "pending" && SignOff is not null)
+                            {
+                                @SignOff((wi, checklist))
+                            }
+                        }
+                        else if (Answer is not null)
+                        {
+                            @Answer((wi, checklist))
                         }
                     </div>
                 }
@@ -71,6 +81,10 @@
     /// <summary>The form to answer a checklist not yet passed, when the reader may; the host renders it (interactive or static).</summary>
     [Parameter]
     public RenderFragment<(JobInstructionDto Instruction, JobChecklistDto Checklist)>? Answer { get; set; }
+
+    /// <summary>The form to sign off a checklist waiting for its second sign-off, when the reader may (#126d).</summary>
+    [Parameter]
+    public RenderFragment<(JobInstructionDto Instruction, JobChecklistDto Checklist)>? SignOff { get; set; }
 
     /// <summary>Interactive pages: a file was chosen.</summary>
     [Parameter]

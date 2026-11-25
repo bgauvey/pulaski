@@ -156,6 +156,9 @@ public sealed record StationDto
     public bool CanCallForHelp { get; init; }
     public bool CanAnswerCalls { get; init; }
 
+    /// <summary>Whether the signed-on person may give checklists their second sign-off here (<c>checklists.sign_off</c>, #126d).</summary>
+    public bool CanSignOffChecklists { get; init; }
+
     /// <summary>Whether the signed-on person may request maintenance here (<c>maintenance.request</c>, #127).</summary>
     public bool CanRequestMaintenance { get; init; }
 
@@ -292,6 +295,16 @@ public sealed record StationChecklistRequest
     /// <summary><c>setup</c> (needs a role that runs jobs) or <c>first_article</c> (a role that reports).</summary>
     public string Phase { get; init; } = "";
     public IReadOnlyDictionary<int, string?> Answers { get; init; } = new Dictionary<int, string?>();
+}
+
+/// <summary>A second sign-off at the station (#126d), as the signed-on person, of one of the shown job's checklists waiting for it.</summary>
+public sealed record StationChecklistSignOffRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public Guid ResponseId { get; init; }
+    public bool Approve { get; init; }
+    public string? Note { get; init; }
 }
 
 public sealed record StationStopRequest

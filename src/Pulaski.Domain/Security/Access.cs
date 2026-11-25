@@ -48,6 +48,9 @@ public static class Permissions
     public const string ProductionCorrect = "production.correct";
     public const string QualityRecord = "quality.record";
     public const string QualityDecide = "quality.decide";
+
+    /// <summary>Give a checklist its second sign-off, or reject it (#126d).</summary>
+    public const string ChecklistSignOff = "checklists.sign_off";
     public const string Materials = "materials.manage";
     public const string Processes = "processes.manage";
     public const string Units = "units.manage";
@@ -123,6 +126,7 @@ public static class Permissions
         new(MaintenanceWork, Term.Mark("Floor"), Term.Mark("Work maintenance requests: start them and close them with what was done")),
         new(QualityRecord, Term.Mark("Quality"), Term.Mark("Record quality results against runs and lots")),
         new(QualityDecide, Term.Mark("Quality"), Term.Mark("Exclude quality results and reject held lots on quality")),
+        new(ChecklistSignOff, Term.Mark("Quality"), Term.Mark("Give setup and first-article checklists their second sign-off, or reject them")),
         new(LotReceive, Term.Mark("Inventory"), Term.Mark("Receive lots")),
         new(LotMove, Term.Mark("Inventory"), Term.Mark("Move lots between locations")),
         new(LotShip, Term.Mark("Inventory"), Term.Mark("Ship lots")),
@@ -218,6 +222,8 @@ public static class Permissions
         // Specifications belong to materials.
         [Specs] = [QualityView, MaterialsView],
         [Instructions] = [InstructionsView],
+        // Checklists are signed off at the job.
+        [ChecklistSignOff] = [FloorView, InstructionsView],
     };
 }
 
@@ -263,7 +269,7 @@ public static class Roles
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
              Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode,
              Permissions.DowntimeAdjust, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.AndonRespond, Permissions.Handover,
-             Permissions.MaintenanceRequest, Permissions.MaintenanceWork, Permissions.InstructionsView],
+             Permissions.MaintenanceRequest, Permissions.MaintenanceWork, Permissions.InstructionsView, Permissions.ChecklistSignOff],
             "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results; calls for and answers andon calls; requests and works maintenance. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
@@ -275,7 +281,8 @@ public static class Roles
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
              Permissions.InventoryBackdate, Permissions.LotAllocate, Permissions.QualityView, Permissions.QualityRecord, Permissions.QualityDecide,
-             Permissions.Specs, Permissions.AndonRespond, Permissions.Handover, Permissions.InstructionsView, Permissions.Instructions],
+             Permissions.Specs, Permissions.AndonRespond, Permissions.Handover, Permissions.InstructionsView, Permissions.Instructions,
+             Permissions.ChecklistSignOff],
             "Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality, answers andon calls."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,

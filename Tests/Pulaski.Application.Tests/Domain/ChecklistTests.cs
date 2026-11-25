@@ -69,4 +69,21 @@ public class ChecklistTests
         Assert.Single(released.NextDraft(Guid.CreateVersion7()).Checklists);
         Assert.Single(draft.SaveDraft("Text").Checklists);
     }
+
+    [Fact]
+    public void A_second_sign_off_is_someone_elses_and_a_rejection_says_why()
+    {
+        var checklist = Checklists.Check([new Checklist("first_article", [new ChecklistItem("Look", "text", true)], SecondSignOff: true)])[0];
+        Assert.True(checklist.SecondSignOff);
+        Assert.Equal("pending", ChecklistSignOffs.OnCompletion(checklist, passed: true));
+        Assert.Null(ChecklistSignOffs.OnCompletion(checklist, passed: false));
+        Assert.Null(ChecklistSignOffs.OnCompletion(checklist with { SecondSignOff = false }, passed: true));
+
+        Assert.Equal(("signed", (string?)null), ChecklistSignOffs.Decide("pending", "op", "qa", approve: true, " "));
+        Assert.Equal(("rejected", "Marks on the face"), ChecklistSignOffs.Decide("pending", "op", "qa", approve: false, " Marks on the face "));
+        Assert.Throws<DomainRuleException>(() => ChecklistSignOffs.Decide("pending", "op", "op", approve: true, null));
+        Assert.Throws<DomainRuleException>(() => ChecklistSignOffs.Decide("pending", "op", "qa", approve: false, null));
+        Assert.Throws<DomainRuleException>(() => ChecklistSignOffs.Decide("signed", "op", "qa", approve: true, null));
+        Assert.Throws<DomainRuleException>(() => ChecklistSignOffs.Decide(null, "op", "qa", approve: true, null));
+    }
 }

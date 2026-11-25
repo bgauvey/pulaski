@@ -85,7 +85,7 @@ internal sealed class ChecklistRepository(Persistence.DbSession session) : IChec
         [.. await session.QueryAsync<Guid>(
             """
             SELECT DISTINCT instruction_id FROM core.checklist_response
-            WHERE job_id = @JobId AND equipment_id = @LineId AND phase = @Phase AND result = 'passed'
+            WHERE job_id = @JobId AND equipment_id = @LineId AND phase = @Phase AND result = 'passed' AND (sign_off IS NULL OR sign_off = 'signed')
             """, new { JobId = jobId, LineId = lineId, Phase = phase }, cancellationToken)];
 
     public Task<Guid?> OpenRunAsync(Guid jobId, Guid lineId, CancellationToken cancellationToken) =>
@@ -96,8 +96,8 @@ internal sealed class ChecklistRepository(Persistence.DbSession session) : IChec
         session.ExecuteAsync(
             """
             INSERT INTO core.checklist_response
-                (id, site_id, job_id, equipment_id, run_id, instruction_id, version_id, phase, result, answers, completed_at, completed_by)
-            VALUES (@Id, @SiteId, @JobId, @EquipmentId, @RunId, @InstructionId, @VersionId, @Phase, @Result, @Answers::jsonb, @CompletedAt, @CompletedBy)
+                (id, site_id, job_id, equipment_id, run_id, instruction_id, version_id, phase, result, answers, completed_at, completed_by, sign_off)
+            VALUES (@Id, @SiteId, @JobId, @EquipmentId, @RunId, @InstructionId, @VersionId, @Phase, @Result, @Answers::jsonb, @CompletedAt, @CompletedBy, @SignOff)
             """,
             new
             {
@@ -113,7 +113,27 @@ internal sealed class ChecklistRepository(Persistence.DbSession session) : IChec
                 Answers = ChecklistJson.WriteAnswers(response.Result.Answers),
                 response.CompletedAt,
                 response.CompletedBy,
+                response.SignOff,
             }, cancellationToken);
+
+    public Task<Guid?> GetResponseJobAsync(Guid responseId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<Guid?>("SELECT job_id FROM core.checklist_response WHERE id = @Id", new { Id = responseId }, cancellationToken);
+
+    public Task<ChecklistResponseState?> GetResponseForUpdateAsync(Guid responseId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<ChecklistResponseState?>(
+            """
+            SELECT r.id, r.job_id, j.job_number, i.code AS instruction_code, r.phase, r.sign_off, r.completed_by
+            FROM core.checklist_response r
+            JOIN core.job j ON j.id = r.job_id
+            JOIN core.work_instruction i ON i.id = r.instruction_id
+            WHERE r.id = @Id
+            FOR UPDATE OF r
+            """, new { Id = responseId }, cancellationToken);
+
+    public Task SetSignOffAsync(Guid responseId, string signOff, string by, DateTimeOffset at, string? note, CancellationToken cancellationToken) =>
+        session.ExecuteAsync(
+            "UPDATE core.checklist_response SET sign_off = @SignOff, sign_off_by = @By, sign_off_at = @At, sign_off_note = @Note WHERE id = @Id",
+            new { Id = responseId, SignOff = signOff, By = by, At = at, Note = note }, cancellationToken);
 
     public Task AttachToRunAsync(Guid jobId, Guid lineId, Guid runId, CancellationToken cancellationToken) =>
         session.ExecuteAsync(

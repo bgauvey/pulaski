@@ -126,6 +126,20 @@ internal static class InstructionEndpoints
         .WithTags("Work instructions")
         .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Job));
 
+        // A job's checklists as answered (#126d), by run, with their answers and sign-offs.
+        routes.MapGet("/jobs/{id:guid}/checklists", async Task<Ok<IReadOnlyList<ChecklistRecordDto>>> (
+            Guid id, IQueryHandler<GetJobChecklistsQuery, IReadOnlyList<ChecklistRecordDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetJobChecklistsQuery(id), ct)))
+        .WithTags("Work instructions")
+        .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView, Permissions.InstructionsView);
+
+        // A second sign-off (#126d), by someone other than who answered it.
+        routes.MapPost("/checklist-responses/{id:guid}/sign-off", async Task<Ok<ChecklistSignedOffResponse>> (
+            Guid id, SignOffChecklistRequest request, ICommandHandler<SignOffChecklistCommand, ChecklistSignedOffResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SignOffChecklistCommand(id, request.Approve, request.Note), ct)))
+        .WithTags("Work instructions")
+        .RequirePermission(Permissions.ChecklistSignOff, Site.Of(SiteOf.ChecklistResponse));
+
         return routes;
     }
 }

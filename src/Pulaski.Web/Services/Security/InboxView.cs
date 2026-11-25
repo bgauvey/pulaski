@@ -30,6 +30,7 @@ public static class InboxView
         "erp_change" => Term.Mark("ERP changes to work orders"),
         "rate_proposal" => Term.Mark("Planning rates to review"),
         "maintenance" => Term.Mark("Maintenance requests waiting"),
+        "checklist" => Term.Mark("Checklists to sign off"),
         _ => kind,
     };
 

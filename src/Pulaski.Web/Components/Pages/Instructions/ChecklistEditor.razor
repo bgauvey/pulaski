@@ -62,7 +62,16 @@
             </div>
         </div>
     }
-    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Add">@L["Add an item"]</button>
+    <div class="d-flex flex-wrap gap-3 align-items-center">
+        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Add">@L["Add an item"]</button>
+        @if (Items.Count > 0)
+        {
+            <div class="form-check">
+                <input id="ce-@Phase-second" class="form-check-input" type="checkbox" checked="@SecondSignOff" @onchange="SetSecondAsync" />
+                <label class="form-check-label small" for="ce-@Phase-second">@L["Needs a second sign-off (by someone who may sign off checklists)"]</label>
+            </div>
+        }
+    </div>
 </div>
 
 @code {
@@ -74,6 +83,18 @@
 
     [Parameter]
     public EventCallback OnChanged { get; set; }
+
+    [Parameter]
+    public bool SecondSignOff { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> SecondSignOffChanged { get; set; }
+
+    private async Task SetSecondAsync(ChangeEventArgs e)
+    {
+        await SecondSignOffChanged.InvokeAsync(e.Value is true);
+        await Changed();
+    }
 
     private Task Changed() => OnChanged.InvokeAsync();
 

@@ -30,8 +30,11 @@ public sealed record ChecklistItem(
     string Prompt, string Kind, bool Required, bool? Expected = null, decimal? Min = null, decimal? Max = null, string? Unit = null,
     IReadOnlyList<string>? Choices = null);
 
-/// <summary>A version's checklist for one phase (#126c): its items, numbered from 1 in order.</summary>
-public sealed record Checklist(string Phase, IReadOnlyList<ChecklistItem> Items);
+/// <summary>
+/// A version's checklist for one phase (#126c): its items, numbered from 1 in order. With <paramref name="SecondSignOff"/>, a passed one counts only
+/// once someone else holding <c>checklists.sign_off</c> signed it off (#126d).
+/// </summary>
+public sealed record Checklist(string Phase, IReadOnlyList<ChecklistItem> Items, bool SecondSignOff = false);
 
 /// <summary>One item's answer as kept with the run: the item's number, the answer as given (yes/no, an invariant number, the choice, the text), and whether it passed.</summary>
 public sealed record ChecklistAnswer(int Item, string? Value, bool Ok);
@@ -73,7 +76,7 @@ public static class Checklists
 
             if (checklist.Items.Count > 0)
             {
-                result.Add(checklist with { Items = [.. checklist.Items.Select((item, i) => Item(item, i + 1))] });
+                result.Add(checklist with { Items = [.. checklist.Items.Select((item, i) => Item(item, i + 1))], SecondSignOff = checklist.SecondSignOff });
             }
         }
 
@@ -183,5 +186,45 @@ public static class Checklists
 
         var ok = (item.Min is not { } min || value >= min) && (item.Max is not { } max || value <= max);
         return new ChecklistAnswer(number, value.ToString(CultureInfo.InvariantCulture), ok);
+    }
+}
+
+/// <summary>A checklist's second sign-off (#126d): waiting, given, or refused.</summary>
+public static class ChecklistSignOffs
+{
+    public const string Pending = "pending";
+    public const string SignedOff = "signed";
+    public const string Rejected = "rejected";
+    public const int MaxNote = 500;
+
+    /// <summary>What a passed checklist starts with: waiting for its second sign-off when the checklist asks for one, else nothing.</summary>
+    public static string? OnCompletion(Checklist checklist, bool passed) => passed && checklist.SecondSignOff ? Pending : null;
+
+    /// <summary>
+    /// Signs off (<paramref name="approve"/>) or rejects a checklist waiting for its second sign-off, as <paramref name="actor"/>; a rejection
+    /// needs a note, and the job then needs the checklist answered again. Gives the sign-off and its note.
+    /// </summary>
+    /// <exception cref="DomainRuleException">It isn't waiting, the actor answered it, or a rejection has no note.</exception>
+    public static (string SignOff, string? Note) Decide(string? current, string completedBy, string actor, bool approve, string? note)
+    {
+        if (current != Pending)
+        {
+            throw new DomainRuleException($"That checklist isn't waiting for a second sign-off.");
+        }
+
+        if (string.Equals(completedBy, actor, StringComparison.Ordinal))
+        {
+            throw new DomainRuleException($"Someone other than who answered it gives the second sign-off.");
+        }
+
+        var text = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (text is { Length: > MaxNote })
+        {
+            throw new DomainRuleException($"Keep the note to {MaxNote} characters.");
+        }
+
+        return approve ? (SignedOff, text)
+            : text is null ? throw new DomainRuleException($"Say why it is rejected.")
+            : (Rejected, text);
     }
 }

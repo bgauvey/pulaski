@@ -21,14 +21,38 @@ public static class ChecklistView
         _ => null,
     };
 
-    /// <summary>How it stands for the job on its line.</summary>
-    public static string Standing(Text l, JobChecklistDto checklist, string? timeZone) => checklist.Result switch
+    /// <summary>How it stands for the job on its line, with its second sign-off (#126d).</summary>
+    public static string Standing(Text l, JobChecklistDto checklist, string? timeZone) => checklist switch
     {
-        "passed" => l["Passed {0} by {1}.", Display.SiteTime(checklist.CompletedAt, timeZone), checklist.CompletedByName ?? "?"],
-        "failed" => checklist.Answers.Where(a => !a.Ok).Select(a => a.Item).ToList() is [var one]
+        { Result: "passed", SignOff: "pending" } =>
+            l["Answered {0} by {1}; waiting for a second sign-off.", Display.SiteTime(checklist.CompletedAt, timeZone), checklist.CompletedByName ?? "?"],
+        { Result: "passed", SignOff: "rejected" } =>
+            l["Rejected by {0}: {1}. Answer it again.", checklist.SignedOffByName ?? "?", checklist.SignOffNote ?? ""],
+        { Result: "passed", SignOff: "signed" } =>
+            l["Passed {0} by {1}, signed off by {2}.", Display.SiteTime(checklist.CompletedAt, timeZone), checklist.CompletedByName ?? "?", checklist.SignedOffByName ?? "?"],
+        { Result: "passed" } => l["Passed {0} by {1}.", Display.SiteTime(checklist.CompletedAt, timeZone), checklist.CompletedByName ?? "?"],
+        { Result: "failed" } => checklist.Answers.Where(a => !a.Ok).Select(a => a.Item).ToList() is [var one]
             ? l["Failed on item {0} ({1}): put it right and answer it again.", one, Display.SiteTime(checklist.CompletedAt, timeZone)]
             : l["Failed on items {0} ({1}): put them right and answer it again.", string.Join(", ", checklist.Answers.Where(a => !a.Ok).Select(a => a.Item)), Display.SiteTime(checklist.CompletedAt, timeZone)],
         _ => checklist.Phase == "setup" ? l["To do before the job starts on this line."] : l["To do before the first report on this line."],
+    };
+
+    /// <summary>A recorded checklist's outcome in a word or two: passed, failed, waiting for its sign-off, signed off, rejected.</summary>
+    public static string Outcome(Text l, ChecklistRecordDto record) => (record.Result, record.SignOff) switch
+    {
+        ("failed", _) => l["Failed"],
+        (_, "pending") => l["Waiting for sign-off"],
+        (_, "signed") => l["Signed off"],
+        (_, "rejected") => l["Rejected"],
+        _ => l["Passed"],
+    };
+
+    /// <summary>An answer as read back: yes and no in words, else as given.</summary>
+    public static string Answer(Text l, string? value) => value switch
+    {
+        "yes" => l["Yes"],
+        "no" => l["No"],
+        _ => value ?? "",
     };
 
     /// <summary>An answer as typed, made ready to send: numbers in the reader's culture become invariant ones; blanks are left out.</summary>

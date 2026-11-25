@@ -2553,8 +2553,17 @@ CREATE TABLE core.checklist_response (
     answers         jsonb NOT NULL,                                        -- [{item, value, ok}]
     completed_at    timestamptz NOT NULL,
     completed_by    text NOT NULL,
-    created_at      timestamptz NOT NULL DEFAULT now()
+    sign_off        text,                                                  -- second sign-off (#126d): pending / signed / rejected
+    sign_off_by     text,
+    sign_off_at     timestamptz,
+    sign_off_note   text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT checklist_response_sign_off_ck CHECK (
+        (sign_off IS NULL OR sign_off IN ('pending', 'signed', 'rejected'))
+        AND (sign_off IS NULL OR result = 'passed')
+        AND ((sign_off IN ('signed', 'rejected')) = (sign_off_at IS NOT NULL AND sign_off_by IS NOT NULL)))
 );
+CREATE INDEX checklist_response_pending_ix ON core.checklist_response (site_id) WHERE sign_off = 'pending';
 CREATE INDEX checklist_response_job_ix ON core.checklist_response (job_id, equipment_id, phase);
 CREATE INDEX checklist_response_run_ix ON core.checklist_response (run_id) WHERE run_id IS NOT NULL;
 
@@ -2911,7 +2920,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0077_maintenance_cmms'),
     ('0078_maintenance_plans'),
     ('0079_work_instructions'),
-    ('0080_instruction_checklists');
+    ('0080_instruction_checklists'),
+    ('0081_checklist_sign_off');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2983,7 +2993,8 @@ INSERT INTO sec.permission (code, description) VALUES
     ('maintenance.request', 'Request maintenance for a line or machine, on its own or from a stop'),
     ('maintenance.work', 'Work maintenance requests: start them and close them with what was done'),
     ('instructions.view', 'See work instructions and their versions'),
-    ('instructions.manage', 'Maintain work instructions: write, attach and release them')
+    ('instructions.manage', 'Maintain work instructions: write, attach and release them'),
+    ('checklists.sign_off', 'Give setup and first-article checklists their second sign-off, or reject them')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
@@ -3016,6 +3027,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('process_engineer', 'instructions.view'),
     ('process_engineer', 'instructions.manage'),
     ('maintenance', 'instructions.view'),
+    ('supervisor', 'checklists.sign_off'),
+    ('quality', 'checklists.sign_off'),
     ('operator', 'maintenance.request'),
     ('supervisor', 'maintenance.request'),
     ('supervisor', 'maintenance.work'),

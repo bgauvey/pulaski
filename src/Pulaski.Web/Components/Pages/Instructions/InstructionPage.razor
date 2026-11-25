@@ -70,8 +70,8 @@ else
                         <label class="form-label small fw-semibold" for="wi-body">@L["Text"]</label>
                         <textarea id="wi-body" class="form-control form-control-sm font-monospace" rows="14" maxlength="20000" @bind="_body" @bind:event="oninput"></textarea>
                         <p class="small text-muted mt-1">@L["Start a line with # or ## for a heading, 1. for a numbered step, - for a point; **words** are bold. A blank line starts a new paragraph."]</p>
-                        <ChecklistEditor Phase="setup" Items="_setup" OnChanged="() => _checklistsChanged = true" />
-                        <ChecklistEditor Phase="first_article" Items="_firstArticle" OnChanged="() => _checklistsChanged = true" />
+                        <ChecklistEditor Phase="setup" Items="_setup" @bind-SecondSignOff="_setupSecond" OnChanged="() => _checklistsChanged = true" />
+                        <ChecklistEditor Phase="first_article" Items="_firstArticle" @bind-SecondSignOff="_firstSecond" OnChanged="() => _checklistsChanged = true" />
                         <div class="form-actions mb-3">
                             <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(!Unsaved(draft) ? L["Nothing changed yet."] : null)" OnClick="() => SaveDraftAsync(draft)">@L["Save the draft"]</ActionButton>
                         </div>
@@ -112,7 +112,7 @@ else
                     <div class="instruction-text mb-2">@((MarkupString)InstructionText.ToHtml(released.Body))</div>
                     @foreach (var checklist in released.Checklists)
                     {
-                        <h3 class="h6 small text-muted mt-2" @key="checklist.Phase">@ChecklistView.Title(L, checklist.Phase)</h3>
+                        <h3 class="h6 small text-muted mt-2" @key="checklist.Phase">@ChecklistView.Title(L, checklist.Phase)@if (checklist.SecondSignOff) {<span class="fw-normal"> · @L["needs a second sign-off"]</span>}</h3>
                         <ol class="small">
                             @foreach (var item in checklist.Items)
                             {
@@ -234,6 +234,8 @@ else
     private List<ChecklistDraftItem> _setup = [];
     private List<ChecklistDraftItem> _firstArticle = [];
     private bool _checklistsChanged;
+    private bool _setupSecond;
+    private bool _firstSecond;
     private int _fileKey;
     private bool _busy;
     private string? _message;
@@ -270,6 +272,8 @@ else
             _body = draft?.Body;
             _setup = [.. (draft?.Checklists.FirstOrDefault(c => c.Phase == "setup")?.Items ?? []).Select(ChecklistDraftItem.From)];
             _firstArticle = [.. (draft?.Checklists.FirstOrDefault(c => c.Phase == "first_article")?.Items ?? []).Select(ChecklistDraftItem.From)];
+            _setupSecond = draft?.Checklists.FirstOrDefault(c => c.Phase == "setup")?.SecondSignOff ?? false;
+            _firstSecond = draft?.Checklists.FirstOrDefault(c => c.Phase == "first_article")?.SecondSignOff ?? false;
             _checklistsChanged = false;
             _error = null;
         }
@@ -321,8 +325,8 @@ else
             Body = _body ?? "",
             Checklists =
             [
-                new ChecklistDto { Phase = "setup", Items = [.. _setup.Select(i => i.ToDto())] },
-                new ChecklistDto { Phase = "first_article", Items = [.. _firstArticle.Select(i => i.ToDto())] },
+                new ChecklistDto { Phase = "setup", Items = [.. _setup.Select(i => i.ToDto())], SecondSignOff = _setupSecond },
+                new ChecklistDto { Phase = "first_article", Items = [.. _firstArticle.Select(i => i.ToDto())], SecondSignOff = _firstSecond },
             ],
         });
         _message = L["The draft is saved."];

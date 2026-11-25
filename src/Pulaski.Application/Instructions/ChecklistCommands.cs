@@ -16,7 +16,10 @@ public sealed record ChecklistJob(Guid Id, Guid SiteId, string JobNumber, string
 /// <summary>A checklist answered, as kept (#126c).</summary>
 public sealed record ChecklistResponse(
     Guid Id, Guid SiteId, Guid JobId, Guid EquipmentId, Guid? RunId, Guid InstructionId, Guid VersionId, string Phase, ChecklistResult Result,
-    DateTimeOffset CompletedAt, string CompletedBy);
+    DateTimeOffset CompletedAt, string CompletedBy, string? SignOff = null);
+
+/// <summary>A checklist answered, as its second sign-off needs it (#126d).</summary>
+public sealed record ChecklistResponseState(Guid Id, Guid JobId, string JobNumber, string InstructionCode, string Phase, string? SignOff, string CompletedBy);
 
 /// <summary>Checklists' writes and the checks of start and report (#126c, D-116), in the current unit of work.</summary>
 public interface IChecklistRepository
@@ -27,7 +30,10 @@ public interface IChecklistRepository
     /// <summary>The released checklists of <paramref name="phase"/> that apply to the job on <paramref name="lineId"/>, by instruction code.</summary>
     Task<IReadOnlyList<ApplicableChecklist>> ApplicableAsync(Guid jobId, Guid lineId, string phase, CancellationToken cancellationToken);
 
-    /// <summary>The instructions with a passed checklist of <paramref name="phase"/> for the job on <paramref name="lineId"/>.</summary>
+    /// <summary>
+    /// The instructions with a checklist of <paramref name="phase"/> that counts for the job on <paramref name="lineId"/>: passed, and signed off
+    /// when it needs that (#126d).
+    /// </summary>
     Task<IReadOnlyList<Guid>> PassedAsync(Guid jobId, Guid lineId, string phase, CancellationToken cancellationToken);
 
     /// <summary>The job's open run on the line, if one is.</summary>
@@ -37,6 +43,14 @@ public interface IChecklistRepository
 
     /// <summary>Puts the job's answers on the line not yet in a run into <paramref name="runId"/>, the run just started.</summary>
     Task AttachToRunAsync(Guid jobId, Guid lineId, Guid runId, CancellationToken cancellationToken);
+
+    /// <summary>The job an answered checklist belongs to, unlocked: the job is locked first, then the answer (#126d).</summary>
+    Task<Guid?> GetResponseJobAsync(Guid responseId, CancellationToken cancellationToken);
+
+    /// <summary>The answered checklist, locked.</summary>
+    Task<ChecklistResponseState?> GetResponseForUpdateAsync(Guid responseId, CancellationToken cancellationToken);
+
+    Task SetSignOffAsync(Guid responseId, string signOff, string by, DateTimeOffset at, string? note, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -112,23 +126,62 @@ internal sealed class CompleteChecklistHandler(
         });
         var response = new ChecklistResponse(
             ids.NewId(), job.SiteId, job.Id, job.EquipmentId, await checklists.OpenRunAsync(job.Id, job.EquipmentId, cancellationToken),
-            checklist.InstructionId, checklist.VersionId, command.Phase, result, envelope.OccurredAt, envelope.ActorId);
+            checklist.InstructionId, checklist.VersionId, command.Phase, result, envelope.OccurredAt, envelope.ActorId,
+            ChecklistSignOffs.OnCompletion(checklist.Checklist, result.Passed));
         await checklists.InsertAsync(response, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new ChecklistCompletedResponse(response.Id, result.Passed, [.. result.Answers.Where(a => !a.Ok).Select(a => a.Item)]);
+        return new ChecklistCompletedResponse(response.Id, result.Passed, [.. result.Answers.Where(a => !a.Ok).Select(a => a.Item)])
+        {
+            WaitsForSignOff = response.SignOff == ChecklistSignOffs.Pending,
+        };
     }
+}
+
+/// <summary>
+/// Gives an answered checklist its second sign-off (#126d), or rejects it with a note: someone other than who answered it, holding
+/// <c>checklists.sign_off</c> at the job's site. Locks the job, then the answer.
+/// </summary>
+public sealed record SignOffChecklistCommand(Guid ResponseId, bool Approve, string? Note) : ICommand<ChecklistSignedOffResponse>;
+
+internal sealed class SignOffChecklistHandler(IUnitOfWork unitOfWork, IChecklistRepository checklists, IEventLog eventLog, IEventFactory events)
+    : ICommandHandler<SignOffChecklistCommand, ChecklistSignedOffResponse>
+{
+    public async Task<ChecklistSignedOffResponse> HandleAsync(SignOffChecklistCommand command, CancellationToken cancellationToken)
+    {
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var jobId = await checklists.GetResponseJobAsync(command.ResponseId, cancellationToken) ?? throw new NotFoundException("That checklist answer isn't one Pulaski knows.");
+        _ = await checklists.LockJobAsync(jobId, cancellationToken);
+        var response = await checklists.GetResponseForUpdateAsync(command.ResponseId, cancellationToken)
+            ?? throw new NotFoundException("That checklist answer isn't one Pulaski knows.");
+        var envelope = events.Create(EventTypes.ChecklistSignedOff, "job", response.JobId, new { ResponseId = response.Id, response.InstructionCode, response.Phase, command.Approve, command.Note });
+        var (signOff, note) = ChecklistSignOffs.Decide(response.SignOff, response.CompletedBy, envelope.ActorId, command.Approve, command.Note);
+        await checklists.SetSignOffAsync(response.Id, signOff, envelope.ActorId, envelope.OccurredAt, note, cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new ChecklistSignedOffResponse(response.Id, signOff);
+    }
+}
+
+/// <summary>Every checklist answered for a job (#126d), latest first: its history by run, with answers and sign-offs.</summary>
+public sealed record GetJobChecklistsQuery(Guid JobId) : IQuery<IReadOnlyList<ChecklistRecordDto>>;
+
+internal sealed class GetJobChecklistsHandler(IInstructionReadStore store) : IQueryHandler<GetJobChecklistsQuery, IReadOnlyList<ChecklistRecordDto>>
+{
+    public Task<IReadOnlyList<ChecklistRecordDto>> HandleAsync(GetJobChecklistsQuery query, CancellationToken cancellationToken) =>
+        store.ChecklistHistoryAsync(query.JobId, cancellationToken);
 }
 
 /// <summary>Checklists between the contract and the domain (#126c).</summary>
 public static class ChecklistMapping
 {
     public static Checklist ToDomain(ChecklistDto dto) =>
-        new(dto.Phase, [.. dto.Items.Select(i => new ChecklistItem(i.Prompt, i.Kind, i.Required, i.Expected, i.Min, i.Max, i.Unit, i.Choices))]);
+        new(dto.Phase, [.. dto.Items.Select(i => new ChecklistItem(i.Prompt, i.Kind, i.Required, i.Expected, i.Min, i.Max, i.Unit, i.Choices))], dto.SecondSignOff);
 
     public static ChecklistDto ToDto(Checklist checklist) => new()
     {
         Phase = checklist.Phase,
+        SecondSignOff = checklist.SecondSignOff,
         Items = [.. checklist.Items.Select(i => new ChecklistItemDto
         {
             Prompt = i.Prompt,

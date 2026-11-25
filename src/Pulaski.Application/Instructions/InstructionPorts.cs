@@ -62,4 +62,7 @@ public interface IInstructionReadStore
 
     /// <summary>The released instructions a job shows (#126b), in <see cref="Domain.Instructions.JobInstructions"/> order; empty for a job not found.</summary>
     Task<IReadOnlyList<JobInstructionDto>> ForJobAsync(Guid jobId, CancellationToken cancellationToken);
+
+    /// <summary>Every checklist answered for the job (#126d), latest first.</summary>
+    Task<IReadOnlyList<ChecklistRecordDto>> ChecklistHistoryAsync(Guid jobId, CancellationToken cancellationToken);
 }

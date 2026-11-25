@@ -306,15 +306,19 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
             ORDER BY f.sort_order, f.id
             """, new { Versions = versions.Values.Select(v => v.VersionId).ToArray() }, cancellationToken: cancellationToken))).ToLookup(f => f.VersionId);
 
-        // How each checklist stands for the job on its line: passed if one passed, else the latest answer (#126c).
+        // How each checklist stands for the job on its line (#126c, #126d): the answer that counts, else one waiting for its sign-off, else the latest.
         var answered = (await connection.QueryAsync<AnsweredRow>(new CommandDefinition(
             $"""
-            SELECT DISTINCT ON (r.instruction_id, r.phase) r.instruction_id, r.phase, r.result, r.completed_at, r.answers::text AS answers_json,
-                   {InstructionSql.UserName("r.completed_by")} AS completed_by_name
+            SELECT DISTINCT ON (r.instruction_id, r.phase) r.id, r.instruction_id, r.phase, r.result, r.completed_at, r.answers::text AS answers_json,
+                   {InstructionSql.UserName("r.completed_by")} AS completed_by_name,
+                   r.sign_off, r.sign_off_at, {InstructionSql.UserName("r.sign_off_by")} AS signed_off_by_name, r.sign_off_note
             FROM core.checklist_response r
             JOIN core.job j ON j.id = r.job_id AND j.equipment_id = r.equipment_id
             WHERE r.job_id = @JobId AND r.instruction_id = ANY(@Ids)
-            ORDER BY r.instruction_id, r.phase, r.result = 'passed' DESC, r.completed_at DESC
+            ORDER BY r.instruction_id, r.phase,
+                     (r.result = 'passed' AND (r.sign_off IS NULL OR r.sign_off = 'signed')) DESC,
+                     (r.sign_off = 'pending') DESC NULLS LAST,
+                     r.completed_at DESC
             """, new { JobId = jobId, Ids = ids }, cancellationToken: cancellationToken))).ToDictionary(a => (a.InstructionId, a.Phase));
         return [.. shown.Where(s => versions.ContainsKey(s.InstructionId)).Select(s =>
         {
@@ -339,19 +343,90 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
                         {
                             Phase = c.Phase,
                             Items = dto.Items,
+                            SecondSignOff = c.SecondSignOff,
+                            ResponseId = a.Id,
                             Result = a.Result,
                             CompletedAt = a.CompletedAt,
                             CompletedByName = a.CompletedByName,
                             Answers = [.. ChecklistJson.ReadAnswers(a.AnswersJson).Select(x => new ChecklistAnswerDto(x.Item, x.Value, x.Ok))],
+                            SignOff = a.SignOff,
+                            SignedOffAt = a.SignOffAt,
+                            SignedOffByName = a.SignedOffByName,
+                            SignOffNote = a.SignOffNote,
                         }
-                        : new JobChecklistDto { Phase = c.Phase, Items = dto.Items };
+                        : new JobChecklistDto { Phase = c.Phase, Items = dto.Items, SecondSignOff = c.SecondSignOff };
                 })],
             };
         })];
     }
 
+    public async Task<IReadOnlyList<ChecklistRecordDto>> ChecklistHistoryAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<HistoryRow>(new CommandDefinition(
+            $"""
+            SELECT r.id, r.run_id, jr.run_no, e.code AS line_code, i.code AS instruction_code, v.version_number, r.phase, r.result,
+                   r.answers::text AS answers_json, v.checklists::text AS checklists_json, r.completed_at,
+                   {InstructionSql.UserName("r.completed_by")} AS completed_by_name,
+                   r.sign_off, r.sign_off_at, {InstructionSql.UserName("r.sign_off_by")} AS signed_off_by_name, r.sign_off_note
+            FROM core.checklist_response r
+            JOIN core.equipment e ON e.id = r.equipment_id
+            JOIN core.work_instruction i ON i.id = r.instruction_id
+            JOIN core.work_instruction_version v ON v.id = r.version_id
+            LEFT JOIN core.job_run jr ON jr.id = r.run_id
+            WHERE r.job_id = @JobId
+            ORDER BY r.completed_at DESC, r.id
+            """, new { JobId = jobId }, cancellationToken: cancellationToken));
+        return [.. rows.Select(r => new ChecklistRecordDto
+        {
+            Id = r.Id,
+            RunId = r.RunId,
+            RunNo = r.RunNo,
+            LineCode = r.LineCode,
+            InstructionCode = r.InstructionCode,
+            VersionNumber = r.VersionNumber,
+            Phase = r.Phase,
+            Result = r.Result,
+            Items = ChecklistJson.Read(r.ChecklistsJson).FirstOrDefault(c => c.Phase == r.Phase) is { } c
+                ? Application.Instructions.ChecklistMapping.ToDto(c).Items
+                : [],
+            Answers = [.. ChecklistJson.ReadAnswers(r.AnswersJson).Select(x => new ChecklistAnswerDto(x.Item, x.Value, x.Ok))],
+            CompletedAt = r.CompletedAt,
+            CompletedByName = r.CompletedByName,
+            SignOff = r.SignOff,
+            SignedOffAt = r.SignOffAt,
+            SignedOffByName = r.SignedOffByName,
+            SignOffNote = r.SignOffNote,
+        })];
+    }
+
+    private sealed class HistoryRow
+    {
+        public Guid Id { get; init; }
+        public Guid? RunId { get; init; }
+        public int? RunNo { get; init; }
+        public string LineCode { get; init; } = "";
+        public string InstructionCode { get; init; } = "";
+        public int VersionNumber { get; init; }
+        public string Phase { get; init; } = "";
+        public string Result { get; init; } = "";
+        public string AnswersJson { get; init; } = "[]";
+        public string ChecklistsJson { get; init; } = "[]";
+        public DateTimeOffset CompletedAt { get; init; }
+        public string? CompletedByName { get; init; }
+        public string? SignOff { get; init; }
+        public DateTimeOffset? SignOffAt { get; init; }
+        public string? SignedOffByName { get; init; }
+        public string? SignOffNote { get; init; }
+    }
+
     private sealed class AnsweredRow
     {
+        public Guid Id { get; init; }
+        public string? SignOff { get; init; }
+        public DateTimeOffset? SignOffAt { get; init; }
+        public string? SignedOffByName { get; init; }
+        public string? SignOffNote { get; init; }
         public Guid InstructionId { get; init; }
         public string Phase { get; init; } = "";
         public string Result { get; init; } = "";

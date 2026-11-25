@@ -215,6 +215,7 @@ public static class LabelTerms
         Term.Mark("Service"),
         Term.Mark("Setup"),
         Term.Mark("First article"),
+        Term.Mark("Signed"),
         Term.Mark("Passed"),
         Term.Mark("Shipped"),
         Term.Mark("Shortage"),

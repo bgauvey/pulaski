@@ -257,6 +257,31 @@ internal static class TerminalEndpoints
             });
         });
 
+        // A second sign-off at the station (#126d): of one of the shown job's checklists waiting for it, as the signed-on person.
+        terminal.MapPost("/station/checklist/sign-off", async Task<Ok<StationActionResponse>> (
+            StationChecklistSignOffRequest request, HttpContext http, StationServices station,
+            ICommandHandler<Application.Instructions.SignOffChecklistCommand, Contracts.Instructions.ChecklistSignedOffResponse> signOff, CancellationToken ct) =>
+        {
+            var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.ChecklistSignOff,
+                UserMessage.Of("sign off checklists"));
+            var personId = station.Tickets.PersonOf(ticket, terminal.Id);
+            var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
+            if (!before.Instructions.Any(i => i.Checklists.Any(c => c.ResponseId == request.ResponseId && c.SignOff == "pending")))
+            {
+                throw new DomainRuleException("That checklist isn't one waiting for a sign-off at this station; sign it off on the job's page.");
+            }
+
+            var done = await signOff.HandleAsync(new Application.Instructions.SignOffChecklistCommand(request.ResponseId, request.Approve, Text(request.Note)), ct);
+            return TypedResults.Ok(new StationActionResponse
+            {
+                Notes = [done.SignOff == "signed" ? Notes.Of($"The checklist is signed off.") : Notes.Of($"The checklist is rejected: it is to be answered again.")],
+                Ticket = ticket,
+                TicketExpiresAt = expires,
+                Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
+            });
+        });
+
         // Andon at the station (#157): call for help on its line, or answer one of its line's calls, as the signed-on person.
         terminal.MapPost("/station/andon/call", async Task<Ok<StationActionResponse>> (
             StationAndonRequest request, HttpContext http, StationServices station, ICommandHandler<RaiseAndonCallCommand, AndonCallResponse> raise,

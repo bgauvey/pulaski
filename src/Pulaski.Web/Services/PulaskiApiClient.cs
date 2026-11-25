@@ -985,6 +985,18 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ChecklistCompletedResponse> CompleteChecklistAsync(Guid jobId, string phase, CompleteChecklistRequest request, CancellationToken ct = default) =>
         SendAsync<ChecklistCompletedResponse>(HttpMethod.Post, $"api/jobs/{jobId}/checklists/{(phase == "setup" ? "setup" : "first-article")}", request, ct);
 
+    /// <summary>A job's checklists as answered (#126d), latest first.</summary>
+    public Task<IReadOnlyList<ChecklistRecordDto>> GetJobChecklistsAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ChecklistRecordDto>>($"api/jobs/{jobId}/checklists", ct);
+
+    /// <summary>A checklist's second sign-off, given or refused (#126d).</summary>
+    public Task<ChecklistSignedOffResponse> SignOffChecklistAsync(Guid responseId, SignOffChecklistRequest request, CancellationToken ct = default) =>
+        SendAsync<ChecklistSignedOffResponse>(HttpMethod.Post, $"api/checklist-responses/{responseId}/sign-off", request, ct);
+
+    /// <summary>A second sign-off at the station (#126d), as the signed-on person.</summary>
+    public Task<StationActionResponse> StationChecklistSignOffAsync(string secret, StationChecklistSignOffRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/checklist/sign-off", request, ct);
+
     /// <summary>Answers a checklist at the station (#126c), as the signed-on person.</summary>
     public Task<StationActionResponse> StationChecklistAsync(string secret, StationChecklistRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/checklist", request, ct);

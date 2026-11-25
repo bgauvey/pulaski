@@ -3222,6 +3222,16 @@ that was.
   line needs both. Permissions: setup `job.execute` (`POST /api/jobs/{id}/checklists/setup`), first article `production.report`
   (`/first-article`); at the station `POST /api/terminal/station/checklist` as the signed-on person, for the job its instructions show: the
   running one, else the next (`StationDto.InstructionsJobId`), so setup can be done before starting it. Event `pulaski.job.checklist_completed.v1`.
+- **Sign-off and history (d, #196).** Whoever answers a checklist signs it (`completed_by`, their user at the Floor or the badged station). A
+  checklist may need a **second sign-off** (`secondSignOff` in its definition): a passed answer is then `sign_off = 'pending'` and doesn't count
+  (`PassedAsync`: passed and `sign_off` null or `signed`) until someone else holding `checklists.sign_off` (new, Quality and Supervisor; implies
+  `floor.view` and `instructions.view`; migration 0081) signs it off, or rejects it with a note (`ChecklistSignOffs.Decide`: not who answered
+  it, only while pending; rejected = answer again). `SignOffChecklistCommand` locks the job, then the answer; `POST /api/checklist-responses/
+  {id}/sign-off`, at the station `/api/terminal/station/checklist/sign-off`; event `pulaski.job.checklist_signed_off.v1`. A failed answer needs
+  no sign-off. One permission for every checklist rather than one chosen per checklist, to keep the role model as it is. Waiting sign-offs are
+  Inbox kind `checklist`. History: `GetJobChecklistsQuery` (`GET /api/jobs/{id}/checklists`) lists every answer of the job, latest first, with
+  run, line, version, answers and sign-off; the job page's **Checklists answered**. A record of who did what, not a Part 11 electronic
+  signature (a v1 non-goal). With (d), #126 is complete.
 - **Pieces:** (a) documents, versions, files and targets; (b) the released instructions at the job, on the floor and the operator station,
   with the version shown; (c) checklists for setup and first article in a version; (d) sign-off by the operator, with an optional second, kept
   against the run.

@@ -110,6 +110,7 @@ internal sealed class GetStationHandler(
             CanCallForHelp = May(Permissions.AndonCall),
             CanAnswerCalls = May(Permissions.AndonRespond),
             CanRequestMaintenance = line is not null && May(Permissions.MaintenanceRequest),
+            CanSignOffChecklists = May(Permissions.ChecklistSignOff),
             IdleMinutes = (int)Domain.Labor.TerminalRules.StationIdle.TotalMinutes,
         };
     }

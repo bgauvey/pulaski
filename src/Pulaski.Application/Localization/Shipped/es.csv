@@ -59,6 +59,7 @@ term,translation
 (else,"(si no,"
 "(every label value as a named data source),","(cada valor de la etiqueta como fuente de datos con nombre),"
 (inactive),(inactivo)
+(needed to reject),(necesaria para rechazar)
 "(one SELECT, run read-only; the connection string is","(un SELECT, ejecutado en solo lectura; la cadena de conexión está en"
 (one-off),(puntual)
 (optional),(opcional)
@@ -484,8 +485,11 @@ Another version of this process was released at the same time. Reload and try ag
 Answer,Respuesta
 Answer andon calls: acknowledge them on arrival and resolve them,Atender llamadas andon: confirmarlas al llegar y resolverlas
 Answer item {0}: {1},Responda el punto {0}: {1}
+Answered,Respondida
 Answered by,Atendida por
 "Answered in, on average","Atendida en, en promedio"
+Answered {0} by {1}; waiting for a second sign-off.,Respondida el {0} por {1}; espera una segunda firma.
+Answers,Respuestas
 Any,Cualquiera
 Any attribute,Cualquier atributo
 Any expiry,Cualquier vencimiento
@@ -600,6 +604,7 @@ Badge in to answer them.,Registre su gafete para atenderlas.
 Badge in to give its reason.,Registre su gafete para dar su motivo.
 Badge in to give their reasons.,Registre su gafete para dar sus motivos.
 Badge in to request maintenance.,Pase su gafete para solicitar mantenimiento.
+Badge in to sign it off.,Registre su gafete para firmarla.
 "Badge not recognised. Try again, or ask a supervisor.",Gafete no reconocido. Intente de nuevo o pida ayuda a un supervisor.
 Badge of {0},Gafete de {0}
 Badge plus pin,Gafete más PIN
@@ -633,6 +638,7 @@ Batch size,Tamaño de tanda
 Batch tolerance,Tolerancia de tanda
 "Batch tolerance on this line, %","Tolerancia de tanda en esta línea, %"
 Batches,Tandas
+"Before a run, on {0}","Antes de una corrida, en {0}"
 Before it can be released:,Antes de que pueda liberarse:
 Before this version can be released:,Antes de que esta versión pueda liberarse:
 Before {0},Antes de {0}
@@ -798,6 +804,9 @@ Checked {0} people in.,Se registró la entrada de {0} personas.
 Checked {0} people out.,Se registró la salida de {0} personas.
 Checking for new events must be every 1 to 300 seconds.,La búsqueda de eventos nuevos debe ser cada 1 a 300 segundos.
 Checking {0}…,Revisando {0}…
+Checklist,Lista de verificación
+Checklists answered,Listas de verificación respondidas
+Checklists to sign off,Listas de verificación por firmar
 Children,Hijos
 Choice,Opción
 Choice: {0},Opción: {0}
@@ -1477,6 +1486,7 @@ Give at least one target.,Indique al menos una meta.
 Give each shift a start time as HH:mm.,Dé a cada turno una hora de inicio como HH:mm.
 Give how often first.,Indique primero con qué frecuencia.
 "Give or take away a role held at every site, rather than at one","Dar o quitar un rol que se tiene en todos los sitios, en lugar de en uno"
+"Give setup and first-article checklists their second sign-off, or reject them","Dar la segunda firma a las listas de verificación de preparación y de primera pieza, o rechazarlas"
 "Give the .btw document for at least one operation, such as default.","Dé el documento .btw para al menos una operación, como default."
 Give the .btw document's path.,Indique la ruta del documento .btw.
 Give the BTXML template; start from the standard one.,Indique la plantilla BTXML; parta de la estándar.
@@ -2201,6 +2211,7 @@ Needed in the next 24 hours,Necesario en las próximas 24 horas
 Needed sooner than its {0}-day lead time from now,Necesario antes que su plazo de entrega de {0} días desde ahora
 Needed sooner than the material's {0}-day lead time from now,Necesario antes que el plazo de entrega de {0} días del material desde ahora
 Needs a comment,Requiere un comentario
+Needs a second sign-off (by someone who may sign off checklists),Necesita una segunda firma (de alguien que pueda firmar listas de verificación)
 Needs attention,Necesita atención
 Needs machine data,Necesita datos de máquina
 Needs machine data: no line reports its state,Necesita datos de máquina: ninguna línea reporta su estado
@@ -2759,6 +2770,7 @@ Partial batches to approve or reject,Tandas parciales por aprobar o rechazar
 Partial batches waiting for approval: {0}.,Tandas parciales en espera de aprobación: {0}.
 Partly received,Recibida en parte
 Passed,Aprobado
+"Passed {0} by {1}, signed off by {2}.","Aprobada el {0} por {1}, firmada por {2}."
 Passed {0} by {1}.,Aprobada el {0} por {1}.
 Passes when,Aprueba cuando
 Password,Contraseña
@@ -3064,6 +3076,7 @@ Reject the lot,Rechazar el lote
 Rejected,Rechazado
 Rejected batch {0},Tanda rechazada {0}
 Rejected batches,Tandas rechazadas
+Rejected by {0}: {1}. Answer it again.,Rechazada por {0}: {1}. Respóndala de nuevo.
 Rejected the proposal for {0} on {1}; its rate stays as it is.,Se rechazó la propuesta para {0} en {1}; su tasa queda como está.
 "Rejecting writes off all {0} {1} as scrap. If the lot was made in a run, that quantity moves from good to scrap there, at the time it was made, so it shows in OEE quality.","Rechazar da de baja todos los {0} {1} como desperdicio. Si el lote se hizo en una corrida, esa cantidad pasa de bueno a desperdicio allí, a la hora en que se hizo, así que aparece en la calidad del OEE."
 Reject…,Rechazar…
@@ -3322,6 +3335,7 @@ Say what was done.,Diga lo que se hizo.
 Say why first.,Diga primero por qué.
 Say why in the comment; it is required.,Diga por qué en el comentario; es obligatorio.
 Say why it is dismissed.,Diga por qué se descarta.
+Say why it is rejected.,Diga por qué se rechaza.
 Say why it is reversed.,Diga por qué se revierte.
 Say why it is revoked.,Diga por qué se revoca.
 Say why the job stopped short: a partial batch is an exception.,Diga por qué el trabajo terminó antes: una tanda parcial es una excepción.
@@ -3368,6 +3382,7 @@ Sds,Hoja de seguridad
 Search,Buscar
 Search properties,Buscar propiedades
 Search terms,Buscar términos
+Second sign-off,Segunda firma
 Security,Seguridad
 "See a site's settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions","Ver los ajustes de un sitio: modo de cambio, tolerancias de reporte, metas de OEE y excepciones de calendario"
 "See inventory: stock, lots, movements, counts, shortages and reports","Ver inventario: existencias, lotes, movimientos, conteos, faltantes y reportes"
@@ -3507,11 +3522,14 @@ Sign,Firmar
 Sign and encrypt,Firmar y cifrar
 Sign in,Iniciar sesión
 Sign in with {0},Iniciar sesión con {0}
+Sign it off,Firmarla
 Sign off,Cerrar sesión de estación
 Sign on,Iniciar sesión de estación
 Sign out,Cerrar sesión
 Signalled,Con señal
+Signed,Firmada
 Signed in through an identity provider; give them a role to let them in,Inició sesión a través de un proveedor de identidad; asígnele un rol para dejarlo entrar
+Signed off,Firmada
 "Signed on at {0}. Badge again to switch person; after {1} minutes without anything done here, the station signs you off.","Sesión iniciada en {0}. Registre su gafete otra vez para cambiar de persona; tras {1} minutos sin hacer nada aquí, la estación cierra su sesión."
 Signs in,Inicia sesión
 Signs in as,Inicia sesión como
@@ -3538,6 +3556,7 @@ Someone else changed the same records at the same moment. Try again.,Alguien má
 Someone else changed this draft; showing their version.,Alguien más cambió este borrador; se muestra su versión.
 Someone else changed this first; the board now shows their change.,Alguien más cambió esto primero; el tablero ahora muestra su cambio.
 Someone else started this material's balance at that location at the same moment. Try again.,Otra persona inició el saldo de este material en esa ubicación en el mismo momento. Intente de nuevo.
+Someone other than who answered it gives the second sign-off.,La segunda firma la da alguien distinto de quien la respondió.
 Something to fix?,¿Algo que reparar?
 Source,Origen
 "Sparkplug B, OPC UA or EtherNet/IP.","Sparkplug B, OPC UA o EtherNet/IP."
@@ -3692,7 +3711,10 @@ That break has ended already.,Ese descanso ya terminó.
 That break was changed by someone else. Reload and try again.,Alguien más cambió ese descanso. Recargue e intente de nuevo.
 That break was corrected already; correct the correction.,Ese descanso ya se corrigió; corrija la corrección.
 That call isn't waiting on this station's line any more.,Esa llamada ya no espera en la línea de esta estación.
+That checklist answer isn't one Pulaski knows.,Pulaski no conoce esa respuesta de lista de verificación.
 That checklist isn't one this station shows; answer it on the job's page.,Esa lista de verificación no es una que muestre esta estación; respóndala en la página del trabajo.
+That checklist isn't one waiting for a sign-off at this station; sign it off on the job's page.,Esa lista de verificación no espera una firma en esta estación; fírmela en la página del trabajo.
+That checklist isn't waiting for a second sign-off.,Esa lista de verificación no espera una segunda firma.
 That class code is already used.,Ese código de clase ya se usa.
 That code belongs to a built-in feed.,Ese código pertenece a un canal incorporado.
 That code is already used for this kind of reason.,Ese código ya se usa para este tipo de motivo.
@@ -3807,6 +3829,8 @@ The characteristic is already sampled on that line; switch that off first.,La ca
 "The chart signals (beyond the limits or a run rule), so the process isn't stable: capability describes it poorly until the cause is dealt with.","El gráfico da señales (fuera de los límites o una regla de corrida), así que el proceso no es estable: la capacidad lo describe mal hasta que se atienda la causa."
 The checklist failed on item {0}: put it right and answer it again.,La lista de verificación falló en el punto {0}: corríjalo y responda de nuevo.
 The checklist failed on items {0}: put them right and answer it again.,La lista de verificación falló en los puntos {0}: corríjalos y responda de nuevo.
+The checklist is rejected: it is to be answered again.,La lista de verificación se rechazó: hay que responderla de nuevo.
+The checklist is signed off.,La lista de verificación está firmada.
 The checklist passed.,La lista de verificación se aprobó.
 The code said {0},El código decía {0}
 "The code, kind and factor can't change later, because quantities are stored in the unit.","El código, el tipo y el factor no pueden cambiar después, porque las cantidades se guardan en la unidad."
@@ -4335,6 +4359,7 @@ Waiting external,Esperando externo
 Waiting for a line,Esperando una línea
 Waiting for its request,En espera de su solicitud
 Waiting for review,Esperando revisión
+Waiting for sign-off,Espera firma
 "Waiting on its department: start it from the Floor, choosing the line it runs on.","Esperando en su departamento: inícielo desde Piso, eligiendo la línea en que se ejecuta."
 Waiting {0},En espera {0}
 Waits behind an earlier delivery for the same lot.,Espera detrás de un envío anterior del mismo lote.
@@ -4745,6 +4770,7 @@ modified {0} in force,modificada {0} vigente
 move,traslado
 moved to {0},movido a {0}
 "name: required, at most {0} characters.","name: obligatorio, como máximo {0} caracteres."
+needs a second sign-off,necesita una segunda firma
 never,nunca
 next {0},siguiente {0}
 no,no
@@ -4827,6 +4853,7 @@ serverThumbprint is the server certificate's SHA-1 thumbprint: 40 hexadecimal di
 shelf_life_days: '{0}' isn't a whole number of days.,shelf_life_days: '{0}' no es un número entero de días.
 shift {0} on {1:yyyy-MM-dd},el turno {0} del {1:yyyy-MM-dd}
 shipped on {0},enviado el {0}
+sign off checklists,firmar listas de verificación
 since the last report from the machine ({0}),desde el último reporte de la máquina ({0})
 since the run started,desde que empezó la corrida
 since {0},desde las {0}
@@ -5157,6 +5184,7 @@ yes,sí
 "{0} is ready: {1} to create, {2} to update, {3} unchanged.","{0} está listo: {1} por crear, {2} por actualizar, {3} sin cambio."
 "{0} is ready: {1} to create, {2} to update, {3} unchanged. Click Import.","{0} está listo: {1} por crear, {2} por actualizar, {3} sin cambio. Haga clic en Importar."
 {0} is ready: {1}.,{0} está listo: {1}.
+{0} is rejected: it is to be answered again.,{0}: rechazada; hay que responderla de nuevo.
 {0} is retired already.,{0} ya está retirado.
 {0} is retired; it can't be changed.,{0} está retirado; no se puede cambiar.
 {0} is retired; it can't be moved.,{0} está retirado; no se puede mover.
@@ -5167,6 +5195,7 @@ yes,sí
 {0} is running.,{0} está en ejecución.
 "{0} is sampled from {1} {2}, from now on.","{0} se muestrea desde {1} {2}, a partir de ahora."
 {0} is shown there already.,{0} ya se muestra allí.
+{0} is signed off.,{0}: firmada.
 {0} is still clocked on; end their time first.,{0} aún tiene entrada registrada; termine primero su tiempo.
 {0} is still used by {1}; give them another profile first.,{1} aún usa {0}; deles otro perfil primero.
 "{0} is stocked in {1}. Each line reads ""1 of the first unit is this many of the second"" and works both ways.","{0} se almacena en {1}. Cada línea dice ""1 de la primera unidad son tantas de la segunda"" y funciona en ambos sentidos."
@@ -5319,6 +5348,7 @@ yes,sí
 {0} overlaps on this line,{0} traslapes en esta línea
 {0} overlaps: a line can't run these at the same time,{0} traslapes: una línea no puede ejecutar estos al mismo tiempo
 {0} packed into {1}.,{0} empacado en {1}.
+{0} passed and waits for a second sign-off.,{0}: aprobada; espera una segunda firma.
 {0} passed.,{0}: aprobada.
 {0} per {1} of the component · priority,{0} por {1} del componente · prioridad
 "{0} planned to {1} for {2}, {3} to {4}.","{0} planeado a {1} por {2}, de {3} a {4}."

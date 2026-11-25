@@ -148,13 +148,14 @@ In detail:
 
 1. Click **Inbox** at the top of the menu; its number says how many items wait.
 2. Items are grouped by what they are, oldest first: **Partial batches to approve or reject**, **SPC alerts to close**, **Labor to approve**,
-   **ERP changes to work orders**, **Planning rates to review** and **Maintenance requests waiting**. Each says where it is and how long it
-   has waited.
+   **ERP changes to work orders**, **Planning rates to review**, **Maintenance requests waiting** and **Checklists to sign off**. Each says
+   where it is and how long it has waited.
 3. Click an item to open the page where it is decided, and decide it there. It leaves the inbox once decided.
 
 In detail: each kind shows only where you hold the permission that decides it (*partial batches: decide*, *quality: record*, *labor: approve*,
-*work orders: manage*, *rates: modify*, *Work maintenance requests*). A maintenance request shows by its number and machine with what was asked,
-until someone starts it; it opens the **Maintenance** tab of Machines. Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
+*work orders: manage*, *rates: modify*, *Work maintenance requests*, *Give setup and first-article checklists their second sign-off*). A maintenance request shows by its
+number and machine with what was asked, until someone starts it; it opens the **Maintenance** tab of Machines. A checklist shows by its job and
+instruction, with the line and who answered it, until it is signed off or rejected; it opens the job's page. Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
 does. The page refreshes every 30 seconds; the menu's number every minute, and when you move to another page.
 
 ### How saving works
@@ -527,7 +528,9 @@ before its first production report there.
 2. Type the question, and choose its **Answer**: **Yes or no** (with **Passes when** *Yes*, *No* or *Either answer*), **A number** (with the
    lowest and highest allowed and a unit, any of them optional), **A choice** (one per line) or **Text**. Clear **Required** for a question that
    may be left blank. **↑** moves an item up; **Remove** takes it out.
-3. Click **Save the draft**, then release it. A checklist on its own is enough to release a version.
+3. To have someone else check the answers, tick **Needs a second sign-off**: a passed checklist then counts only once someone who may sign
+   off checklists (Quality and Supervisor to start with) signs it off.
+4. Click **Save the draft**, then release it. A checklist on its own is enough to release a version.
 
 #### In detail
 
@@ -546,7 +549,8 @@ before its first production report there.
 - **The code** is 1 to 30 letters, digits, `-`, `_` and `.`, unique at the site, and fixed once made. Clear **Shown at jobs** to switch an
   instruction off without deleting it.
 - Permissions: *See work instructions* (Planner, Supervisor, Operator, Maintenance, Quality, Process engineer, Manager, Auditor) and *Maintain
-  work instructions* (Quality, Process engineer).
+  work instructions* (Quality, Process engineer). Giving checklists their second sign-off needs *Give setup and first-article checklists their
+  second sign-off* (Quality, Supervisor).
 
 ---
 
@@ -975,7 +979,8 @@ does, to anyone there: no badge is needed. While nothing runs, it shows the next
 before starting it. Tap a folded one to open it, and a file's name to open the file.
 
 **Answer a checklist at a station.** Badge in (setup needs a role that runs jobs, first article one that reports), answer the questions under
-the instruction and tap **Save the answers**. The station says whether it passed, or which items failed.
+the instruction and tap **Save the answers**. The station says whether it passed, or which items failed. A checklist waiting for its second
+sign-off can be signed off (**Sign it off**) or rejected with a note at the station too, by someone else badged in who may sign off checklists.
 
 **Run the job at a station.** Signed on with a role that runs jobs:
 
@@ -1236,7 +1241,21 @@ In detail:
   Correcting or reversing a report, and the partial batch of a stop, aren't held up.
 - **Once per job and line.** Pausing and resuming on the same line needs neither again; moving the job to another line needs both there.
 - **Kept with the run.** Answers given during a run belong to it; setup answered before the start belongs to the run that start opens.
-- **Who answers:** setup, whoever may start jobs (Operator, Supervisor); first article, whoever may report production.
+- **Who answers:** setup, whoever may start jobs (Operator, Supervisor); first article, whoever may report production. The person answering
+  signs it: Pulaski records their user and the time.
+
+**Give a checklist its second sign-off.** A checklist that *needs a second sign-off* says, once passed, *Answered … by …; waiting for a second
+sign-off*, and the job waits as if it weren't answered. It is in the [Inbox](#your-inbox) of everyone who may sign off checklists at the site.
+
+1. Open the job's page (from the Inbox, or the Floor) and read the answers under the checklist.
+2. Click **Sign it off**, or type a **Note** saying what is wrong and click **Reject**.
+3. Signed off, the checklist counts. Rejected, it doesn't: the job needs it answered again, and the new answers wait for a sign-off in turn.
+
+In detail: someone other than who answered it signs it off. Only a passed checklist waits for a sign-off; a failed one is simply answered
+again. The **Checklists answered** table on the job's page keeps every checklist answered for the job, latest first: its run (or *Before a run*
+until the run starts) and line, the instruction and version, the outcome (*Passed*, *Failed*, *Waiting for sign-off*, *Signed off*,
+*Rejected*), who answered and when, and who signed or rejected it and why; **Answers** shows each answer, failed ones in red. Signing is a
+record of who did what, not an electronic signature (Pulaski has no 21 CFR Part 11 features).
 
 ### Reverse a production report
 
@@ -2495,9 +2514,9 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; changeover rules; materials; allocating lots to jobs. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results; request maintenance and start and close requests. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results; request maintenance and start and close requests; give checklists their second sign-off. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off; record quality results; request maintenance. |
-| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality; write and release work instructions. |
+| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality; write and release work instructions; give checklists their second sign-off. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, characteristics and specifications, and work instructions. |
@@ -3383,12 +3402,13 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
   waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
   and machine counts, not days on the calendar.
 - **Work instructions** show on the job page and at the station, not on the Floor's board or line boards. At a station only the running job's
-  show, or the next job's while nothing runs. Checklists are signed by whoever answers them; a second sign-off and the run's checklist history
-  come next. A failed checklist only holds up the job; it doesn't put lots on hold or raise a quality alert. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
+  show, or the next job's while nothing runs. A failed or rejected checklist only holds up the job; it doesn't put lots on hold or raise a quality
+  alert, and nothing e-mails anyone about a checklist waiting for its sign-off (it is in the Inbox). Who may give the second sign-off is one
+  permission for every checklist, not chosen per checklist. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).
-- **The inbox** gathers five kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It
+- **The inbox** gathers seven kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It
   links to the page where an item is decided rather than deciding it in place.
 - **Alerts** come by e-mail only. Each person keeps their own; nobody can subscribe others. A lot made on hold (rather than put on hold
   later) doesn't alert, and a shortage that clears and comes back for the same job isn't e-mailed again.

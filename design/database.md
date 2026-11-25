@@ -1800,7 +1800,8 @@ One row per operation, material or line (`work_instruction_target_shape_ck` keep
 ### core.checklist_response — checklists answered (#126c, D-116) · *In use*
 
 A job's setup or first-article checklist answered on a line. A failed one is kept and doesn't count; a start (setup) or a report (both) needs
-one that passed for the job on that line, once per job and line. Never changed but for `run_id`.
+one that passed (and, when its checklist asks, was signed off) for the job on that line, once per job and line. Never changed but for
+`run_id` and the sign-off columns.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1814,6 +1815,9 @@ one that passed for the job on that line, once per job and line. Never changed b
 | `result` | text | no | `passed`, or `failed` (an answer against what an item expects, or outside its limits). |
 | `answers` | jsonb | no | `[{item, value, ok}]`: item number, the answer (numbers invariant, yes/no as `yes`/`no`), whether it passed. |
 | `completed_at`, `completed_by` | timestamptz, text | no | When and by whom (the actor). |
+| `sign_off` | text | yes | The second sign-off (#126d): null when none is needed, else `pending` (doesn't count yet), `signed` or `rejected` (answer it again). Only a `passed` answer has one. |
+| `sign_off_by`, `sign_off_at` | text, timestamptz | yes | Who signed it off or rejected it, and when; set exactly when `signed` or `rejected`. |
+| `sign_off_note` | text | yes | Why it was rejected (required then), or a note with the sign-off; at most 500 characters. |
 | `created_at` | timestamptz | no | Row timestamp. |
 
 ### core.andon_call — andon calls (#125, D-108) · *In use*

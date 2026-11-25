@@ -231,6 +231,9 @@ public enum SiteOf
     /// <summary>A work instruction (#126): its site.</summary>
     WorkInstruction,
 
+    /// <summary>An answered checklist (#126d): its job's site.</summary>
+    ChecklistResponse,
+
     /// <summary>A shift handover entry (#124): its site.</summary>
     HandoverEntry,
 }

@@ -58,6 +58,7 @@
 (else
 (every label value as a named data source),
 (inactive)
+(needed to reject)
 (one SELECT, run read-only; the connection string is
 (one-off)
 (optional)
@@ -483,8 +484,11 @@ Another version of this process was released at the same time. Reload and try ag
 Answer
 Answer andon calls: acknowledge them on arrival and resolve them
 Answer item {0}: {1}
+Answered
 Answered by
 Answered in, on average
+Answered {0} by {1}; waiting for a second sign-off.
+Answers
 Any
 Any attribute
 Any expiry
@@ -599,6 +603,7 @@ Badge in to answer them.
 Badge in to give its reason.
 Badge in to give their reasons.
 Badge in to request maintenance.
+Badge in to sign it off.
 Badge not recognised. Try again, or ask a supervisor.
 Badge of {0}
 Badge plus pin
@@ -632,6 +637,7 @@ Batch size on this line, {0}
 Batch tolerance
 Batch tolerance on this line, %
 Batches
+Before a run, on {0}
 Before it can be released:
 Before this version can be released:
 Before {0}
@@ -797,6 +803,9 @@ Checked {0} people in.
 Checked {0} people out.
 Checking for new events must be every 1 to 300 seconds.
 Checking {0}…
+Checklist
+Checklists answered
+Checklists to sign off
 Children
 Choice
 Choice: {0}
@@ -1476,6 +1485,7 @@ Give both external_system and external_key, or neither.
 Give each shift a start time as HH:mm.
 Give how often first.
 Give or take away a role held at every site, rather than at one
+Give setup and first-article checklists their second sign-off, or reject them
 Give the .btw document for at least one operation, such as default.
 Give the .btw document's path.
 Give the BTXML template; start from the standard one.
@@ -2200,6 +2210,7 @@ Needed in the next 24 hours
 Needed sooner than its {0}-day lead time from now
 Needed sooner than the material's {0}-day lead time from now
 Needs a comment
+Needs a second sign-off (by someone who may sign off checklists)
 Needs attention
 Needs machine data
 Needs machine data: no line reports its state
@@ -2758,6 +2769,7 @@ Partial batches to approve or reject
 Partial batches waiting for approval: {0}.
 Partly received
 Passed
+Passed {0} by {1}, signed off by {2}.
 Passed {0} by {1}.
 Passes when
 Password
@@ -3063,6 +3075,7 @@ Reject the lot
 Rejected
 Rejected batch {0}
 Rejected batches
+Rejected by {0}: {1}. Answer it again.
 Rejected the proposal for {0} on {1}; its rate stays as it is.
 Rejecting writes off all {0} {1} as scrap. If the lot was made in a run, that quantity moves from good to scrap there, at the time it was made, so it shows in OEE quality.
 Reject…
@@ -3321,6 +3334,7 @@ Say what was done.
 Say why first.
 Say why in the comment; it is required.
 Say why it is dismissed.
+Say why it is rejected.
 Say why it is reversed.
 Say why it is revoked.
 Say why the job stopped short: a partial batch is an exception.
@@ -3367,6 +3381,7 @@ Sds
 Search
 Search properties
 Search terms
+Second sign-off
 Security
 See a site's settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions
 See inventory: stock, lots, movements, counts, shortages and reports
@@ -3506,11 +3521,14 @@ Sign
 Sign and encrypt
 Sign in
 Sign in with {0}
+Sign it off
 Sign off
 Sign on
 Sign out
 Signalled
+Signed
 Signed in through an identity provider; give them a role to let them in
+Signed off
 Signed on at {0}. Badge again to switch person; after {1} minutes without anything done here, the station signs you off.
 Signs in
 Signs in as
@@ -3537,6 +3555,7 @@ Someone else changed the same records at the same moment. Try again.
 Someone else changed this draft; showing their version.
 Someone else changed this first; the board now shows their change.
 Someone else started this material's balance at that location at the same moment. Try again.
+Someone other than who answered it gives the second sign-off.
 Something to fix?
 Source
 Sparkplug B, OPC UA or EtherNet/IP.
@@ -3691,7 +3710,10 @@ That break has ended already.
 That break was changed by someone else. Reload and try again.
 That break was corrected already; correct the correction.
 That call isn't waiting on this station's line any more.
+That checklist answer isn't one Pulaski knows.
 That checklist isn't one this station shows; answer it on the job's page.
+That checklist isn't one waiting for a sign-off at this station; sign it off on the job's page.
+That checklist isn't waiting for a second sign-off.
 That class code is already used.
 That code belongs to a built-in feed.
 That code is already used for this kind of reason.
@@ -3806,6 +3828,8 @@ The characteristic is already sampled on that line; switch that off first.
 The chart signals (beyond the limits or a run rule), so the process isn't stable: capability describes it poorly until the cause is dealt with.
 The checklist failed on item {0}: put it right and answer it again.
 The checklist failed on items {0}: put them right and answer it again.
+The checklist is rejected: it is to be answered again.
+The checklist is signed off.
 The checklist passed.
 The code said {0}
 The code, kind and factor can't change later, because quantities are stored in the unit.
@@ -4334,6 +4358,7 @@ Waiting external
 Waiting for a line
 Waiting for its request
 Waiting for review
+Waiting for sign-off
 Waiting on its department: start it from the Floor, choosing the line it runs on.
 Waiting {0}
 Waits behind an earlier delivery for the same lot.
@@ -4744,6 +4769,7 @@ modified {0} in force
 move
 moved to {0}
 name: required, at most {0} characters.
+needs a second sign-off
 never
 next {0}
 no
@@ -4826,6 +4852,7 @@ serverThumbprint is the server certificate's SHA-1 thumbprint: 40 hexadecimal di
 shelf_life_days: '{0}' isn't a whole number of days.
 shift {0} on {1:yyyy-MM-dd}
 shipped on {0}
+sign off checklists
 since the last report from the machine ({0})
 since the run started
 since {0}
@@ -5156,6 +5183,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is ready: {1} to create, {2} to update, {3} unchanged.
 {0} is ready: {1} to create, {2} to update, {3} unchanged. Click Import.
 {0} is ready: {1}.
+{0} is rejected: it is to be answered again.
 {0} is retired already.
 {0} is retired; it can't be changed.
 {0} is retired; it can't be moved.
@@ -5166,6 +5194,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is running.
 {0} is sampled from {1} {2}, from now on.
 {0} is shown there already.
+{0} is signed off.
 {0} is still clocked on; end their time first.
 {0} is still used by {1}; give them another profile first.
 {0} is stocked in {1}. Each line reads "1 of the first unit is this many of the second" and works both ways.
@@ -5318,6 +5347,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} overlaps on this line
 {0} overlaps: a line can't run these at the same time
 {0} packed into {1}.
+{0} passed and waits for a second sign-off.
 {0} passed.
 {0} per {1} of the component · priority
 {0} planned to {1} for {2}, {3} to {4}.
