@@ -116,6 +116,7 @@
 1 BarTender document
 1 delivery failed; it holds back later ones for the same subject.
 1 delivery goes again on the next round.
+1 earlier sample was missed.
 1 item is failing.
 1 item needs a look.
 1 lot is still to count; enter 0 for a lot that isn't there.
@@ -130,6 +131,8 @@
 1 overlap: a line can't run these at the same time
 1 production day isn't rolled up yet ({0:yyyy-MM-dd}); long OEE reports work it out from the history.
 1 request not closed
+1 sample due
+1 sample overdue
 1 session
 1 session, oldest {0}
 1 stop chosen
@@ -446,6 +449,7 @@ Allocated to jobs
 Allocation refresh
 Allocation {0} of that job wasn't found.
 Allocations and suggested lots
+Allow 0 to {0} minutes' grace.
 Alphabetical
 Already allocated to this job.
 Already at the job's line (picked from nearest)
@@ -554,6 +558,8 @@ At site…
 At the end
 At the end of
 At the line
+At the start of the run
+At the start of the run, then {0}
 At the top
 At {0} it goes into lot {1} ({2}).
 At {0} it starts a new lot.
@@ -1198,6 +1204,8 @@ Drop to plan {0} to {1}; you'll set its window next.
 Drop {0} here to plan it to {1} in a window
 Drop {0} here to see where it lands
 Due
+Due now
+Due since {0}.
 Due {0}
 Due{0}
 Duration
@@ -1547,6 +1555,7 @@ Good output
 Good output goes to
 Good, {0}
 Good, {0} · {1}%
+Grace in minutes
 Grant
 Grant not found.
 Granted {0}.
@@ -1602,6 +1611,7 @@ Host
 Host id
 Hours
 Hours a cycle
+Hours or units
 Hours worked
 How
 How a characteristic's results vary over time against their control limits. A point beyond the limits is a sign something changed; limits are set on the characteristic's
@@ -2283,7 +2293,9 @@ Next
 Next 14 days
 Next 3 days
 Next 7 days
+Next after {0} {1} more.
 Next at {0}
+Next at {0}.
 Next expiry
 Next month
 Next page at
@@ -2501,6 +2513,7 @@ Not an active crew of the site: {0}.
 Not applied
 Not at this site yet: receive it?
 Not capable
+Not due yet
 Not found
 Not heard from for {0} hours.
 Not imported (errors)
@@ -2768,6 +2781,7 @@ Output lots
 Output, % of the ideal rate
 Over 180
 Over the working time inside each material's runs. Good and scrap are as reported; machine counts aren't reports.
+Overdue
 Overlap
 Override
 Overview
@@ -3321,13 +3335,19 @@ SPC alert {0} not found.
 SPC alerts
 SPC alerts to close
 SSCC extension digit
+Sample every
 Sample every 1 to 1440 minutes.
+Sample every so many hours or every so many units, not both.
+Sample every so many hours, more than 0 and at most {0}.
+Sample every so many units, more than 0.
 Sample exclusion
 Sample from it
+Sample:
 Sampled
 Sampled at
 Sampled from process values
 Sampled up to
+Samples
 Sampling ms
 Save
 Save allocation settings
@@ -4678,6 +4698,7 @@ against the rate in force.
 against {0} then
 all groups
 and
+and every
 and {0} more
 anonymous
 another site
@@ -4695,6 +4716,7 @@ at least {0} {1}
 at most {0} {1}
 at the end
 at the line
+at the start of each run
 at their published times
 at {0} UTC
 balance
@@ -4756,6 +4778,8 @@ e.g. pulaski
 each time a production job's totals change (it starts, pauses, completes, is reopened, closed or cancelled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML
 effective_to must be after effective_from.
 employeeNumber (enterprise extension) is missing; it is the person's employee number.
+every {0} h
+every {0} {1}
 everywhere
 exact or near.
 expects no
@@ -4782,6 +4806,7 @@ had a movement ({0}) reversed
 had movements reversed, latest first: {0}
 held
 held at a site
+hours
 hr or erp, for a person from an external system.
 https://…
 in a container
@@ -4832,6 +4857,7 @@ mapped
 material {0}
 material's
 min
+minutes
 minutes after it ended
 minutes before it is needed
 minutes stopped
@@ -4978,6 +5004,7 @@ took in lots: {0}
 u chart
 u: defects per unit
 uncoded
+units of output
 unpacking
 until
 uses
@@ -5101,6 +5128,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} doesn't track state, so it has no stops.
 {0} doesn't track state; tick Tracks state before giving it a machine profile.
 {0} doesn't work at that site; add it to their sites on Configure → People.
+{0} earlier samples were missed.
 {0} ends in {1}
 {0} expired on {1}; it can't be consumed. If quality has extended it, correct its expiry first.
 {0} expired on {1}; it can't be merged. If quality has extended it, correct its expiry first.
@@ -5446,6 +5474,8 @@ you measure or inspect first, then a specification for a material with their lim
 {0} runs on no day; tick at least one.
 {0} runs, {1} h over {2} days
 {0} runs, {1} h running ({2} h of stops taken out) over {3} days
+{0} samples due
+{0} samples overdue
 {0} scrap
 {0} shipped on {1}
 {0} signs in through {1}; change the password there.
@@ -5619,6 +5649,7 @@ you measure or inspect first, then a specification for a material with their lim
 · no released version
 · oldest from {0} UTC
 · orders may use any unit that converts to this one
+· overdue after
 · running on {0}
 · running {0}
 · when the operations it follows allow

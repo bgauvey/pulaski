@@ -225,6 +225,7 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Instructions.IChecklistRepository>();
         services.RemoveAll<Application.Live.ILiveSignals>();
         services.RemoveAll<Application.Health.ISystemHealthReadStore>();
+        services.RemoveAll<Application.Quality.ISamplingReadStore>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -326,6 +327,7 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Instructions.IChecklistRepository>(Instructions);
         services.AddSingleton<Application.Live.ILiveSignals>(LiveSignals);
         services.AddSingleton<Application.Health.ISystemHealthReadStore>(Health);
+        services.AddSingleton<Application.Quality.ISamplingReadStore>(new InMemorySampling());
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);
@@ -454,4 +456,21 @@ public sealed class InMemorySystemHealth : Application.Health.ISystemHealthReadS
 
     public Task<IReadOnlyList<(string SiteCode, int Days, DateOnly Oldest)>> StaleRollupsAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<(string, int, DateOnly)>>([]);
+}
+
+/// <summary>No running jobs, so nothing is due (#136); sampling is tested against the database.</summary>
+public sealed class InMemorySampling : Application.Quality.ISamplingReadStore
+{
+    public Task<IReadOnlyList<Application.Quality.SamplingRun>> OpenRunsAsync(Guid? siteId, Guid? jobId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Application.Quality.SamplingRun>>([]);
+
+    public Task<IReadOnlyList<Application.Quality.SamplingItem>> PlansAsync(IReadOnlyCollection<Guid> materialIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Application.Quality.SamplingItem>>([]);
+
+    public Task<IReadOnlyList<(Guid RunId, DateTimeOffset At, decimal Quantity)>> OutputAsync(IReadOnlyCollection<Guid> runIds, DateTimeOffset since, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(Guid, DateTimeOffset, decimal)>>([]);
+
+    public Task<IReadOnlyList<(Guid RunId, Guid CharacteristicId, DateTimeOffset At)>> SamplesAsync(
+        IReadOnlyCollection<Guid> runIds, DateTimeOffset since, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(Guid, Guid, DateTimeOffset)>>([]);
 }

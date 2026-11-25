@@ -1706,6 +1706,53 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_running_job_owes_the_samples_its_specification_plans_at_its_start_and_every_so_many_units()
+    {
+        var plant = await CreatePlantAsync();
+        var s = _suffix.ToUpperInvariant();
+        CreatedResponse wall = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("SMP-" + s, "Wall thickness", null, "variable", plant.Kg, 2));
+        CreatedResponse spec = await db.SendAsync(new Application.Quality.CreateSpecCommand(plant.Profile));
+        var header = await QueryAsync<Application.Quality.GetSpecQuery, Contracts.Quality.SpecDto>(new Application.Quality.GetSpecQuery(spec.Id));
+        var draft = await QueryAsync<Application.Quality.GetSpecVersionQuery, Contracts.Quality.SpecVersionDto>(
+            new Application.Quality.GetSpecVersionQuery(spec.Id, header.Versions[0].Id));
+        Contracts.Quality.SpecItemDto item = new()
+        {
+            Id = Guid.CreateVersion7(),
+            CharacteristicId = wall.Id,
+            Lsl = 3.2m,
+            Usl = 3.4m,
+            SampleAtStart = true,
+            SampleEveryUnits = 50,
+            SampleGraceMinutes = 15,
+        };
+        var saved = await db.SendAsync(new Application.Quality.SaveSpecDraftCommand(spec.Id, draft.Id, draft.Version, new Contracts.Quality.SpecDefinitionDto { Items = [item] }));
+        Assert.Empty(saved.Problems);
+        await db.SendAsync(new Application.Quality.ReleaseSpecVersionCommand(spec.Id, draft.Id, saved.Version, null));
+
+        async Task<Contracts.Quality.DueSampleDto> DueAsync() => Assert.Single(
+            await QueryAsync<Application.Quality.GetDueSamplesQuery, IReadOnlyList<Contracts.Quality.DueSampleDto>>(new Application.Quality.GetDueSamplesQuery(null, plant.Job)));
+
+        // The plant's run started a while ago, so its start sample is past its grace: overdue. Taken, the next falls due after 50 m more.
+        var atStart = await DueAsync();
+        Assert.Equal(("overdue", true, 50m, "SMP-" + s), (atStart.Status, atStart.AtStart, atStart.EveryUnits!.Value, atStart.CharacteristicCode));
+        await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, wall.Id, null, plant.Job, null, [3.3m], null, null, "manual", null));
+        var taken = await DueAsync();
+        Assert.Equal(("done", 50m, 1), (taken.Status, taken.NextAfterUnits!.Value, taken.Taken));
+
+        // 60 m reported: the 50 m sample falls due now. The result just taken is within its grace, so it counts for that one, and the late start
+        // sample counts as missed. The site's list shows the line's job.
+        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 60m, 0m, plant.Metre, null, plant.Staging));
+        var after = await DueAsync();
+        Assert.Equal(("done", 40m, 1), (after.Status, after.NextAfterUnits!.Value, after.Missed));
+        Assert.Contains(await QueryAsync<Application.Quality.GetDueSamplesQuery, IReadOnlyList<Contracts.Quality.DueSampleDto>>(
+            new Application.Quality.GetDueSamplesQuery(plant.Site, null)), d => d.JobId == plant.Job && d.CharacteristicId == wall.Id);
+
+        // The plan comes back in the released version as written.
+        var version = await QueryAsync<Application.Quality.GetSpecVersionQuery, Contracts.Quality.SpecVersionDto>(new Application.Quality.GetSpecVersionQuery(spec.Id, draft.Id));
+        Assert.Equal((true, 50m, (decimal?)null), (version.Definition.Items[0].SampleAtStart, version.Definition.Items[0].SampleEveryUnits!.Value, version.Definition.Items[0].SampleEveryHours));
+    }
+
+    [Fact]
     public async Task Results_are_checked_against_the_released_specification_hold_lots_and_rejected_lots_move_good_to_scrap()
     {
         var plant = await CreatePlantAsync();

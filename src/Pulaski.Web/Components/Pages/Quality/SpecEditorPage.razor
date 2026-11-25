@@ -86,6 +86,33 @@ else
                             }
                         </td>
                     </tr>
+                    @* When it is sampled in a run (#136): at the start, and/or every so many hours or units, with a grace before it is overdue. *@
+                    <tr @key="@($"{item.Id:N}-sampling")" class="spec-sampling @(Flagged(item.Id) ? "table-warning" : "")">
+                        <td colspan="7" class="pt-0">
+                            <div class="d-flex flex-wrap align-items-center gap-2 small">
+                                <span class="text-muted">@L["Sample:"]</span>
+                                <div class="form-check mb-0">
+                                    <input id="@($"start-{item.Id:N}")" type="checkbox" class="form-check-input" checked="@item.SampleAtStart" disabled="@ReadOnly"
+                                           @onchange="e => Edit(() => item.SampleAtStart = e.Value is true)" />
+                                    <label class="form-check-label" for="@($"start-{item.Id:N}")">@L["at the start of each run"]</label>
+                                </div>
+                                <span class="text-muted">@L["and every"]</span>
+                                <input type="number" class="form-control form-control-sm text-end" style="width: 6rem" min="0" step="any" inputmode="decimal"
+                                       aria-label="@L["Sample every"]" value="@item.Every" disabled="@ReadOnly"
+                                       @onchange="e => Edit(() => SetEvery(item, e))" />
+                                <select class="form-select form-select-sm w-auto" aria-label="@L["Hours or units"]" value="@item.EveryKind" disabled="@ReadOnly"
+                                        @onchange="e => Edit(() => SetEveryKind(item, e))">
+                                    <option value="hours">@L["hours"]</option>
+                                    <option value="units">@L["units of output"]</option>
+                                </select>
+                                <span class="text-muted">@L["· overdue after"]</span>
+                                <input type="number" class="form-control form-control-sm text-end" style="width: 5rem" min="0" max="480" step="1"
+                                       aria-label="@L["Grace in minutes"]" value="@item.Grace" disabled="@ReadOnly"
+                                       @onchange="e => Edit(() => item.Grace = int.TryParse(e.Value?.ToString(), out var n) ? n : null)" />
+                                <span class="text-muted">@L["minutes"]</span>
+                            </div>
+                        </td>
+                    </tr>
                 }
                 @if (_items.Count == 0)
                 {
@@ -252,6 +279,12 @@ else
         }
     }
 
+    private static void SetEveryKind(ItemModel item, ChangeEventArgs e) => item.EveryKind = e.Value?.ToString() == "units" ? "units" : "hours";
+
+    // A number input sends its value in invariant form, whatever the reader's language.
+    private static void SetEvery(ItemModel item, ChangeEventArgs e) =>
+        item.Every = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
+
     private sealed class ItemModel
     {
         public Guid Id { get; init; }
@@ -261,6 +294,10 @@ else
         public decimal? Usl { get; set; }
         public int? MaxDefects { get; set; }
         public bool HoldOnFail { get; set; }
+        public bool SampleAtStart { get; set; }
+        public decimal? Every { get; set; }
+        public string EveryKind { get; set; } = "hours";
+        public int? Grace { get; set; } = 15;
 
         public static ItemModel From(SpecItemDto dto) => new()
         {
@@ -271,6 +308,10 @@ else
             Usl = dto.Usl,
             MaxDefects = dto.MaxDefects,
             HoldOnFail = dto.HoldOnFail,
+            SampleAtStart = dto.SampleAtStart,
+            Every = dto.SampleEveryHours ?? dto.SampleEveryUnits,
+            EveryKind = dto.SampleEveryUnits is not null ? "units" : "hours",
+            Grace = dto.SampleGraceMinutes ?? 15,
         };
 
         public SpecItemDto ToDto(int sortOrder) => new()
@@ -283,6 +324,10 @@ else
             MaxDefects = MaxDefects,
             HoldOnFail = HoldOnFail,
             SortOrder = sortOrder,
+            SampleAtStart = SampleAtStart,
+            SampleEveryHours = EveryKind == "hours" ? Every : null,
+            SampleEveryUnits = EveryKind == "units" ? Every : null,
+            SampleGraceMinutes = Grace,
         };
     }
 }

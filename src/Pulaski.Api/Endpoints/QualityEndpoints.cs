@@ -203,6 +203,19 @@ internal static class QualityEndpoints
             .WithTags("Quality")
         .RequirePermission(Permissions.QualityDecide, Site.Of(SiteOf.Lot));
 
+        // Samples running jobs owe (#136, D-121): at a site for the Floor, or for one job.
+        routes.MapGet("/quality/samples-due", async Task<Ok<IReadOnlyList<DueSampleDto>>> (
+            Guid siteId, IQueryHandler<GetDueSamplesQuery, IReadOnlyList<DueSampleDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetDueSamplesQuery(siteId, null), ct)))
+        .WithTags("Quality")
+        .RequireAny(Site.Query(), Permissions.FloorView, Permissions.QualityView);
+
+        routes.MapGet("/jobs/{id:guid}/samples-due", async Task<Ok<IReadOnlyList<DueSampleDto>>> (
+            Guid id, IQueryHandler<GetDueSamplesQuery, IReadOnlyList<DueSampleDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetDueSamplesQuery(null, id), ct)))
+        .WithTags("Quality")
+        .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView, Permissions.QualityView);
+
         return routes;
     }
 

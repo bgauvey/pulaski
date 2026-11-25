@@ -977,6 +977,14 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         return await ReadAsync<CreatedResponse>(response, ct);
     }
 
+    /// <summary>The samples running jobs owe at a site (#136).</summary>
+    public Task<IReadOnlyList<DueSampleDto>> ListDueSamplesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DueSampleDto>>($"api/quality/samples-due?siteId={siteId}", ct);
+
+    /// <summary>The samples a job owes in its open run (#136).</summary>
+    public Task<IReadOnlyList<DueSampleDto>> ListJobDueSamplesAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<DueSampleDto>>($"api/jobs/{jobId}/samples-due", ct);
+
     /// <summary>How Pulaski is running (#141).</summary>
     public Task<Contracts.Health.SystemHealthDto> GetSystemHealthAsync(CancellationToken ct = default) =>
         GetAsync<Contracts.Health.SystemHealthDto>("api/system/health", ct);
