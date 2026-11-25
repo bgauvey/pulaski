@@ -1,6 +1,8 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.MachineData;
 using Pulaski.Domain.MachineData;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.MachineData;
 
@@ -24,7 +26,7 @@ internal sealed class ImportMachineProfileHandler(IUnitOfWork unitOfWork, IMachi
     {
         if (command.Rows.Problems.Count > 0)
         {
-            return new ProfileImportResponse { FileProblems = command.Rows.Problems, Errors = command.Rows.Problems.Count, Version = command.ExpectedVersion };
+            return new ProfileImportResponse { FileProblems = [.. command.Rows.Problems.Select(Notes.Of)], Errors = command.Rows.Problems.Count, Version = command.ExpectedVersion };
         }
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -76,14 +78,14 @@ internal sealed class ImportMachineProfileHandler(IUnitOfWork unitOfWork, IMachi
             foreach (var left in states.Values.Where(s => s.IsActive && !seen.Contains((MachineProfileCsv.State, s.RawValue))).OrderBy(s => s.RawValue))
             {
                 stateWrites.Add(left with { IsActive = false });
-                results.Add(Result(0, MachineProfileCsv.State, left.RawValue, SwitchOff, $"{left.Name} isn't in the file."));
+                results.Add(Result(0, MachineProfileCsv.State, left.RawValue, SwitchOff, UserMessage.From($"{left.Name} isn't in the file.")));
             }
         }
 
         foreach (var left in codes.Values.Where(c => kinds.Contains(c.Kind) && c.IsActive && !seen.Contains((c.Kind, c.RawValue))).OrderBy(c => c.Kind).ThenBy(c => c.RawValue))
         {
             codeWrites.Add(left with { IsActive = false });
-            results.Add(Result(0, left.Kind, left.RawValue, SwitchOff, $"{left.Message} isn't in the file."));
+            results.Add(Result(0, left.Kind, left.RawValue, SwitchOff, UserMessage.From($"{left.Message} isn't in the file.")));
         }
 
         var errors = results.Count(r => r.Action == Error);
@@ -127,46 +129,46 @@ internal sealed class ImportMachineProfileHandler(IUnitOfWork unitOfWork, IMachi
         };
     }
 
-    private static string? Problem(ProfileImportRow row, HashSet<(string, int)> seen, Dictionary<string, UtilizationReasonRecord> reasons)
+    private static UserMessage? Problem(ProfileImportRow row, HashSet<(string, int)> seen, Dictionary<string, UtilizationReasonRecord> reasons)
     {
         if (row.Problems.Count > 0)
         {
-            return string.Join(" ", row.Problems);
+            return UserMessage.Join(row.Problems);
         }
 
         // Counted before the other checks, so a later row with the same value is caught even when this one fails.
         if (!seen.Add((row.Kind, row.RawValue)))
         {
-            return $"{Label(row.Kind)} {row.RawValue} appears earlier in the file.";
+            return UserMessage.From($"{Label(row.Kind)} {row.RawValue} appears earlier in the file.");
         }
 
         var limit = row.Kind == MachineProfileCsv.State ? ProfileRules.NameLength : ProfileRules.MessageLength;
         if (row.Name.Length == 0 || row.Name.Length > limit)
         {
-            return $"name: required, at most {limit} characters.";
+            return UserMessage.From($"name: required, at most {limit} characters.");
         }
 
         if (row.Category is { Length: > ProfileRules.CategoryLength })
         {
-            return $"category: at most {ProfileRules.CategoryLength} characters.";
+            return UserMessage.From($"category: at most {ProfileRules.CategoryLength} characters.");
         }
 
         return row.Reason is { } code && !reasons.ContainsKey(code)
-            ? $"reason: {code} isn't an active utilization reason of the site."
+            ? UserMessage.From($"reason: {code} isn't an active utilization reason of the site.")
             : null;
     }
 
     private static string Compare<T>(T? before, T after)
         where T : class => before is null ? Create : before.Equals(after) ? Unchanged : Update;
 
-    private static ProfileImportRowDto Result(int line, string kind, int rawValue, string action, string? message) =>
-        new() { Line = line, Kind = kind, RawValue = rawValue, Action = action, Message = message };
+    private static ProfileImportRowDto Result(int line, string kind, int rawValue, string action, UserMessage? message) =>
+        new() { Line = line, Kind = kind, RawValue = rawValue, Action = action, Message = message is null ? null : Notes.Of(message) };
 
-    private static string Label(string kind) => kind switch
+    private static UserMessage Label(string kind) => kind switch
     {
-        MachineProfileCsv.State => "State",
-        StopCodeKinds.StopReason => "Stop reason",
-        StopCodeKinds.Alarm => "Alarm",
-        _ => "Warning",
+        MachineProfileCsv.State => UserMessage.Of("State"),
+        StopCodeKinds.StopReason => UserMessage.Of("Stop reason"),
+        StopCodeKinds.Alarm => UserMessage.Of("Alarm"),
+        _ => UserMessage.Of("Warning"),
     };
 }

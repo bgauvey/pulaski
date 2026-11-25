@@ -1,6 +1,7 @@
 using System.Globalization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Domain.MachineData;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.MachineData;
 
@@ -25,11 +26,11 @@ public sealed record ProfileImportRow
 
     /// <summary>The code of the utilization reason it maps to; blank for none.</summary>
     public string? Reason { get; init; }
-    public IReadOnlyList<string> Problems { get; init; } = [];
+    public IReadOnlyList<UserMessage> Problems { get; init; } = [];
 }
 
 /// <summary>The rows from a source, and what was wrong with the source as a whole.</summary>
-public sealed record ProfileImportSource(IReadOnlyList<ProfileImportRow> Rows, IReadOnlyList<string> Problems);
+public sealed record ProfileImportSource(IReadOnlyList<ProfileImportRow> Rows, IReadOnlyList<UserMessage> Problems);
 
 /// <summary>
 /// Reads a machine's definitions from CSV (D-050). The first line names the columns, in any order and case:
@@ -64,10 +65,10 @@ public static class MachineProfileCsv
         var records = CsvText.Read(text);
         if (records.Count == 0)
         {
-            return new ProfileImportSource([], ["The file is empty."]);
+            return new ProfileImportSource([], [UserMessage.Of("The file is empty.")]);
         }
 
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         var index = new Dictionary<string, int>(StringComparer.Ordinal);
         var header = records[0].Fields;
         for (var i = 0; i < header.Count; i++)
@@ -81,18 +82,18 @@ public static class MachineProfileCsv
             var column = Columns.ContainsKey(name) ? name : Columns.FirstOrDefault(c => c.Value.Contains(name)).Key;
             if (column is null)
             {
-                problems.Add($"Unknown column '{header[i]}'. The columns are {string.Join(", ", Columns.Keys)}.");
+                problems.Add(UserMessage.From($"Unknown column '{header[i]}'. The columns are {string.Join(", ", Columns.Keys)}."));
             }
             else if (!index.TryAdd(column, i))
             {
-                problems.Add($"Column '{column}' appears twice.");
+                problems.Add(UserMessage.From($"Column '{column}' appears twice."));
             }
         }
 
-        problems.AddRange(Required.Where(r => !index.ContainsKey(r)).Select(r => $"The required column '{r}' is missing."));
+        problems.AddRange(Required.Where(r => !index.ContainsKey(r)).Select(r => UserMessage.From($"The required column '{r}' is missing.")));
         if (records.Count - 1 > MaxRows)
         {
-            problems.Add($"The file has {records.Count - 1} rows; import at most {MaxRows} at a time.");
+            problems.Add(UserMessage.From($"The file has {records.Count - 1} rows; import at most {MaxRows} at a time."));
         }
 
         if (problems.Count > 0)
@@ -104,24 +105,24 @@ public static class MachineProfileCsv
             .Where(r => r.Fields.Any(f => f.Length > 0))
             .Select(r => ToRow(r, index))
             .ToList();
-        return new ProfileImportSource(rows, rows.Count == 0 ? ["The file has a header but no rows."] : []);
+        return new ProfileImportSource(rows, rows.Count == 0 ? [UserMessage.Of("The file has a header but no rows.")] : []);
     }
 
     private static ProfileImportRow ToRow(CsvRecord record, Dictionary<string, int> index)
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         string Cell(string column) =>
             index.TryGetValue(column, out var i) && i < record.Fields.Count ? record.Fields[i].Trim() : "";
 
         var kind = CsvText.Normalize(Cell("kind"));
         if (!Kinds.Contains(kind))
         {
-            problems.Add($"kind: '{Cell("kind")}' isn't one of {string.Join(", ", Kinds)}.");
+            problems.Add(UserMessage.From($"kind: '{Cell("kind")}' isn't one of {string.Join(", ", Kinds)}."));
         }
 
         if (!int.TryParse(Cell("value"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
         {
-            problems.Add($"value: '{Cell("value")}' isn't a whole number.");
+            problems.Add(UserMessage.From($"value: '{Cell("value")}' isn't a whole number."));
         }
 
         int? packml = null;
@@ -129,7 +130,7 @@ public static class MachineProfileCsv
         if (kind != State && packmlText.Length > 0)
         {
             // Usually a column out of place: the rest of the row would land in the wrong fields.
-            problems.Add($"packml_state: only a state row has one; is a column missing before '{packmlText}'?");
+            problems.Add(UserMessage.From($"packml_state: only a state row has one; is a column missing before '{packmlText}'?"));
         }
         else if (kind == State)
         {
@@ -137,8 +138,8 @@ public static class MachineProfileCsv
             if (packml is null)
             {
                 problems.Add(packmlText.Length == 0
-                    ? "packml_state: a state row needs the PackML state it means."
-                    : $"packml_state: '{packmlText}' isn't a PackML state (0 to 17, or a name such as Execute).");
+                    ? UserMessage.Of("packml_state: a state row needs the PackML state it means.")
+                    : UserMessage.From($"packml_state: '{packmlText}' isn't a PackML state (0 to 17, or a name such as Execute)."));
             }
         }
 

@@ -90,7 +90,7 @@ internal static class SpecRules
     public static Characteristic Validate(Characteristic characteristic)
     {
         new Validator()
-            .Require(Characteristic.CodeProblem(characteristic.Code) is null, nameof(characteristic.Code), Characteristic.CodeProblem(characteristic.Code) ?? "")
+            .Require(nameof(characteristic.Code), Characteristic.CodeProblem(characteristic.Code))
             .Require(characteristic.Name.Length is > 0 and <= Characteristic.MaxName, nameof(characteristic.Name), $"1 to {Characteristic.MaxName} characters.")
             .Require(characteristic.Description is null || characteristic.Description.Length <= Characteristic.MaxDescription, nameof(characteristic.Description),
                 $"At most {Characteristic.MaxDescription} characters.")
@@ -98,8 +98,7 @@ internal static class SpecRules
             .Require(characteristic.Decimals is >= 0 and <= 6, nameof(characteristic.Decimals), "0 to 6.")
             .Require(characteristic.UomId is null || characteristic.DataKind == CharacteristicKinds.Variable, nameof(characteristic.UomId),
                 "Only a measured characteristic has a unit.")
-            .Require(Domain.Quality.Spc.ChartTypes.Problem(characteristic.ChartType, characteristic.DataKind, characteristic.SubgroupSize) is null,
-                nameof(characteristic.ChartType), Domain.Quality.Spc.ChartTypes.Problem(characteristic.ChartType, characteristic.DataKind, characteristic.SubgroupSize) ?? "")
+            .Require(nameof(characteristic.ChartType), Domain.Quality.Spc.ChartTypes.Problem(characteristic.ChartType, characteristic.DataKind, characteristic.SubgroupSize))
             .ThrowIfInvalid();
         return characteristic;
     }
@@ -207,7 +206,7 @@ internal sealed class SaveSpecDraftHandler(IUnitOfWork unitOfWork, IQualityRepos
         var characteristics = await quality.GetCharacteristicsAsync(SpecRules.CharacteristicIds(definition), cancellationToken);
         if (SpecRules.ReferenceProblems(definition, characteristics, malformedOnly: true) is { Count: > 0 } malformed)
         {
-            throw new DomainRuleException(malformed[0].Message);
+            throw new DomainRuleException(malformed[0].Text);
         }
 
         var saved = current.SaveDraft(definition);
@@ -237,7 +236,7 @@ internal sealed class ReleaseSpecVersionHandler(
         var characteristics = await quality.GetCharacteristicsAsync(SpecRules.CharacteristicIds(draft.Definition), cancellationToken);
         if (SpecRules.ReferenceProblems(draft.Definition, characteristics, malformedOnly: false) is { Count: > 0 } problems)
         {
-            throw new DomainRuleException(string.Join(" ", problems.Select(p => p.Message)));
+            throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
         }
 
         var previous = await quality.GetReleasedForUpdateAsync(spec.Id, cancellationToken);

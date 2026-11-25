@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Materials;
+using Pulaski.Domain;
 
 namespace Pulaski.Testing;
 
@@ -117,7 +118,7 @@ public sealed class FakeMaterialConnectionFetcher : IMaterialConnectionFetcher
 {
     public Dictionary<string, string> Json { get; } = [];
 
-    public Dictionary<string, string> Problems { get; } = [];
+    public Dictionary<string, UserMessage> Problems { get; } = [];
 
     public Task<MaterialConnectionFetch> FetchAsync(MaterialConnection connection, int maxItems, CancellationToken cancellationToken)
     {

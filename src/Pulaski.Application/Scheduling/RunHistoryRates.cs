@@ -1,11 +1,12 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Application.MachineData;
 using Pulaski.Application.Units;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Scheduling;
-using Pulaski.Domain;
 using Pulaski.Domain.Scheduling;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Scheduling;
 
@@ -163,7 +164,7 @@ internal static class RunHistory
     {
         if (result.RatePerHour is not { } rate)
         {
-            throw new DomainRuleException(result.NotEnough ?? "The run history gives no rate.");
+            throw result.NotEnough is { } why ? new DomainRuleException(why) : new DomainRuleException("The run history gives no rate.");
         }
 
         if (rate != reviewed)
@@ -216,7 +217,7 @@ internal sealed class GetRunHistoryRateHandler(
             EffectiveRatePerHour = standard.EffectiveRatePerHour,
             IdealRatePerHour = await RunHistory.IdealInStandardUnitAsync(units, source, cancellationToken),
             SuggestedRatePerHour = result.RatePerHour,
-            NotEnough = result.NotEnough,
+            NotEnough = result.NotEnough is { } why ? Notes.Of(why) : null,
             UsedRuns = result.UsedRuns,
             UsedHours = result.UsedHours,
             UsedGoodQty = result.UsedGoodQty,
@@ -241,7 +242,7 @@ internal sealed class GetRunHistoryRateHandler(
                 StoppedHours = v.Run.StoppedHours is { } stopped ? Math.Round(stopped, 2) : null,
                 GoodQty = v.Run.GoodQty,
                 RatePerHour = v.RatePerHour is { } r ? Math.Round(r, 2) : null,
-                Excluded = v.Excluded,
+                Excluded = v.Excluded is { } why ? Notes.Of(why) : null,
             })],
         };
     }
@@ -300,7 +301,9 @@ internal sealed class UseIdealRateHandler(
         var source = await store.GetStandardAsync(current.Id, now, cancellationToken);
         if (source?.IdealRatePerHour is not { } ideal || source.IdealUomId is not { } uom)
         {
-            throw new DomainRuleException($"{source?.LineCode ?? "The line"} has no capability in effect for {source?.MaterialCode ?? "the material"}, so there is no ideal rate to go back to.");
+            throw source is null
+                ? new DomainRuleException("The line has no capability in effect for the material, so there is no ideal rate to go back to.")
+                : new DomainRuleException($"{source.LineCode} has no capability in effect for {source.MaterialCode}, so there is no ideal rate to go back to.");
         }
 
         var reset = current.UseIdealRate(ideal, uom, now);

@@ -14,10 +14,10 @@ public class BatchingTests
     {
         Assert.Equal((2, 3, (int?)null), (Near.WholeBatches(100m), Near.WholeBatches(150m), Near.WholeBatches(125m)));
 
-        var ex = Assert.Throws<DomainRuleException>(() => Near.EnsureWholeBatches(125m, "Work order WO-1", "kg"));
+        var ex = Assert.Throws<DomainRuleException>(() => Near.EnsureWholeBatches(125m, UserMessage.Of("Work order WO-1"), "kg"));
         Assert.Contains("125 kg is 2.5 batches of 50 kg", ex.Message, StringComparison.Ordinal);
         Assert.Contains("Plan 100 or 150 kg.", ex.Message, StringComparison.Ordinal);
-        Assert.Contains("Plan at least 50 kg.", Assert.Throws<DomainRuleException>(() => Near.EnsureWholeBatches(20m, "Job J-1", "kg")).Message, StringComparison.Ordinal);
+        Assert.Contains("Plan at least 50 kg.", Assert.Throws<DomainRuleException>(() => Near.EnsureWholeBatches(20m, UserMessage.Of("Job J-1"), "kg")).Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -96,9 +96,9 @@ public class BatchingTests
         Assert.Equal(4, line.WholeBatches(800m));
         Assert.Null(line.WholeBatches(850m));
 
-        Assert.Equal([3, 2], Batching.ShareBySize(250m, [(60m, 50m), (40m, 50m)], "WO", "kg"));
-        Assert.Contains("Plan 200 or 250", Assert.Throws<DomainRuleException>(() => Batching.ShareBySize(225m, [(60m, 50m), (40m, 50m)], "WO", "kg")).Message, StringComparison.Ordinal);
-        Assert.Equal(1000m, Batching.ShareBySize(1000m, [(50m, 50m), (50m, 200m)], "WO", "kg").Zip([50m, 200m], (c, size) => c * size).Sum());
+        Assert.Equal([3, 2], Batching.ShareBySize(250m, [(60m, 50m), (40m, 50m)], UserMessage.Of("WO"), "kg"));
+        Assert.Contains("Plan 200 or 250", Assert.Throws<DomainRuleException>(() => Batching.ShareBySize(225m, [(60m, 50m), (40m, 50m)], UserMessage.Of("WO"), "kg")).Message, StringComparison.Ordinal);
+        Assert.Equal(1000m, Batching.ShareBySize(1000m, [(50m, 50m), (50m, 200m)], UserMessage.Of("WO"), "kg").Zip([50m, 200m], (c, size) => c * size).Sum());
     }
 
     [Fact]

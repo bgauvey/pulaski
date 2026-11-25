@@ -97,13 +97,13 @@ internal static class QualificationWriter
     {
         if (QualificationRules.GrantProblem(validFrom, expiresOn) is { } problem)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["ExpiresOn"] = [problem] });
+            throw ValidationException.Field("ExpiresOn", problem);
         }
     }
 
     public static async Task<Versioned<T>> AtVersionAsync<T>(Task<Versioned<T>?> load, long expectedVersion, string what)
     {
-        var current = await load ?? throw new NotFoundException($"{what} not found.");
+        var current = await load ?? throw (what == "Grant" ? new NotFoundException("Grant not found.") : new NotFoundException("Qualification not found."));
         if (current.Version != expectedVersion)
         {
             throw new ConflictException($"That {what.ToLowerInvariant()} was changed by someone else. Reload and try again.");

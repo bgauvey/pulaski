@@ -18,34 +18,34 @@ public static class ChangeoverRules
     public const int MaxNote = 500;
 
     /// <summary>Why the rule can't be kept, or null.</summary>
-    public static string? Problem(ChangeoverPattern pattern, TimeSpan duration, string? note)
+    public static UserMessage? Problem(ChangeoverPattern pattern, TimeSpan duration, string? note)
     {
         if (pattern.FromMaterialId is not null && pattern.FromMaterialClassId is not null)
         {
-            return "The 'from' side is a material or a class, not both.";
+            return UserMessage.Of("The 'from' side is a material or a class, not both.");
         }
 
         if (pattern.ToMaterialId is not null && pattern.ToMaterialClassId is not null)
         {
-            return "The 'to' side is a material or a class, not both.";
+            return UserMessage.Of("The 'to' side is a material or a class, not both.");
         }
 
         if (pattern.FromMaterialId is { } from && from == pattern.ToMaterialId)
         {
-            return "From a material to itself is no changeover: the line just keeps running.";
+            return UserMessage.Of("From a material to itself is no changeover: the line just keeps running.");
         }
 
         if (duration < TimeSpan.Zero || duration > MaxDuration)
         {
-            return "A changeover takes from 0 minutes to 7 days.";
+            return UserMessage.Of("A changeover takes from 0 minutes to 7 days.");
         }
 
         if (duration.Ticks % TimeSpan.TicksPerMinute != 0)
         {
-            return "Give the time in whole minutes.";
+            return UserMessage.Of("Give the time in whole minutes.");
         }
 
-        return note is { Length: > MaxNote } ? $"Keep the note to {MaxNote} characters." : null;
+        return note is { Length: > MaxNote } ? UserMessage.From($"Keep the note to {MaxNote} characters.") : null;
     }
 
     /// <summary>The rule switched on that already has this pattern, other than <paramref name="exceptId"/>; null when there is none.</summary>

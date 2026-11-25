@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+
 namespace Pulaski.Contracts.Scheduling;
 
 /// <summary>
@@ -26,6 +28,12 @@ public sealed record LineTimelineDto
 
     /// <summary>Where the line's working time comes from, e.g. "2X8 · Two shifts, from PLT1" (D-038); null without one.</summary>
     public string? CalendarName { get; init; }
+
+    /// <summary><see cref="CalendarName"/> with its template, for the reader's language (#188).</summary>
+    public MessageDto? Calendar { get; init; }
+
+    /// <summary>The line works around the clock by choice (its calendar says so), rather than by a shift schedule.</summary>
+    public bool IsAroundTheClock { get; init; }
 
     public IReadOnlyList<TimelineSegmentDto> Segments { get; init; } = [];
 

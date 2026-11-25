@@ -81,7 +81,7 @@ internal sealed class CreateRoleHandler(
         var validator = new Validator();
         if (Roles.CodeProblem(code) is { } problem)
         {
-            validator.Require(false, nameof(command.Code), problem);
+            validator.Require(nameof(command.Code), problem);
         }
 
         var (name, description) = RoleRules.Text(command.Name, command.Description, validator);
@@ -132,15 +132,18 @@ internal sealed class UpdateRoleHandler(
         // Every user keeps a role (D-037): a role people hold can't be switched off under them.
         if (current.Value.IsActive && !command.IsActive && await security.CountHoldersAsync(current.Value.Id, now, cancellationToken) is var holders and > 0)
         {
-            throw new DomainRuleException($"{holders} {(holders == 1 ? "user holds" : "users hold")} {current.Value.Name}; give them another role and take this one away first.");
+            throw holders == 1
+                ? new DomainRuleException($"1 user holds {current.Value.Name}; give them another role and take this one away first.")
+                : new DomainRuleException($"{holders} users hold {current.Value.Name}; give them another role and take this one away first.");
         }
 
         // Held everywhere by someone, it stays allowed everywhere until those grants end (D-092).
         var everySite = command.AllowsEverySite ?? current.Value.AllowsEverySite;
         if (current.Value.AllowsEverySite && !everySite && await security.CountEverywhereHoldersAsync(current.Value.Id, now, cancellationToken) is var everywhere and > 0)
         {
-            throw new DomainRuleException(
-                $"{everywhere} {(everywhere == 1 ? "user holds" : "users hold")} {current.Value.Name} at every site; take those away or give it at a site first.");
+            throw everywhere == 1
+                ? new DomainRuleException($"1 user holds {current.Value.Name} at every site; take that away or give it at a site first.")
+                : new DomainRuleException($"{everywhere} users hold {current.Value.Name} at every site; take those away or give it at a site first.");
         }
 
         var updated = current.Value with

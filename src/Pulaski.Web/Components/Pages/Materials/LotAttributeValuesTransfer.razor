@@ -21,13 +21,13 @@
     @if (_check is { } c)
     {
         <p class="small mt-2 mb-1 @(c.Errors > 0 ? "text-danger" : "")">
-            @(c.FileProblems.Count > 0 ? string.Join(" ", c.FileProblems)
+            @(c.FileProblems.Count > 0 ? string.Join(" ", L.Notes(c.FileProblems))
                 : c.Errors > 0 ? L["{0} rows have errors, so nothing can be imported yet. Fix them and pick the file again.", c.Errors]
                 : L["{0}: {1} lots to change, {2} unchanged.", (c.Applied ? L["Imported"] : L["Ready"]), c.Updated, c.Unchanged])
         </p>
         @foreach (var row in c.Rows.Where(r => r.Action == "error"))
         {
-            <div class="small text-danger">@L["Line {0}, {1}: {2}", row.Line, row.Code, row.Message]</div>
+            <div class="small text-danger">@L["Line {0}, {1}: {2}", row.Line, row.Code, row.Message is { } why ? L.Of(why) : ""]</div>
         }
         @if (c.Errors == 0)
         {

@@ -68,7 +68,7 @@ public class ShiftScheduleTests
     public void Overlapping_shifts_and_bad_shifts_are_problems()
     {
         var overlapping = TwoShifts with { Shifts = [.. TwoShifts.Shifts, new("X", "Extra", new TimeOnly(13, 0), TimeSpan.FromHours(2), [2])] };
-        Assert.Contains("can't overlap", Assert.Single(overlapping.Problems()), StringComparison.Ordinal);
+        Assert.Contains("can't overlap", Assert.Single(overlapping.Problems())?.Text, StringComparison.Ordinal);
 
         // A night shift on the last day of the cycle runs into the next cycle's first morning.
         var wrapping = new ShiftSchedule("W", "Wrap", 2, new DateOnly(2026, 10, 12),
@@ -78,10 +78,10 @@ public class ShiftScheduleTests
         var bad = new ShiftSchedule("B", "Bad", 7, new DateOnly(2026, 10, 12),
             [new("A", "A", new TimeOnly(6, 0), TimeSpan.FromMinutes(5), []), new("a", "A again", new TimeOnly(6, 0), TimeSpan.FromHours(8), [9])]);
         var problems = bad.Problems();
-        Assert.Contains(problems, p => p.Contains("Two shifts", StringComparison.Ordinal));
-        Assert.Contains(problems, p => p.Contains("15 minutes", StringComparison.Ordinal));
-        Assert.Contains(problems, p => p.Contains("no day", StringComparison.Ordinal));
-        Assert.Contains(problems, p => p.Contains("outside", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.Text.Contains("Two shifts", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.Text.Contains("15 minutes", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.Text.Contains("no day", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.Text.Contains("outside", StringComparison.Ordinal));
         Assert.Empty(TwoShifts.Problems());
         Assert.NotEmpty((TwoShifts with { CycleDays = 60 }).Problems());
     }
@@ -121,11 +121,11 @@ public class ShiftScheduleTests
     {
         var late = new ShiftOverride(new DateOnly(2026, 10, 19), "A", IsWorking: true, new TimeOnly(9, 0), TimeSpan.FromHours(8), "Days");
         var clash = Assert.Single((TwoShifts with { Overrides = [late] }).Problems());
-        Assert.Contains("Mon 19 Oct 2026", clash, StringComparison.Ordinal);
-        Assert.Contains("can't overlap", clash, StringComparison.Ordinal);
+        Assert.Contains("Mon 19 Oct 2026", clash?.Text, StringComparison.Ordinal);
+        Assert.Contains("can't overlap", clash?.Text, StringComparison.Ordinal);
 
         Assert.Contains((TwoShifts with { Overrides = [late, late with { Start = new TimeOnly(5, 0) }] }).Problems(),
-            p => p.Contains("two overrides", StringComparison.Ordinal));
+            p => p.Text.Contains("two overrides", StringComparison.Ordinal));
         Assert.NotEmpty((TwoShifts with { Overrides = [late with { Start = new TimeOnly(4, 0), Length = TimeSpan.FromMinutes(5) }] }).Problems());
 
         var replaced = TwoShifts.WithOverride(late.ProductionDate, "a", late with { Start = new TimeOnly(5, 0) }).WithOverride(late.ProductionDate, "A", null);

@@ -7,7 +7,8 @@ namespace Pulaski.Domain;
 /// <summary>
 /// A message for a person (#128, D-114): its English template with placeholders (<c>"{0} isn't a line"</c>), the values that fill them, and
 /// the English text. The template is the key the screens translate by, as their own text is. Numbers stay numbers, so a screen writes them in
-/// its reader's region; anything else is its text.
+/// its reader's region; a value that is itself a <see cref="UserMessage"/> is translated on its own, and a <see cref="MessageCode"/> is a status
+/// or kind code the screen words (#188); anything else is its text.
 /// </summary>
 public sealed record UserMessage(string Template, IReadOnlyList<object?> Values, string Text)
 {
@@ -17,6 +18,36 @@ public sealed record UserMessage(string Template, IReadOnlyList<object?> Values,
 
     /// <summary>A message from an interpolated string, for code that words one to return (#189).</summary>
     public static UserMessage From(ref MessageBuilder message) => message.Build();
+
+    /// <summary>
+    /// Several messages as one, each translated on its own (#188): the template <c>"{0} {1}"</c> with the messages as its values. None is an
+    /// empty message.
+    /// </summary>
+    public static UserMessage Join(IEnumerable<UserMessage> messages, string separator = " ")
+    {
+        var parts = messages.ToList();
+        var escaped = separator.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal);
+        return parts.Count == 1
+            ? parts[0]
+            : new(
+                string.Join(escaped, parts.Select((_, i) => "{" + i.ToString(CultureInfo.InvariantCulture) + "}")),
+                [.. parts],
+                string.Join(separator, parts.Select(p => p.Text)));
+    }
+
+    /// <summary>A status or kind code put into a message (<c>$"Job {JobNumber} is {UserMessage.Code(Status)}."</c>), which a screen words.</summary>
+    public static MessageCode Code(string code) => new(code);
+
+    public override string ToString() => Text;
+}
+
+/// <summary>
+/// A status or kind code inside a message (#188): its English text is the code as words ('on_hold' → 'on hold'); a screen shows its label in
+/// its reader's language.
+/// </summary>
+public sealed record MessageCode(string Code)
+{
+    public override string ToString() => Code.Replace('_', ' ');
 }
 
 /// <summary>An exception whose message is for a person, with its template and values (#128).</summary>
@@ -74,6 +105,14 @@ public ref struct MessageBuilder
         }
 
         _template.Append('}');
+
+        // A message inside a message, or a code, stays one, for the screen to word (#188).
+        if (value is UserMessage or MessageCode)
+        {
+            _text.Append(value.ToString());
+            _values.Add(value);
+            return;
+        }
 
         var text = value is IFormattable formattable ? formattable.ToString(format, CultureInfo.InvariantCulture) : value?.ToString() ?? "";
         _text.Append(alignment is { } width ? (width < 0 ? text.PadRight(-width) : text.PadLeft(width)) : text);

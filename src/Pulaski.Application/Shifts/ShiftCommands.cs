@@ -74,7 +74,7 @@ internal static class ShiftRules
         var problems = schedule.Problems();
         if (problems.Count > 0)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Shifts"] = [.. problems] });
+            throw ValidationException.Field("Shifts", problems);
         }
     }
 
@@ -255,7 +255,9 @@ internal sealed class UpdateShiftScheduleHandler(
         // Equipment that follows a schedule needs it: switch the equipment to another first (it is never left without working time).
         if (current.Value.IsActive && !command.IsActive && await shifts.ListUsersAsync(current.Value.Id, cancellationToken) is { Count: > 0 } users)
         {
-            throw new DomainRuleException($"{string.Join(", ", users)} {(users.Count == 1 ? "follows" : "follow")} {current.Value.Code}; give {(users.Count == 1 ? "it" : "them")} another schedule first.");
+            throw users.Count == 1
+                ? new DomainRuleException($"{users[0]} follows {current.Value.Code}; give it another schedule first.")
+                : new DomainRuleException($"{string.Join(", ", users)} follow {current.Value.Code}; give them another schedule first.");
         }
 
         var updated = current.Value with

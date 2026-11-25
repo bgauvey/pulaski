@@ -104,7 +104,9 @@ internal sealed class GetShortagesHandler(
             }
             else
             {
-                problems.Add(Notes.Inventory("uom_mismatch", $"{receipt.Reference ?? "An expected receipt"} of {receipt.MaterialCode} is in {receipt.UomCode}, which doesn't convert; it was left out."));
+                problems.Add(receipt.Reference is { } reference
+                    ? Notes.Inventory("uom_mismatch", $"{reference} of {receipt.MaterialCode} is in {receipt.UomCode}, which doesn't convert; it was left out.")
+                    : Notes.Inventory("uom_mismatch", $"An expected receipt of {receipt.MaterialCode} is in {receipt.UomCode}, which doesn't convert; it was left out."));
             }
         }
 

@@ -327,9 +327,9 @@ internal sealed class UndoStopAdjustmentHandler(
         var stop = found[0];
         if (stop.ReplacesIds is not { Count: > 0 } replacedIds || stop.AdjustedAt is not { } adjustedAt)
         {
-            throw new DomainRuleException(stop.Source == StopSources.Manual
-                ? "A stop entered by hand is removed, not undone."
-                : "This stop didn't come from an adjustment, so there is nothing to undo.");
+            throw stop.Source == StopSources.Manual
+                ? new DomainRuleException("A stop entered by hand is removed, not undone.")
+                : new DomainRuleException("This stop didn't come from an adjustment, so there is nothing to undo.");
         }
 
         // The adjustment's stops (both parts of a split) and the stops it replaced, all locked.

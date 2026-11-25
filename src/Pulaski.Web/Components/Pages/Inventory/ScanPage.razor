@@ -194,7 +194,7 @@
             if (_next is null && result.Status == "receivable")
             {
                 (_item, _lot, _container, _scanned) = (null, null, null, result.Parsed);
-                Say(result.Message ?? L["Not at this site yet: receive it?"]);
+                Say(result.Message is { } said ? L.Of(said) : L["Not at this site yet: receive it?"]);
                 return;
             }
 
@@ -207,7 +207,7 @@
                     await ChooseAsync(matches[0]);
                     break;
                 case 0:
-                    Say(wantedKind is { } wanted && result.Matches.Count > 0 ? L["{0} isn't a {1}.", code, L.Label(wanted).ToLowerInvariant()] : result.Message ?? L["Nothing matches {0}.", code], warning: true);
+                    Say(wantedKind is { } wanted && result.Matches.Count > 0 ? L["{0} isn't a {1}.", code, L.Label(wanted).ToLowerInvariant()] : result.Message is { } said ? L.Of(said) : L["Nothing matches {0}.", code], warning: true);
                     break;
                 default:
                     _choices = matches;

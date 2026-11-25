@@ -260,7 +260,7 @@ public sealed record ImportRowResultDto
     public IReadOnlyList<string> Changes { get; init; } = [];
 
     /// <summary>Why the row can't be imported, for an error.</summary>
-    public string? Message { get; init; }
+    public MessageDto? Message { get; init; }
 
     /// <summary>What else it did, such as setting a line's planning rate from a capability's ideal rate.</summary>
     public IReadOnlyList<MessageDto> Notes { get; init; } = [];
@@ -279,7 +279,7 @@ public sealed record ImportMaterialsResponse
     public int Errors { get; init; }
 
     /// <summary>Problems with the file as a whole, such as a missing or unknown column.</summary>
-    public IReadOnlyList<string> FileProblems { get; init; } = [];
+    public IReadOnlyList<MessageDto> FileProblems { get; init; } = [];
 
     /// <summary>The codes of the classes the import created, or would create, because the file named them and they were missing (D-055).</summary>
     public IReadOnlyList<string> CreatedClasses { get; init; } = [];

@@ -86,7 +86,7 @@ public class ImportMaterialsHandlerTests
         Assert.Equal((created.Id, 90), (ByCode("R-1B").Id, ByCode("R-1B").ShelfLifeDays));
 
         var asLocal = await RunAsync("code,name,type,base_unit\nR-1B,Resin B,raw,kg\n");
-        Assert.Contains("comes from ERP1", Assert.Single(asLocal.Rows).Message, StringComparison.Ordinal);
+        Assert.Contains("comes from ERP1", Assert.Single(asLocal.Rows).Message?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public class ImportMaterialsHandlerTests
         Assert.False(result.Applied);
         Assert.Equal((1, 5), (result.Created, result.Errors));
         Assert.Equal(["create", "error", "error", "error", "error", "error"], result.Rows.Select(r => r.Action));
-        Assert.Contains("appears earlier", result.Rows[^1].Message, StringComparison.Ordinal);
+        Assert.Contains("appears earlier", result.Rows[^1].Message?.Text, StringComparison.Ordinal);
         Assert.Equal(0, _f.Stores.UnitOfWork.Committed);
     }
 
@@ -124,8 +124,8 @@ public class ImportMaterialsHandlerTests
 
         var refused = await RunAsync(csv);
         Assert.Equal(2, refused.Errors);
-        Assert.Contains("no class 'films'", refused.Rows[0].Message, StringComparison.Ordinal);
-        Assert.Contains("create missing classes", refused.Rows[0].Message, StringComparison.Ordinal);
+        Assert.Contains("no class 'films'", refused.Rows[0].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("create missing classes", refused.Rows[0].Message?.Text, StringComparison.Ordinal);
 
         var applied = await RunAsync(csv, createClasses: true);
         Assert.Equal(["FILMS"], applied.CreatedClasses);
@@ -149,7 +149,7 @@ public class ImportMaterialsHandlerTests
     {
         var csv = new CsvMaterialSource();
         Assert.Equal(Contracts.Materials.MaterialCsvFormat.Header + "\r\n", csv.Template);
-        Assert.Equal(["The file has a header but no rows."], csv.Read(csv.Template, null).Problems);
+        Assert.Equal(["The file has a header but no rows."], csv.Read(csv.Template, null).Problems.Select(p => p?.Text));
 
         var b2mml = new B2mmlMaterialSource();
         var row = Assert.Single(b2mml.Read(b2mml.Template, "ERP1").Rows);

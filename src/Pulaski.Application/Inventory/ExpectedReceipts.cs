@@ -89,7 +89,9 @@ internal static class ExpectedReceiptRules
         var current = await receipts.GetForUpdateAsync(id, cancellationToken) ?? throw new NotFoundException($"Expected receipt {id} not found.");
         return current.Version == expectedVersion
             ? current
-            : throw new ConflictException($"{current.Value.Reference ?? "The expected receipt"} was changed by someone else. Reload and try again.");
+            : throw (current.Value.Reference is { } reference
+                ? new ConflictException($"{reference} was changed by someone else. Reload and try again.")
+                : new ConflictException("The expected receipt was changed by someone else. Reload and try again."));
     }
 }
 
@@ -281,7 +283,9 @@ internal sealed class CompleteExpectedReceiptHandler(IUnitOfWork unitOfWork, IEx
         var current = await receipts.GetForUpdateAsync(command.Id, cancellationToken) ?? throw new NotFoundException($"Expected receipt {command.Id} not found.");
         if (current.Version != command.ExpectedVersion)
         {
-            throw new ConflictException($"{current.Value.Reference ?? "That expected receipt"} was changed by someone else. Reload and try again.");
+            throw current.Value.Reference is { } reference
+                ? new ConflictException($"{reference} was changed by someone else. Reload and try again.")
+                : new ConflictException("That expected receipt was changed by someone else. Reload and try again.");
         }
 
         var completed = current.Value.Complete();
@@ -307,7 +311,9 @@ internal static class ExpectedReceiving
             ?? throw new NotFoundException($"Expected receipt {expectedReceiptId} not found.");
         if (current.Value.SiteId != lot.SiteId || current.Value.MaterialId != lot.MaterialId)
         {
-            throw new DomainRuleException($"{current.Value.Reference ?? "That expected receipt"} is for another material or site.");
+            throw current.Value.Reference is { } reference
+                ? new DomainRuleException($"{reference} is for another material or site.")
+                : new DomainRuleException("That expected receipt is for another material or site.");
         }
 
         var converter = UnitConversions.For(material.Id, await units.GetUnitsAsync(cancellationToken), await units.GetConversionsAsync([material.Id], cancellationToken));

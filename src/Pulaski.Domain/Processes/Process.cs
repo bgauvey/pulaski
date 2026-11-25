@@ -26,7 +26,7 @@ public sealed record ProcessVersion(
         EnsureDraft("changed");
         if (definition.StructuralProblems() is { Count: > 0 } problems)
         {
-            throw new DomainRuleException(problems[0].Message);
+            throw new DomainRuleException(problems[0].Text);
         }
 
         return this with { Definition = definition };
@@ -39,7 +39,7 @@ public sealed record ProcessVersion(
         EnsureDraft("released");
         if (Definition.ReleaseProblems() is { Count: > 0 } problems)
         {
-            throw new DomainRuleException(string.Join(" ", problems.Select(p => p.Message)));
+            throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
         }
 
         return this with { Status = ProcessVersionStatus.Released, ReleasedAt = at, Note = note };
@@ -50,7 +50,7 @@ public sealed record ProcessVersion(
     {
         if (Status != ProcessVersionStatus.Released)
         {
-            throw new DomainRuleException($"Version {Number} is {Status}; only a released version becomes obsolete.");
+            throw new DomainRuleException($"Version {Number} is {UserMessage.Code(Status)}; only a released version becomes obsolete.");
         }
 
         return this with { Status = ProcessVersionStatus.Obsolete };
@@ -78,7 +78,9 @@ public sealed record ProcessVersion(
     {
         if (Status != ProcessVersionStatus.Draft)
         {
-            throw new DomainRuleException($"Version {Number} is {Status}; start a new draft to have it {action}.");
+            throw action == "released"
+                ? new DomainRuleException($"Version {Number} is {UserMessage.Code(Status)}; start a new draft to have it released.")
+                : new DomainRuleException($"Version {Number} is {UserMessage.Code(Status)}; start a new draft to have it changed.");
         }
     }
 }

@@ -1,12 +1,12 @@
-using Pulaski.Contracts.Common;
-using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Application.Units;
+using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Materials;
-using Pulaski.Domain;
 using Pulaski.Domain.Inventory;
 using Pulaski.Domain.Materials;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -44,7 +44,7 @@ internal sealed class ImportCapabilitiesHandler(
     {
         if (command.Rows.Problems.Count > 0)
         {
-            return new ImportMaterialsResponse { FileProblems = command.Rows.Problems, Errors = command.Rows.Problems.Count };
+            return new ImportMaterialsResponse { FileProblems = [.. command.Rows.Problems.Select(Notes.Of)], Errors = command.Rows.Problems.Count };
         }
 
         var now = timeProvider.GetUtcNow();
@@ -70,7 +70,7 @@ internal sealed class ImportCapabilitiesHandler(
             }
             catch (Exception ex) when (ex is DomainRuleException or ValidationException or NotFoundException)
             {
-                results.Add(new ImportRowResultDto { Line = row.Line, Code = label, Action = Error, Message = Message(ex) });
+                results.Add(new ImportRowResultDto { Line = row.Line, Code = label, Action = Error, Message = Notes.Of(ex) });
             }
         }
 
@@ -114,7 +114,9 @@ internal sealed class ImportCapabilitiesHandler(
         var line = Line(row, lines);
         if (command.Sites is { } sites && (line.SiteId is not { } siteId || !sites.Contains(siteId)))
         {
-            throw new DomainRuleException($"You can't change the capabilities of {line.Line.Code} at {line.SiteCode ?? "its site"}.");
+            throw line.SiteCode is { } siteCode
+                ? new DomainRuleException($"You can't change the capabilities of {line.Line.Code} at {siteCode}.")
+                : new DomainRuleException($"You can't change the capabilities of {line.Line.Code} at its site.");
         }
 
         var material = (await materials.FindByCodeForUpdateAsync(materialCode, cancellationToken))?.Value
@@ -159,7 +161,9 @@ internal sealed class ImportCapabilitiesHandler(
         {
             if (!line.Line.CanRunJob || !line.Line.IsActive)
             {
-                throw new DomainRuleException($"{line.Line.Code} {(line.Line.IsActive ? "doesn't run jobs" : "is inactive")}; a capability goes on an active line that runs jobs.");
+                throw line.Line.IsActive
+                    ? new DomainRuleException($"{line.Line.Code} doesn't run jobs; a capability goes on an active line that runs jobs.")
+                    : new DomainRuleException($"{line.Line.Code} is inactive; a capability goes on an active line that runs jobs.");
             }
 
             if (!material.IsActive)
@@ -271,7 +275,9 @@ internal sealed class ImportCapabilitiesHandler(
         return matches.Count switch
         {
             1 => matches[0],
-            0 => throw new DomainRuleException($"There is no line {code}{(site is null ? "" : $" at {site}")}."),
+            0 => throw (site is null
+                ? new DomainRuleException($"There is no line {code}.")
+                : new DomainRuleException($"There is no line {code} at {site}.")),
             _ => throw new DomainRuleException(
                 $"{code} is at several sites ({string.Join(", ", matches.Select(m => m.SiteCode))}); give the site."),
         };
@@ -301,10 +307,4 @@ internal sealed class ImportCapabilitiesHandler(
         Add(before.EffectiveTo != after.EffectiveTo, "effective_to");
         return changes;
     }
-
-    private static string Message(Exception ex) => ex switch
-    {
-        ValidationException v => string.Join(" ", v.Errors.SelectMany(e => e.Value.Select(m => $"{e.Key}: {m}"))),
-        _ => ex.Message,
-    };
 }

@@ -1,8 +1,9 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.Materials;
-using Pulaski.Domain;
 using Pulaski.Domain.Materials;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -33,7 +34,7 @@ internal sealed class ImportMaterialsHandler(
     {
         if (command.Rows.Problems.Count > 0)
         {
-            return new ImportMaterialsResponse { FileProblems = command.Rows.Problems, Errors = command.Rows.Problems.Count };
+            return new ImportMaterialsResponse { FileProblems = [.. command.Rows.Problems.Select(Notes.Of)], Errors = command.Rows.Problems.Count };
         }
 
         var results = new List<ImportRowResultDto>();
@@ -70,7 +71,7 @@ internal sealed class ImportMaterialsHandler(
             }
             catch (Exception ex) when (ex is DomainRuleException or ValidationException)
             {
-                results.Add(new ImportRowResultDto { Line = row.Line, Code = code, Action = Error, Message = Message(ex) });
+                results.Add(new ImportRowResultDto { Line = row.Line, Code = code, Action = Error, Message = Notes.Of(ex) });
             }
         }
 
@@ -237,7 +238,7 @@ internal sealed class ImportMaterialsHandler(
             }
             catch (Exception ex) when (ex is DomainRuleException or ValidationException)
             {
-                results.Add(new ImportRowResultDto { Line = row.Line, Code = $"class {code}", Action = Error, Message = Message(ex) });
+                results.Add(new ImportRowResultDto { Line = row.Line, Code = $"class {code}", Action = Error, Message = Notes.Of(ex) });
             }
         }
     }
@@ -280,8 +281,9 @@ internal sealed class ImportMaterialsHandler(
     {
         if (await materials.FindByCodeForUpdateAsync(code, cancellationToken) is { } owner && owner.Value.Id != materialId)
         {
-            throw new DomainRuleException(
-                $"Another material already has the code {code}{(owner.Value.IsFromErp ? $" ({owner.Value.ExternalSystem} key {owner.Value.ExternalKey})" : "")}.");
+            throw owner.Value.IsFromErp
+                ? new DomainRuleException($"Another material already has the code {code} ({owner.Value.ExternalSystem} key {owner.Value.ExternalKey}).")
+                : new DomainRuleException($"Another material already has the code {code}.");
         }
     }
 
@@ -308,10 +310,4 @@ internal sealed class ImportMaterialsHandler(
         Check(before.ExternalVersion != after.ExternalVersion, "external version");
         return changes;
     }
-
-    private static string Message(Exception ex) => ex switch
-    {
-        ValidationException v => string.Join(" ", v.Errors.SelectMany(e => e.Value.Select(m => $"{e.Key}: {m}"))),
-        _ => ex.Message,
-    };
 }

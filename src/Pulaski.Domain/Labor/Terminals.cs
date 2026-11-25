@@ -36,12 +36,12 @@ public static class TerminalRules
     private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
     /// <returns>What is wrong with a badge value as scanned; null when it can be used.</returns>
-    public static string? BadgeProblem(string value) =>
-        value.Length is < 4 or > 64 ? "A badge value is 4 to 64 characters." : null;
+    public static UserMessage? BadgeProblem(string value) =>
+        value.Length is < 4 or > 64 ? UserMessage.Of("A badge value is 4 to 64 characters.") : null;
 
     /// <returns>What is wrong with a PIN; null when it can be used.</returns>
-    public static string? PinProblem(string pin) =>
-        pin.Length is < 4 or > 8 || !pin.All(char.IsAsciiDigit) ? "A PIN is 4 to 8 digits." : null;
+    public static UserMessage? PinProblem(string pin) =>
+        pin.Length is < 4 or > 8 || !pin.All(char.IsAsciiDigit) ? UserMessage.Of("A PIN is 4 to 8 digits.") : null;
 
     /// <summary>The badge value as stored for matching: trimmed, upper case, so readers that differ in case agree.</summary>
     public static string NormalizeBadge(string value) => value.Trim().ToUpperInvariant();

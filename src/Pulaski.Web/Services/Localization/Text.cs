@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.Json;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Scheduling;
@@ -50,19 +51,7 @@ public sealed class Text(TranslationCache? cache)
             return null;
         }
 
-        if (error.Template is { } template)
-        {
-            try
-            {
-                return string.Format(CultureInfo.CurrentCulture, this[template], [.. error.Values]);
-            }
-            catch (FormatException)
-            {
-                // A translation or values that don't fit: the English as sent.
-            }
-        }
-
-        return error.Detail;
+        return error.Template is { } template ? Fill(template, Values(error.Values)) ?? error.Detail : error.Detail;
     }
 
     /// <summary>A term chosen in code (a helper's label, marked with <see cref="Term.Mark"/>) in the reader's language; null stays null.</summary>
@@ -80,7 +69,7 @@ public sealed class Text(TranslationCache? cache)
             e => e.Key,
             e => e.Value.Select((english, i) =>
                 error.FieldMessages.TryGetValue(e.Key, out var messages) && i < messages.Count && messages[i].Template.Length > 0
-                    ? Fill(messages[i].Template, messages[i].Values) ?? english
+                    ? Fill(messages[i].Template, Values(messages[i].Values)) ?? english
                     : english).ToArray(),
             StringComparer.Ordinal);
 
@@ -130,18 +119,38 @@ public sealed class Text(TranslationCache? cache)
     /// <summary>Notes from the API in the reader's language, in order.</summary>
     public IReadOnlyList<string> Notes(IEnumerable<MessageDto> messages) => [.. messages.Select(Of)];
 
-    /// <summary>A message's values as sent: JSON numbers as numbers (for the reader's region), the rest as text.</summary>
-    private static IReadOnlyList<object?> Values(IReadOnlyList<object?> values) =>
-        [.. values.Select(v => v is System.Text.Json.JsonElement e
-            ? e.ValueKind switch
-            {
-                System.Text.Json.JsonValueKind.Number when e.TryGetDecimal(out var number) => number,
-                System.Text.Json.JsonValueKind.Number => e.GetDouble(),
-                System.Text.Json.JsonValueKind.String => e.GetString(),
-                System.Text.Json.JsonValueKind.Null => null,
-                _ => (object?)e.ToString(),
-            }
-            : v)];
+    /// <summary>
+    /// A message's values as sent: JSON numbers as numbers (for the reader's region); a message inside it translated on its own and a code
+    /// (#188) as its word, in the reader's language; the rest as text.
+    /// </summary>
+    private IReadOnlyList<object?> Values(IReadOnlyList<object?> values) => [.. values.Select(v => v is JsonElement e ? Value(e) : v)];
+
+    private object? Value(JsonElement e) => e.ValueKind switch
+    {
+        JsonValueKind.Number when e.TryGetDecimal(out var number) => number,
+        JsonValueKind.Number => e.GetDouble(),
+        JsonValueKind.String => e.GetString(),
+        JsonValueKind.Null => null,
+        JsonValueKind.Object when Property(e, "code") is { } code => Word(code),
+        JsonValueKind.Object when Property(e, "template") is { } template =>
+            Fill(template, e.TryGetProperty("values", out var inner) && inner.ValueKind == JsonValueKind.Array ? [.. inner.EnumerateArray().Select(Value)] : [])
+            ?? Property(e, "text"),
+        _ => e.ToString(),
+    };
+
+    private static string? Property(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+
+    /// <summary>
+    /// A code inside a sentence (#188): its label in the reader's language, starting lower case as a word mid-sentence does ('on_hold' → 'on hold').
+    /// </summary>
+    public string Word(string code) => Lower(Label(code));
+
+    /// <summary>Text going mid-sentence, starting lower case ('See the schedule' → 'see the schedule'); an acronym (SPC) stays as it is.</summary>
+    public static string Lower(string text) =>
+        text.Length > 1 && char.IsUpper(text[0]) && !char.IsUpper(text[1])
+            ? char.ToLower(text[0], CultureInfo.CurrentCulture) + text[1..]
+            : text;
 
     /// <summary>A refusal in one line: its message, else its title, in the reader's language.</summary>
     public string Problem(ApiException error) => Message(error) ?? Title(error);

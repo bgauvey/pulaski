@@ -15,7 +15,8 @@ public sealed class NotFoundException : Exception, IHasUserMessage
     {
     }
 
-    private NotFoundException(UserMessage message)
+    /// <summary>A message worked out elsewhere (a list of problems joined, say).</summary>
+    public NotFoundException(UserMessage message)
         : base(message.Text) => UserMessage = message;
 
     public UserMessage UserMessage { get; }
@@ -37,7 +38,8 @@ public sealed class ForbiddenException : Exception, IHasUserMessage
     {
     }
 
-    private ForbiddenException(UserMessage message)
+    /// <summary>A message worked out elsewhere (a list of problems joined, say).</summary>
+    public ForbiddenException(UserMessage message)
         : base(message.Text) => UserMessage = message;
 
     public UserMessage UserMessage { get; }
@@ -56,7 +58,8 @@ public sealed class ConflictException : Exception, IHasUserMessage
     {
     }
 
-    private ConflictException(UserMessage message)
+    /// <summary>A message worked out elsewhere (a list of problems joined, say).</summary>
+    public ConflictException(UserMessage message)
         : base(message.Text) => UserMessage = message;
 
     public UserMessage UserMessage { get; }
@@ -91,10 +94,14 @@ public sealed class ValidationException : Exception
     public static ValidationException Field(string field, ref MessageBuilder message) => Field(field, message.Build());
 
     /// <summary>One field's messages, worked out elsewhere (a list of problems).</summary>
-    public static ValidationException Field(string field, IEnumerable<string> messages) =>
-        new(new Dictionary<string, UserMessage[]>(StringComparer.Ordinal) { [field] = [.. messages.Select(UserMessage.Of)] });
+    public static ValidationException Field(string field, IEnumerable<string> messages) => Field(field, messages.Select(UserMessage.Of));
 
-    private static ValidationException Field(string field, UserMessage message) =>
+    /// <inheritdoc cref="Field(string, IEnumerable{string})"/>
+    public static ValidationException Field(string field, IEnumerable<UserMessage> messages) =>
+        new(new Dictionary<string, UserMessage[]>(StringComparer.Ordinal) { [field] = [.. messages] });
+
+    /// <summary>One field's message, worked out elsewhere.</summary>
+    public static ValidationException Field(string field, UserMessage message) =>
         new(new Dictionary<string, UserMessage[]>(StringComparer.Ordinal) { [field] = [message] });
 }
 
@@ -111,6 +118,9 @@ internal sealed class Validator
     /// language.
     /// </summary>
     public Validator Require(bool condition, string field, ref MessageBuilder message) => condition ? this : Add(field, message.Build());
+
+    /// <summary>The same with a message worked out elsewhere (#188); null is no problem.</summary>
+    public Validator Require(string field, UserMessage? problem) => problem is null ? this : Add(field, problem);
 
     private Validator Add(string field, UserMessage message)
     {

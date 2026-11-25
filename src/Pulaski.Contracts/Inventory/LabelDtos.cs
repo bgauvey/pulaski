@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+
 namespace Pulaski.Contracts.Inventory;
 
 /// <summary>A site's label setup (#75): its format and GS1 numbering, its printers and its supplier barcode formats.</summary>
@@ -146,7 +148,7 @@ public sealed record TestSupplierFormatRequest
 /// <summary>What a supplier format makes of a sample: the problems with it, or what it read (null when the sample doesn't match).</summary>
 public sealed record SupplierFormatTestDto
 {
-    public IReadOnlyList<string> Problems { get; init; } = [];
+    public IReadOnlyList<MessageDto> Problems { get; init; } = [];
     public ScannedLotDto? Read { get; init; }
 }
 

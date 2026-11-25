@@ -132,7 +132,7 @@ internal sealed class PostStockCountHandler(
         var (adjustments, problems) = StockCountPosting.Plan(lines, lots);
         if (problems.Count > 0)
         {
-            throw new DomainRuleException($"Count {count.Number} can't be posted yet. " + string.Join(" ", problems));
+            throw new DomainRuleException($"Count {count.Number} can't be posted yet. {UserMessage.Join(problems)}");
         }
 
         var unitCodes = new Dictionary<Guid, string>();
@@ -207,8 +207,8 @@ internal sealed class CreateReasonCodeHandler(
             .Require(ReasonCode.IsValidCode(code), nameof(command.Code), "Letters, digits, '-', '_' or '.', up to 30.")
             .RequireText(name, nameof(command.Name), 100)
             .Require(command.SortOrder is >= 0 and <= 10_000, nameof(command.SortOrder), "Between 0 and 10000.")
-            .Require(!ReasonCode.Kinds.Contains(command.Kind) || ReasonCode.IsValidClass(command.Kind, command.UtilizationClass, command.IsGroup), nameof(command.UtilizationClass),
-                ReasonCodeRules.ClassMessage(command.Kind, command.IsGroup))
+            .Require(nameof(command.UtilizationClass),
+                !ReasonCode.Kinds.Contains(command.Kind) || ReasonCode.IsValidClass(command.Kind, command.UtilizationClass, command.IsGroup) ? null : ReasonCodeRules.ClassMessage(command.Kind, command.IsGroup))
             .Require(!(command.IsGroup && command.RequiresComment), nameof(command.RequiresComment), "A group is never chosen, so it never needs a comment.")
             .ThrowIfInvalid();
 
@@ -264,10 +264,7 @@ internal sealed class UpdateReasonCodeHandler(
         };
         if (!ReasonCode.IsValidClass(after.Kind, after.UtilizationClass, after.IsGroup))
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                [nameof(command.UtilizationClass)] = [ReasonCodeRules.ClassMessage(after.Kind, after.IsGroup)],
-            });
+            throw ValidationException.Field(nameof(command.UtilizationClass), ReasonCodeRules.ClassMessage(after.Kind, after.IsGroup));
         }
 
         if (after.IsGroup && after.RequiresComment)
@@ -346,10 +343,7 @@ internal sealed class ConvertReasonCodeHandler(
             : current with { IsGroup = false, UtilizationClass = command.UtilizationClass };
         if (!ReasonCode.IsValidClass(after.Kind, after.UtilizationClass, after.IsGroup))
         {
-            throw new ValidationException(new Dictionary<string, string[]>
-            {
-                [nameof(command.UtilizationClass)] = [ReasonCodeRules.ClassMessage(after.Kind, after.IsGroup)],
-            });
+            throw ValidationException.Field(nameof(command.UtilizationClass), ReasonCodeRules.ClassMessage(after.Kind, after.IsGroup));
         }
 
         var envelope = events.Create(EventTypes.ReasonCodeConverted, "reason_code", after.Id, new { after.Code, ToGroup = after.IsGroup, after.UtilizationClass });
@@ -362,10 +356,10 @@ internal sealed class ConvertReasonCodeHandler(
 
 internal static class ReasonCodeRules
 {
-    public static string ClassMessage(string kind, bool isGroup) =>
-        kind != ReasonCode.Utilization ? "Only a utilization reason has a class."
-        : isGroup ? "A group has no class: the reasons in it each have their own."
-        : "Runtime, downtime or planned.";
+    public static UserMessage ClassMessage(string kind, bool isGroup) =>
+        kind != ReasonCode.Utilization ? UserMessage.Of("Only a utilization reason has a class.")
+        : isGroup ? UserMessage.Of("A group has no class: the reasons in it each have their own.")
+        : UserMessage.Of("Runtime, downtime or planned.");
 
     public static async Task<IReadOnlyList<ReasonCode>> TreeAsync(IInventoryRepository inventory, string kind, CancellationToken cancellationToken) =>
         [.. (await inventory.LockReasonTreeAsync(kind, cancellationToken)).Select(r => r.Value)];

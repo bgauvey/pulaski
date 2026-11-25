@@ -132,8 +132,8 @@ public class LotOperationTests
 
         var (_, refused) = StockCountPosting.Plan([Line(a, null), Line(c, 7m)], lots);
         Assert.Equal(2, refused.Count);
-        Assert.Contains(refused, p => p.Contains("isn't counted", StringComparison.Ordinal));
-        Assert.Contains(refused, p => p.Contains("changed after", StringComparison.Ordinal));
+        Assert.Contains(refused, p => p.Text.Contains("isn't counted", StringComparison.Ordinal));
+        Assert.Contains(refused, p => p.Text.Contains("changed after", StringComparison.Ordinal));
         Assert.Equal("CNT-20261016-3", StockCount.NumberFor(counted, 3));
     }
 }

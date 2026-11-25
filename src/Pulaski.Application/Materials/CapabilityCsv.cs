@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Application.Abstractions;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -40,10 +41,10 @@ public sealed record CapabilityImportRow
 
     /// <summary>The day after the period's last, its end; blank for open-ended; left out, kept as it is (open-ended for a new one).</summary>
     public Supplied<DateOnly?>? EffectiveTo { get; init; }
-    public IReadOnlyList<string> Problems { get; init; } = [];
+    public IReadOnlyList<UserMessage> Problems { get; init; } = [];
 }
 
-public sealed record CapabilityImportSource(IReadOnlyList<CapabilityImportRow> Rows, IReadOnlyList<string> Problems);
+public sealed record CapabilityImportSource(IReadOnlyList<CapabilityImportRow> Rows, IReadOnlyList<UserMessage> Problems);
 
 /// <summary>
 /// Reads a capabilities CSV file (D-055): one row per material and line, columns named in the first line in any order and case.
@@ -85,10 +86,10 @@ public static class CapabilityCsv
         var records = CsvText.Read(text);
         if (records.Count == 0)
         {
-            return new CapabilityImportSource([], ["The file is empty."]);
+            return new CapabilityImportSource([], [UserMessage.Of("The file is empty.")]);
         }
 
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         var index = new Dictionary<string, int>(StringComparer.Ordinal);
         var header = records[0].Fields;
         for (var i = 0; i < header.Count; i++)
@@ -102,18 +103,18 @@ public static class CapabilityCsv
             var column = Columns.ContainsKey(name) ? name : Columns.FirstOrDefault(c => c.Value.Contains(name)).Key;
             if (column is null)
             {
-                problems.Add($"Unknown column '{header[i]}'. The columns are {string.Join(", ", Columns.Keys)}.");
+                problems.Add(UserMessage.From($"Unknown column '{header[i]}'. The columns are {string.Join(", ", Columns.Keys)}."));
             }
             else if (!index.TryAdd(column, i))
             {
-                problems.Add($"Column '{column}' appears twice.");
+                problems.Add(UserMessage.From($"Column '{column}' appears twice."));
             }
         }
 
-        problems.AddRange(Required.Where(r => !index.ContainsKey(r)).Select(r => $"The required column '{r}' is missing."));
+        problems.AddRange(Required.Where(r => !index.ContainsKey(r)).Select(r => UserMessage.From($"The required column '{r}' is missing.")));
         if (records.Count - 1 > MaxRows)
         {
-            problems.Add($"The file has {records.Count - 1} rows; import at most {MaxRows} at a time.");
+            problems.Add(UserMessage.From($"The file has {records.Count - 1} rows; import at most {MaxRows} at a time."));
         }
 
         if (problems.Count > 0)
@@ -122,12 +123,12 @@ public static class CapabilityCsv
         }
 
         var rows = records.Skip(1).Where(r => r.Fields.Any(f => f.Length > 0)).Select(r => ToRow(r, index)).ToList();
-        return new CapabilityImportSource(rows, rows.Count == 0 ? ["The file has a header but no rows."] : []);
+        return new CapabilityImportSource(rows, rows.Count == 0 ? [UserMessage.Of("The file has a header but no rows.")] : []);
     }
 
     private static CapabilityImportRow ToRow(CsvRecord record, Dictionary<string, int> index)
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         string? Cell(string column) =>
             index.TryGetValue(column, out var i) ? (i < record.Fields.Count ? record.Fields[i].Trim() : "") : null;
 
@@ -145,7 +146,7 @@ public static class CapabilityCsv
                 case "false" or "no" or "n" or "0":
                     return new(false);
                 default:
-                    problems.Add($"{column}: '{value}' isn't yes or no.");
+                    problems.Add(UserMessage.From($"{column}: '{value}' isn't yes or no."));
                     return null;
             }
         }
@@ -163,7 +164,7 @@ public static class CapabilityCsv
                 return number;
             }
 
-            problems.Add($"{column}: '{value}' isn't a number; use a decimal point and no thousands separator.");
+            problems.Add(UserMessage.From($"{column}: '{value}' isn't a number; use a decimal point and no thousands separator."));
             return null;
         }
 
@@ -180,7 +181,7 @@ public static class CapabilityCsv
             }
             else
             {
-                problems.Add($"changeover_minutes: '{minutes}' isn't a whole number of minutes.");
+                problems.Add(UserMessage.From($"changeover_minutes: '{minutes}' isn't a whole number of minutes."));
             }
         }
 
@@ -196,7 +197,7 @@ public static class CapabilityCsv
                 return day;
             }
 
-            problems.Add($"{column}: '{value}' isn't a date; use yyyy-MM-dd.");
+            problems.Add(UserMessage.From($"{column}: '{value}' isn't a date; use yyyy-MM-dd."));
             return null;
         }
 
@@ -204,7 +205,7 @@ public static class CapabilityCsv
         Supplied<DateOnly?>? to = Cell("effective_to") is { } end ? new(Day(end, "effective_to")) : null;
         if (from is { } f && to?.Value is { } t && t <= f)
         {
-            problems.Add("effective_to must be after effective_from.");
+            problems.Add(UserMessage.Of("effective_to must be after effective_from."));
         }
 
         return new CapabilityImportRow

@@ -114,6 +114,6 @@ public sealed class CapabilityAndImportTests(DatabaseFixture db)
             await ScalarAsync<decimal>("SELECT standard_crew_size FROM core.equipment_capability WHERE equipment_id = @Line", new { Line = line })));
 
         var elsewhere = await db.SendAsync(new ImportCapabilitiesCommand(CapabilityCsv.Parse(good), true, "CSV import", [Guid.CreateVersion7()]));
-        Assert.Contains("can't change the capabilities", Assert.Single(elsewhere.Rows).Message, StringComparison.Ordinal);
+        Assert.Contains("can't change the capabilities", Assert.Single(elsewhere.Rows).Message?.Text, StringComparison.Ordinal);
     }
 }

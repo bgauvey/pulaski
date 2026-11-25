@@ -86,14 +86,14 @@ internal static class InventoryRules
         var reason = await repository.GetReasonAsync(id, cancellationToken);
         if (reason is null || reason.Kind != kind || (reason.SiteId is { } site && site != siteId))
         {
-            throw new DomainRuleException(kind switch
+            throw kind switch
             {
-                ReasonKinds.Hold => "Choose a hold reason.",
-                ReasonKinds.Scrap => "Choose a scrap reason.",
-                ReasonKinds.RunEnd => "Choose a reason for ending the run.",
-                ReasonKinds.SampleExclusion => "Choose why the result is left out.",
-                _ => "Choose an adjustment reason.",
-            });
+                ReasonKinds.Hold => new DomainRuleException("Choose a hold reason."),
+                ReasonKinds.Scrap => new DomainRuleException("Choose a scrap reason."),
+                ReasonKinds.RunEnd => new DomainRuleException("Choose a reason for ending the run."),
+                ReasonKinds.SampleExclusion => new DomainRuleException("Choose why the result is left out."),
+                _ => new DomainRuleException("Choose an adjustment reason."),
+            };
         }
 
         if (!reason.IsActive || !reason.IsSelectable)
@@ -121,7 +121,7 @@ internal static class InventoryRules
 
         if (ClosedJobStatuses.Contains(job.Status))
         {
-            throw new DomainRuleException($"{job.JobNumber} is {job.Status}; nothing more can be declared against it.");
+            throw new DomainRuleException($"{job.JobNumber} is {UserMessage.Code(job.Status)}; nothing more can be declared against it.");
         }
 
         if (siteId is { } site && job.SiteId != site)
@@ -151,13 +151,32 @@ internal static class InventoryRules
         }
     }
 
-    /// <summary>An expired lot can't be <paramref name="action"/> until its expiry is corrected (D-032).</summary>
-    public static void EnsureNotExpired(Lot lot, DateTimeOffset now, string action)
+    /// <summary>An expired lot can't go into the balance at <paramref name="locationCode"/> until its expiry is corrected (D-032).</summary>
+    public static void EnsureNotExpiredForBalance(Lot lot, DateTimeOffset now, string locationCode)
     {
         if (lot.IsExpired(now))
         {
+            var day = lot.ExpiresAt!.Value.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
             throw new DomainRuleException(
-                $"{lot.Name} expired on {lot.ExpiresAt!.Value.UtcDateTime:yyyy-MM-dd}; it can't be {action}. If quality has extended it, correct its expiry first.");
+                $"{lot.Name} expired on {day}; it can't be put into the balance at {locationCode}. If quality has extended it, correct its expiry first.");
+        }
+    }
+
+    /// <summary>An expired lot can't be <paramref name="action"/> until its expiry is corrected (D-032).</summary>
+    public static void EnsureNotExpired(Lot lot, DateTimeOffset now, string action)
+    {
+
+        if (lot.IsExpired(now))
+        {
+            // Each action its own sentence, for translation (#188).
+            var day = lot.ExpiresAt!.Value.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            throw action switch
+            {
+                "consumed" => new DomainRuleException($"{lot.Name} expired on {day}; it can't be consumed. If quality has extended it, correct its expiry first."),
+                "shipped" => new DomainRuleException($"{lot.Name} expired on {day}; it can't be shipped. If quality has extended it, correct its expiry first."),
+                "merged into" => new DomainRuleException($"{lot.Name} expired on {day}; nothing can be merged into it. If quality has extended it, correct its expiry first."),
+                _ => new DomainRuleException($"{lot.Name} expired on {day}; it can't be merged. If quality has extended it, correct its expiry first."),
+            };
         }
     }
 

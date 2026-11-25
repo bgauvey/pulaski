@@ -3,6 +3,7 @@ using Pulaski.Application.Labor;
 using Pulaski.Application.Security;
 using Pulaski.Domain.Labor;
 using Pulaski.Domain.Security;
+using Pulaski.Domain;
 
 namespace Pulaski.Api.Security;
 
@@ -22,7 +23,7 @@ internal static class StationActing
     /// <exception cref="UnauthorizedException">The ticket ran out: badge again.</exception>
     /// <exception cref="ForbiddenException">The person has no user, or their user may not do this at the terminal's site.</exception>
     public static async Task<(TerminalRecord Terminal, UserAccess Access, string Ticket, DateTimeOffset ExpiresAt)> BeginAsync(
-        HttpContext http, BadgeTickets tickets, ISecurityReadStore security, TimeProvider time, string? ticket, string permission, string what)
+        HttpContext http, BadgeTickets tickets, ISecurityReadStore security, TimeProvider time, string? ticket, string permission, UserMessage what)
     {
         var terminal = TerminalFilter.Current(http);
         var personId = tickets.PersonOf(ticket ?? "", terminal.Id);
@@ -30,9 +31,9 @@ internal static class StationActing
             ?? throw new ForbiddenException("You have no Pulaski user, so only your time can be recorded here. Ask a supervisor to link your badge to a user.");
         if (!access.Can(permission, terminal.SiteId))
         {
-            throw new ForbiddenException(access.IsActive
-                ? $"Your role doesn't let you {what} at this site."
-                : "Your Pulaski user is switched off; ask a supervisor.");
+            throw access.IsActive
+                ? new ForbiddenException($"Your role doesn't let you {what} at this site.")
+                : new ForbiddenException("Your Pulaski user is switched off; ask a supervisor.");
         }
 
         http.Items[ItemKey] = access;

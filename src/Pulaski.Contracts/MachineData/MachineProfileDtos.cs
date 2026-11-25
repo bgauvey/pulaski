@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+
 namespace Pulaski.Contracts.MachineData;
 
 /// <summary>One kind of machine, as its controller reports it (D-050), as profile lists show it.</summary>
@@ -99,7 +101,7 @@ public sealed record ProfileImportResponse
     public int Errors { get; init; }
 
     /// <summary>What was wrong with the file as a whole, such as a missing column; the rows weren't read.</summary>
-    public IReadOnlyList<string> FileProblems { get; init; } = [];
+    public IReadOnlyList<MessageDto> FileProblems { get; init; } = [];
     public IReadOnlyList<ProfileImportRowDto> Rows { get; init; } = [];
 
     /// <summary>The profile's version after an applied import.</summary>
@@ -117,5 +119,5 @@ public sealed record ProfileImportRowDto
 
     /// <summary><c>create</c>, <c>update</c>, <c>unchanged</c>, <c>switch_off</c> or <c>error</c>.</summary>
     public required string Action { get; init; }
-    public string? Message { get; init; }
+    public MessageDto? Message { get; init; }
 }

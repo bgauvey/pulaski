@@ -186,8 +186,8 @@ public class MachineProfileHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(3, result.Errors);
-        Assert.Contains(result.Rows, r => r.Message?.Contains("appears earlier", StringComparison.Ordinal) == true);
-        Assert.Contains(result.Rows, r => r.Message?.Contains("NOPE isn't an active utilization reason", StringComparison.Ordinal) == true);
+        Assert.Contains(result.Rows, r => r.Message?.Text.Contains("appears earlier", StringComparison.Ordinal) == true);
+        Assert.Contains(result.Rows, r => r.Message?.Text.Contains("NOPE isn't an active utilization reason", StringComparison.Ordinal) == true);
         Assert.Empty(Machines.Codes(id));
     }
 

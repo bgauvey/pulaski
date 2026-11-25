@@ -6,18 +6,18 @@ public sealed record OeeTargetValues(decimal? AvailabilityPct, decimal? Performa
     public bool IsEmpty => AvailabilityPct is null && PerformancePct is null && QualityPct is null && OeePct is null;
 
     /// <summary>Why the values can't be a target, or null: each one above 0 and at most 100, with one decimal at most, and one at least.</summary>
-    public string? Problem()
+    public UserMessage? Problem()
     {
         if (IsEmpty)
         {
-            return "Give at least one target.";
+            return UserMessage.Of("Give at least one target.");
         }
 
         foreach (var value in new[] { AvailabilityPct, PerformancePct, QualityPct, OeePct })
         {
             if (value is { } v && (v <= 0 || v > 100 || decimal.Round(v, 1) != v))
             {
-                return "Each target is a percentage above 0 and at most 100, with one decimal at most.";
+                return UserMessage.Of("Each target is a percentage above 0 and at most 100, with one decimal at most.");
             }
         }
 

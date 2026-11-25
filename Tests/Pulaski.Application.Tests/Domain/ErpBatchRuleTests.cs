@@ -12,20 +12,20 @@ public class ErpBatchRuleTests
     [Fact]
     public void Whole_batches_and_continuous_materials_are_planned_as_sent()
     {
-        Assert.Equal(new ErpQuantity(1000m, null, null), ErpBatchRule.Apply(1000m, Fifty, ErpBatchRule.Reject, "WO", "kg"));
-        Assert.Equal(new ErpQuantity(1025m, null, null), ErpBatchRule.Apply(1025m, null, ErpBatchRule.Reject, "WO", "kg"));
+        Assert.Equal(new ErpQuantity(1000m, null, null), ErpBatchRule.Apply(1000m, Fifty, ErpBatchRule.Reject, UserMessage.Of("WO"), "kg"));
+        Assert.Equal(new ErpQuantity(1025m, null, null), ErpBatchRule.Apply(1025m, null, ErpBatchRule.Reject, UserMessage.Of("WO"), "kg"));
     }
 
     [Fact]
     public void Each_rule_says_what_it_did_and_reject_names_the_whole_quantities()
     {
-        var refused = Assert.Throws<DomainRuleException>(() => ErpBatchRule.Apply(1025m, Fifty, ErpBatchRule.Reject, "WO-1", "kg"));
+        var refused = Assert.Throws<DomainRuleException>(() => ErpBatchRule.Apply(1025m, Fifty, ErpBatchRule.Reject, UserMessage.Of("WO-1"), "kg"));
         Assert.Contains("Send 1,000 or 1,050 kg", refused.Message, StringComparison.Ordinal);
 
-        Assert.Equal((1050m, BatchAdjustment.RoundedUp), Pick(ErpBatchRule.Apply(1025m, Fifty, ErpBatchRule.RoundUp, "WO", "kg")));
-        Assert.Equal((1000m, BatchAdjustment.RoundedDown), Pick(ErpBatchRule.Apply(1025m, Fifty, ErpBatchRule.RoundDown, "WO", "kg")));
-        Assert.Equal((1025m, BatchAdjustment.Held), Pick(ErpBatchRule.Apply(1025m, Fifty, ErpBatchRule.Hold, "WO", "kg")));
-        Assert.Throws<DomainRuleException>(() => ErpBatchRule.Apply(30m, Fifty, ErpBatchRule.RoundDown, "WO", "kg"));
+        Assert.Equal((1050m, BatchAdjustment.RoundedUp), Pick(ErpBatchRule.Apply(1025m, Fifty, ErpBatchRule.RoundUp, UserMessage.Of("WO"), "kg")));
+        Assert.Equal((1000m, BatchAdjustment.RoundedDown), Pick(ErpBatchRule.Apply(1025m, Fifty, ErpBatchRule.RoundDown, UserMessage.Of("WO"), "kg")));
+        Assert.Equal((1025m, BatchAdjustment.Held), Pick(ErpBatchRule.Apply(1025m, Fifty, ErpBatchRule.Hold, UserMessage.Of("WO"), "kg")));
+        Assert.Throws<DomainRuleException>(() => ErpBatchRule.Apply(30m, Fifty, ErpBatchRule.RoundDown, UserMessage.Of("WO"), "kg"));
 
         // The material's own rule beats the site's; with neither, reject.
         Assert.Equal(ErpBatchRule.Hold, ErpBatchRule.For(ErpBatchRule.Hold, ErpBatchRule.RoundUp));

@@ -36,12 +36,12 @@ else
             <tbody>
                 @foreach (var area in _permissions.GroupBy(p => p.Area))
                 {
-                    <tr class="permission-area"><th scope="rowgroup" colspan="@(roles.Count + 1)">@area.Key</th></tr>
+                    <tr class="permission-area"><th scope="rowgroup" colspan="@(roles.Count + 1)">@L[area.Key]</th></tr>
                     @foreach (var p in area)
                     {
                         <tr @key="p.Code">
                             <th scope="row" class="fw-normal">
-                                <div>@p.Description</div>
+                                <div>@L[p.Description]</div>
                                 <div class="small text-muted">@p.Code</div>
                             </th>
                             @foreach (var r in roles)
@@ -51,7 +51,7 @@ else
                                 <td class="text-center" @key="(p.Code, r.Code)" title="@(!held && with.Count > 0 ? L["Comes with {0}", string.Join(", ", with.Select(Describe))] : null)">
                                     <input class="form-check-input" type="checkbox" checked="@(held || with.Count > 0)"
                                            disabled="@(r.IsLocked || !CanManage || _saving.Contains((r.Code, p.Code)) || (!held && with.Count > 0))"
-                                           aria-label="@r.Name may @p.Description.ToLowerInvariant()"
+                                           aria-label="@L["{0} may: {1}", r.Name, L[p.Description]]"
                                            @onchange="e => SetAsync(r, p, e.Value is true)" />
                                 </td>
                             }
@@ -74,7 +74,7 @@ else
 
     private bool CanManage => User.Can(PermissionCodes.Security);
 
-    private string Describe(string code) => _permissions?.FirstOrDefault(p => p.Code == code)?.Description.ToLowerInvariant() ?? code;
+    private string Describe(string code) => _permissions?.FirstOrDefault(p => p.Code == code) is { } p ? Text.Lower(L[p.Description]) : code;
 
     protected override async Task OnInitializedAsync()
     {

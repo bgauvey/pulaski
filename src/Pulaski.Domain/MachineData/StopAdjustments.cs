@@ -154,9 +154,9 @@ public static class StopAdjustments
     {
         if (!StopSources.Undoable.Contains(source))
         {
-            throw new DomainRuleException(source == StopSources.Manual
-                ? "A stop entered by hand is removed, not undone."
-                : "Only a split, a merge or a change of times can be undone.");
+            throw source == StopSources.Manual
+                ? new DomainRuleException("A stop entered by hand is removed, not undone.")
+                : new DomainRuleException("Only a split, a merge or a change of times can be undone.");
         }
 
         if (results.Any(r => r.IsSuperseded))
@@ -233,8 +233,8 @@ public static class StopAdjustments
         }
     }
 
-    private static string Overlapping(StopInterval overlap) =>
+    private static UserMessage Overlapping(StopInterval overlap) =>
         overlap.End is { } end
-            ? $"It overlaps the stop from {overlap.Start:u} to {end:u}; split or merge that one instead."
-            : $"It overlaps the stop open since {overlap.Start:u}.";
+            ? UserMessage.From($"It overlaps the stop from {overlap.Start:u} to {end:u}; split or merge that one instead.")
+            : UserMessage.From($"It overlaps the stop open since {overlap.Start:u}.");
 }

@@ -26,6 +26,17 @@ public static class Notes
     /// <summary>A note already made as a <see cref="UserMessage"/> (a domain rule's, say).</summary>
     public static MessageDto Of(UserMessage message) => Dto(message);
 
+    /// <summary>Why an import row failed (#188): a refusal's own message, each field check as "field: message", else the exception's text.</summary>
+    public static MessageDto Of(Exception ex) => Dto(Message(ex));
+
+    /// <inheritdoc cref="Of(Exception)"/>
+    public static UserMessage Message(Exception ex) => ex switch
+    {
+        Errors.ValidationException v => UserMessage.Join(v.Messages.SelectMany(e => e.Value.Select(m => UserMessage.From($"{e.Key}: {m}")))),
+        IHasUserMessage { UserMessage: var message } => message,
+        _ => UserMessage.Of(ex.Message),
+    };
+
     /// <summary>An inventory warning with its code (the screens compare codes, never words).</summary>
     public static InventoryWarningDto Inventory(string code, string message) => Inventory(code, UserMessage.Of(message));
 
@@ -49,10 +60,15 @@ public static class Notes
     public static ProcessOrderProblemDto OrderProblem(string code, ref MessageBuilder message, int? operationNumber = null, string? equipmentCode = null) =>
         OrderProblem(code, message.Build(), operationNumber, equipmentCode);
 
+    /// <summary>An order problem back as a message, for a refusal that lists them (#188).</summary>
+    public static UserMessage Message(ProcessOrderProblemDto problem) =>
+        problem.Template is { Length: > 0 } template ? new(template, problem.Values, problem.Message) : UserMessage.Of(problem.Message);
+
     private static ProcessOrderProblemDto OrderProblem(string code, UserMessage message, int? operationNumber, string? equipmentCode) =>
         new(code, message.Text, operationNumber, equipmentCode) { Template = message.Template, Values = message.Values };
 
-    private static InventoryWarningDto Inventory(string code, UserMessage message) =>
+    /// <summary>An inventory warning worked out elsewhere (a domain rule's), with its code.</summary>
+    public static InventoryWarningDto Inventory(string code, UserMessage message) =>
         new(code, message.Text) { Template = message.Template, Values = message.Values };
 
     private static ScheduleWarningDto Schedule(string code, UserMessage message) =>

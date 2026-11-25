@@ -64,7 +64,7 @@ internal sealed class PreviewJobPlacementHandler(
 
         if (workOrder.Status != WorkOrderStatus.Planned)
         {
-            throw new DomainRuleException($"Work order {workOrder.OrderNumber} is {workOrder.Status}; only planned orders get new jobs.");
+            throw new DomainRuleException($"Work order {workOrder.OrderNumber} is {UserMessage.Code(workOrder.Status)}; only planned orders get new jobs.");
         }
 
         if (!check.IsEligible)

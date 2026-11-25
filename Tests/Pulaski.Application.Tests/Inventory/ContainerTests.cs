@@ -122,6 +122,6 @@ public class ContainerTests
 
         var none = await resolve.HandleAsync(new ResolveScanQuery(_site, "PUL1C999999"), CancellationToken.None);
         Assert.Equal("not_found", none.Status);
-        Assert.Contains("Pulaski label", none.Message, StringComparison.Ordinal);
+        Assert.Contains("Pulaski label", none.Message?.Text, StringComparison.Ordinal);
     }
 }

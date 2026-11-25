@@ -16,7 +16,8 @@ public sealed class DomainRuleException : Exception, IHasUserMessage
     {
     }
 
-    private DomainRuleException(UserMessage message)
+    /// <summary>A message worked out elsewhere (a list of problems joined, say).</summary>
+    public DomainRuleException(UserMessage message)
         : base(message.Text) => UserMessage = message;
 
     public UserMessage UserMessage { get; }

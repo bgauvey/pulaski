@@ -37,4 +37,36 @@ public class UserMessageTests
         Assert.Equal("A 5 b", new ConflictException($"A {5} b").Message);
         Assert.Equal("Here", new ForbiddenException($"Here").Message);
     }
+
+    [Fact]
+    public void A_message_or_code_inside_a_message_stays_one_for_the_screen_to_word()
+    {
+        // #188: the screen translates the part and words the code; the English reads as before.
+        var why = UserMessage.Of("not held");
+        var error = new DomainRuleException($"Job {"J-1"} is {UserMessage.Code("on_hold")}: {why}.");
+        Assert.Equal("Job J-1 is on hold: not held.", error.Message);
+        Assert.Equal("Job {0} is {1}: {2}.", error.UserMessage.Template);
+        Assert.Equal(["J-1", new MessageCode("on_hold"), why], error.UserMessage.Values);
+    }
+
+    [Fact]
+    public void Joined_messages_are_each_their_own_value()
+    {
+        UserMessage[] parts = [UserMessage.From($"Shift {"A"} overlaps."), UserMessage.Of("Pick {another}.")];
+        var joined = UserMessage.Join(parts);
+        Assert.Equal(("{0} {1}", "Shift A overlaps. Pick {another}."), (joined.Template, joined.Text));
+        Assert.Equal(parts, joined.Values);
+        Assert.Equal(("{0}; {1}", "Shift A overlaps.; Pick {another}."), (UserMessage.Join(parts, "; ").Template, UserMessage.Join(parts, "; ").Text));
+        Assert.Same(parts[0], UserMessage.Join(parts[..1]));
+    }
+
+    [Fact]
+    public void A_field_check_takes_a_message_worked_out_elsewhere()
+    {
+        var problem = UserMessage.From($"Use at least {12} characters.");
+        var thrown = Assert.Throws<ValidationException>(() => new Validator().Require("Password", problem).Require("Name", null).ThrowIfInvalid());
+        Assert.Equal(["Use at least 12 characters."], thrown.Errors["Password"]);
+        Assert.Equal("Use at least {0} characters.", thrown.Messages["Password"][0].Template);
+        Assert.False(thrown.Errors.ContainsKey("Name"));
+    }
 }

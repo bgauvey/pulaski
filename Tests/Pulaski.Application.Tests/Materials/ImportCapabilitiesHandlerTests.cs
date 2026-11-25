@@ -73,7 +73,7 @@ public class ImportCapabilitiesHandlerTests
         // Overlapping a period that has an end is refused, and nothing changes.
         var overlap = await RunAsync(Dated + "PRF-1,EXT-01,800,m,2026-10-20,2026-11-15\n");
         Assert.False(overlap.Applied);
-        Assert.Contains("can't overlap", Assert.Single(overlap.Rows).Message, StringComparison.Ordinal);
+        Assert.Contains("can't overlap", Assert.Single(overlap.Rows).Message?.Text, StringComparison.Ordinal);
         Assert.Equal(2, Capabilities.On(_line.Id, _profile.Id).Count);
     }
 
@@ -124,14 +124,14 @@ public class ImportCapabilitiesHandlerTests
 
         Assert.False(result.Applied);
         Assert.Equal(["create", "error", "error", "error", "error", "error", "error", "error", "error"], result.Rows.Select(r => r.Action));
-        Assert.Contains("several sites (S1, S2)", result.Rows[1].Message, StringComparison.Ordinal);
-        Assert.Contains("can't change the capabilities of EXT-02 at S2", result.Rows[2].Message, StringComparison.Ordinal);
-        Assert.Contains("PACK-1 at S2", result.Rows[3].Message, StringComparison.Ordinal);
-        Assert.Contains("no material NOPE", result.Rows[4].Message, StringComparison.Ordinal);
-        Assert.Contains("no line NOPE", result.Rows[5].Message, StringComparison.Ordinal);
-        Assert.Contains("doesn't run jobs", result.Rows[6].Message, StringComparison.Ordinal);
-        Assert.Contains("ideal_rate: Required", result.Rows[7].Message, StringComparison.Ordinal);
-        Assert.Contains("appears earlier", result.Rows[8].Message, StringComparison.Ordinal);
+        Assert.Contains("several sites (S1, S2)", result.Rows[1].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("can't change the capabilities of EXT-02 at S2", result.Rows[2].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("PACK-1 at S2", result.Rows[3].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("no material NOPE", result.Rows[4].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("no line NOPE", result.Rows[5].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("doesn't run jobs", result.Rows[6].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("ideal_rate: Required", result.Rows[7].Message?.Text, StringComparison.Ordinal);
+        Assert.Contains("appears earlier", result.Rows[8].Message?.Text, StringComparison.Ordinal);
         Assert.Equal(0, _f.Stores.UnitOfWork.Committed);
     }
 
@@ -142,7 +142,7 @@ public class ImportCapabilitiesHandlerTests
         Assert.Equal(5m, row.BatchTolerancePct!.Value);
 
         var result = await RunAsync("material,line,ideal_rate,rate_unit,batch_tolerance\nPRF-1,EXT-01,900,m,5\n");
-        Assert.Contains("isn't made in batches", Assert.Single(result.Rows).Message, StringComparison.Ordinal);
+        Assert.Contains("isn't made in batches", Assert.Single(result.Rows).Message?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public class ImportCapabilitiesHandlerTests
         Assert.Equal(((decimal?)null, 8m, true), (rule.Size, rule.Hours!.Value, rule.ByShift));
 
         var bad = await RunAsync(LotHeader + "PRF-1,EXT-01,900,m,,721,\n");
-        Assert.Contains("720", Assert.Single(bad.Rows).Message, StringComparison.Ordinal);
+        Assert.Contains("720", Assert.Single(bad.Rows).Message?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public class ImportCapabilitiesHandlerTests
         var row = Assert.Single(CapabilityCsv.Parse("Item Code;Line Code;Rate;UOM;Changeover;Crew\nPRF-1;EXT-01;1,5;m;x;\n").Rows);
         Assert.Equal(2, row.Problems.Count);
         Assert.Null(row.CrewSize!.Value);
-        Assert.Contains("missing", Assert.Single(CapabilityCsv.Parse("material,line,ideal_rate\nA,B,1\n").Problems), StringComparison.Ordinal);
+        Assert.Contains("missing", Assert.Single(CapabilityCsv.Parse("material,line,ideal_rate\nA,B,1\n").Problems)?.Text, StringComparison.Ordinal);
         Assert.Equal(CapabilityCsvFormat.Header, CapabilityCsv.Template);
     }
 }

@@ -68,7 +68,9 @@ public sealed record LotAttributeDefinition(
 
         if ((DataType == LotAttributeTypes.Choice) != (cleaned.Count > 0))
         {
-            throw new DomainRuleException(DataType == LotAttributeTypes.Choice ? "A choice attribute needs at least one choice." : "Only a choice attribute has choices.");
+            throw DataType == LotAttributeTypes.Choice
+                ? new DomainRuleException("A choice attribute needs at least one choice.")
+                : new DomainRuleException("Only a choice attribute has choices.");
         }
 
         if (cleaned.Count > MaxChoices || cleaned.Any(c => c.Length > MaxName))

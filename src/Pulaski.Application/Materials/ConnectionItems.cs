@@ -1,8 +1,9 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
-using System.Xml;
+using System.Text;
 using System.Xml.Linq;
+using System.Xml;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Materials;
 
@@ -28,12 +29,12 @@ public static class ConnectionItems
     /// The items of a REST answer: the array at <paramref name="path"/> (parts split by '.' or '/'), or the answer itself when the path is blank
     /// and it is an array. Null with why when there is no such array.
     /// </summary>
-    public static (IReadOnlyList<JsonElement>? Items, string? Problem) Rest(JsonElement answer, string path)
+    public static (IReadOnlyList<JsonElement>? Items, UserMessage? Problem) Rest(JsonElement answer, string path)
     {
         var found = path.Length == 0 ? answer : Find(answer, path);
         return found is { ValueKind: JsonValueKind.Array } array
             ? ([.. array.EnumerateArray().Select(e => e.Clone())], null)
-            : (null, path.Length == 0 ? "the answer isn't an array; give the path to the items." : $"the answer has no array at '{path}'.");
+            : (null, path.Length == 0 ? UserMessage.Of("the answer isn't an array; give the path to the items.") : UserMessage.From($"the answer has no array at '{path}'."));
     }
 
     /// <summary>The next page's address in a REST answer, when <paramref name="path"/> names one and it is a non-empty string.</summary>
@@ -44,7 +45,7 @@ public static class ConnectionItems
     /// The items of a SOAP answer: every element named <paramref name="element"/> (local name, any namespace), each as an object of its child
     /// elements (nested ones as objects, text as strings, empty as null). A SOAP fault is a problem, with its message.
     /// </summary>
-    public static (IReadOnlyList<JsonElement>? Items, string? Problem) Soap(string xml, string element)
+    public static (IReadOnlyList<JsonElement>? Items, UserMessage? Problem) Soap(string xml, string element)
     {
         XDocument document;
         try
@@ -54,13 +55,13 @@ public static class ConnectionItems
         }
         catch (XmlException ex)
         {
-            return (null, $"the answer isn't well-formed XML: {ex.Message}");
+            return (null, UserMessage.From($"the answer isn't well-formed XML: {ex.Message}"));
         }
 
         if (document.Descendants().FirstOrDefault(e => e.Name.LocalName == "Fault") is { } fault)
         {
             var text = fault.Descendants().FirstOrDefault(e => e.Name.LocalName is "faultstring" or "Text" or "Reason")?.Value.Trim();
-            return (null, $"the service answered with a SOAP fault{(string.IsNullOrEmpty(text) ? "" : $": {text}")}.");
+            return (null, UserMessage.From($"the service answered with a SOAP fault{(string.IsNullOrEmpty(text) ? "" : $": {text}")}."));
         }
 
         return ([.. document.Descendants().Where(e => e.Name.LocalName == element).Select(ToJson)], null);

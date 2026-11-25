@@ -47,9 +47,9 @@ internal sealed class OeeTargetWrites(IUnitOfWork unitOfWork, IOeeTargetReposito
         {
             if (!await targets.LockScopeAsync(siteId, equipmentId, cancellationToken))
             {
-                throw new NotFoundException(equipmentId is { } id
-                    ? $"Equipment {id} isn't equipment of this site that tracks state."
-                    : $"Site {siteId} not found.");
+                throw equipmentId is { } id
+                    ? new NotFoundException($"Equipment {id} isn't equipment of this site that tracks state.")
+                    : new NotFoundException($"Site {siteId} not found.");
             }
 
             var scope = await targets.ListScopeAsync(siteId, equipmentId, cancellationToken);
@@ -85,7 +85,7 @@ internal sealed class SetOeeTargetHandler(OeeTargetWrites writes, IIdGenerator i
 {
     public Task<IReadOnlyList<OeeTargetDto>> HandleAsync(SetOeeTargetCommand command, CancellationToken cancellationToken)
     {
-        new Validator().Require(command.Values.Problem() is null, "Targets", command.Values.Problem() ?? "").ThrowIfInvalid();
+        new Validator().Require("Targets", command.Values.Problem()).ThrowIfInvalid();
         var id = ids.NewId();
         return writes.ChangeAsync(command.SiteId, command.EquipmentId, command.ExpectedVersion, EventTypes.OeeTargetSet,
             scope => OeeTargets.Set(scope, id, command.SiteId, command.EquipmentId, command.EffectiveFrom, command.Values), cancellationToken);

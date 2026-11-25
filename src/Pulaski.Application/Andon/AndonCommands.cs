@@ -90,7 +90,9 @@ internal sealed class RaiseAndonCallHandler(
         var line = await andon.LockLineAsync(command.LineId, cancellationToken) ?? throw new NotFoundException($"Line {command.LineId} not found.");
         if (!line.CanRunJob || !line.IsActive)
         {
-            throw new DomainRuleException($"{line.Code} {(line.IsActive ? "isn't a line" : "is switched off")}; call for help from a line.");
+            throw line.IsActive
+                ? new DomainRuleException($"{line.Code} isn't a line; call for help from a line.")
+                : new DomainRuleException($"{line.Code} is switched off; call for help from a line.");
         }
 
         var type = (await andon.GetTypeForUpdateAsync(command.TypeId, cancellationToken))?.Value;

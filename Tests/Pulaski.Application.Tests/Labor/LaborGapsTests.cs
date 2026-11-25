@@ -73,12 +73,12 @@ public class LaborGapsTests
         Assert.Empty(schedule.Problems());
 
         var outside = schedule with { Shifts = [night with { Breaks = [new PlannedBreak("Late", new TimeOnly(7, 0), TimeSpan.FromMinutes(30), false)] }] };
-        Assert.Contains(outside.Problems(), p => p.Contains("isn't inside the shift", StringComparison.Ordinal));
+        Assert.Contains(outside.Problems(), p => p.Text.Contains("isn't inside the shift", StringComparison.Ordinal));
         var clash = schedule with
         {
             Shifts = [night with { Breaks = [new PlannedBreak("A", new TimeOnly(2, 0), TimeSpan.FromMinutes(30), false), new PlannedBreak("B", new TimeOnly(2, 15), TimeSpan.FromMinutes(15), false)] }],
         };
-        Assert.Contains(clash.Problems(), p => p.Contains("overlap", StringComparison.Ordinal));
+        Assert.Contains(clash.Problems(), p => p.Text.Contains("overlap", StringComparison.Ordinal));
     }
 
     [Fact]

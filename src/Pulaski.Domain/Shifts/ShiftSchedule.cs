@@ -180,41 +180,41 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
     }
 
     /// <returns>What is wrong with the schedule, in words; empty when it can be saved.</returns>
-    public IReadOnlyList<string> Problems()
+    public IReadOnlyList<UserMessage> Problems()
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         if (CycleDays is < 1 or > MaxCycleDays)
         {
-            problems.Add($"The cycle is 1 to {MaxCycleDays} days.");
+            problems.Add(UserMessage.From($"The cycle is 1 to {MaxCycleDays} days."));
             return problems;
         }
 
         foreach (var duplicate in Shifts.GroupBy(s => s.Code, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
         {
-            problems.Add($"Two shifts are called {duplicate.Key}.");
+            problems.Add(UserMessage.From($"Two shifts are called {duplicate.Key}."));
         }
 
         foreach (var shift in Shifts)
         {
-            var label = string.IsNullOrWhiteSpace(shift.Code) ? "A shift" : $"Shift {shift.Code}";
+            var label = string.IsNullOrWhiteSpace(shift.Code) ? UserMessage.Of("A shift") : UserMessage.From($"Shift {shift.Code}");
             if (string.IsNullOrWhiteSpace(shift.Code) || shift.Code.Length > 10)
             {
-                problems.Add("Each shift needs a code of up to 10 characters.");
+                problems.Add(UserMessage.Of("Each shift needs a code of up to 10 characters."));
             }
 
             if (shift.Length < MinLength || shift.Length > MaxLength)
             {
-                problems.Add($"{label} is 15 minutes to 24 hours long.");
+                problems.Add(UserMessage.From($"{label} is 15 minutes to 24 hours long."));
             }
 
             if (shift.Days.Count == 0)
             {
-                problems.Add($"{label} runs on no day; tick at least one.");
+                problems.Add(UserMessage.From($"{label} runs on no day; tick at least one."));
             }
 
             if (shift.Days.Any(d => d < 0 || d >= CycleDays))
             {
-                problems.Add($"{label} names a day outside the {CycleDays}-day cycle.");
+                problems.Add(UserMessage.From($"{label} names a day outside the {CycleDays}-day cycle."));
             }
 
             problems.AddRange(BreakProblems(shift, label));
@@ -240,26 +240,26 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
     }
 
     /// <summary>A shift's planned breaks (#84): named, 5 minutes to 4 hours, inside the shift, not overlapping, at most six.</summary>
-    private static IEnumerable<string> BreakProblems(ShiftDefinition shift, string label)
+    private static IEnumerable<UserMessage> BreakProblems(ShiftDefinition shift, UserMessage label)
     {
         var breaks = shift.Breaks ?? [];
         if (breaks.Count > MaxBreaks)
         {
-            yield return $"{label} has more than {MaxBreaks} planned breaks.";
+            yield return UserMessage.From($"{label} has more than {MaxBreaks} planned breaks.");
         }
 
-        var spans = new List<(TimeSpan From, TimeSpan To, string Name)>();
+        var spans = new List<(TimeSpan From, TimeSpan To, object Name)>();
         foreach (var b in breaks)
         {
-            var name = string.IsNullOrWhiteSpace(b.Name) ? "A break" : b.Name;
+            var name = string.IsNullOrWhiteSpace(b.Name) ? (object)UserMessage.Of("A break") : b.Name;
             if (string.IsNullOrWhiteSpace(b.Name) || b.Name.Length > 40)
             {
-                yield return $"{label}: each planned break needs a name of up to 40 characters.";
+                yield return UserMessage.From($"{label}: each planned break needs a name of up to 40 characters.");
             }
 
             if (b.Length < MinBreak || b.Length > MaxBreak)
             {
-                yield return $"{label}: {name} is 5 minutes to 4 hours long.";
+                yield return UserMessage.From($"{label}: {name} is 5 minutes to 4 hours long.");
             }
 
             var offset = b.Start.ToTimeSpan() - shift.Start.ToTimeSpan();
@@ -270,7 +270,7 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
 
             if (offset + b.Length > shift.Length)
             {
-                yield return $"{label}: {name} at {b.Start.ToString("HH:mm", CultureInfo.InvariantCulture)} isn't inside the shift.";
+                yield return UserMessage.From($"{label}: {name} at {b.Start.ToString("HH:mm", CultureInfo.InvariantCulture)} isn't inside the shift.");
             }
 
             spans.Add((offset, offset + b.Length, name));
@@ -281,40 +281,40 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
         {
             if (ordered[i].From < ordered[i - 1].To)
             {
-                yield return $"{label}: {ordered[i - 1].Name} and {ordered[i].Name} overlap.";
+                yield return UserMessage.From($"{label}: {ordered[i - 1].Name} and {ordered[i].Name} overlap.");
             }
         }
     }
 
-    private IEnumerable<string> OverrideProblems()
+    private IEnumerable<UserMessage> OverrideProblems()
     {
         var overrides = Overrides ?? [];
         if (overrides.Count > MaxOverrides)
         {
-            yield return $"A schedule keeps at most {MaxOverrides} overrides.";
+            yield return UserMessage.From($"A schedule keeps at most {MaxOverrides} overrides.");
         }
 
         foreach (var duplicate in overrides.GroupBy(x => (x.ProductionDate, x.Code.ToUpperInvariant())).Where(g => g.Count() > 1))
         {
-            yield return $"Shift {duplicate.Key.Item2} has two overrides on {Day(duplicate.Key.ProductionDate)}.";
+            yield return UserMessage.From($"Shift {duplicate.Key.Item2} has two overrides on {Day(duplicate.Key.ProductionDate)}.");
         }
 
         foreach (var entry in overrides)
         {
             if (string.IsNullOrWhiteSpace(entry.Code) || entry.Code.Length > 10)
             {
-                yield return "Each override names a shift code of up to 10 characters.";
+                yield return UserMessage.Of("Each override names a shift code of up to 10 characters.");
             }
             else if (entry.IsWorking && (entry.Length < MinLength || entry.Length > MaxLength))
             {
-                yield return $"Shift {entry.Code} on {Day(entry.ProductionDate)} is 15 minutes to 24 hours long.";
+                yield return UserMessage.From($"Shift {entry.Code} on {Day(entry.ProductionDate)} is 15 minutes to 24 hours long.");
             }
         }
     }
 
     // Checked on clock time, without daylight saving. For the cycle itself over two cycles, so a shift running past the
     // end of the cycle meets the next cycle's first; for an override over the days around it.
-    private static string? FirstOverlap(ShiftSchedule schedule, DateOnly first, DateOnly last, bool cycleDays)
+    private static UserMessage? FirstOverlap(ShiftSchedule schedule, DateOnly first, DateOnly last, bool cycleDays)
     {
         var start = new DateTimeOffset(first.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
         var occurrences = schedule.Expand(TimeZoneInfo.Utc, start, new DateTimeOffset(last.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)));
@@ -323,9 +323,14 @@ public sealed record ShiftSchedule(string Code, string Name, int CycleDays, Date
             var (a, b) = (occurrences[i - 1], occurrences[i]);
             if (b.Start < a.End)
             {
-                var day = cycleDays ? $"day {schedule.CycleDay(b.ProductionDate) + 1}" : Day(b.ProductionDate);
-                return $"Shift {b.Code} on {day} starts at {b.Start.ToString("HH:mm", CultureInfo.InvariantCulture)}, "
-                    + $"before shift {a.Code} ends at {a.End.ToString("HH:mm", CultureInfo.InvariantCulture)}; shifts can't overlap.";
+                var (starts, ends) = (b.Start.ToString("HH:mm", CultureInfo.InvariantCulture), a.End.ToString("HH:mm", CultureInfo.InvariantCulture));
+                return cycleDays
+                    ? UserMessage.From(
+                        $"Shift {b.Code} on day {schedule.CycleDay(b.ProductionDate) + 1} starts at {starts}, " +
+                        $"before shift {a.Code} ends at {ends}; shifts can't overlap.")
+                    : UserMessage.From(
+                        $"Shift {b.Code} on {Day(b.ProductionDate)} starts at {starts}, " +
+                        $"before shift {a.Code} ends at {ends}; shifts can't overlap.");
             }
         }
 

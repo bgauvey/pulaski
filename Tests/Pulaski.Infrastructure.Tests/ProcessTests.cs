@@ -463,7 +463,7 @@ public sealed class ProcessTests(DatabaseFixture db)
         // Not whole batches: refused by default; rounded up once the site says so; held where the material says so.
         var refused = await ImportAsync(Order("B", 1025m));
         Assert.Equal(ErpOrderAction.Refused, refused.Action);
-        Assert.Contains("Send 1,000 or 1,050", refused.Messages[0], StringComparison.Ordinal);
+        Assert.Contains("Send 1,000 or 1,050", refused.Messages[0]?.Text, StringComparison.Ordinal);
         await db.SendAsync(new SetErpBatchRuleCommand(plant.Site, "round_up"));
         var b = await ImportAsync(Order("B", 1025m));
         row = (await reads.GetAsync(b.WorkOrderId!.Value, CancellationToken.None))!;
@@ -542,7 +542,7 @@ public sealed class ProcessTests(DatabaseFixture db)
         Assert.True(dry.DryRun);
         Assert.Equal([ErpOrderAction.Created, ErpOrderAction.Refused], dry.Results.Select(r => r.Action));
         Assert.Null(dry.Results[0].WorkOrderId);
-        Assert.Contains(dry.Results[1].Messages, m => m.StartsWith("No produced material", StringComparison.Ordinal));
+        Assert.Contains(dry.Results[1].Messages, m => m.Text.StartsWith("No produced material", StringComparison.Ordinal));
         Assert.Equal(0, await OrdersAsync());
 
         var made = (await ImportAsync("Released", dryRun: false)).Results[0];
@@ -553,7 +553,7 @@ public sealed class ProcessTests(DatabaseFixture db)
 
         var empty = await db.SendAsync(new ImportB2mmlWorkOrdersCommand("<nothing/>", "ERP-" + suffix, null, null, DryRun: false));
         Assert.Empty(empty.Results);
-        Assert.StartsWith("The file has no ProductionRequest", Assert.Single(empty.FileProblems), StringComparison.Ordinal);
+        Assert.StartsWith("The file has no ProductionRequest", Assert.Single(empty.FileProblems)?.Text, StringComparison.Ordinal);
     }
 
     /// <summary>Extrude and Pack, making every material, released as version 1.</summary>

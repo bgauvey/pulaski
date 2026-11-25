@@ -1,3 +1,5 @@
+using Pulaski.Contracts.Common;
+
 namespace Pulaski.Contracts.ReferenceData;
 
 /// <summary>A new unit (D-026). A packaging unit has dimension <c>other</c> and no factor.</summary>
@@ -50,5 +52,5 @@ public sealed record UnitConversionResultDto
     /// <summary>What one of the from-unit is in the to-unit.</summary>
     public decimal? Factor { get; init; }
 
-    public string? Message { get; init; }
+    public MessageDto? Message { get; init; }
 }

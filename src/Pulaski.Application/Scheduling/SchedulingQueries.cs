@@ -1,9 +1,10 @@
 using Pulaski.Application.Abstractions;
-using Pulaski.Application.Units;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
+using Pulaski.Application.Units;
 using Pulaski.Contracts.Scheduling;
-using Pulaski.Domain;
 using Pulaski.Domain.Scheduling;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Scheduling;
 
@@ -130,7 +131,9 @@ internal static class TimelineMapping
             ChangeoverMode = source.Line.ChangeoverMode,
             ProjectedAt = timeline.ProjectedAt,
             HasShiftCalendar = source.HasShiftCalendar,
-            CalendarName = source.CalendarName,
+            CalendarName = source.CalendarName?.Text,
+            Calendar = source.CalendarName is { } calendarName ? Notes.Of(calendarName) : null,
+            IsAroundTheClock = source.IsAroundTheClock,
             Warnings = [.. timeline.Warnings.Select(ToDto)],
             Overlaps = [.. timeline.Overlaps.Select(o => new TimelineOverlapDto(
                 o.FirstJobId, o.FirstKind, o.SecondJobId, o.SecondKind, o.Start, o.End))],
@@ -233,7 +236,9 @@ internal static class TimelineMapping
             IsGroup = true,
             ProjectedAt = now,
             HasShiftCalendar = source.HasShiftCalendar,
-            CalendarName = source.CalendarName,
+            CalendarName = source.CalendarName?.Text,
+            Calendar = source.CalendarName is { } calendarName ? Notes.Of(calendarName) : null,
+            IsAroundTheClock = source.IsAroundTheClock,
             Segments = [.. segments.OrderBy(s => s.Start).ThenBy(s => s.JobNumber, StringComparer.Ordinal)],
         };
     }

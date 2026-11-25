@@ -1,10 +1,11 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Materials;
 using Pulaski.Contracts.Scheduling;
-using Pulaski.Domain;
 using Pulaski.Domain.Scheduling;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Scheduling;
 
@@ -147,7 +148,7 @@ internal sealed class ImportChangeoverRulesHandler(
     {
         if (command.Rows.Problems.Count > 0)
         {
-            return new ImportMaterialsResponse { FileProblems = command.Rows.Problems, Errors = command.Rows.Problems.Count };
+            return new ImportMaterialsResponse { FileProblems = [.. command.Rows.Problems.Select(Notes.Of)], Errors = command.Rows.Problems.Count };
         }
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
@@ -177,7 +178,12 @@ internal sealed class ImportChangeoverRulesHandler(
                 }
 
                 Guid? Find(IReadOnlyDictionary<string, Guid> known, string code, string what) =>
-                    code.Length == 0 ? null : known.TryGetValue(Key(code), out var id) ? id : throw new DomainRuleException($"There is no {what} {code}.");
+                    code.Length == 0 ? null : known.TryGetValue(Key(code), out var id) ? id : throw what switch
+                    {
+                        "line at this site" => new DomainRuleException($"There is no line {code} at this site."),
+                        "material class" => new DomainRuleException($"There is no material class {code}."),
+                        _ => new DomainRuleException($"There is no material {code}."),
+                    };
                 var pattern = new ChangeoverPattern(
                     Find(lines, row.LineCode, "line at this site"),
                     Find(materials, row.FromMaterial, "material"),
@@ -239,7 +245,7 @@ internal sealed class ImportChangeoverRulesHandler(
             }
             catch (DomainRuleException ex)
             {
-                results.Add(new ImportRowResultDto { Line = row.Line, Code = row.Label, Action = Error, Message = ex.Message });
+                results.Add(new ImportRowResultDto { Line = row.Line, Code = row.Label, Action = Error, Message = Notes.Of(ex) });
             }
         }
 

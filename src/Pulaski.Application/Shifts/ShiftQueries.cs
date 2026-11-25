@@ -1,5 +1,6 @@
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.Shifts;
 
 namespace Pulaski.Application.Shifts;
@@ -34,7 +35,7 @@ internal sealed class PreviewShiftScheduleHandler(IShiftReadStore store, TimePro
         var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
         if (!request.Shifts.All(ShiftMapping.HasValidStart))
         {
-            return new ShiftPreviewDto { Problems = ["Give each shift a start time as HH:mm."], TimeZone = timeZone };
+            return new ShiftPreviewDto { Problems = [Notes.Of("Give each shift a start time as HH:mm.")], TimeZone = timeZone };
         }
 
         var schedule = ShiftMapping.ToDomain("PREVIEW", "Preview", request.CycleDays, request.CycleStart == default ? Today(zone) : request.CycleStart, request.Shifts,
@@ -42,7 +43,7 @@ internal sealed class PreviewShiftScheduleHandler(IShiftReadStore store, TimePro
         var problems = schedule.Problems();
         if (problems.Count > 0)
         {
-            return new ShiftPreviewDto { Problems = problems, TimeZone = timeZone };
+            return new ShiftPreviewDto { Problems = [.. problems.Select(Notes.Of)], TimeZone = timeZone };
         }
 
         var from = request.From ?? Today(zone);

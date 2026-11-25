@@ -49,8 +49,8 @@ public class ChangeoverRulesTests
         Assert.Null(first.Note);
         Assert.Equal(2, second.Problems.Count);
 
-        Assert.Contains("The required column 'minutes' is missing.", ChangeoverRuleCsv.Parse("line,from\nL1,WH\n").Problems);
-        Assert.Contains(ChangeoverRuleCsv.Parse("line,minutes,colour\n").Problems, p => p.StartsWith("Unknown column 'colour'", StringComparison.Ordinal));
+        Assert.Contains("The required column 'minutes' is missing.", ChangeoverRuleCsv.Parse("line,from\nL1,WH\n").Problems.Select(p => p.Text));
+        Assert.Contains(ChangeoverRuleCsv.Parse("line,minutes,colour\n").Problems, p => p.Text.StartsWith("Unknown column 'colour'", StringComparison.Ordinal));
         Assert.Equal(Contracts.Scheduling.ChangeoverRuleCsvFormat.Header, ChangeoverRuleCsv.Template);
     }
 }

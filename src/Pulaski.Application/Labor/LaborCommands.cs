@@ -46,7 +46,7 @@ internal static class LaborWriter
     {
         if (LaborRules.Problem(laborType, reasonCodeId, jobId, start, end, allocationPct, now) is { } problem)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Session"] = [problem] });
+            throw ValidationException.Field("Session", problem);
         }
 
         var equipment = await labor.GetEquipmentShiftsAsync(equipmentId, cancellationToken) ?? throw new DomainRuleException("That equipment doesn't exist.");
@@ -144,7 +144,10 @@ internal static class LaborWriter
 
     public static string? Clean(string? note) => string.IsNullOrWhiteSpace(note) ? null : note.Trim()[..Math.Min(note.Trim().Length, 500)];
 
-    public static string Describe(ShiftKey key) => key.ShiftCode is null ? $"{key.ProductionDate:yyyy-MM-dd}" : $"shift {key.ShiftCode} on {key.ProductionDate:yyyy-MM-dd}";
+    /// <summary>"shift B on 2026-11-24", or the day alone outside shifts; translated as a part of the message it goes in (#188).</summary>
+    public static object Describe(ShiftKey key) => key.ShiftCode is null
+        ? key.ProductionDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+        : UserMessage.From($"shift {key.ShiftCode} on {key.ProductionDate:yyyy-MM-dd}");
 }
 
 internal sealed class ClockOnHandler(
@@ -434,7 +437,9 @@ internal sealed class ApproveShiftHandler(
 
         if (end > now)
         {
-            throw new DomainRuleException($"{char.ToUpperInvariant(LaborWriter.Describe(key)[0])}{LaborWriter.Describe(key)[1..]} hasn't ended yet; approve it once it has.");
+            throw key.ShiftCode is null
+                ? new DomainRuleException($"{key.ProductionDate:yyyy-MM-dd} hasn't ended yet; approve it once it has.")
+                : new DomainRuleException($"Shift {key.ShiftCode} on {key.ProductionDate:yyyy-MM-dd} hasn't ended yet; approve it once it has.");
         }
 
         if (await labor.IsApprovedAsync(key, cancellationToken))

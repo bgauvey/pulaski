@@ -129,7 +129,7 @@ else
                     }
                     else
                     {
-                        @result.Message
+                        @(result.Message is { } why ? L.Of(why) : null)
                     }
                 </p>
             }

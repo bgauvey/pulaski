@@ -35,7 +35,7 @@ public static class ErpBatchRule
     /// <param name="what">The order, for messages.</param>
     /// <param name="unitCode">The base unit's code, for messages.</param>
     /// <exception cref="DomainRuleException">The rule refuses it, or rounding down leaves nothing.</exception>
-    public static ErpQuantity Apply(decimal quantity, Batching? batching, string rule, string what, string unitCode)
+    public static ErpQuantity Apply(decimal quantity, Batching? batching, string rule, UserMessage what, string unitCode)
     {
         if (batching is null || batching.WholeBatches(quantity) is not null)
         {
@@ -43,22 +43,28 @@ public static class ErpBatchRule
         }
 
         var batches = quantity / batching.Size;
-        var sent = $"{Batching.Qty(quantity)} {unitCode} is {Batching.Qty(batches)} batches of {Batching.Qty(batching.Size)} {unitCode}";
+        var (sent, count, size) = (Batching.Qty(quantity), Batching.Qty(batches), Batching.Qty(batching.Size));
         switch (rule)
         {
             case RoundUp:
                 var up = Math.Ceiling(batches) * batching.Size;
-                return new ErpQuantity(up, BatchAdjustment.RoundedUp, $"{sent}: planned {Batching.Qty(up)} {unitCode}, rounded up to whole batches.");
+                return new ErpQuantity(
+                    up, BatchAdjustment.RoundedUp,
+                    UserMessage.From($"{sent} {unitCode} is {count} batches of {size} {unitCode}: planned {Batching.Qty(up)} {unitCode}, rounded up to whole batches."));
             case RoundDown:
                 var down = Math.Floor(batches) * batching.Size;
                 return down > 0
-                    ? new ErpQuantity(down, BatchAdjustment.RoundedDown, $"{sent}: planned {Batching.Qty(down)} {unitCode}, rounded down to whole batches.")
-                    : throw new DomainRuleException($"{what}: {sent}; rounded down it would be nothing. Send at least {Batching.Qty(batching.Size)} {unitCode}.");
+                    ? new ErpQuantity(
+                        down, BatchAdjustment.RoundedDown,
+                        UserMessage.From($"{sent} {unitCode} is {count} batches of {size} {unitCode}: planned {Batching.Qty(down)} {unitCode}, rounded down to whole batches."))
+                    : throw new DomainRuleException(
+                        $"{what}: {sent} {unitCode} is {count} batches of {size} {unitCode}; rounded down it would be nothing. Send at least {size} {unitCode}.");
             case Hold:
-                return new ErpQuantity(quantity, BatchAdjustment.Held, $"{sent}: held until a planner sets a whole-batch quantity.");
+                return new ErpQuantity(
+                    quantity, BatchAdjustment.Held, UserMessage.From($"{sent} {unitCode} is {count} batches of {size} {unitCode}: held until a planner sets a whole-batch quantity."));
             default:
                 throw new DomainRuleException(
-                    $"{what}: {sent}, and this site takes only whole batches from the ERP. Send {Batching.Qty(Math.Max(1, Math.Floor(batches)) * batching.Size)} or {Batching.Qty(Math.Ceiling(batches) * batching.Size)} {unitCode}.");
+                    $"{what}: {sent} {unitCode} is {count} batches of {size} {unitCode}, and this site takes only whole batches from the ERP. Send {Batching.Qty(Math.Max(1, Math.Floor(batches)) * batching.Size)} or {Batching.Qty(Math.Ceiling(batches) * batching.Size)} {unitCode}.");
         }
     }
 }
@@ -72,7 +78,7 @@ public static class BatchAdjustment
 }
 
 /// <summary>The quantity to plan, in the base unit, and how it differs from what the ERP sent; null adjustment when it doesn't.</summary>
-public sealed record ErpQuantity(decimal Quantity, string? Adjustment, string? Note);
+public sealed record ErpQuantity(decimal Quantity, string? Adjustment, UserMessage? Note);
 
 /// <summary>
 /// An order as the ERP sends it (D-066), after codes are resolved: the fields the ERP owns (product, quantity, due date) plus its start and

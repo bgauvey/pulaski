@@ -3101,10 +3101,32 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   `SiteSettingsView`, `ShiftView`, `ShiftOverrideView`, `QualificationView`, `DeliveryView`, `MachineProfileView`) do the same; their lists
   of labels (`EdgeView.Roles`, connection settings, calendar exception kinds, ERP batch rules) are `Term.Mark`s shown with `L[…]`. Code
   literals in help (`<code>` column names, addresses, SQL and URL placeholders) stay untranslated (#181).
+- **Messages inside messages, codes and lists (#188):** a value of a `UserMessage` may be another `UserMessage` (a part translated on its own:
+  a qualification's *expired 2026-10-01*, a lot event's kind, a station action such as *report production*) or a `MessageCode`
+  (`UserMessage.Code(status)`: a status or kind code; English text = the code with spaces). The problem document and `MessageDto` carry them as
+  `{template, values, text}` and `{code}`; the web words a part with its own template and a code with its label, first letter lower case
+  (`Text.Word`). Lists of problems are `UserMessage.Join(parts, separator)` (template `{0} {1}`, the parts as values); the exceptions take a
+  ready `UserMessage`, `Validator.Require(field, problem)` a nullable one, `ValidationException.Field` one or a list. A message chosen by a
+  conditional is written as one exception (or `UserMessage.From`) per case, so each is a term: `throw x ? new …($"…") : new …($"…")`; an
+  action word passed to a helper (*changed*, *released*, *moved*) is one sentence per action in a `switch`, and a fallback such as
+  `Reference ?? "This expected receipt"` is a case of its own. Plurals are separate sentences. Rule helpers that return a problem
+  (`PasswordRules.Problem`, `OeeTargetValues.Problem`, `ChartTypes.Problem`, `ShiftSchedule.Problems`, `ReasonTree.WhyNot…`, the connection
+  and feed checks) return `UserMessage`; `NotEnough` (control limits, capability, run-history rates), allocation problems and exclusion
+  reasons reach the screens as `MessageDto`. Permission refusals name the permission by its description (*it needs the permission
+  "See the schedule"*). A code's label may not agree in gender with the sentence it is in; a translator words around it.
+- **Imports, scans and the rest (#188, part 2):** import rows' and sources' `Problems` are `UserMessage`s (CSV, B2MML, SCIM and connection
+  parsers alike); results carry `MessageDto`: `ImportRowResultDto.Message`, `ProfileImportRowDto.Message`, every `FileProblems`,
+  `ErpOrderResultDto.Messages`; a failed row's message is `Notes.Of(ex)` (a refusal's own message, field checks as *field: message*). Scan
+  answers (`ScanResultDto.Message`), unit conversions, why a lot was suggested (`LotRecommendationDto.ReasonMessage`), why a run was left out
+  of a rate, the translations import's problems and the line's calendar (`LineTimelineDto.Calendar`, `IsAroundTheClock`) are messages too.
+  Text the server keeps for the screens to show is marked with the Domain's `Term.Mark("…")` (permission areas and descriptions, alert kinds,
+  import source descriptions, the password-reset answer); the catalog takes them and the screens show `L[…]`. The role line
+  (`CurrentUser.RoleSummary(l)`) and Blazor's reconnect dialog are worded on the web; `<html lang>` follows the reader. Event payloads,
+  stored history (connection runs, rate review reasons, delivery errors) and e-mails stay English.
 - **Pieces:** #173 the layer, the pages, the layout, menu and sign-in; #174 floor screens, terminals and server messages; #175 office screens,
   split by area: #178 Overview, Inbox, Machines, Quality, Labor; #179 inventory and lots; #180 planning; #181 configuration, My alerts and the password reset pages. With #181 every screen is translated. Then the server's own text: #189 field
-  checks (then notes, warnings and draft-check problems), #188 refusals worded in parts, words inside messages, other server text and the
-  reconnect banner.
+  checks (then notes, warnings and draft-check problems), #188 refusals worded in parts and words inside messages, then imports, scans,
+  the server's other text and the reconnect banner. With #188 #128 is done.
 
 ## Application architecture
 

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Pulaski.Application.Abstractions;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Scheduling;
 
@@ -21,7 +22,7 @@ public sealed record ChangeoverRuleImportRow
 
     /// <summary>False switches the rule off; left out or true, it is on.</summary>
     public bool? IsActive { get; init; }
-    public IReadOnlyList<string> Problems { get; init; } = [];
+    public IReadOnlyList<UserMessage> Problems { get; init; } = [];
 
     /// <summary>"From → to on line", for messages.</summary>
     public string Label =>
@@ -31,7 +32,7 @@ public sealed record ChangeoverRuleImportRow
         material.Length > 0 ? material : materialClass.Length > 0 ? $"class {materialClass}" : "anything";
 }
 
-public sealed record ChangeoverRuleImportSource(IReadOnlyList<ChangeoverRuleImportRow> Rows, IReadOnlyList<string> Problems);
+public sealed record ChangeoverRuleImportSource(IReadOnlyList<ChangeoverRuleImportRow> Rows, IReadOnlyList<UserMessage> Problems);
 
 /// <summary>
 /// Reads a changeover rules CSV file (D-074): one rule per row, columns named in the first line in any order and case. A row matches the
@@ -62,10 +63,10 @@ public static class ChangeoverRuleCsv
         var records = CsvText.Read(text);
         if (records.Count == 0)
         {
-            return new([], ["The file is empty."]);
+            return new([], [UserMessage.Of("The file is empty.")]);
         }
 
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         var index = new Dictionary<string, int>(StringComparer.Ordinal);
         var header = records[0].Fields;
         for (var i = 0; i < header.Count; i++)
@@ -79,22 +80,22 @@ public static class ChangeoverRuleCsv
             var column = Columns.ContainsKey(name) ? name : Columns.FirstOrDefault(c => c.Value.Contains(name)).Key;
             if (column is null)
             {
-                problems.Add($"Unknown column '{header[i]}'. The columns are {string.Join(", ", Columns.Keys)}.");
+                problems.Add(UserMessage.From($"Unknown column '{header[i]}'. The columns are {string.Join(", ", Columns.Keys)}."));
             }
             else if (!index.TryAdd(column, i))
             {
-                problems.Add($"Column '{column}' appears twice.");
+                problems.Add(UserMessage.From($"Column '{column}' appears twice."));
             }
         }
 
         if (!index.ContainsKey("minutes"))
         {
-            problems.Add("The required column 'minutes' is missing.");
+            problems.Add(UserMessage.Of("The required column 'minutes' is missing."));
         }
 
         if (records.Count - 1 > MaxRows)
         {
-            problems.Add($"The file has {records.Count - 1} rows; import at most {MaxRows} at a time.");
+            problems.Add(UserMessage.From($"The file has {records.Count - 1} rows; import at most {MaxRows} at a time."));
         }
 
         if (problems.Count > 0)
@@ -103,19 +104,19 @@ public static class ChangeoverRuleCsv
         }
 
         var rows = records.Skip(1).Where(r => r.Fields.Any(f => f.Length > 0)).Select(r => ToRow(r, index)).ToList();
-        return new(rows, rows.Count == 0 ? ["The file has a header but no rows."] : []);
+        return new(rows, rows.Count == 0 ? [UserMessage.Of("The file has a header but no rows.")] : []);
     }
 
     private static ChangeoverRuleImportRow ToRow(CsvRecord record, Dictionary<string, int> index)
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         string? Cell(string column) =>
             index.TryGetValue(column, out var i) ? (i < record.Fields.Count ? record.Fields[i].Trim() : "") : null;
 
         int? minutes = null;
         if (Cell("minutes") is not { Length: > 0 } text)
         {
-            problems.Add("minutes: required.");
+            problems.Add(UserMessage.Of("minutes: required."));
         }
         else if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var m))
         {
@@ -123,7 +124,7 @@ public static class ChangeoverRuleCsv
         }
         else
         {
-            problems.Add($"minutes: '{text}' isn't a whole number of minutes.");
+            problems.Add(UserMessage.From($"minutes: '{text}' isn't a whole number of minutes."));
         }
 
         bool? active = null;
@@ -137,7 +138,7 @@ public static class ChangeoverRuleCsv
             };
             if (active is null)
             {
-                problems.Add($"active: '{flag}' isn't yes or no.");
+                problems.Add(UserMessage.From($"active: '{flag}' isn't yes or no."));
             }
         }
 

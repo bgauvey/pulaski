@@ -30,13 +30,13 @@
             <InputFile id="wo-b2mml-file" OnChange="PickAsync" accept=".xml,application/xml,text/xml" class="form-control form-control-sm" disabled="@_busy" />
         </div>
         <div class="col-md-2">
-            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@ErpOrderImportView.Why(_check, _system)" OnClick="ImportAsync">@L["Import"]</ActionButton>
+            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@ErpOrderImportView.Why(L, _check, _system)" OnClick="ImportAsync">@L["Import"]</ActionButton>
         </div>
     </div>
     <ProblemAlert Error="_error" />
     @if (_check is { } c)
     {
-        <p class="small mt-2 mb-1 @(c.FileProblems.Count > 0 ? "text-danger" : "")" role="status">@ErpOrderImportView.Summary(c)</p>
+        <p class="small mt-2 mb-1 @(c.FileProblems.Count > 0 ? "text-danger" : "")" role="status">@ErpOrderImportView.Summary(L, c)</p>
         @if (c.Results.Count > 0)
         {
             <div class="table-panel" style="max-height: 20rem; overflow-y: auto;">
@@ -47,8 +47,8 @@
                         {
                             <tr class="@(row.Action == "refused" ? "text-danger" : "")">
                                 <td class="fw-semibold">@(row.OrderNumber.Length > 0 ? row.OrderNumber : row.ExternalKey)</td>
-                                <td>@ErpOrderImportView.Action(row.Action, c.DryRun)</td>
-                                <td>@string.Join(" ", row.Messages)</td>
+                                <td>@ErpOrderImportView.Action(L, row.Action, c.DryRun)</td>
+                                <td>@string.Join(" ", L.Notes(row.Messages))</td>
                             </tr>
                         }
                     </tbody>

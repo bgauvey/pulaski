@@ -71,7 +71,9 @@ public sealed record Container(
 
         if (outer.Id == Id || outerAncestors.Contains(Id))
         {
-            throw new DomainRuleException($"{Code} can't go inside {outer.Code}: {outer.Code} is {(outer.Id == Id ? "the same container" : $"inside {Code}")}.");
+            throw outer.Id == Id
+                ? new DomainRuleException($"{Code} can't go inside itself.")
+                : new DomainRuleException($"{Code} can't go inside {outer.Code}: {outer.Code} is inside {Code}.");
         }
 
         if (outer.MixesLots)
@@ -113,7 +115,9 @@ public sealed record Container(
 
         if (mixesLots != MixesLots && stockInside > 0)
         {
-            throw new DomainRuleException($"{Code} holds stock; empty it before {(mixesLots ? "letting lots mix in it" : "keeping lots apart in it")}.");
+            throw mixesLots
+                ? new DomainRuleException($"{Code} holds stock; empty it before letting lots mix in it.")
+                : new DomainRuleException($"{Code} holds stock; empty it before keeping lots apart in it.");
         }
 
         if (mixesLots && containersInside > 0)
@@ -132,7 +136,16 @@ public sealed record Container(
     {
         if (!IsActive)
         {
-            throw new DomainRuleException($"{Code} is retired; it can't be {action}.");
+            // Each action its own sentence, for translation (#188).
+            throw action switch
+            {
+                "moved" => new DomainRuleException($"{Code} is retired; it can't be moved."),
+                "packed" => new DomainRuleException($"{Code} is retired; it can't be packed."),
+                "packed into" => new DomainRuleException($"{Code} is retired; nothing can be packed into it."),
+                "taken out" => new DomainRuleException($"{Code} is retired; it can't be taken out."),
+                "retired" => new DomainRuleException($"{Code} is retired already."),
+                _ => new DomainRuleException($"{Code} is retired; it can't be changed."),
+            };
         }
     }
 
@@ -142,11 +155,15 @@ public sealed record Container(
         EnsureActive("retired");
         if (containersInside > 0)
         {
-            throw new DomainRuleException($"{Code} still holds {containersInside} {(containersInside == 1 ? "container" : "containers")}; take them out first.");
+            throw containersInside == 1
+                ? new DomainRuleException($"{Code} still holds a container; take it out first.")
+                : new DomainRuleException($"{Code} still holds {containersInside} containers; take them out first.");
         }
 
         return lotsInside > 0
-            ? throw new DomainRuleException($"{Code} still holds {lotsInside} {(lotsInside == 1 ? "lot" : "lots")}; unpack or move them first.")
+            ? throw (lotsInside == 1
+                ? new DomainRuleException($"{Code} still holds a lot; unpack or move it first.")
+                : new DomainRuleException($"{Code} still holds {lotsInside} lots; unpack or move them first."))
             : this with { IsActive = false, ParentId = null };
     }
 }

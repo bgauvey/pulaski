@@ -40,7 +40,9 @@ internal sealed class ReverseChainHandler(
             ?? throw new NotFoundException($"That movement of lot {command.LotId} wasn't found.");
         if (original.ReversedBy is not null || original.ReversesEventId is not null)
         {
-            throw new DomainRuleException(original.ReversedBy is not null ? "That movement was reversed already." : "That movement is a reversal already.");
+            throw original.ReversedBy is not null
+                ? new DomainRuleException("That movement was reversed already.")
+                : new DomainRuleException("That movement is a reversal already.");
         }
 
         // Latest first: a lot split off is undone before the split that made it, and a later movement before an earlier one.

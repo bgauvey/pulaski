@@ -143,7 +143,7 @@ internal sealed class GetLimitBaselineHandler(IQualityReadStore store, TimeProvi
             DispersionCenter = limits?.DispersionCenter,
             DispersionUcl = limits?.DispersionUcl,
             DispersionLcl = limits?.DispersionLcl,
-            NotEnough = result.NotEnough,
+            NotEnough = result.NotEnough is { } why ? Notes.Of(why) : null,
             Warnings = [.. result.Warnings.Select(w => Notes.Of(w))],
             Current = current,
             Points = [.. subgroups.Select(s =>
@@ -185,7 +185,7 @@ internal sealed class ApproveControlLimitsHandler(
         var result = ControlLimitRules.Work(characteristic, subgroups, leftOut);
         if (result.Limits is not { } limits)
         {
-            throw new DomainRuleException(result.NotEnough ?? "The baseline gives no limits.");
+            throw result.NotEnough is { } why ? new DomainRuleException(why) : new DomainRuleException("The baseline gives no limits.");
         }
 
         if (!ControlLimitPeriods.Same(limits, new LimitSet(command.CenterLine, command.Ucl, command.Lcl)))

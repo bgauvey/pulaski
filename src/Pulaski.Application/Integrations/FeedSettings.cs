@@ -98,7 +98,7 @@ internal sealed class SaveDeliveryFeedSettingsHandler(
         };
         if (after.Problems() is { Count: > 0 } problems)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Settings"] = [.. problems] });
+            throw ValidationException.Field("Settings", problems);
         }
 
         if (current.Version != command.ExpectedVersion)
@@ -161,7 +161,7 @@ internal sealed class CreateDeliveryFeedHandler(
         var kind = (command.Kind ?? "").Trim().ToLowerInvariant();
         var format = (command.Format ?? "").Trim().ToLowerInvariant();
         new Validator()
-            .Require(DeliveryFeedKinds.CodeProblem(code) is null, nameof(command.Code), DeliveryFeedKinds.CodeProblem(code) ?? "")
+            .Require(nameof(command.Code), DeliveryFeedKinds.CodeProblem(code))
             .Require(!DeliveryFeedKinds.BuiltIn.Contains(code), nameof(command.Code), "That code belongs to a built-in feed.")
             .Require(DeliveryFeedKinds.All.Contains(kind), nameof(command.Kind), "webhook or mqtt.")
             .Require(DeliveryFormats.All.Contains(format), nameof(command.Format), "cloudevents or b2mml.")

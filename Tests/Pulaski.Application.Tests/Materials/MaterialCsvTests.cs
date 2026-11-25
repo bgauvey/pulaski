@@ -46,11 +46,11 @@ public class MaterialCsvTests
     [Fact]
     public void Problems_with_the_file_or_a_row_are_reported_not_thrown()
     {
-        Assert.Contains("missing", Assert.Single(MaterialCsv.Parse("code,name,type\nA,A,raw").Problems), StringComparison.Ordinal);
-        Assert.Contains("Unknown column 'clas'", MaterialCsv.Parse("code,name,type,base_unit,clas\n").Problems[0], StringComparison.Ordinal);
-        Assert.Contains("twice", MaterialCsv.Parse("code,name,type,base_unit,unit\n").Problems[0], StringComparison.Ordinal);
-        Assert.Equal(["The file is empty."], MaterialCsv.Parse("").Problems);
-        Assert.Equal(["The file has a header but no rows."], MaterialCsv.Parse("code,name,type,base_unit\n,,,\n").Problems);
+        Assert.Contains("missing", Assert.Single(MaterialCsv.Parse("code,name,type\nA,A,raw").Problems)?.Text, StringComparison.Ordinal);
+        Assert.Contains("Unknown column 'clas'", MaterialCsv.Parse("code,name,type,base_unit,clas\n").Problems[0]?.Text, StringComparison.Ordinal);
+        Assert.Contains("twice", MaterialCsv.Parse("code,name,type,base_unit,unit\n").Problems[0]?.Text, StringComparison.Ordinal);
+        Assert.Equal(["The file is empty."], MaterialCsv.Parse("").Problems.Select(p => p?.Text));
+        Assert.Equal(["The file has a header but no rows."], MaterialCsv.Parse("code,name,type,base_unit\n,,,\n").Problems.Select(p => p?.Text));
 
         var row = Assert.Single(MaterialCsv.Parse("code,name,type,base_unit,lot_tracked,shelf_life_days\nA,A,raw,kg,maybe,2.5").Rows);
         Assert.Equal(2, row.Problems.Count);
@@ -61,7 +61,7 @@ public class MaterialCsvTests
     {
         var big = "code,name,type,base_unit\n" + string.Concat(Enumerable.Range(0, MaterialCsv.MaxRows + 1).Select(i => $"M{i},M,raw,kg\n"));
 
-        Assert.Contains("at most", Assert.Single(MaterialCsv.Parse(big).Problems), StringComparison.Ordinal);
+        Assert.Contains("at most", Assert.Single(MaterialCsv.Parse(big).Problems)?.Text, StringComparison.Ordinal);
         Assert.Equal(MaterialCsvFormat.Header, MaterialCsv.Template);
     }
 }

@@ -3,8 +3,8 @@ using System.Text.RegularExpressions;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
 using Pulaski.Contracts.Common;
-using Pulaski.Domain;
 using Pulaski.Domain.MachineData;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.MachineData;
 
@@ -77,22 +77,22 @@ public static partial class EdgeProtocols
     };
 
     /// <summary>What is wrong with a connection's settings, field by field; empty when nothing is.</summary>
-    public static IReadOnlyList<string> SettingsProblems(string protocol, IReadOnlyDictionary<string, string> settings)
+    public static IReadOnlyList<UserMessage> SettingsProblems(string protocol, IReadOnlyDictionary<string, string> settings)
     {
         if (!All.Contains(protocol))
         {
-            return [$"'{protocol}' isn't a protocol Pulaski Edge reads ({string.Join(", ", All.Select(Label))})."];
+            return [UserMessage.From($"'{protocol}' isn't a protocol Pulaski Edge reads ({string.Join(", ", All.Select(Label))}).")];
         }
 
         var known = SettingsOf(protocol);
-        var problems = new List<string>();
-        problems.AddRange(settings.Keys.Where(k => !known.Contains(k)).Select(k => $"'{k}' isn't a {Label(protocol)} setting ({string.Join(", ", known)})."));
+        var problems = new List<UserMessage>();
+        problems.AddRange(settings.Keys.Where(k => !known.Contains(k)).Select(k => UserMessage.From($"'{k}' isn't a {Label(protocol)} setting ({string.Join(", ", known)}).")));
         string? Get(string key) => settings.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
-        void Whole(string key, int min, int max, string what)
+        void Whole(string key, int min, int max, UserMessage what)
         {
             if (Get(key) is { } text && !(int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n >= min && n <= max))
             {
-                problems.Add($"{what} is a whole number from {min} to {max}.");
+                problems.Add(UserMessage.From($"{what} is a whole number from {min} to {max}."));
             }
         }
 
@@ -100,7 +100,7 @@ public static partial class EdgeProtocols
         {
             if (Get(key) is { } flag && flag is not ("true" or "false"))
             {
-                problems.Add($"{key} is true or false.");
+                problems.Add(UserMessage.From($"{key} is true or false."));
             }
         }
 
@@ -109,74 +109,74 @@ public static partial class EdgeProtocols
             case SparkplugB:
                 if (Get("host") is null)
                 {
-                    problems.Add("Give the broker's host.");
+                    problems.Add(UserMessage.Of("Give the broker's host."));
                 }
 
-                Whole("port", 1, 65535, "The port");
+                Whole("port", 1, 65535, UserMessage.Of("The port"));
                 Flag("tls");
                 if (Get("groupId") is { } group && !SparkplugId().IsMatch(group))
                 {
-                    problems.Add("The group id has no '/', '+', '#' or ':'.");
+                    problems.Add(UserMessage.Of("The group id has no '/', '+', '#' or ':'."));
                 }
 
                 break;
             case OpcUa:
                 if (Get("endpoint") is not { } endpoint)
                 {
-                    problems.Add("Give the server's endpoint, such as opc.tcp://plc1:4840.");
+                    problems.Add(UserMessage.Of("Give the server's endpoint, such as opc.tcp://plc1:4840."));
                 }
                 else if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme != "opc.tcp")
                 {
-                    problems.Add("The endpoint is an opc.tcp:// address, such as opc.tcp://plc1:4840.");
+                    problems.Add(UserMessage.Of("The endpoint is an opc.tcp:// address, such as opc.tcp://plc1:4840."));
                 }
 
                 if (Get("securityMode") is { } mode && !OpcUaSecurityModes.Contains(mode))
                 {
-                    problems.Add($"securityMode is {string.Join(", ", OpcUaSecurityModes)}.");
+                    problems.Add(UserMessage.From($"securityMode is {string.Join(", ", OpcUaSecurityModes)}."));
                 }
 
                 if (Get("serverThumbprint") is { } thumbprint && !Thumbprint().IsMatch(thumbprint))
                 {
-                    problems.Add("serverThumbprint is the server certificate's SHA-1 thumbprint: 40 hexadecimal digits.");
+                    problems.Add(UserMessage.Of("serverThumbprint is the server certificate's SHA-1 thumbprint: 40 hexadecimal digits."));
                 }
 
                 Flag("trustAnyServer");
-                Whole("publishingIntervalMs", 50, 60000, "The publishing interval");
-                Whole("samplingIntervalMs", 0, 60000, "The sampling interval");
-                Whole("browseDepth", 0, 10, "The browse depth");
+                Whole("publishingIntervalMs", 50, 60000, UserMessage.Of("The publishing interval"));
+                Whole("samplingIntervalMs", 0, 60000, UserMessage.Of("The sampling interval"));
+                Whole("browseDepth", 0, 10, UserMessage.Of("The browse depth"));
                 if (Get("browseRoot") is { } root && !OpcUaNodeId().IsMatch(root))
                 {
-                    problems.Add("browseRoot is a node id, such as ns=2;s=Line1 or i=85.");
+                    problems.Add(UserMessage.Of("browseRoot is a node id, such as ns=2;s=Line1 or i=85."));
                 }
 
                 break;
             case EthernetIp:
                 if (Get("gateway") is null)
                 {
-                    problems.Add("Give the PLC's address (gateway), such as 10.0.0.20.");
+                    problems.Add(UserMessage.Of("Give the PLC's address (gateway), such as 10.0.0.20."));
                 }
 
                 if (Get("plc") is { } plc && !EthernetIpPlcs.Contains(plc))
                 {
-                    problems.Add($"plc is {string.Join(", ", EthernetIpPlcs)}.");
+                    problems.Add(UserMessage.From($"plc is {string.Join(", ", EthernetIpPlcs)}."));
                 }
 
                 if (Get("path") is { } path && !CipPath().IsMatch(path))
                 {
-                    problems.Add("path is the CIP route to the CPU, such as 1,0.");
+                    problems.Add(UserMessage.Of("path is the CIP route to the CPU, such as 1,0."));
                 }
 
                 if ((Get("plc") ?? "controllogix") is "controllogix" && Get("path") is null)
                 {
-                    problems.Add("A ControlLogix needs its CIP path, such as 1,0 (backplane, slot 0).");
+                    problems.Add(UserMessage.Of("A ControlLogix needs its CIP path, such as 1,0 (backplane, slot 0)."));
                 }
 
-                Whole("pollIntervalMs", 50, 60000, "The poll interval");
-                Whole("timeoutMs", 100, 60000, "The timeout");
+                Whole("pollIntervalMs", 50, 60000, UserMessage.Of("The poll interval"));
+                Whole("timeoutMs", 100, 60000, UserMessage.Of("The timeout"));
                 break;
         }
 
-        problems.AddRange(settings.Where(s => s.Value.Length > 200).Select(s => $"{s.Key} is at most 200 characters."));
+        problems.AddRange(settings.Where(s => s.Value.Length > 200).Select(s => UserMessage.From($"{s.Key} is at most 200 characters.")));
         return problems;
     }
 
@@ -234,7 +234,7 @@ internal static class EdgeRules
     {
         if (EdgeProtocols.SettingsProblems(protocol, settings) is { Count: > 0 } problems)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Settings"] = [.. problems] });
+            throw ValidationException.Field("Settings", problems);
         }
     }
 

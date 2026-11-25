@@ -109,18 +109,18 @@ public class MaterialB2mmlTests
 
         Assert.Equal(["A", "B"], source.Rows.Select(r => r.Code));
         Assert.Equal(3, source.Rows[0].Problems.Count);
-        Assert.Contains(source.Rows[0].Problems, p => p.Contains("Description is missing", StringComparison.Ordinal));
-        Assert.Contains(source.Rows[0].Problems, p => p.Contains("given twice", StringComparison.Ordinal));
-        Assert.Contains(source.Rows[0].Problems, p => p.Contains("isn't yes or no", StringComparison.Ordinal));
+        Assert.Contains(source.Rows[0].Problems, p => p.Text.Contains("Description is missing", StringComparison.Ordinal));
+        Assert.Contains(source.Rows[0].Problems, p => p.Text.Contains("given twice", StringComparison.Ordinal));
+        Assert.Contains(source.Rows[0].Problems, p => p.Text.Contains("isn't yes or no", StringComparison.Ordinal));
         Assert.Empty(source.Rows[1].Problems);
     }
 
     [Fact]
     public void Problems_with_the_file_are_reported_not_thrown_and_dtds_are_refused()
     {
-        Assert.Equal(["The file is empty."], MaterialB2mml.Parse("  ", null).Problems);
-        Assert.StartsWith("The file isn't well-formed XML", Assert.Single(MaterialB2mml.Parse("<MaterialInformation>", null).Problems), StringComparison.Ordinal);
-        Assert.Contains("no MaterialDefinition", Assert.Single(MaterialB2mml.Parse("<MaterialInformation />", null).Problems), StringComparison.Ordinal);
+        Assert.Equal(["The file is empty."], MaterialB2mml.Parse("  ", null).Problems.Select(p => p?.Text));
+        Assert.StartsWith("The file isn't well-formed XML", Assert.Single(MaterialB2mml.Parse("<MaterialInformation>", null).Problems)?.Text, StringComparison.Ordinal);
+        Assert.Contains("no MaterialDefinition", Assert.Single(MaterialB2mml.Parse("<MaterialInformation />", null).Problems)?.Text, StringComparison.Ordinal);
 
         var entity = """
             <?xml version="1.0"?>
@@ -129,10 +129,10 @@ public class MaterialB2mmlTests
             """;
         var refused = MaterialB2mml.Parse(entity, null);
         Assert.Empty(refused.Rows);
-        Assert.StartsWith("The file isn't well-formed XML", Assert.Single(refused.Problems), StringComparison.Ordinal);
+        Assert.StartsWith("The file isn't well-formed XML", Assert.Single(refused.Problems)?.Text, StringComparison.Ordinal);
 
         var big = "<MaterialInformation>" + string.Concat(Enumerable.Repeat("<MaterialDefinition><ID>M</ID></MaterialDefinition>", MaterialImportFields.MaxRows + 1)) + "</MaterialInformation>";
-        Assert.Contains("at most", Assert.Single(MaterialB2mml.Parse(big, null).Problems), StringComparison.Ordinal);
+        Assert.Contains("at most", Assert.Single(MaterialB2mml.Parse(big, null).Problems)?.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public class MaterialB2mmlTests
         Assert.Empty(first.Problems);
 
         Assert.Equal(3, source.Rows[1].Problems.Count);
-        Assert.Contains(Pulaski.Application.Inventory.LotB2mml.Parse("<MaterialInformation/>").Problems, p => p.Contains("no MaterialLot", StringComparison.Ordinal));
+        Assert.Contains(Pulaski.Application.Inventory.LotB2mml.Parse("<MaterialInformation/>").Problems, p => p.Text.Contains("no MaterialLot", StringComparison.Ordinal));
         Assert.Empty(Pulaski.Application.Inventory.LotB2mml.Parse(Pulaski.Application.Inventory.LotB2mml.Template).Rows[0].Problems);
     }
 }

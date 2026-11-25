@@ -1,8 +1,9 @@
-using Pulaski.Application.Errors;
 using Pulaski.Application.Abstractions;
+using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.Quality;
-using Pulaski.Domain.Quality;
 using Pulaski.Domain.Quality.Spc;
+using Pulaski.Domain.Quality;
 
 namespace Pulaski.Application.Quality;
 
@@ -116,12 +117,17 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
         if (ChartTypes.IsAttribute(characteristic.ChartType))
         {
             var rate = ProcessCapability.Counted(subgroups);
-            return common with { DefectRate = rate.Rate, Ppm = rate.Ppm, Inspected = rate.Inspected, Defects = rate.Defects, NotEnough = rate.Rate is null ? "No samples to rate." : null };
+            return common with { DefectRate = rate.Rate, Ppm = rate.Ppm, Inspected = rate.Inspected, Defects = rate.Defects, NotEnough = rate.Rate is null ? Notes.Of("No samples to rate.") : null };
         }
 
         if (item is null)
         {
-            return common with { NotEnough = spec is null ? "The material has no released specification." : $"The material's specification doesn't name {characteristic.Code}." };
+            return common with
+            {
+                NotEnough = spec is null
+                    ? Notes.Of("The material has no released specification.")
+                    : Notes.Of($"The material's specification doesn't name {characteristic.Code}."),
+            };
         }
 
         var result = ProcessCapability.Measured(characteristic.ChartType, subgroups, characteristic.SubgroupSize, (double?)item.Lsl, (double?)item.Usl);
@@ -137,7 +143,7 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
             Ppk = result.Ppk,
             Band = result.Band,
             PerformanceBand = result.PerformanceBand,
-            NotEnough = result.NotEnough,
+            NotEnough = result.NotEnough is { } why ? Notes.Of(why) : null,
         };
     }
 }

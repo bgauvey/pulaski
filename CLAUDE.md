@@ -292,7 +292,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   Refusals carry `UserMessage` (`MessageBuilder` interpolated handler on the exceptions) → problem `template`/`values` → `L.Message`/`L.Problem`;
   the catalog includes them (`TermExtractor.Messages`). Field checks too (#189): `Validator.Require`/`ValidationException.Field` take
   `MessageBuilder` → problem `fieldMessages` → `L.FieldErrors`; notes are `MessageDto`s (`Notes.Of($"…")`, `Notes.Inventory(code, $"…")`; domain
-  records/`UserMessage.From` take `MessageBuilder`) shown with `L.Of`/`L.Notes`. Helpers take `Text l` and use `l["…"]` (tests: `Text.English`); plain labels are
+  records/`UserMessage.From` take `MessageBuilder`) shown with `L.Of`/`L.Notes`. #188: a value may be a `UserMessage` (translated on its own) or
+  `UserMessage.Code(status)` (worded by `Text.Word`); lists are `UserMessage.Join`; a conditional message is one exception per case, an action
+  word one sentence per action; rule helpers return `UserMessage?` (`Validator.Require(field, problem)`). Import problems are `UserMessage`s,
+  results `MessageDto` (`Notes.Of(ex)` for a failed row); server text the screens show is the Domain's `Term.Mark("…")`, shown with `L[…]`. Helpers take `Text l` and use `l["…"]` (tests: `Text.English`); plain labels are
   `Term.Mark` shown with `L[…]`/`L.Of`; codes via `L.Label(code)` (`LabelTerms`, checked against the schema). CSV exports stay English.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.

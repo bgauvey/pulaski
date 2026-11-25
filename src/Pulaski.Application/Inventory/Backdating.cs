@@ -97,7 +97,7 @@ public static class Backdating
     /// </summary>
     /// <exception cref="DomainRuleException">It wasn't there then, or another movement counts after it.</exception>
     public static async Task EnsureLatestAsync(
-        IInventoryRepository inventory, Lot lot, DateTimeOffset effectiveAt, DateTimeOffset now, string what, CancellationToken cancellationToken)
+        IInventoryRepository inventory, Lot lot, DateTimeOffset effectiveAt, DateTimeOffset now, UserMessage what, CancellationToken cancellationToken)
     {
         if (effectiveAt >= now)
         {
@@ -110,7 +110,7 @@ public static class Backdating
         {
             throw new DomainRuleException(
                 $"{lot.Name} has a {Kind(later.Kind)} counting from {Time(later.EffectiveAt)}, after {Time(effectiveAt)}. {what} can count from earlier only " +
-                "when it is the lot's latest movement: what happened later says where the lot was and what status it had.");
+                $"when it is the lot's latest movement: what happened later says where the lot was and what status it had.");
         }
     }
 
@@ -132,7 +132,7 @@ public static class Backdating
         {
             throw new DomainRuleException(
                 $"{lot.Name} was {Kind(later.Kind)} at {Time(later.EffectiveAt)}, after {Time(effectiveAt)}; a movement can count from before a change of its status or location " +
-                "only by reversing that change first.");
+                $"only by reversing that change first.");
         }
     }
 
@@ -144,13 +144,13 @@ public static class Backdating
         }
     }
 
-    private static string Kind(string kind) => kind switch
+    private static object Kind(string kind) => kind switch
     {
-        LotEventKind.StatusChanged => "status change",
-        LotEventKind.Moved => "move",
-        LotEventKind.Packed => "packing",
-        LotEventKind.Unpacked => "unpacking",
-        _ => kind.Replace('_', ' '),
+        LotEventKind.StatusChanged => UserMessage.Of("status change"),
+        LotEventKind.Moved => UserMessage.Of("move"),
+        LotEventKind.Packed => UserMessage.Of("packing"),
+        LotEventKind.Unpacked => UserMessage.Of("unpacking"),
+        _ => UserMessage.Code(kind),
     };
 
     private static string Time(DateTimeOffset at) => at.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);

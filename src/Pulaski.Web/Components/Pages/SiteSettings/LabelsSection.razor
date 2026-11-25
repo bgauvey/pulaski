@@ -263,7 +263,7 @@
                             <div class="small mt-1">
                                 @if (test.Problems.Count > 0)
                                 {
-                                    <span class="text-danger">@string.Join(" ", test.Problems)</span>
+                                    <span class="text-danger">@string.Join(" ", L.Notes(test.Problems))</span>
                                 }
                                 else if (test.Read is { } read)
                                 {

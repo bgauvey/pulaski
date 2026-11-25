@@ -213,8 +213,9 @@ public sealed class LabelPrinting(LabelTemplates templates, IOptions<LabelPrinti
             }
             catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException && !cancellationToken.IsCancellationRequested)
             {
-                throw new DomainRuleException(
-                    $"Couldn't send the labels to {printer.Code} through BarTender: {(ex is OperationCanceledException ? "it didn't answer in time" : ex.Message)}.");
+                throw ex is OperationCanceledException
+                    ? new DomainRuleException($"Couldn't send the labels to {printer.Code} through BarTender: it didn't answer in time.")
+                    : new DomainRuleException($"Couldn't send the labels to {printer.Code} through BarTender: {ex.Message}.");
             }
 
             var done = i == 0 ? "" : $" ({i} of {labels.Count} labels went before it)";
@@ -244,7 +245,9 @@ public sealed class LabelPrinting(LabelTemplates templates, IOptions<LabelPrinti
         }
         catch (Exception ex) when (ex is SocketException or IOException or OperationCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            throw new DomainRuleException($"Couldn't send the labels to {printer.Code} at {printer.Host}:{printer.Port}: {(ex is OperationCanceledException ? "it didn't answer in time" : ex.Message)}.");
+            throw ex is OperationCanceledException
+                ? new DomainRuleException($"Couldn't send the labels to {printer.Code} at {printer.Host}:{printer.Port}: it didn't answer in time.")
+                : new DomainRuleException($"Couldn't send the labels to {printer.Code} at {printer.Host}:{printer.Port}: {ex.Message}.");
         }
     }
 

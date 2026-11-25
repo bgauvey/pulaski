@@ -90,7 +90,9 @@ public sealed record AndonCall(
     /// <exception cref="DomainRuleException">It is already acknowledged or resolved.</exception>
     public AndonCall Acknowledge(DateTimeOffset at, string by) => Status == AndonStatuses.Open
         ? this with { Status = AndonStatuses.Acknowledged, AcknowledgedAt = at, AcknowledgedBy = by }
-        : throw new DomainRuleException(Status == AndonStatuses.Resolved ? "This call is resolved already." : $"{AcknowledgedBy} is already on this call.");
+        : throw (Status == AndonStatuses.Resolved
+            ? new DomainRuleException("This call is resolved already.")
+            : new DomainRuleException($"{AcknowledgedBy} is already on this call."));
 
     /// <summary>Done. Resolving a call nobody acknowledged acknowledges it at the same moment, by the same person.</summary>
     /// <exception cref="DomainRuleException">It is resolved already.</exception>

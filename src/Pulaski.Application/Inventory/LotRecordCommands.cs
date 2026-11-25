@@ -231,9 +231,9 @@ internal sealed class LotAttributeWriter(
         // Anything recorded can be cleared; a new value needs an attribute that is on and offered for the material.
         if (!value.IsEmpty && (!attribute.IsActive || !attribute.AppliesTo(context.MaterialClassId)))
         {
-            throw new DomainRuleException(attribute.IsActive
-                ? $"{attribute.Name} isn't recorded for lots of this material's class."
-                : $"{attribute.Name} is switched off; it can only be cleared.");
+            throw attribute.IsActive
+                ? new DomainRuleException($"{attribute.Name} isn't recorded for lots of this material's class.")
+                : new DomainRuleException($"{attribute.Name} is switched off; it can only be cleared.");
         }
 
         var envelope = events.Create(

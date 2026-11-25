@@ -1,4 +1,5 @@
 using Pulaski.Application.Abstractions;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Labor;
 
@@ -20,10 +21,10 @@ public static class PeopleCsv
         var records = CsvText.Read(text);
         if (records.Count == 0)
         {
-            return new PersonImportSource([], ["The file is empty."]);
+            return new PersonImportSource([], [UserMessage.Of("The file is empty.")]);
         }
 
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         var index = new Dictionary<string, int>(StringComparer.Ordinal);
         var header = records[0].Fields;
         for (var i = 0; i < header.Count; i++)
@@ -36,18 +37,18 @@ public static class PeopleCsv
 
             if (PersonImportFields.Canonical(name) is not { } column)
             {
-                problems.Add($"Unknown column '{header[i]}'. The columns are {string.Join(", ", PersonImportFields.Names.Keys)}.");
+                problems.Add(UserMessage.From($"Unknown column '{header[i]}'. The columns are {string.Join(", ", PersonImportFields.Names.Keys)}."));
             }
             else if (!index.TryAdd(column, i))
             {
-                problems.Add($"Column '{column}' appears twice.");
+                problems.Add(UserMessage.From($"Column '{column}' appears twice."));
             }
         }
 
-        problems.AddRange(Required.Where(r => !index.ContainsKey(r)).Select(r => $"The required column '{r}' is missing."));
+        problems.AddRange(Required.Where(r => !index.ContainsKey(r)).Select(r => UserMessage.From($"The required column '{r}' is missing.")));
         if (records.Count - 1 > PersonImportFields.MaxRows)
         {
-            problems.Add($"The file has {records.Count - 1} rows; import at most {PersonImportFields.MaxRows} at a time.");
+            problems.Add(UserMessage.From($"The file has {records.Count - 1} rows; import at most {PersonImportFields.MaxRows} at a time."));
         }
 
         if (problems.Count > 0)
@@ -60,7 +61,7 @@ public static class PeopleCsv
             .Where(r => r.Fields.Any(f => f.Length > 0))
             .Select(r => ToRow(r, index, system))
             .ToList();
-        return new PersonImportSource(rows, rows.Count == 0 ? ["The file has a header but no rows."] : []);
+        return new PersonImportSource(rows, rows.Count == 0 ? [UserMessage.Of("The file has a header but no rows.")] : []);
     }
 
     private static PersonImportRow ToRow(CsvRecord record, Dictionary<string, int> index, string? system)

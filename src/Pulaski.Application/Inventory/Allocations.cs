@@ -118,10 +118,10 @@ public sealed record ComponentPlan(
     decimal Consumed,
     decimal Allocated,
     decimal Remaining,
-    IReadOnlyList<(HeldAllocation Allocation, AllocationLot? Lot, string? Problem)> Allocations,
+    IReadOnlyList<(HeldAllocation Allocation, AllocationLot? Lot, UserMessage? Problem)> Allocations,
     IReadOnlyList<(LotPick Pick, AllocationLot Lot, AllocationAlternate? Alternate)> Picks,
     IReadOnlyList<(LotExclusion Exclusion, AllocationLot Lot)> Excluded,
-    string? Problem)
+    UserMessage? Problem)
 {
     /// <summary>What the suggestions cover of the component, in its base unit: an alternate's at its ratio.</summary>
     public decimal Suggested => Picks.Sum(p => p.Alternate is { } a ? Math.Round(p.Pick.Quantity / a.Ratio, 6, MidpointRounding.AwayFromZero) : p.Pick.Quantity);
@@ -147,7 +147,7 @@ internal static class AllocationPlanner
             var first = rows.First();
             var converter = UnitConversions.For(first.MaterialId, units, conversions);
             decimal? need = 0m;
-            string? problem = null;
+            UserMessage? problem = null;
             foreach (var row in rows)
             {
                 if (converter.Factor(row.UomId, row.BaseUomId) is { } factor)
@@ -157,7 +157,7 @@ internal static class AllocationPlanner
                 else
                 {
                     need = null;
-                    problem = $"{first.MaterialCode} is planned in a unit that doesn't convert to {first.BaseUomCode}; nothing is suggested.";
+                    problem = UserMessage.From($"{first.MaterialCode} is planned in a unit that doesn't convert to {first.BaseUomCode}; nothing is suggested.");
                     break;
                 }
             }
@@ -171,7 +171,7 @@ internal static class AllocationPlanner
             {
                 var lot = byLot.GetValueOrDefault(a.Allocation.LotId);
                 var issue = lot is null
-                    ? "The lot is no longer on hand."
+                    ? UserMessage.Of("The lot is no longer on hand.")
                     : LotRecommendation.AllocationProblem(a.Allocation, lot.Candidate, neededBy, a.Allocation.Ratio is null
                         ? first.BaseUomCode
                         : source.Alternates?.FirstOrDefault(x => x.MaterialId == a.Allocation.MaterialId)?.BaseUomCode ?? first.BaseUomCode);
@@ -196,7 +196,7 @@ internal static class AllocationPlanner
                     Math.Round(left * alternate.Ratio, 6, MidpointRounding.AwayFromZero), alternateLots.Select(l => l.Candidate), neededBy, alternate.BaseUomCode, source.Preferences);
                 foreach (var pick in alternatePicks)
                 {
-                    chosen.Add((pick with { Reason = $"Alternate for {first.MaterialCode} ({alternate.Ratio:0.######} {alternate.BaseUomCode} per {first.BaseUomCode}): {pick.Reason}" },
+                    chosen.Add((pick with { Reason = UserMessage.From($"Alternate for {first.MaterialCode} ({alternate.Ratio:0.######} {alternate.BaseUomCode} per {first.BaseUomCode}): {pick.Reason}") },
                         byLot[pick.Lot.LotId], alternate));
                     left -= Math.Round(pick.Quantity / alternate.Ratio, 6, MidpointRounding.AwayFromZero);
                 }
@@ -272,7 +272,7 @@ internal sealed class GetJobAllocationsHandler(IAllocationReadStore store, IUnit
                 ConsumedQty = p.Consumed,
                 AllocatedQty = p.Allocated,
                 RemainingQty = p.Remaining,
-                Problem = p.Problem,
+                Problem = p.Problem is { } problem ? Notes.Of(problem) : null,
                 Allocations = [.. p.Allocations.Select(a => new LotAllocationDto
                 {
                     Id = a.Allocation.Allocation.Id,
@@ -293,7 +293,7 @@ internal sealed class GetJobAllocationsHandler(IAllocationReadStore store, IUnit
                     Note = a.Allocation.Allocation.Note,
                     CreatedAt = a.Allocation.CreatedAt,
                     CreatedBy = a.Allocation.CreatedBy,
-                    Problem = a.Problem,
+                    Problem = a.Problem is { } issue ? Notes.Of(issue) : null,
                 })],
                 Recommendations = [.. p.Picks.Select(x => new LotRecommendationDto
                 {
@@ -308,7 +308,8 @@ internal sealed class GetJobAllocationsHandler(IAllocationReadStore store, IUnit
                     Free = x.Lot.Candidate.Free,
                     ExpiresAt = x.Lot.Candidate.ExpiresAt,
                     ReceivedAt = x.Lot.Candidate.ReceivedAt,
-                    Reason = x.Pick.Reason,
+                    Reason = x.Pick.Reason.Text,
+                    ReasonMessage = Notes.Of(x.Pick.Reason),
                 })],
                 Excluded = [.. p.Excluded.Select(x => new LotExclusionDto
                 {
@@ -316,7 +317,8 @@ internal sealed class GetJobAllocationsHandler(IAllocationReadStore store, IUnit
                     LotLabel = x.Lot.Candidate.Label,
                     LocationCode = x.Lot.LocationCode,
                     Quantity = x.Lot.Candidate.Quantity,
-                    Reason = x.Exclusion.Reason,
+                    Reason = x.Exclusion.Reason.Text,
+                    ReasonMessage = Notes.Of(x.Exclusion.Reason),
                 })],
             })],
         };
@@ -333,7 +335,7 @@ internal sealed class AllocationWriter(
         var source = await allocations.LoadAsync(jobId, cancellationToken) ?? throw new DomainRuleException("Only a production job's components are allocated.");
         if (!AllocationPlanner.CanAllocate(source.Job))
         {
-            throw new DomainRuleException($"{source.Job.JobNumber} is {source.Job.Status}; nothing is allocated to it.");
+            throw new DomainRuleException($"{source.Job.JobNumber} is {UserMessage.Code(source.Job.Status)}; nothing is allocated to it.");
         }
 
         return source;
@@ -418,16 +420,18 @@ internal sealed class AllocationWriter(
                     var left = lot is null ? 0m : lot.Candidate.Quantity - lot.Candidate.AllocatedToOthers;
                     if (lot is not null && LotRecommendation.Problem(lot.Candidate, AllocationPlanner.NeededBy(source.Job, time.GetUtcNow())) is null && left > 0)
                     {
-                        await ChangeAsync(current, current.TrimTo(left), EventTypes.LotAllocationChanged, problem, cancellationToken);
+                        await ChangeAsync(current, current.TrimTo(left), EventTypes.LotAllocationChanged, problem!.Text, cancellationToken);
                         trimmed++;
                     }
                     else
                     {
-                        await ChangeAsync(current, current.Release(problem), EventTypes.LotAllocationReleased, problem, cancellationToken);
+                        await ChangeAsync(current, current.Release(problem!.Text), EventTypes.LotAllocationReleased, problem.Text, cancellationToken);
                         released++;
                     }
 
-                    notes.Add(Notes.Of($"{source.Job.JobNumber}, {lot?.Candidate.Label ?? "a lot"}: {problem}"));
+                    notes.Add(lot is null
+                        ? Notes.Of($"{source.Job.JobNumber}, a lot: {problem}")
+                        : Notes.Of($"{source.Job.JobNumber}, {lot.Candidate.Label}: {problem}"));
                 }
             }
 
@@ -440,7 +444,7 @@ internal sealed class AllocationWriter(
             {
                 foreach (var (pick, lot, alternate) in plan.Picks)
                 {
-                    await AllocateAsync(source, lot.MaterialId, lot.Candidate.LotId, pick.Quantity, AllocationBasis.Recommended, pick.Reason, cancellationToken,
+                    await AllocateAsync(source, lot.MaterialId, lot.Candidate.LotId, pick.Quantity, AllocationBasis.Recommended, pick.Reason.Text, cancellationToken,
                         alternate?.ComponentId, alternate?.Ratio);
                     allocated++;
                 }
@@ -500,9 +504,10 @@ internal sealed class AllocateLotHandler(
 
         if (quantity > candidate.Free)
         {
-            throw new DomainRuleException(
-                $"{lot.Name} has only {InventoryRules.Qty(candidate.Free)} {material.BaseUomCode} free" +
-                (candidate.AllocatedToOthers > 0 ? $"; {InventoryRules.Qty(candidate.AllocatedToOthers)} {material.BaseUomCode} is allocated to other jobs." : "."));
+            throw candidate.AllocatedToOthers > 0
+                ? new DomainRuleException(
+                    $"{lot.Name} has only {InventoryRules.Qty(candidate.Free)} {material.BaseUomCode} free; {InventoryRules.Qty(candidate.AllocatedToOthers)} {material.BaseUomCode} is allocated to other jobs.")
+                : new DomainRuleException($"{lot.Name} has only {InventoryRules.Qty(candidate.Free)} {material.BaseUomCode} free.");
         }
 
         await writer.AllocateAsync(source, lot.MaterialId, lot.Id, quantity, AllocationBasis.Chosen, note, cancellationToken, alternate?.ComponentId, alternate?.Ratio);
@@ -593,7 +598,7 @@ internal sealed class ReleaseAllocationHandler(
         _ = await inventory.GetJobForUpdateAsync(found.JobId, cancellationToken);
         await inventory.LockLotsAsync([found.LotId], cancellationToken);
         var held = (await allocations.LockActiveOfLotsAsync([found.LotId], cancellationToken)).FirstOrDefault(a => a.Allocation.Id == found.Id)?.Allocation
-            ?? throw new DomainRuleException($"That allocation is {found.Status} already.");
+            ?? throw new DomainRuleException($"That allocation is {UserMessage.Code(found.Status)} already.");
         var writer = new AllocationWriter(inventory, allocations, units, eventLog, events, ids, time);
         await writer.ChangeAsync(held, held.Release(note), EventTypes.LotAllocationReleased, note, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -719,7 +724,7 @@ internal static class AllocationUse
         {
             throw new DomainRuleException(
                 $"{InventoryRules.Qty(quantity - Math.Max(0m, free))} {unitCode} of {lot.Name} is reserved for {string.Join(", ", others.Select(o => o.JobNumber).Distinct())}; " +
-                "release or move their allocation first.");
+                $"release or move their allocation first.");
         }
 
         return others.Count > 0 && quantity > free

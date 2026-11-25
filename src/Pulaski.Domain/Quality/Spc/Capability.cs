@@ -25,7 +25,7 @@ public static class CapabilityBands
 /// of every value. A one-sided specification has only its Cpk (and Ppk) side. Null figures, with <see cref="NotEnough"/>, when there aren't enough.
 /// </summary>
 public sealed record CapabilityResult(
-    int Subgroups, double? Mean, double? SigmaWithin, double? SigmaOverall, double? Cp, double? Cpk, double? Pp, double? Ppk, string? NotEnough)
+    int Subgroups, double? Mean, double? SigmaWithin, double? SigmaOverall, double? Cp, double? Cpk, double? Pp, double? Ppk, UserMessage? NotEnough)
 {
     public string? Band => CapabilityBands.Of(Cpk);
 
@@ -51,13 +51,15 @@ public static class ProcessCapability
         var usable = subgroups.Where(s => used.LeftOut.All(l => l.Subgroup.SampleId != s.SampleId)).OrderBy(s => s.At).ToList();
         if (lsl is null && usl is null)
         {
-            return new(usable.Count, null, null, null, null, null, null, null, "The specification gives no limits for it.");
+            return new(usable.Count, null, null, null, null, null, null, null, UserMessage.Of("The specification gives no limits for it."));
         }
 
         if (ChartTypes.IsAttribute(chartType) || usable.Count < MinSubgroups)
         {
             return new(usable.Count, null, null, null, null, null, null, null,
-                ChartTypes.IsAttribute(chartType) ? "Capability indices are for measured values." : $"Only {usable.Count} usable subgroups; capability needs at least {MinSubgroups}.");
+                ChartTypes.IsAttribute(chartType)
+                    ? UserMessage.Of("Capability indices are for measured values.")
+                    : UserMessage.From($"Only {usable.Count} usable subgroups; capability needs at least {MinSubgroups}."));
         }
 
         var values = usable.SelectMany(s => s.Values!).ToList();

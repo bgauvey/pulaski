@@ -173,10 +173,10 @@ public static class DeliveryFeedKinds
     public static string Sink(string kind, string feed) => $"{kind}:{feed}";
 
     /// <returns>Why a feed code isn't acceptable, or null: 2 to 30 lower-case letters, digits, '-' or '_', starting with a letter.</returns>
-    public static string? CodeProblem(string code) =>
+    public static UserMessage? CodeProblem(string code) =>
         System.Text.RegularExpressions.Regex.IsMatch(code, "^[a-z][a-z0-9_-]{1,29}$")
             ? null
-            : "Use 2 to 30 lower-case letters, digits, '-' and '_', starting with a letter.";
+            : UserMessage.Of("Use 2 to 30 lower-case letters, digits, '-' and '_', starting with a letter.");
 
     /// <summary>
     /// An MQTT topic for an event from a feed's template (#74): <c>{type}</c>, <c>{subjectType}</c> and <c>{subject}</c> are filled in; the
@@ -233,22 +233,22 @@ public sealed record DeliveryFeedSettings(
     public IReadOnlyList<string> TypePrefixes =>
         Format == DeliveryFormats.B2mml ? DeliveryFormats.PerformanceTriggers : DeliveryKinds.PrefixesOf(EventKinds);
 
-    public IReadOnlyList<string> Problems()
+    public IReadOnlyList<UserMessage> Problems()
     {
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         if (Name.Length > MaxName)
         {
-            problems.Add($"The name is at most {MaxName} characters.");
+            problems.Add(UserMessage.From($"The name is at most {MaxName} characters."));
         }
 
         if (!DeliveryFeedKinds.All.Contains(Kind))
         {
-            problems.Add("A feed is a webhook or an MQTT broker.");
+            problems.Add(UserMessage.Of("A feed is a webhook or an MQTT broker."));
         }
 
         if (!DeliveryFormats.All.Contains(Format))
         {
-            problems.Add("A feed sends CloudEvents or B2MML.");
+            problems.Add(UserMessage.Of("A feed sends CloudEvents or B2MML."));
         }
 
         if (Url is { } url)
@@ -258,51 +258,51 @@ public sealed record DeliveryFeedSettings(
             {
                 if (!parsed || uri!.Scheme is not ("mqtt" or "mqtts"))
                 {
-                    problems.Add("A broker's address is mqtt://host:port or mqtts://host:port.");
+                    problems.Add(UserMessage.Of("A broker's address is mqtt://host:port or mqtts://host:port."));
                 }
             }
             else if (!parsed || uri!.Scheme is not ("https" or "http"))
             {
-                problems.Add("The address must be a full https:// URL.");
+                problems.Add(UserMessage.Of("The address must be a full https:// URL."));
             }
             else if (uri.Scheme == "http" && !uri.IsLoopback)
             {
-                problems.Add("Use https:// for a receiver on another machine; plain http only for this one.");
+                problems.Add(UserMessage.Of("Use https:// for a receiver on another machine; plain http only for this one."));
             }
         }
         else if (Enabled)
         {
-            problems.Add("Give the receiver's address before switching the feed on.");
+            problems.Add(UserMessage.Of("Give the receiver's address before switching the feed on."));
         }
 
         if (EventKinds.Except(DeliveryKinds.All.Select(k => k.Code)).FirstOrDefault() is { } unknown)
         {
-            problems.Add($"'{unknown}' isn't a kind of event.");
+            problems.Add(UserMessage.From($"'{unknown}' isn't a kind of event."));
         }
 
         if (Enabled && EventKinds.Count == 0 && Format == DeliveryFormats.CloudEvents)
         {
-            problems.Add("Choose at least one kind of event to send.");
+            problems.Add(UserMessage.Of("Choose at least one kind of event to send."));
         }
 
         if (Kind == DeliveryFeedKinds.Mqtt && (string.IsNullOrWhiteSpace(Topic) || Topic.IndexOfAny(['#', '+']) >= 0 || Topic.StartsWith('/')))
         {
-            problems.Add("Give the topic to publish to, such as pulaski/{type}, without # or + and not starting with /.");
+            problems.Add(UserMessage.Of("Give the topic to publish to, such as pulaski/{type}, without # or + and not starting with /."));
         }
 
         if (MaxAttempts is < 1 or > 50)
         {
-            problems.Add("Attempts must be 1 to 50.");
+            problems.Add(UserMessage.Of("Attempts must be 1 to 50."));
         }
 
         if (TimeoutSeconds is < 1 or > 120)
         {
-            problems.Add("The timeout must be 1 to 120 seconds.");
+            problems.Add(UserMessage.Of("The timeout must be 1 to 120 seconds."));
         }
 
         if (PollSeconds is < 1 or > 300)
         {
-            problems.Add("Checking for new events must be every 1 to 300 seconds.");
+            problems.Add(UserMessage.Of("Checking for new events must be every 1 to 300 seconds."));
         }
 
         return problems;

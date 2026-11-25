@@ -281,7 +281,7 @@ internal sealed class StartJobHandler(
         // The line it starts on takes it only in whole batches of its own size (D-065).
         if (boms is not null && units is not null && job.PlannedQty is { } quantity && job.UomId is { } uomId && !job.PartialBatchPlanned)
         {
-            await BatchPlanning.EnsureWholeAsync(boms, units, job.MaterialId!.Value, quantity, uomId, $"Job {job.JobNumber} on {line.Code}", lineBatches, line.Id, now, cancellationToken);
+            await BatchPlanning.EnsureWholeAsync(boms, units, job.MaterialId!.Value, quantity, uomId, UserMessage.From($"Job {job.JobNumber} on {line.Code}"), lineBatches, line.Id, now, cancellationToken);
         }
 
         var assigned = job.Assign(target, targetIsGroup: false, await SchedulingRules.RankAsync(scheduling, target, null, job.Id, now, cancellationToken));

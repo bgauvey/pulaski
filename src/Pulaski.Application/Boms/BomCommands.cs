@@ -81,7 +81,7 @@ internal sealed class SaveBomDraftHandler(
         var materials = await boms.GetMaterialsAsync(BomRules.MaterialIds(definition, bom.MaterialId), cancellationToken);
         if (BomRules.ReferenceProblems(definition, bom, materials, null, malformedOnly: true) is { Count: > 0 } malformed)
         {
-            throw new DomainRuleException(malformed[0].Message);
+            throw new DomainRuleException(malformed[0].Text);
         }
 
         var saved = current.SaveDraft(definition);
@@ -122,7 +122,7 @@ internal sealed class ReleaseBomVersionHandler(
         var converterFor = await BomLocks.ConvertersAsync(units, materials, cancellationToken);
         if (BomRules.ReferenceProblems(draft.Definition, bom, materials, operations, malformedOnly: false, converterFor) is { Count: > 0 } problems)
         {
-            throw new DomainRuleException(string.Join(" ", problems.Select(p => p.Message)));
+            throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
         }
 
         var released = draft.Release(timeProvider.GetUtcNow(), string.IsNullOrWhiteSpace(command.Note) ? null : command.Note.Trim());

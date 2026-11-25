@@ -1,9 +1,10 @@
 using System.Globalization;
 using System.Security;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Xml;
+using System.Text;
 using System.Xml.Linq;
+using System.Xml;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Inventory;
 
@@ -79,16 +80,16 @@ public static partial class Btxml
     }
 
     /// <summary>What is wrong with a template, filled in with sample values; empty when it is a BTXML print script.</summary>
-    public static IReadOnlyList<string> Problems(string? template)
+    public static IReadOnlyList<UserMessage> Problems(string? template)
     {
         if (string.IsNullOrWhiteSpace(template))
         {
-            return ["Give the BTXML template; start from the standard one."];
+            return [UserMessage.Of("Give the BTXML template; start from the standard one.")];
         }
 
         if (template.Length > MaxTemplate)
         {
-            return [$"Keep the template to {MaxTemplate} characters."];
+            return [UserMessage.From($"Keep the template to {MaxTemplate} characters.")];
         }
 
         var sample = new Dictionary<string, string?>(StringComparer.Ordinal) { ["Code"] = "PUL1L1", ["Title"] = "Sample <&> \"label\"", ["Line1"] = "Line" };
@@ -99,29 +100,29 @@ public static partial class Btxml
         }
         catch (XmlException ex)
         {
-            return [$"The template isn't well-formed XML once filled in: {ex.Message}"];
+            return [UserMessage.From($"The template isn't well-formed XML once filled in: {ex.Message}")];
         }
 
-        var problems = new List<string>();
+        var problems = new List<UserMessage>();
         if (script.Root?.Name.LocalName != "XMLScript")
         {
-            problems.Add("A BTXML script's root element is XMLScript.");
+            problems.Add(UserMessage.Of("A BTXML script's root element is XMLScript."));
         }
 
         if (!script.Descendants().Any(e => e.Name.LocalName == "Print" && e.Elements().Any(f => f.Name.LocalName == "Format")))
         {
-            problems.Add("The script needs a Print command with a Format (use {{BtwPath}} for the .btw document).");
+            problems.Add(UserMessage.Of("The script needs a Print command with a Format (use {{BtwPath}} for the .btw document)."));
         }
 
         return problems;
     }
 
     /// <summary>What is wrong with a document path; null when it can be used.</summary>
-    public static string? PathProblem(string? path) =>
-        string.IsNullOrWhiteSpace(path) ? "Give the .btw document's path."
-        : path.Length > MaxPath ? $"Keep a path to {MaxPath} characters."
-        : path.Any(char.IsControl) ? "A path can't hold control characters."
-        : !path.Trim().EndsWith(".btw", StringComparison.OrdinalIgnoreCase) ? "A BarTender document ends in .btw."
+    public static UserMessage? PathProblem(string? path) =>
+        string.IsNullOrWhiteSpace(path) ? UserMessage.Of("Give the .btw document's path.")
+        : path.Length > MaxPath ? UserMessage.From($"Keep a path to {MaxPath} characters.")
+        : path.Any(char.IsControl) ? UserMessage.Of("A path can't hold control characters.")
+        : !path.Trim().EndsWith(".btw", StringComparison.OrdinalIgnoreCase) ? UserMessage.Of("A BarTender document ends in .btw.")
         : null;
 
     /// <summary>Whether <paramref name="operation"/> can name a document: <c>default</c>, a kind, or a kind and what printed it (<c>lot.produced</c>).</summary>

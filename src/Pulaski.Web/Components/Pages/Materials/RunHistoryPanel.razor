@@ -83,7 +83,7 @@
             }
             else
             {
-                <p class="small text-warning-strong mb-2">@L["No rate: {0} It needs {1} runs and {2} hours of usable history.", r.NotEnough, r.MinRuns, Qty(r.MinHours)]</p>
+                <p class="small text-warning-strong mb-2">@L["No rate: {0} It needs {1} runs and {2} hours of usable history.", r.NotEnough is { } why ? L.Of(why) : "", r.MinRuns, Qty(r.MinHours)]</p>
             }
 
             @if (r.Runs.Count == 0)
@@ -108,7 +108,7 @@
                                 }
                                 <td class="inv-num">@(run.GoodQty is { } g ? Qty(g) : "—")</td>
                                 <td class="inv-num">@(run.RatePerHour is { } rate ? Qty(rate) : "—")</td>
-                                <td>@(run.Excluded is { } why ? L["Left out: {0}", why] : L["Used"])</td>
+                                <td>@(run.Excluded is { } why ? L["Left out: {0}", L.Of(why)] : L["Used"])</td>
                             </tr>
                         }
                     </tbody>

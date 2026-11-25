@@ -83,7 +83,7 @@ public sealed record LotAllocation(
     /// <exception cref="DomainRuleException">It isn't active.</exception>
     public LotAllocation Release(string? note) => IsActive
         ? this with { Status = AllocationStatus.Released, Note = note ?? Note }
-        : throw new DomainRuleException($"That allocation is {Status} already.");
+        : throw new DomainRuleException($"That allocation is {UserMessage.Code(Status)} already.");
 
     /// <summary>Keeps only what the lot can still give.</summary>
     public LotAllocation TrimTo(decimal quantity) => this with { Quantity = Math.Max(0m, Math.Min(Quantity, quantity)) };
@@ -107,10 +107,10 @@ public sealed record AllocationCandidate(
 }
 
 /// <summary>A suggested lot and quantity, and why it comes where it does.</summary>
-public sealed record LotPick(AllocationCandidate Lot, decimal Quantity, string Reason);
+public sealed record LotPick(AllocationCandidate Lot, decimal Quantity, UserMessage Reason);
 
 /// <summary>A lot of the material that wasn't suggested, and why.</summary>
-public sealed record LotExclusion(AllocationCandidate Lot, string Reason);
+public sealed record LotExclusion(AllocationCandidate Lot, UserMessage Reason);
 
 /// <summary>
 /// Which lots to use first for a job's component (D-064): first expiry, first out, by day; among lots expiring the same day (or not at all),
@@ -138,13 +138,13 @@ public static class LotRecommendation
 
             if (lot.Free <= 0)
             {
-                excluded.Add(new LotExclusion(lot, lot.AllocatedToJob > 0 ? "Already allocated to this job." : "All of it is allocated to other jobs."));
+                excluded.Add(new LotExclusion(lot, lot.AllocatedToJob > 0 ? UserMessage.Of("Already allocated to this job.") : UserMessage.Of("All of it is allocated to other jobs.")));
                 continue;
             }
 
             if (left <= 0)
             {
-                excluded.Add(new LotExclusion(lot, "Not needed: the lots before it cover the need."));
+                excluded.Add(new LotExclusion(lot, UserMessage.Of("Not needed: the lots before it cover the need.")));
                 continue;
             }
 
@@ -157,17 +157,17 @@ public static class LotRecommendation
     }
 
     /// <summary>Why a lot can't feed the job at all; null when it can. An allocation that has one is no longer good.</summary>
-    public static string? Problem(AllocationCandidate lot, DateTimeOffset neededBy) =>
-        lot.Status != LotStatus.Available ? $"It is {lot.Status.Replace('_', ' ')}; only available stock is allocated."
-        : lot.ExpiresAt is { } expires && expires <= neededBy ? $"It expires {Day(expires)}, before the job needs it ({Day(neededBy)})."
-        : lot.Quantity <= 0 ? "It is empty."
+    public static UserMessage? Problem(AllocationCandidate lot, DateTimeOffset neededBy) =>
+        lot.Status != LotStatus.Available ? UserMessage.From($"It is {UserMessage.Code(lot.Status)}; only available stock is allocated.")
+        : lot.ExpiresAt is { } expires && expires <= neededBy ? UserMessage.From($"It expires {Day(expires)}, before the job needs it ({Day(neededBy)}).")
+        : lot.Quantity <= 0 ? UserMessage.Of("It is empty.")
         : null;
 
     /// <summary>Why an existing allocation is no longer good; null while it is.</summary>
-    public static string? AllocationProblem(LotAllocation allocation, AllocationCandidate lot, DateTimeOffset neededBy, string unitCode) =>
+    public static UserMessage? AllocationProblem(LotAllocation allocation, AllocationCandidate lot, DateTimeOffset neededBy, string unitCode) =>
         Problem(lot, neededBy)
         ?? (lot.Quantity - lot.AllocatedToOthers < allocation.Quantity
-            ? $"The lot has only {Qty(Math.Max(0m, lot.Quantity - lot.AllocatedToOthers))} {unitCode} left for this job, not the {Qty(allocation.Quantity)} {unitCode} allocated."
+            ? UserMessage.From($"The lot has only {Qty(Math.Max(0m, lot.Quantity - lot.AllocatedToOthers))} {unitCode} left for this job, not the {Qty(allocation.Quantity)} {unitCode} allocated.")
             : null);
 
     /// <summary>Expiry day first; then the preferences, each ranking the lots it favours first; then the oldest receipt and the label.</summary>
@@ -189,20 +189,24 @@ public static class LotRecommendation
         return ordered.ThenBy(c => c.ReceivedAt).ThenBy(c => c.Label, StringComparer.Ordinal);
     }
 
-    private static string Why(AllocationCandidate lot, DateTimeOffset? firstExpiry, string unitCode, IReadOnlyList<string> preferences, decimal left)
+    /// <summary>"Expires 3 Dec 2026, the earliest; at the line; received 1 Nov 2026; 40 kg free.", each part translated on its own (#188).</summary>
+    private static UserMessage Why(AllocationCandidate lot, DateTimeOffset? firstExpiry, string unitCode, IReadOnlyList<string> preferences, decimal left)
     {
         var order = lot.ExpiresAt is { } expires
-            ? $"Expires {Day(expires)}{(expires == firstExpiry ? ", the earliest" : "")}"
-            : "No expiry";
+            ? expires == firstExpiry ? UserMessage.From($"Expires {Day(expires)}, the earliest") : UserMessage.From($"Expires {Day(expires)}")
+            : UserMessage.Of("No expiry");
         var favoured = preferences.Select(p => p switch
         {
-            AllocationPreferences.NearLine when lot.NearLine => "at the line",
-            AllocationPreferences.InContainer when lot.InContainer => "in a container",
-            AllocationPreferences.WholeLot when lot.Free >= left => "covers the rest alone",
-            AllocationPreferences.PartLotsFirst when lot.Free < left => "a part lot, used up first",
+            AllocationPreferences.NearLine when lot.NearLine => UserMessage.Of("at the line"),
+            AllocationPreferences.InContainer when lot.InContainer => UserMessage.Of("in a container"),
+            AllocationPreferences.WholeLot when lot.Free >= left => UserMessage.Of("covers the rest alone"),
+            AllocationPreferences.PartLotsFirst when lot.Free < left => UserMessage.Of("a part lot, used up first"),
             _ => null,
-        }).OfType<string>().ToList();
-        return $"{order}{(favoured.Count > 0 ? "; " + string.Join(", ", favoured) : "")}; received {Day(lot.ReceivedAt)}; {Qty(lot.Free)} {unitCode} free.";
+        }).OfType<UserMessage>().ToList();
+        var (received, free) = (Day(lot.ReceivedAt), Qty(lot.Free));
+        return favoured.Count > 0
+            ? UserMessage.From($"{order}; {UserMessage.Join(favoured, ", ")}; received {received}; {free} {unitCode} free.")
+            : UserMessage.From($"{order}; received {received}; {free} {unitCode} free.");
     }
 
     private static string Day(DateTimeOffset at) => at.UtcDateTime.ToString("d MMM yyyy", CultureInfo.InvariantCulture);

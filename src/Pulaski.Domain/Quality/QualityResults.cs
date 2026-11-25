@@ -34,23 +34,23 @@ public sealed record QualityMeasurement(IReadOnlyList<decimal>? Values, int? Ins
     public int SubgroupSize => Values?.Count ?? Inspected ?? 0;
 
     /// <returns>Why the measurement doesn't fit a characteristic of <paramref name="kind"/>, or null.</returns>
-    public string? Problem(string kind)
+    public UserMessage? Problem(string kind)
     {
         if (kind == CharacteristicKinds.Variable)
         {
             return Inspected is not null || Defects is not null
-                ? "A measured characteristic takes values, not counts."
+                ? UserMessage.Of("A measured characteristic takes values, not counts.")
                 : Values is not { Count: > 0 }
-                    ? "Enter at least one value."
-                    : Values.Count > MaxValues ? $"At most {MaxValues} values in one sample." : null;
+                    ? UserMessage.Of("Enter at least one value.")
+                    : Values.Count > MaxValues ? UserMessage.From($"At most {MaxValues} values in one sample.") : null;
         }
 
         return Values is { Count: > 0 }
-            ? "An inspected characteristic takes counts, not values."
+            ? UserMessage.Of("An inspected characteristic takes counts, not values.")
             : Inspected is not > 0
-                ? "Enter how many were inspected (at least 1)."
+                ? UserMessage.Of("Enter how many were inspected (at least 1).")
                 : Defects is not { } defects || defects < 0 || defects > Inspected
-                    ? "Defects must be between 0 and the number inspected."
+                    ? UserMessage.Of("Defects must be between 0 and the number inspected.")
                     : null;
     }
 }

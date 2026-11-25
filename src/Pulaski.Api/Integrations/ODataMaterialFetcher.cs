@@ -1,7 +1,8 @@
 using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using Pulaski.Application.Materials;
+using Pulaski.Domain;
 
 namespace Pulaski.Api.Integrations;
 
@@ -44,7 +45,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
         {
             if (page == MaxPages)
             {
-                return Problem(connection, $"the service sent more than {MaxPages} pages.");
+                return Problem(connection, UserMessage.From($"the service sent more than {MaxPages} pages."));
             }
 
             using var request = new HttpRequestMessage(HttpMethod.Get, next);
@@ -68,14 +69,14 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
                 items.AddRange(found);
                 if (items.Count > maxItems)
                 {
-                    return Problem(connection, $"the service has more than {maxItems} items; one import takes at most that.");
+                    return Problem(connection, UserMessage.From($"the service has more than {maxItems} items; one import takes at most that."));
                 }
 
                 next = ConnectionItems.NextLink(document.RootElement, connection.NextLinkPath) is { } href ? new Uri(next, href) : null;
             }
             catch (JsonException)
             {
-                return Problem(connection, "the answer isn't JSON.");
+                return Problem(connection, UserMessage.Of("the answer isn't JSON."));
             }
         }
 
@@ -94,7 +95,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
         {
             if (page == MaxPages)
             {
-                return Problem(connection, $"the service sent more than {MaxPages} pages.");
+                return Problem(connection, UserMessage.From($"the service sent more than {MaxPages} pages."));
             }
 
             var address = $"{connection.BaseUrl!.TrimEnd('/')}/Users?startIndex={items.Count + 1}&count={ScimPageSize}"
@@ -117,7 +118,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
                 var hasResources = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("Resources", out _);
                 if (root.ValueKind != JsonValueKind.Object || (!hasResources && !root.TryGetProperty("totalResults", out _)))
                 {
-                    return Problem(connection, "the answer isn't a SCIM ListResponse.");
+                    return Problem(connection, UserMessage.Of("the answer isn't a SCIM ListResponse."));
                 }
 
                 var users = root.TryGetProperty("Resources", out var resources) && resources.ValueKind == JsonValueKind.Array
@@ -126,7 +127,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
                 items.AddRange(users);
                 if (items.Count > maxItems)
                 {
-                    return Problem(connection, $"the service has more than {maxItems} users; one import takes at most that. Narrow it with a filter.");
+                    return Problem(connection, UserMessage.From($"the service has more than {maxItems} users; one import takes at most that. Narrow it with a filter."));
                 }
 
                 var total = root.TryGetProperty("totalResults", out var t) && t.TryGetInt32(out var n) ? n : items.Count;
@@ -137,7 +138,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
             }
             catch (JsonException)
             {
-                return Problem(connection, "the answer isn't JSON.");
+                return Problem(connection, UserMessage.Of("the answer isn't JSON."));
             }
         }
     }
@@ -162,7 +163,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
 
         var (items, why) = ConnectionItems.Soap(body!, connection.EntitySet);
         return items is null ? Problem(connection, why!)
-            : items.Count > maxItems ? Problem(connection, $"the service sent more than {maxItems} items; one import takes at most that.")
+            : items.Count > maxItems ? Problem(connection, UserMessage.From($"the service sent more than {maxItems} items; one import takes at most that."))
             : new MaterialConnectionFetch(items, []);
     }
 
@@ -170,7 +171,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
     {
         if (configuration[$"{Section}:{connection.Code}:ConnectionString"] is not { Length: > 0 } connectionString)
         {
-            return Problem(connection, $"no connection string is configured ({Section}:{connection.Code}:ConnectionString).");
+            return Problem(connection, UserMessage.From($"no connection string is configured ({Section}:{connection.Code}:ConnectionString)."));
         }
 
         try
@@ -190,7 +191,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
             {
                 if (items.Count == maxItems)
                 {
-                    return Problem(connection, $"the query returns more than {maxItems} rows; one import takes at most that.");
+                    return Problem(connection, UserMessage.From($"the query returns more than {maxItems} rows; one import takes at most that."));
                 }
 
                 items.Add(ConnectionItems.Row([.. Enumerable.Range(0, reader.FieldCount).Select(i => (reader.GetName(i), reader.IsDBNull(i) ? null : reader.GetValue(i)))]));
@@ -200,15 +201,15 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
         }
         catch (Npgsql.NpgsqlException ex)
         {
-            return Problem(connection, $"the database refused the query: {ex.Message}");
+            return Problem(connection, UserMessage.From($"the database refused the query: {ex.Message}"));
         }
         catch (ArgumentException ex)
         {
-            return Problem(connection, $"the connection string isn't usable: {ex.Message}");
+            return Problem(connection, UserMessage.From($"the connection string isn't usable: {ex.Message}"));
         }
     }
 
-    private static async Task<(string? Body, string? Problem)> SendAsync(
+    private static async Task<(string? Body, UserMessage? Problem)> SendAsync(
         HttpClient http, HttpRequestMessage request, MaterialConnection connection, CancellationToken cancellationToken, bool acceptFault = false)
     {
         try
@@ -219,19 +220,19 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
             // A SOAP fault comes back as 500 with its envelope, which says more than the status does.
             return response.IsSuccessStatusCode || acceptFault && body.Contains("Fault", StringComparison.Ordinal)
                 ? (body, null)
-                : (null, $"{connection.Code}: the service answered {(int)response.StatusCode}{Detail(body)}.");
+                : (null, UserMessage.From($"{connection.Code}: the service answered {(int)response.StatusCode}{Detail(body)}."));
         }
         catch (HttpRequestException ex)
         {
-            return (null, $"{connection.Code}: couldn't reach the service: {ex.Message}");
+            return (null, UserMessage.From($"{connection.Code}: couldn't reach the service: {ex.Message}"));
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return (null, $"{connection.Code}: the service didn't answer in time.");
+            return (null, UserMessage.From($"{connection.Code}: the service didn't answer in time."));
         }
     }
 
-    private static MaterialConnectionFetch Problem(MaterialConnection connection, string problem) => new([], [$"{connection.Code}: {problem}"]);
+    private static MaterialConnectionFetch Problem(MaterialConnection connection, UserMessage problem) => new([], [UserMessage.From($"{connection.Code}: {problem}")]);
 
     private async Task<MaterialConnectionFetch> ODataAsync(MaterialConnection connection, int maxItems, CancellationToken cancellationToken)
     {
@@ -242,7 +243,7 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
         {
             if (page == MaxPages)
             {
-                return new MaterialConnectionFetch([], [$"The service sent more than {MaxPages} pages; narrow it with a filter."]);
+                return new MaterialConnectionFetch([], [UserMessage.From($"The service sent more than {MaxPages} pages; narrow it with a filter.")]);
             }
 
             using var request = new HttpRequestMessage(HttpMethod.Get, next);
@@ -255,19 +256,19 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
                 if (!response.IsSuccessStatusCode)
                 {
-                    return new MaterialConnectionFetch([], [$"{connection.Code}: the service answered {(int)response.StatusCode}{Detail(body)}."]);
+                    return new MaterialConnectionFetch([], [UserMessage.From($"{connection.Code}: the service answered {(int)response.StatusCode}{Detail(body)}.")]);
                 }
 
                 using var document = JsonDocument.Parse(body);
                 if (!document.RootElement.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Array)
                 {
-                    return new MaterialConnectionFetch([], [$"{connection.Code}: the answer isn't an OData collection (no \"value\" array)."]);
+                    return new MaterialConnectionFetch([], [UserMessage.From($"{connection.Code}: the answer isn't an OData collection (no \"value\" array).")]);
                 }
 
                 items.AddRange(value.EnumerateArray().Select(e => e.Clone()));
                 if (items.Count > maxItems)
                 {
-                    return new MaterialConnectionFetch([], [$"{connection.Code}: the service has more than {maxItems} items; one import takes at most that. Narrow it with a filter."]);
+                    return new MaterialConnectionFetch([], [UserMessage.From($"{connection.Code}: the service has more than {maxItems} items; one import takes at most that. Narrow it with a filter.")]);
                 }
 
                 next = document.RootElement.TryGetProperty("@odata.nextLink", out var link) && link.GetString() is { Length: > 0 } href
@@ -276,15 +277,15 @@ public sealed class ODataMaterialFetcher(IHttpClientFactory clients, IConfigurat
             }
             catch (HttpRequestException ex)
             {
-                return new MaterialConnectionFetch([], [$"{connection.Code}: couldn't reach the service: {ex.Message}"]);
+                return new MaterialConnectionFetch([], [UserMessage.From($"{connection.Code}: couldn't reach the service: {ex.Message}")]);
             }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                return new MaterialConnectionFetch([], [$"{connection.Code}: the service didn't answer in time."]);
+                return new MaterialConnectionFetch([], [UserMessage.From($"{connection.Code}: the service didn't answer in time.")]);
             }
             catch (JsonException)
             {
-                return new MaterialConnectionFetch([], [$"{connection.Code}: the answer isn't JSON."]);
+                return new MaterialConnectionFetch([], [UserMessage.From($"{connection.Code}: the answer isn't JSON.")]);
             }
         }
 

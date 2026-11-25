@@ -110,7 +110,7 @@ public sealed record LimitBaselineDto
     public double? DispersionCenter { get; init; }
     public double? DispersionUcl { get; init; }
     public double? DispersionLcl { get; init; }
-    public string? NotEnough { get; init; }
+    public MessageDto? NotEnough { get; init; }
     public IReadOnlyList<MessageDto> Warnings { get; init; } = [];
 
     /// <summary>Every result in the window, in time order, with its plotted value and whether it was used.</summary>
@@ -249,7 +249,7 @@ public sealed record CapabilityDto
     public int Defects { get; init; }
 
     /// <summary>Why there are no figures.</summary>
-    public string? NotEnough { get; init; }
+    public MessageDto? NotEnough { get; init; }
 
     /// <summary>The charted results break the rules: the process isn't stable, so capability says little.</summary>
     public bool IsUnstable { get; init; }

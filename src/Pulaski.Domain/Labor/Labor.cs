@@ -63,62 +63,62 @@ public static class LaborRules
     public static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(5);
 
     /// <returns>What is wrong with a session, in words; null when it can be saved.</returns>
-    public static string? Problem(string laborType, Guid? reasonCodeId, Guid? jobId, DateTimeOffset start, DateTimeOffset? end, decimal allocationPct, DateTimeOffset now)
+    public static UserMessage? Problem(string laborType, Guid? reasonCodeId, Guid? jobId, DateTimeOffset start, DateTimeOffset? end, decimal allocationPct, DateTimeOffset now)
     {
         if (!LaborTypes.All.Contains(laborType))
         {
-            return "Direct, setup, indirect or training.";
+            return UserMessage.Of("Direct, setup, indirect or training.");
         }
 
         if (laborType == LaborTypes.Indirect && reasonCodeId is null)
         {
-            return "Indirect time needs a reason.";
+            return UserMessage.Of("Indirect time needs a reason.");
         }
 
         if (laborType == LaborTypes.Setup && jobId is null)
         {
-            return "Setup time is for a job; choose it.";
+            return UserMessage.Of("Setup time is for a job; choose it.");
         }
 
         if (allocationPct is <= 0 or > 100)
         {
-            return "The share of their time is more than 0% and at most 100%.";
+            return UserMessage.Of("The share of their time is more than 0% and at most 100%.");
         }
 
         if (start > now + ClockSkew || end > now + ClockSkew)
         {
-            return "Time can't be recorded ahead of now.";
+            return UserMessage.Of("Time can't be recorded ahead of now.");
         }
 
-        return end < start ? "It ends before it starts." : null;
+        return end < start ? UserMessage.Of("It ends before it starts.") : null;
     }
 
     /// <summary>
     /// Whether a person may take on another share of their time: open sessions together are at most 100% (someone
     /// tending two machines is 50% on each).
     /// </summary>
-    public static string? AllocationProblem(IEnumerable<decimal> openShares, decimal newShare) =>
+    public static UserMessage? AllocationProblem(IEnumerable<decimal> openShares, decimal newShare) =>
         openShares.Sum() + newShare > 100
-            ? $"They are already on {openShares.Sum():0.##}% of their time; another {newShare:0.##}% would be more than all of it. End a session or lower its share."
+            ? UserMessage.From($"They are already on {openShares.Sum():0.##}% of their time; another {newShare:0.##}% would be more than all of it. End a session or lower its share.")
             : null;
 
     /// <summary>The longest one break may last, so a forgotten one can't swallow a shift.</summary>
     public static readonly TimeSpan MaxBreak = TimeSpan.FromHours(4);
 
     /// <returns>What is wrong with a break's times, in words; null when it can be saved.</returns>
-    public static string? BreakProblem(DateTimeOffset start, DateTimeOffset? end, DateTimeOffset now)
+    public static UserMessage? BreakProblem(DateTimeOffset start, DateTimeOffset? end, DateTimeOffset now)
     {
         if (start > now + ClockSkew || end > now + ClockSkew)
         {
-            return "A break can't be recorded ahead of now.";
+            return UserMessage.Of("A break can't be recorded ahead of now.");
         }
 
         if (end is { } e && e <= start)
         {
-            return "It ends after it starts.";
+            return UserMessage.Of("It ends after it starts.");
         }
 
-        return end is { } ended && ended - start > MaxBreak ? "A break is at most 4 hours; end the person's time instead." : null;
+        return end is { } ended && ended - start > MaxBreak ? UserMessage.Of("A break is at most 4 hours; end the person's time instead.") : null;
     }
 
     /// <summary>

@@ -122,7 +122,7 @@ public static class JobReadiness
 public static class ConsumptionCheck
 {
     /// <returns>A warning, or null when within the allowance or nothing was planned to compare with.</returns>
-    public static string? Warning(
+    public static UserMessage? Warning(
         decimal plannedComponentQty, decimal jobPlannedQty, decimal madeSoFar, decimal consumedSoFar, decimal consuming, decimal tolerancePct,
         string materialCode, string unitCode)
     {
@@ -135,7 +135,8 @@ public static class ConsumptionCheck
         var total = consumedSoFar + consuming;
         return total <= allowed
             ? null
-            : $"{RateCap.Qty(total)} {unitCode} of {materialCode} is more than planned: the components allow {RateCap.Qty(allowed)} {unitCode} " +
-              $"for what the job has made, with the site's {RateCap.Qty(tolerancePct)}% tolerance. It was recorded; check it.";
+            : UserMessage.From(
+                $"{RateCap.Qty(total)} {unitCode} of {materialCode} is more than planned: the components allow {RateCap.Qty(allowed)} {unitCode} " +
+                $"for what the job has made, with the site's {RateCap.Qty(tolerancePct)}% tolerance. It was recorded; check it.");
     }
 }

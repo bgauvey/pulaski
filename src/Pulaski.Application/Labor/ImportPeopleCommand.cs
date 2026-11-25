@@ -1,10 +1,10 @@
-using Pulaski.Application.Localization;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Errors;
+using Pulaski.Application.Localization;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.Materials;
-using Pulaski.Domain;
 using Pulaski.Domain.Labor;
+using Pulaski.Domain;
 
 namespace Pulaski.Application.Labor;
 
@@ -47,15 +47,18 @@ internal sealed class ImportPeopleHandler(
     {
         if (command.Rows.Problems.Count > 0)
         {
-            return new ImportPeopleResponse { FileProblems = command.Rows.Problems, Errors = command.Rows.Problems.Count };
+            return new ImportPeopleResponse { FileProblems = [.. command.Rows.Problems.Select(Notes.Of)], Errors = command.Rows.Problems.Count };
         }
 
         // Who is missing is only clear for a full list of one system's people; an empty list switches no one off.
         var systems = command.Rows.Rows.Select(r => r.ExternalSystem?.Trim()).Distinct().ToList();
         if (command.SwitchOffMissing && (systems.Count != 1 || systems[0] is null || command.Rows.Rows.Count == 0))
         {
-            const string Problem = "Switching off people who are missing needs every row to be one external system's person: name the system and give each an external_key.";
-            return new ImportPeopleResponse { FileProblems = [Problem], Errors = 1 };
+            return new ImportPeopleResponse
+            {
+                FileProblems = [Notes.Of("Switching off people who are missing needs every row to be one external system's person: name the system and give each an external_key.")],
+                Errors = 1,
+            };
         }
 
         var results = new List<ImportRowResultDto>();
@@ -105,7 +108,7 @@ internal sealed class ImportPeopleHandler(
             }
             catch (Exception ex) when (ex is DomainRuleException or ValidationException)
             {
-                results.Add(new ImportRowResultDto { Line = row.Line, Code = number, Action = Error, Message = Message(ex) });
+                results.Add(new ImportRowResultDto { Line = row.Line, Code = number, Action = Error, Message = Notes.Of(ex) });
             }
         }
 
@@ -351,10 +354,4 @@ internal sealed class ImportPeopleHandler(
         Add(before.ExternalVersion != after.ExternalVersion, "external_version");
         return changes;
     }
-
-    private static string Message(Exception ex) => ex switch
-    {
-        ValidationException v => string.Join(" ", v.Errors.SelectMany(e => e.Value.Select(m => $"{e.Key}: {m}"))),
-        _ => ex.Message,
-    };
 }

@@ -20,11 +20,11 @@ public sealed record CompletePasswordResetCommand(string Token, string NewPasswo
 
 internal static class PasswordResets
 {
-    /// <summary>What everyone who asks is told, whether or not an account matches.</summary>
-    public const string Answer =
-        "If that matches a Pulaski account with an e-mail address, a link to choose a new password is on its way. It works once, for a short time.";
+    /// <summary>What everyone who asks is told, whether or not an account matches; a term the page translates (#188).</summary>
+    public static string Answer { get; } =
+        Term.Mark("If that matches a Pulaski account with an e-mail address, a link to choose a new password is on its way. It works once, for a short time.");
 
-    public const string Expired = "This link has expired or was already used. Ask for a new one on the sign-in page.";
+    public static UserMessage Expired { get; } = UserMessage.Of("This link has expired or was already used. Ask for a new one on the sign-in page.");
 
     /// <summary>At most this many links per user in <see cref="Window"/>, and none sooner than <see cref="Gap"/> after the last.</summary>
     public const int MaxPerWindow = 3;

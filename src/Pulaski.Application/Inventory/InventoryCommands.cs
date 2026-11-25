@@ -348,7 +348,7 @@ internal sealed class MoveLotHandler(
 
         if (!lot.IsBulk)
         {
-            await Backdating.EnsureLatestAsync(inventory, lot, effective, now, "A move", cancellationToken);
+            await Backdating.EnsureLatestAsync(inventory, lot, effective, now, UserMessage.Of("A move"), cancellationToken);
             var (moved, movement) = lot.MoveTo(to.Id);
             var envelope = events.Create(
                 EventTypes.LotMoved, "lot", lot.Id,
@@ -453,7 +453,7 @@ internal sealed class ChangeLotStatusHandler(
         var now = timeProvider.GetUtcNow();
         var effective = Backdating.EffectiveAt(command.EffectiveAt, now, comment);
         var backdated = MovementTime.Backdated(effective, now);
-        await Backdating.EnsureLatestAsync(inventory, lot, effective, now, holding ? "A hold" : "A release", cancellationToken);
+        await Backdating.EnsureLatestAsync(inventory, lot, effective, now, holding ? UserMessage.Of("A hold") : UserMessage.Of("A release"), cancellationToken);
         var (after, movement) = lot.ChangeStatus(command.Status);
         var envelope = events.Create(
             EventTypes.LotStatusChanged,
@@ -567,7 +567,7 @@ internal sealed class ConsumeLotHandler(
     /// Using more of a component than the job's plan allows, for what it has made, is recorded with a
     /// warning (D-035): the floor knows what it used, but someone should look.
     /// </summary>
-    private async Task<string?> OverPlannedAsync(InventoryJob job, InventoryMaterial material, decimal quantity, CancellationToken cancellationToken)
+    private async Task<UserMessage?> OverPlannedAsync(InventoryJob job, InventoryMaterial material, decimal quantity, CancellationToken cancellationToken)
     {
         if (await execution.GetPlannedComponentAsync(job.Id, material.Id, cancellationToken) is not { } planned
             || job.PlannedQty is not { } jobPlanned)
@@ -672,9 +672,9 @@ internal static class ProductionOutput
                 existing = await inventory.FindLotForUpdateAsync(job.SiteId, material.Id, lotNumber, cancellationToken);
                 if (existing is { Value: var found } && (found.ProducedByJobId != job.Id || found.LocationId != location.Id))
                 {
-                    throw new ConflictException(found.ProducedByJobId == job.Id
-                        ? $"Lot {lotNumber} is at another location; produce into it there, or use another number."
-                        : $"Lot {lotNumber} of {material.Code} already exists and wasn't made by {job.JobNumber}. Use another number.");
+                    throw found.ProducedByJobId == job.Id
+                        ? new ConflictException($"Lot {lotNumber} is at another location; produce into it there, or use another number.")
+                        : new ConflictException($"Lot {lotNumber} of {material.Code} already exists and wasn't made by {job.JobNumber}. Use another number.");
                 }
             }
 

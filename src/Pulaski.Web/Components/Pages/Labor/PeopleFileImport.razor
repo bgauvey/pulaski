@@ -41,13 +41,13 @@
     else if (Source.Name == Scim)
     {
         <p class="small text-muted mb-2">
-            @Source.Description @L["Each user is one person: the enterprise extension's"] <code>employeeNumber</code> @L["is the employee number,"]
+            @L[Source.Description] @L["Each user is one person: the enterprise extension's"] <code>employeeNumber</code> @L["is the employee number,"]
             <code>displayName</code> @L["the name and"] <code>active</code> @L["whether they work here. With an external system, the people are that system's, matched on their"] <code>externalId</code> @L["(or"] <code>id</code>@L["); without one, on their employee number. Nothing is saved until every person is valid."]
         </p>
     }
     else
     {
-        <p class="small text-muted mb-2">@Source.Description @L["Nothing is saved until every person is valid."]</p>
+        <p class="small text-muted mb-2">@L[Source.Description] @L["Nothing is saved until every person is valid."]</p>
     }
 
     <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -80,7 +80,7 @@
                 }
                 else if (r.FileProblems.Count > 0)
                 {
-                    @(L["{0} can't be imported: {1}", _fileName, string.Join(" ", r.FileProblems)])
+                    @(L["{0} can't be imported: {1}", _fileName, string.Join(" ", L.Notes(r.FileProblems))])
                 }
                 else if (r.Errors > 0)
                 {
@@ -116,7 +116,7 @@
                                 <td class="fw-semibold">@row.Code</td>
                                 <td>@ActionLabel(row.Action, r.Applied)</td>
                                 <td class="small">
-                                    @(row.Message ?? (row.Changes.Count > 0 ? (r.Applied ? L["Changed {0}", string.Join(", ", row.Changes)] : L["Changes {0}", string.Join(", ", row.Changes)]) : ""))
+                                    @(row.Message is { } why ? L.Of(why) : (row.Changes.Count > 0 ? (r.Applied ? L["Changed {0}", string.Join(", ", row.Changes)] : L["Changes {0}", string.Join(", ", row.Changes)]) : ""))
                                     @foreach (var note in row.Notes)
                                     {
                                         <div class="text-muted">@L.Of(note)</div>

@@ -61,7 +61,7 @@ public class ExecutionRulesTests
     public void Consumption_warns_beyond_the_plan_for_what_was_made()
     {
         Assert.Null(ConsumptionCheck.Warning(1450m, 1000m, 0m, 1500m, 0m, 110m, "RESIN", "kg"));
-        Assert.Contains("is more than planned", ConsumptionCheck.Warning(1450m, 1000m, 0m, 1500m, 200m, 110m, "RESIN", "kg"), StringComparison.Ordinal);
+        Assert.Contains("is more than planned", ConsumptionCheck.Warning(1450m, 1000m, 0m, 1500m, 200m, 110m, "RESIN", "kg")?.Text, StringComparison.Ordinal);
 
         // Making twice the plan allows twice the components.
         Assert.Null(ConsumptionCheck.Warning(1450m, 1000m, 2000m, 3000m, 100m, 110m, "RESIN", "kg"));

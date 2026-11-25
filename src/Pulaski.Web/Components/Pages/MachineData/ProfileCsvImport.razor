@@ -36,7 +36,7 @@
             <span>
                 @if (r.FileProblems.Count > 0)
                 {
-                    @(L["{0} can't be imported: {1}", _fileName, string.Join(" ", r.FileProblems)])
+                    @(L["{0} can't be imported: {1}", _fileName, string.Join(" ", L.Notes(r.FileProblems))])
                 }
                 else if (r.Errors > 0)
                 {
@@ -70,7 +70,7 @@
                                 <td>@MachineProfileView.KindLabel(L, row.Kind)</td>
                                 <td class="inv-num">@row.RawValue</td>
                                 <td>@ActionLabel(row.Action, r.Applied)</td>
-                                <td class="small">@row.Message</td>
+                                <td class="small">@(row.Message is { } why ? L.Of(why) : null)</td>
                             </tr>
                         }
                     </tbody>

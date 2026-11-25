@@ -7,12 +7,12 @@
    per device in the browser (js/theme.js), language and region on the user. *@
 @if (Me is { } me)
 {
-    <button type="button" class="user-button" popovertarget="user-menu" aria-haspopup="menu" title="@User.RoleSummary"
+    <button type="button" class="user-button" popovertarget="user-menu" aria-haspopup="menu" title="@User.RoleSummary(L)"
             aria-label="@L["Account menu for {0}", me.DisplayName]">
         <span class="user-avatar" aria-hidden="true">@UserMenuView.Initials(me.DisplayName)</span>
         <span class="user-text">
             <span class="user-name">@me.DisplayName</span>
-            <span class="user-roles">@User.RoleSummary</span>
+            <span class="user-roles">@User.RoleSummary(L)</span>
         </span>
         <Icon Name="chevron-down" Size="16" />
     </button>
@@ -23,9 +23,9 @@
             <span class="user-menu-who">
                 <span class="user-name">@me.DisplayName</span>
                 <span class="user-menu-detail">@me.Username</span>
-                @if (User.RoleSummary.Length > 0)
+                @if (User.RoleSummary(L).Length > 0)
                 {
-                    <span class="user-menu-detail">@User.RoleSummary</span>
+                    <span class="user-menu-detail">@User.RoleSummary(L)</span>
                 }
             </span>
         </div>

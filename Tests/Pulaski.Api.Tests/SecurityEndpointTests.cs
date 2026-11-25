@@ -456,7 +456,7 @@ public sealed class SecurityEndpointTests(ApiFactory factory) : IClassFixture<Ap
         var response = await planner.PostAsJsonAsync("/api/work-orders/import", request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = Assert.Single((await response.Content.ReadFromJsonAsync<ImportWorkOrdersResponse>())!.Results);
-        Assert.Equal(("refused", true), (result.Action, result.Messages[0].Contains("OTHER-SITE", StringComparison.Ordinal)));
+        Assert.Equal(("refused", true), (result.Action, result.Messages[0].Text.Contains("OTHER-SITE", StringComparison.Ordinal)));
     }
 
     [Fact]

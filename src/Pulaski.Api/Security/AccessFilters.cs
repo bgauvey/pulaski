@@ -1,6 +1,7 @@
 using Pulaski.Application.Errors;
 using Pulaski.Application.Security;
 using Pulaski.Domain.Security;
+using Pulaski.Domain;
 
 namespace Pulaski.Api.Security;
 
@@ -99,11 +100,15 @@ internal sealed class PermissionFilter(IReadOnlyList<string> permissions, SiteRe
 
         if (!access.CanAny(permissions, siteId))
         {
-            var what = Permissions.All.GetValueOrDefault(permissions[0], permissions[0]);
-            var verb = Permissions.Views.Contains(permissions[0]) ? "see this" : "do this";
-            throw new ForbiddenException(siteId is null
-                ? $"You may not {verb}: it needs permission to {char.ToLowerInvariant(what[0])}{what[1..]}."
-                : $"You may not {verb} at this site: it needs permission to {char.ToLowerInvariant(what[0])}{what[1..]}.");
+            // The permission by its description, as Configure → Users lists it, translated as a part of the message (#188).
+            var what = UserMessage.Of(Permissions.All.GetValueOrDefault(permissions[0], permissions[0]));
+            throw (siteId is null, Permissions.Views.Contains(permissions[0])) switch
+            {
+                (true, true) => new ForbiddenException($"You may not see this: it needs the permission “{what}”."),
+                (true, false) => new ForbiddenException($"You may not do this: it needs the permission “{what}”."),
+                (false, true) => new ForbiddenException($"You may not see this at this site: it needs the permission “{what}”."),
+                _ => new ForbiddenException($"You may not do this at this site: it needs the permission “{what}”."),
+            };
         }
 
         return await next(context);

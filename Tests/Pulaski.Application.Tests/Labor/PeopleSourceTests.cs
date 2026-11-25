@@ -30,10 +30,10 @@ public class PeopleSourceTests
     [Fact]
     public void Csv_problems_are_reported_not_thrown()
     {
-        Assert.Contains("missing", Assert.Single(PeopleCsv.Parse("employee_number\n1").Problems), StringComparison.Ordinal);
-        Assert.Contains("Unknown column 'shift'", PeopleCsv.Parse("employee_number,name,shift\n").Problems[0], StringComparison.Ordinal);
-        Assert.Equal(["The file is empty."], PeopleCsv.Parse("").Problems);
-        Assert.Contains("isn't yes or no", Assert.Single(Assert.Single(PeopleCsv.Parse("employee_number,name,active\n1,A,maybe").Rows).Problems), StringComparison.Ordinal);
+        Assert.Contains("missing", Assert.Single(PeopleCsv.Parse("employee_number\n1").Problems)?.Text, StringComparison.Ordinal);
+        Assert.Contains("Unknown column 'shift'", PeopleCsv.Parse("employee_number,name,shift\n").Problems[0]?.Text, StringComparison.Ordinal);
+        Assert.Equal(["The file is empty."], PeopleCsv.Parse("").Problems.Select(p => p?.Text));
+        Assert.Contains("isn't yes or no", Assert.Single(Assert.Single(PeopleCsv.Parse("employee_number,name,active\n1,A,maybe").Rows).Problems)?.Text, StringComparison.Ordinal);
     }
 
     private const string List = """
@@ -94,11 +94,11 @@ public class PeopleSourceTests
     {
         var rows = PeopleScim.Parse("""[{ "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"], "displayName": "Ops" }, 3]""", null).Rows;
         Assert.Equal(2, rows[0].Problems.Count);
-        Assert.Contains("employeeNumber", rows[0].Problems[1], StringComparison.Ordinal);
-        Assert.Contains("isn't a SCIM user", Assert.Single(rows[1].Problems), StringComparison.Ordinal);
+        Assert.Contains("employeeNumber", rows[0].Problems[1]?.Text, StringComparison.Ordinal);
+        Assert.Contains("isn't a SCIM user", Assert.Single(rows[1].Problems)?.Text, StringComparison.Ordinal);
 
-        Assert.StartsWith("The file isn't valid JSON", Assert.Single(PeopleScim.Parse("{", null).Problems), StringComparison.Ordinal);
-        Assert.Contains("no SCIM users", Assert.Single(PeopleScim.Parse("""{ "Resources": [] }""", null).Problems), StringComparison.Ordinal);
-        Assert.Equal(["The file is empty."], PeopleScim.Parse(" ", null).Problems);
+        Assert.StartsWith("The file isn't valid JSON", Assert.Single(PeopleScim.Parse("{", null).Problems)?.Text, StringComparison.Ordinal);
+        Assert.Contains("no SCIM users", Assert.Single(PeopleScim.Parse("""{ "Resources": [] }""", null).Problems)?.Text, StringComparison.Ordinal);
+        Assert.Equal(["The file is empty."], PeopleScim.Parse(" ", null).Problems.Select(p => p?.Text));
     }
 }

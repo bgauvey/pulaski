@@ -311,7 +311,7 @@
                         <tr @key="@($"{row.Line}-{row.Code}")" class="@(row.Action == "error" ? "is-error" : "")">
                             <td>@(row.Line == 0 ? "" : row.Line)</td>
                             <td>@row.Code</td>
-                            <td class="small">@(row.Message ?? string.Join(" ", L.Notes(row.Notes)))</td>
+                            <td class="small">@(row.Message is { } why ? L.Of(why) : string.Join(" ", L.Notes(row.Notes)))</td>
                         </tr>
                     }
                 </tbody>

@@ -25,8 +25,8 @@ public class MachineProfileCsvTests
         var source = MachineProfileCsv.Parse("kind,value,colour\nstate,1,red\n");
 
         Assert.Empty(source.Rows);
-        Assert.Contains(source.Problems, p => p.Contains("'colour'", StringComparison.Ordinal));
-        Assert.Contains(source.Problems, p => p.Contains("'name'", StringComparison.Ordinal));
+        Assert.Contains(source.Problems, p => p.Text.Contains("'colour'", StringComparison.Ordinal));
+        Assert.Contains(source.Problems, p => p.Text.Contains("'name'", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -34,18 +34,18 @@ public class MachineProfileCsvTests
     {
         var source = MachineProfileCsv.Parse("kind,value,name,packml_state\nstate,x,Odd,\nfault,7,Seven,\nstate,9,Nine,Running\nalarm,12,Low air,\nstop_reason,5,Jam,Mechanical\n");
 
-        Assert.Contains(source.Rows[0].Problems, p => p.StartsWith("value:", StringComparison.Ordinal));
-        Assert.Contains(source.Rows[0].Problems, p => p.Contains("needs the PackML state", StringComparison.Ordinal));
-        Assert.Contains(source.Rows[1].Problems, p => p.StartsWith("kind:", StringComparison.Ordinal));
-        Assert.Contains(source.Rows[2].Problems, p => p.Contains("'Running' isn't a PackML state", StringComparison.Ordinal));
+        Assert.Contains(source.Rows[0].Problems, p => p.Text.StartsWith("value:", StringComparison.Ordinal));
+        Assert.Contains(source.Rows[0].Problems, p => p.Text.Contains("needs the PackML state", StringComparison.Ordinal));
+        Assert.Contains(source.Rows[1].Problems, p => p.Text.StartsWith("kind:", StringComparison.Ordinal));
+        Assert.Contains(source.Rows[2].Problems, p => p.Text.Contains("'Running' isn't a PackML state", StringComparison.Ordinal));
         Assert.Empty(source.Rows[3].Problems);
-        Assert.Contains(source.Rows[4].Problems, p => p.Contains("only a state row has one", StringComparison.Ordinal));
+        Assert.Contains(source.Rows[4].Problems, p => p.Text.Contains("only a state row has one", StringComparison.Ordinal));
     }
 
     [Fact]
     public void An_empty_file_or_a_header_alone_has_nothing_to_import()
     {
-        Assert.Equal(["The file is empty."], MachineProfileCsv.Parse("").Problems);
-        Assert.Equal(["The file has a header but no rows."], MachineProfileCsv.Parse("kind,value,name\n\n").Problems);
+        Assert.Equal(["The file is empty."], MachineProfileCsv.Parse("").Problems.Select(p => p?.Text));
+        Assert.Equal(["The file has a header but no rows."], MachineProfileCsv.Parse("kind,value,name\n\n").Problems.Select(p => p?.Text));
     }
 }

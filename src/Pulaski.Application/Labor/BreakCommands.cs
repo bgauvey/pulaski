@@ -34,7 +34,7 @@ internal static class BreakWriter
     {
         if (LaborRules.BreakProblem(start, end, now) is { } problem)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["Break"] = [problem] });
+            throw ValidationException.Field("Break", problem);
         }
 
         var on = await labor.ListSessionsOfPersonAtAsync(person.Id, start, cancellationToken);
@@ -144,7 +144,7 @@ internal sealed class EndBreakHandler(
         var end = command.EndedAt ?? now;
         if (LaborRules.BreakProblem(current.Value.StartedAt, end, now) is { } problem)
         {
-            throw new ValidationException(new Dictionary<string, string[]> { ["EndedAt"] = [problem] });
+            throw ValidationException.Field("EndedAt", problem);
         }
 
         var ended = current.Value with { EndedAt = end };
@@ -222,7 +222,7 @@ internal sealed class CorrectBreakHandler(
         {
             if (LaborRules.BreakProblem(command.StartedAt, command.EndedAt, now) is { } problem)
             {
-                throw new ValidationException(new Dictionary<string, string[]> { ["Break"] = [problem] });
+                throw ValidationException.Field("Break", problem);
             }
 
             var person = (await labor.GetPersonForUpdateAsync(original.PersonId, cancellationToken))!.Value;

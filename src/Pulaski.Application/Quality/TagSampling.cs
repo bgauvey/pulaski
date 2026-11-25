@@ -45,7 +45,9 @@ internal sealed class AddTagBindingHandler(IUnitOfWork unitOfWork, IQualityRepos
             ?? throw new NotFoundException($"Characteristic {command.CharacteristicId} not found.")).Value;
         if (characteristic.DataKind != CharacteristicKinds.Variable || !characteristic.IsActive)
         {
-            throw new DomainRuleException($"{characteristic.Code} {(characteristic.IsActive ? "is inspected; only a measured characteristic can be sampled from a tag" : "is switched off")}.");
+            throw characteristic.IsActive
+                ? new DomainRuleException($"{characteristic.Code} is inspected; only a measured characteristic can be sampled from a tag.")
+                : new DomainRuleException($"{characteristic.Code} is switched off.");
         }
 
         var tag = await quality.GetBindableTagAsync(command.EquipmentTagId, cancellationToken) ?? throw new NotFoundException($"Tag {command.EquipmentTagId} not found.");
