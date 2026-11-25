@@ -1701,6 +1701,7 @@ because it changes as it is worked and is referred to, by a CMMS too (D-010). Nu
 | `started_at`, `started_by` | timestamptz, text | yes | When someone started on it; closing one nobody started sets them to the close. |
 | `closed_at`, `closed_by` | timestamptz, text | yes | When and by whom it was closed. |
 | `resolution` | text | yes | What was done, at most 1000 characters; needed to close. |
+| `external_system`, `external_reference` | text | yes | The delivery feed a CMMS took it on through and the CMMS's own number (#127c), at most 100 characters. Both or neither. |
 | `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
 
 ### core.andon_call — andon calls (#125, D-108) · *In use*

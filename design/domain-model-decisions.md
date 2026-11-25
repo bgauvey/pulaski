@@ -3155,6 +3155,13 @@ CMMS (maintenance system); Pulaski shouldn't become one, but a plant without one
   `POST /api/terminal/station/maintenance/request` for the line or one of its stops to code, `Urgent` = high, raised from the terminal's code.
   Working requests stays on Machines. The Inbox kind `maintenance` (`maintenance.work`) lists requests not started, titled by number and
   equipment code with the asker's words, so nothing in it needs translating; it opens `machines?tab=maintenance`.
+- **A CMMS (c).** Delivery kind `maintenance` (`pulaski.maintenance.`; kind labels are now terms) lets any feed send requests raised, started,
+  closed and linked. The CMMS answers on `POST /api/integrations/{feed}/maintenance-requests`, signed with the feed's secret like acknowledgements
+  (`AcknowledgementSignature`), actor `receiver:{feed}`: `{number, action, reference?, resolution?}` with action `accepted` (records
+  `external_system` = the feed and `external_reference` = its number, `MaintenanceRequest.LinkExternal`; migration 0077), `started` or `closed`
+  (`UpdateMaintenanceFromCmmsCommand`). An answer already applied changes nothing, so retries are safe; a new number replaces the old. A
+  separate answer rather than the delivery acknowledgement, which is per event and says only whether it was booked. No adapter for a
+  particular CMMS; events the CMMS caused go back to it like others.
 - **Pieces:** (a) requests from a stop or the line, statuses, the Machines tab; (b) the operator station, line boards and Inbox; (c) a CMMS feed
   and its answer back (work order number, closing); (d) preventive triggers by run hours or machine counts.
 

@@ -45,4 +45,14 @@ public class MaintenanceRequestTests
         var closed = r.Close(T0.AddMinutes(45), "ann", "Not needed: it was the guard switch");
         Assert.Equal((T0.AddMinutes(45), "ann"), (closed.StartedAt!.Value, closed.StartedBy));
     }
+
+    [Fact]
+    public void A_cmms_number_is_kept_with_its_feed_and_must_be_given()
+    {
+        var linked = Raised().LinkExternal("cmms", " WO-77 ");
+        Assert.Equal(("cmms", "WO-77"), (linked.ExternalSystem, linked.ExternalReference));
+        Assert.Equal(linked, linked.LinkExternal("cmms", "WO-77"));
+        Assert.Throws<DomainRuleException>(() => Raised().LinkExternal("cmms", " "));
+        Assert.Throws<DomainRuleException>(() => Raised().LinkExternal("cmms", new string('x', 101)));
+    }
 }

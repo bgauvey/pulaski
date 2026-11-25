@@ -1706,7 +1706,7 @@ Pulaski can send every inventory movement (received, moved, consumed, produced, 
 
 1. Open **Configure → Integrations** and choose the feed: **ERP** or **Document system**.
 2. Under **Settings**, type the **Receiver's address** (an `https://` address) and tick **Send to this receiver**.
-3. Under **What it sends**, tick the kinds of events: *Inventory movements*, *Certificates and lot documents*, *Work orders and jobs*, *Production reports and partial batches*, *Labor sessions, breaks and approvals*, *Machine stops coded and adjusted*, *Quality results*.
+3. Under **What it sends**, tick the kinds of events: *Inventory movements*, *Certificates and lot documents*, *Work orders and jobs*, *Production reports and partial batches*, *Labor sessions, breaks and approvals*, *Machine stops coded and adjusted*, *Quality results*, *Maintenance requests*.
 4. Tick **Send a certificate's file with its event** if the receiver should get the file itself.
 5. Leave **Attempts**, **Timeout** and **Check every** as they are unless the receiver needs otherwise, then click **Save settings**.
 
@@ -1748,6 +1748,7 @@ Whoever runs Pulaski puts the feed's secret (and a broker's username and passwor
 - **The secret, and the configuration.** In the API's settings (or environment), section `Integrations:Erp` (or `Integrations:Documents`): `Secret`, shared with the receiver; keep it in a secret store or environment variable, not in a file in source control. Until **Save settings** is first used, the feed also takes the rest from there: `Enabled`, `Url`, `EventTypes` (type prefixes, default `pulaski.lot.`), `IncludeFiles`, `MaxAttempts` (12), `TimeoutSeconds` (15), `PollSeconds` (5) and `StartFromNow` (true: the first time it is switched on, only events from then on are sent; false sends the whole history). After that the screen's settings are used and only the secret comes from the configuration. Changing the secret needs an API restart.
 - **Settings are recorded.** Each save is an event (`pulaski.delivery_feed.settings_saved.v1`) with the settings before and after and who saved them. The full address is shown only to those who may change it; everyone else sees the receiver's host.
 - **The document feed.** Section `Integrations:Documents`, with the same settings as the ERP's. It sends `pulaski.lot_document.attached.v1` and `…withdrawn.v1` (default `EventTypes` `pulaski.lot_document.`), each holding the document's kind, title, number, issuer, issue date, URL, file name, type, size and SHA-256 and the lot it was attached to; a withdrawal has the reason. With `IncludeFiles` (on for this feed, off for the ERP's unless set), the attached event also carries the stored file in `data.file`: `fileName`, `contentType`, `sizeBytes`, `sha256` and `contentBase64`. The ERP feed can take certificates too: add `pulaski.lot_document.` to its `EventTypes`. A certificate's later events wait behind an undelivered earlier one, as a lot's do. Documents carried to other lots by a split or merge send nothing of their own.
+- **Maintenance requests to a CMMS** (#127). Tick *Maintenance requests* to send each request as it is raised (`pulaski.maintenance.request_raised.v1`, with its number such as MR-000042, the machine's code, priority, what needs looking at and the stop it came from), started and closed. The CMMS answers by posting to `/api/integrations/{feed}/maintenance-requests`, signed as acknowledgements are: `{"number": "MR-000042", "action": "accepted", "reference": "WO-1234"}` records its own work order number for the request (shown on the Maintenance tab as *CMMS WO-1234*); `"action": "started"` starts it and `"action": "closed"` with `"resolution": "…"` closes it, as the receiver (`receiver:{feed}`). Sending an answer again changes nothing, so a CMMS can repeat it safely. Requests started and closed by the CMMS are sent back to it like any others; a CMMS ignores what it did itself.
 - **An MQTT feed** publishes each event as the same CloudEvents JSON a webhook gets, with quality of service 1, on the topic from its template: `{type}` becomes the event type with slashes for dots (`pulaski/lot/received/v1`), and `{subjectType}` and `{subject}` are filled in too. It uses MQTT 5: the event id goes as the `Idempotency-Key` user property, and with a secret the timestamp and signature as `X-Pulaski-Timestamp` and `X-Pulaski-Signature`. An event counts as delivered when the broker accepts it; a broker that refuses it (not allowed, bad topic) fails it at once, and one that is busy or unreachable is retried. Whatever reads from the broker can post an acknowledgement back to the feed's address, as a webhook receiver can.
 - **Delivered rows are cleared** after 90 days (`Retention:DeliveredDays` in the API's configuration, at least 7). Failed, waiting and skipped deliveries stay until someone deals with them, and the events themselves are always kept.
 - **Several API servers** share the work safely: only one sends each feed at a time.
@@ -3189,6 +3190,8 @@ In detail:
   and closing needs *Work maintenance requests* (Supervisor, Maintenance). The Maintenance role comes with a new Pulaski and is added to
   an existing one by its upgrade.
 - The tab refreshes itself, as the Andon page does. **Equipment** narrows it to a line or machine; a line includes its machines' requests.
+- **A CMMS** can take requests on: send them through a delivery feed with *Maintenance requests* ticked, and it answers with its own number,
+  and can start and close them (see [Send movements to the ERP and certificates to a document system](#send-movements-to-the-erp-and-certificates-to-a-document-system)). Its number shows as **CMMS …** under the request's.
 - **Elsewhere:** a line's open requests show on its [operator station](#use-an-operator-station), where they can be raised too, and on its
   [line board](#show-a-line-board-on-a-tv); requests nobody has started are in the [Inbox](#your-inbox) of whoever may work them.
 
@@ -3277,7 +3280,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
   put up for review, a delivery's error. Dates and quantities inside a message keep Pulaski's usual form (*2026-11-24*, *1,234.5*), and the
   screens that haven't moved to regional formats yet still write them that way.
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
-  waiting. Pulaski doesn't send them to a CMMS yet, and nothing raises one by itself (after so many run hours or counts).
+  waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Nothing raises one by itself yet (after
+  so many run hours or counts).
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).

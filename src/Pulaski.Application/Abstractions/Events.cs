@@ -247,6 +247,9 @@ public static class EventTypes
     public const string MaintenanceRequestRaised = "pulaski.maintenance.request_raised.v1";
     public const string MaintenanceRequestStarted = "pulaski.maintenance.request_started.v1";
     public const string MaintenanceRequestClosed = "pulaski.maintenance.request_closed.v1";
+
+    /// <summary>A CMMS took a request on as its own work order (#127c), with its number.</summary>
+    public const string MaintenanceRequestLinked = "pulaski.maintenance.request_linked.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

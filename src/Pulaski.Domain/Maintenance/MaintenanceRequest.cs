@@ -44,9 +44,13 @@ public sealed record MaintenanceRequest(
     string? StartedBy = null,
     DateTimeOffset? ClosedAt = null,
     string? ClosedBy = null,
-    string? Resolution = null)
+    string? Resolution = null,
+    string? ExternalSystem = null,
+    string? ExternalReference = null)
 {
     public const int MaxText = 1000;
+
+    public const int MaxReference = 100;
 
     /// <summary>A request's number: <c>MR-000042</c>, from the database's sequence.</summary>
     public static string NumberFor(long sequence) => $"MR-{sequence:D6}";
@@ -96,6 +100,22 @@ public sealed record MaintenanceRequest(
             ClosedBy = by,
             Resolution = text,
         };
+    }
+
+    /// <summary>
+    /// A CMMS has taken it on as its own work order (#127c): <paramref name="system"/> is the feed it came through, <paramref name="reference"/> the
+    /// CMMS's number. Telling it again with the same number changes nothing; another number replaces it (the CMMS renumbered it).
+    /// </summary>
+    /// <exception cref="DomainRuleException">No number, or one too long.</exception>
+    public MaintenanceRequest LinkExternal(string system, string? reference)
+    {
+        var trimmed = reference?.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed.Length > MaxReference)
+        {
+            throw new DomainRuleException($"Give the CMMS's number for {Number}, at most {MaxReference} characters.");
+        }
+
+        return this with { ExternalSystem = system, ExternalReference = trimmed };
     }
 
     private static string? Text(string? value)

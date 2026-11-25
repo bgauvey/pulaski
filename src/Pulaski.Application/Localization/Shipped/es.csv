@@ -674,6 +674,7 @@ By shift,Por turno
 By {0},Por {0}
 C,C
 CIP path,Ruta CIP
+CMMS {0},CMMS {0}
 CODE,CÓDIGO
 CSV file,Archivo CSV
 Calculated now,Calculada ahora
@@ -729,6 +730,7 @@ Centre,Centro
 Centre line,Línea central
 Certificate files,Archivos de certificados
 Certificates and documents,Certificados y documentos
+Certificates and lot documents,Certificados y documentos de lote
 Change,Cambiar
 "Change a single day without changing the repeating cycle: an extra Saturday, a shift that starts late, or a shift that doesn't run. Times are in the site's time zone; a shift belongs to the day it starts on.","Cambie un solo día sin cambiar el ciclo repetitivo: un sábado extra, un turno que empieza tarde o un turno que no se trabaja. Las horas están en la zona horaria del sitio; un turno pertenece al día en que empieza."
 Change a translation first.,Primero cambie una traducción.
@@ -1443,6 +1445,7 @@ Give each shift a start time as HH:mm.,Dé a cada turno una hora de inicio como 
 "Give the .btw document for at least one operation, such as default.","Dé el documento .btw para al menos una operación, como default."
 Give the .btw document's path.,Indique la ruta del documento .btw.
 Give the BTXML template; start from the standard one.,Indique la plantilla BTXML; parta de la estándar.
+"Give the CMMS's number for {0}, at most {1} characters.","Indique el número del CMMS para {0}, como máximo {1} caracteres."
 "Give the PLC's address (gateway), such as 10.0.0.20.","Indique la dirección del PLC (gateway), como 10.0.0.20."
 Give the broker's host.,Indique el host del broker.
 "Give the call type a name of at most {0} characters, such as Maintenance.","Dé al tipo de llamada un nombre de como máximo {0} caracteres, como Mantenimiento."
@@ -1631,6 +1634,7 @@ Interval,Intervalo
 Into,Hacia
 Inventory,Inventario
 Inventory adjustment,Ajuste de inventario
+Inventory movements,Movimientos de inventario
 Inventory reports,Reportes de inventario
 Issue,Salida
 Issued,Emitido
@@ -1767,6 +1771,7 @@ Label settings saved.,Se guardaron los ajustes de etiquetas.
 Labels,Etiquetas
 Labor,Mano de obra
 "Labor for shift {0} on {1:yyyy-MM-dd} is approved, so its times are locked.","La mano de obra del turno {0} del {1:yyyy-MM-dd} está aprobada, así que sus horas están bloqueadas."
+"Labor sessions, breaks and approvals","Sesiones de mano de obra, descansos y aprobaciones"
 Labor to approve,Mano de obra por aprobar
 "Labor: who is on, shift review and reports","Mano de obra: quién está, revisión de turno y reportes"
 Laboratory,Laboratorio
@@ -1975,6 +1980,7 @@ Machine profile {0} not found.,Perfil de máquina {0} no encontrado.
 Machine profiles,Perfiles de máquina
 Machine profiles: state values and stop codes,Perfiles de máquina: valores de estado y códigos de paro
 Machine speed,Velocidad de máquina
+Machine stops coded and adjusted,Paros de máquina codificados y ajustados
 Machines,Máquinas
 Machines: live state and stops to code,Máquinas: estado en vivo y paros por codificar
 Machine…,Máquina…
@@ -2002,6 +2008,7 @@ Maintain units of measure,Mantener unidades de medida
 Maintained in Pulaski,Mantenido en Pulaski
 Maintenance,Mantenimiento
 Maintenance request {0} not found.,Solicitud de mantenimiento {0} no encontrada.
+Maintenance requests,Solicitudes de mantenimiento
 Maintenance requests open: {0},Solicitudes de mantenimiento abiertas: {0}
 Maintenance requests waiting,Solicitudes de mantenimiento en espera
 Make a material class…,Hacer una clase de material…
@@ -2821,6 +2828,7 @@ Production line,Línea de producción
 Production lots on this line,Lotes de producción en esta línea
 Production performance (B2MML),Desempeño de producción (B2MML)
 Production reports,Reportes de producción
+Production reports and partial batches,Reportes de producción y tandas parciales
 Production unit,Unidad de producción
 Profile,Perfil
 Profile code,Código del perfil
@@ -3803,6 +3811,7 @@ The name of a drop folder in the API's configuration.,El nombre de una carpeta d
 "The name of a template set: letters, digits, - or _.","El nombre de un juego de plantillas: letras, dígitos, - o _."
 The next 7 days,Los próximos 7 días
 The note is at most {0} characters.,La nota tiene como máximo {0} caracteres.
+The number {0} gave it,El número que le dio {0}
 The operation that follows it.,La operación que lo sigue.
 The operations it waits for. Draw links on the canvas.,Las operaciones que espera. Dibuje vínculos en el lienzo.
 The operations that wait for it.,Las operaciones que lo esperan.
@@ -3945,6 +3954,7 @@ There is no line {0}.,No hay ninguna línea {0}.
 There is no location {0} at this site.,No hay una ubicación {0} en este sitio.
 There is no lot {0} at this site.,No hay ningún lote {0} en este sitio.
 There is no lot {0} of {1} at this site.,No hay ningún lote {0} de {1} en este sitio.
+There is no maintenance request {0}.,No hay ninguna solicitud de mantenimiento {0}.
 There is no material class {0}.,No hay ninguna clase de material {0}.
 There is no material {0}.,No hay un material {0}.
 There is no released process {0} at {1} that makes {2}.,No hay ningún proceso liberado {0} en {1} que haga {2}.
@@ -4347,6 +4357,7 @@ Work order {0}'s jobs moved while it was being changed. Try again.,Los trabajos 
 "Work order {0}, operation {1}","Orden de trabajo {0}, operación {1}"
 Work order · {0},Orden de trabajo · {0}
 Work orders,Órdenes de trabajo
+Work orders and jobs,Órdenes de trabajo y trabajos
 Work out again,Calcular de nuevo
 Work out limits from results,Calcular límites desde resultados
 "Work out the rate {0} really made {1} at: good output ÷ run time over its ended runs, or ÷ running time with the stops inside the runs taken out. Short runs, runs with no good output and unusually slow or fast runs are left out. Nothing changes until you accept it.","Calcule la tasa a la que {0} realmente hizo {1}: producción buena ÷ tiempo de ejecución en sus corridas terminadas, o ÷ tiempo en marcha con los paros dentro de las corridas excluidos. Las corridas cortas, las que no tienen producción buena y las inusualmente lentas o rápidas se excluyen. Nada cambia hasta que la acepte."
@@ -4435,6 +4446,7 @@ about the same as {0} then,casi igual que {0} entonces
 about {0} on {1},cerca de {0} en {1}
 accept or reject proposals,aceptar o rechazar propuestas
 accepted or rejected.,accepted o rejected.
+"accepted, started or closed.","accepted, started o closed."
 active,activo
 active: '{0}' isn't yes or no.,active: '{0}' no es sí ni no.
 after end,después del fin

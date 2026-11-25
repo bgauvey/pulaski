@@ -2,12 +2,14 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Pulaski.Api.Security;
 using Pulaski.Application.Abstractions;
 using Pulaski.Application.Integrations;
+using Pulaski.Application.Maintenance;
 using Pulaski.Application.Materials;
+using Pulaski.Application.Security;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Integrations;
 using Pulaski.Contracts.Labor;
+using Pulaski.Contracts.Maintenance;
 using Pulaski.Contracts.Materials;
-using Pulaski.Application.Security;
 using Pulaski.Domain.Security;
 
 namespace Pulaski.Api.Endpoints;
@@ -98,6 +100,26 @@ internal static class IntegrationEndpoints
                 ?? new AcknowledgementRequest();
             http.Items[Infrastructure.HttpRequestContext.ActorItem] = $"receiver:{feed}";
             return TypedResults.Ok(await handler.HandleAsync(new AcknowledgeDeliveryCommand(feed, request.EventId, request.Status, request.Reference, request.Message), ct));
+        });
+
+        // A CMMS's answer about a maintenance request (#127c): signed with the feed's secret and fresh, as acknowledgements are.
+        integrations.MapPost("/maintenance-requests", [AllowSignedOut] async Task<Results<Ok<MaintenanceRequestResponse>, UnauthorizedHttpResult>> (
+            string feed, HttpContext http, IConfiguration configuration, TimeProvider time,
+            ICommandHandler<UpdateMaintenanceFromCmmsCommand, MaintenanceRequestResponse> handler, CancellationToken ct) =>
+        {
+            using var reader = new StreamReader(http.Request.Body);
+            var body = http.Request.ContentLength is > 64 * 1024 ? "" : await reader.ReadToEndAsync(ct);
+            var secret = Integrations.WebhookFeedOptions.From(configuration, feed).Secret;
+            if (string.IsNullOrEmpty(secret)
+                || !Integrations.AcknowledgementSignature.IsValid(secret, http.Request.Headers["X-Pulaski-Timestamp"], http.Request.Headers["X-Pulaski-Signature"], body, time.GetUtcNow()))
+            {
+                return TypedResults.Unauthorized();
+            }
+
+            var request = System.Text.Json.JsonSerializer.Deserialize<CmmsMaintenanceUpdateRequest>(body, Json) ?? new CmmsMaintenanceUpdateRequest();
+            http.Items[Infrastructure.HttpRequestContext.ActorItem] = $"receiver:{feed}";
+            return TypedResults.Ok(await handler.HandleAsync(
+                new UpdateMaintenanceFromCmmsCommand(feed, request.Number, request.Action, request.Reference, request.Resolution), ct));
         });
 
         // External sources of material master data (D-068): set up by whoever manages integrations, run by whoever manages materials.

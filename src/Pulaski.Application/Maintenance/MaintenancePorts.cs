@@ -25,6 +25,9 @@ public interface IMaintenanceRepository
 
     Task<MaintenanceRequest?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>The request with this number, locked; null when there is none.</summary>
+    Task<MaintenanceRequest?> FindByNumberForUpdateAsync(string number, CancellationToken cancellationToken);
+
     Task InsertAsync(MaintenanceRequest request, DateTimeOffset at, CancellationToken cancellationToken);
 
     Task UpdateAsync(MaintenanceRequest request, DateTimeOffset at, CancellationToken cancellationToken);

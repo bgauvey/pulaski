@@ -105,6 +105,44 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
     }
 
     [Fact]
+    public async Task A_cmms_answers_about_a_maintenance_request_by_signed_callback_and_repeats_change_nothing()
+    {
+        var site = Guid.CreateVersion7();
+        var request = Pulaski.Domain.Maintenance.MaintenanceRequest.Raise(
+            Guid.CreateVersion7(), site, Guid.CreateVersion7(), "MR-900001", null, "Belt slipping", DateTimeOffset.UtcNow, "lee");
+        await factory.Stores.Maintenance.InsertAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
+        var client = factory.CreateSignedOutClient();
+        HttpRequestMessage Signed(string body, string secret = "api-tests-erp-secret")
+        {
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var message = new HttpRequestMessage(HttpMethod.Post, "/api/integrations/erp/maintenance-requests") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+            message.Headers.Add("X-Pulaski-Timestamp", timestamp);
+            message.Headers.Add("X-Pulaski-Signature", WebhookSender.Signature(secret, timestamp, body));
+            return message;
+        }
+
+        Pulaski.Domain.Maintenance.MaintenanceRequest Current() =>
+            factory.Stores.Maintenance.GetForUpdateAsync(request.Id, CancellationToken.None).Result!;
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(Signed("""{"number":"MR-900001","action":"accepted","reference":"WO-1"}""", "wrong"))).StatusCode);
+
+        // Taken on with its number; started; closed with what was done, by the receiver.
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Signed("""{"number":"mr-900001","action":"accepted","reference":"WO-1"}"""))).StatusCode);
+        Assert.Equal(("erp", "WO-1"), (Current().ExternalSystem, Current().ExternalReference));
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Signed("""{"number":"MR-900001","action":"started"}"""))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Signed("""{"number":"MR-900001","action":"started"}"""))).StatusCode);
+        Assert.Equal(("in_progress", "receiver:erp"), (Current().Status, Current().StartedBy));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.SendAsync(Signed("""{"number":"MR-900001","action":"closed"}"""))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Signed("""{"number":"MR-900001","action":"closed","resolution":"Belt replaced"}"""))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(Signed("""{"number":"MR-900001","action":"closed","resolution":"Again"}"""))).StatusCode);
+        Assert.Equal(("closed", "Belt replaced"), (Current().Status, Current().Resolution));
+
+        // An unknown number is not found; an unknown action is refused.
+        Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(Signed("""{"number":"MR-999999","action":"started"}"""))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(Signed("""{"number":"MR-900001","action":"done"}"""))).StatusCode);
+    }
+
+    [Fact]
     public async Task The_webhook_gets_a_signed_cloudevent_keyed_by_the_event_id()
     {
         var e = new OutboundEvent

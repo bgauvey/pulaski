@@ -2487,8 +2487,11 @@ CREATE TABLE core.maintenance_request (
     closed_at               timestamptz,
     closed_by               text,
     resolution              text,
+    external_system         text,                                       -- the delivery feed a CMMS took it on through (#127c)
+    external_reference      text,                                       -- the CMMS's work order number
     created_at              timestamptz NOT NULL DEFAULT now(),
     updated_at              timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT maintenance_request_external_ck CHECK ((external_system IS NULL) = (external_reference IS NULL)),
     CONSTRAINT maintenance_request_started_ck CHECK ((status = 'open') = (started_at IS NULL)),
     CONSTRAINT maintenance_request_closed_ck CHECK ((status = 'closed') = (closed_at IS NOT NULL AND resolution IS NOT NULL)),
     CONSTRAINT maintenance_request_stop_ck CHECK ((downtime_id IS NULL) = (downtime_started_at IS NULL))
@@ -2793,7 +2796,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0073_line_output'),
     ('0074_shift_handover'),
     ('0075_languages'),
-    ('0076_maintenance_requests');
+    ('0076_maintenance_requests'),
+    ('0077_maintenance_cmms');
 
 -- =====================================================================
 -- 17. SEED DATA

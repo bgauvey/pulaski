@@ -39,6 +39,14 @@ public sealed class InMemoryMaintenance : IMaintenanceRepository, IMaintenanceRe
         }
     }
 
+    public Task<MaintenanceRequest?> FindByNumberForUpdateAsync(string number, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult(_requests.Values.FirstOrDefault(r => r.Number == number));
+        }
+    }
+
     public Task<long> NextNumberAsync(CancellationToken cancellationToken) => Task.FromResult(Interlocked.Increment(ref _number));
 
     public Task<MaintenanceRequest?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken)
@@ -90,6 +98,8 @@ public sealed class InMemoryMaintenance : IMaintenanceRepository, IMaintenanceRe
                     ClosedAt = r.ClosedAt,
                     ClosedBy = r.ClosedBy,
                     Resolution = r.Resolution,
+                    ExternalSystem = r.ExternalSystem,
+                    ExternalReference = r.ExternalReference,
                 })];
             return Task.FromResult(list);
         }

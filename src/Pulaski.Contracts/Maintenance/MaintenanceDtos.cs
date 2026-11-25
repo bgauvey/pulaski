@@ -37,6 +37,10 @@ public sealed record MaintenanceRequestDto
     public string? ClosedBy { get; init; }
     public string? Resolution { get; init; }
 
+    /// <summary>The delivery feed a CMMS took it on through, and the CMMS's own number for it (#127c); null until a CMMS answers.</summary>
+    public string? ExternalSystem { get; init; }
+    public string? ExternalReference { get; init; }
+
     /// <summary>The users' names for <see cref="RaisedBy"/>, <see cref="StartedBy"/> and <see cref="ClosedBy"/>, when they are users.</summary>
     public string? RaisedByName { get; init; }
     public string? StartedByName { get; init; }
@@ -64,6 +68,18 @@ public sealed record RaiseMaintenanceRequestRequest
 public sealed record CloseMaintenanceRequestRequest
 {
     public string Resolution { get; init; } = "";
+}
+
+/// <summary>
+/// A CMMS's answer about a request (#127c), signed as acknowledgements are: <c>accepted</c> (taken on, with its number in
+/// <see cref="Reference"/>), <c>started</c>, or <c>closed</c> (with <see cref="Resolution"/>). Repeating an answer changes nothing.
+/// </summary>
+public sealed record CmmsMaintenanceUpdateRequest
+{
+    public string Number { get; init; } = "";
+    public string Action { get; init; } = "";
+    public string? Reference { get; init; }
+    public string? Resolution { get; init; }
 }
 
 /// <summary>What raising, starting or closing did. <see cref="AlreadyOpen"/>: the stop already had a request still open, which is returned.</summary>

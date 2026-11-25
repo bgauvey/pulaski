@@ -12,7 +12,7 @@ internal sealed class MaintenanceRepository(DbSession session) : IMaintenanceRep
 {
     private const string Columns = """
         id, site_id, equipment_id, number, status, priority, description, raised_at, raised_by, raised_from, downtime_id, downtime_started_at,
-        started_at, started_by, closed_at, closed_by, resolution
+        started_at, started_by, closed_at, closed_by, resolution, external_system, external_reference
         """;
 
     public Task<MaintenanceEquipment?> LockEquipmentAsync(Guid equipmentId, CancellationToken cancellationToken) =>
@@ -30,6 +30,10 @@ internal sealed class MaintenanceRepository(DbSession session) : IMaintenanceRep
 
     public Task<long> NextNumberAsync(CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>("SELECT nextval('core.maintenance_request_no')", new { }, cancellationToken);
+
+    public Task<MaintenanceRequest?> FindByNumberForUpdateAsync(string number, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<MaintenanceRequest>(
+            $"SELECT {Columns} FROM core.maintenance_request WHERE number = @Number FOR UPDATE", new { Number = number }, cancellationToken);
 
     public Task<MaintenanceRequest?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
         session.QuerySingleOrDefaultAsync<MaintenanceRequest>($"SELECT {Columns} FROM core.maintenance_request WHERE id = @Id FOR UPDATE", new { Id = id }, cancellationToken);
@@ -65,10 +69,22 @@ internal sealed class MaintenanceRepository(DbSession session) : IMaintenanceRep
             """
             UPDATE core.maintenance_request
             SET status = @Status, started_at = @StartedAt, started_by = @StartedBy, closed_at = @ClosedAt, closed_by = @ClosedBy, resolution = @Resolution,
-                updated_at = @At
+                external_system = @ExternalSystem, external_reference = @ExternalReference, updated_at = @At
             WHERE id = @Id
             """,
-            new { request.Id, request.Status, request.StartedAt, request.StartedBy, request.ClosedAt, request.ClosedBy, request.Resolution, At = at },
+            new
+            {
+                request.Id,
+                request.Status,
+                request.StartedAt,
+                request.StartedBy,
+                request.ClosedAt,
+                request.ClosedBy,
+                request.Resolution,
+                request.ExternalSystem,
+                request.ExternalReference,
+                At = at,
+            },
             cancellationToken);
 }
 
@@ -81,7 +97,7 @@ internal sealed class MaintenanceQueries(NpgsqlDataSource dataSource) : IMainten
                r.status, r.priority, r.description,
                r.raised_at, r.raised_by, r.raised_from, r.downtime_id, r.downtime_started_at, d.ended_at AS downtime_ended_at,
                rc.code || ' · ' || rc.name AS downtime_reason,
-               r.started_at, r.started_by, r.closed_at, r.closed_by, r.resolution,
+               r.started_at, r.started_by, r.closed_at, r.closed_by, r.resolution, r.external_system, r.external_reference,
                (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = r.raised_by) AS raised_by_name,
                (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = r.started_by) AS started_by_name,
                (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = r.closed_by) AS closed_by_name

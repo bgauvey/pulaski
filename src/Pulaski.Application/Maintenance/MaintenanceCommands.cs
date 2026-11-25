@@ -111,6 +111,76 @@ internal sealed class CloseMaintenanceRequestHandler(IUnitOfWork unitOfWork, IMa
 }
 
 /// <summary>
+/// A CMMS's answer about a request (#127c, D-115), through feed <paramref name="Feed"/>: <c>accepted</c> records its number for the request,
+/// <c>started</c> and <c>closed</c> work it as a person would (the actor is <c>receiver:{feed}</c>). Answers repeat safely: starting one already
+/// started, or closing one already closed, changes nothing.
+/// </summary>
+public sealed record UpdateMaintenanceFromCmmsCommand(string Feed, string Number, string Action, string? Reference, string? Resolution)
+    : ICommand<MaintenanceRequestResponse>;
+
+/// <summary>What a CMMS may say about a request (#127c).</summary>
+public static class CmmsActions
+{
+    public const string Accepted = "accepted";
+    public const string Started = "started";
+    public const string Closed = "closed";
+
+    public static IReadOnlyList<string> All { get; } = [Accepted, Started, Closed];
+}
+
+internal sealed class UpdateMaintenanceFromCmmsHandler(
+    IUnitOfWork unitOfWork, IMaintenanceRepository maintenance, IEventLog eventLog, IEventFactory events, TimeProvider time)
+    : ICommandHandler<UpdateMaintenanceFromCmmsCommand, MaintenanceRequestResponse>
+{
+    public async Task<MaintenanceRequestResponse> HandleAsync(UpdateMaintenanceFromCmmsCommand command, CancellationToken cancellationToken)
+    {
+        var action = (command.Action ?? "").Trim().ToLowerInvariant();
+        var number = (command.Number ?? "").Trim().ToUpperInvariant();
+        new Validator()
+            .Require(number.Length > 0, nameof(command.Number), "Required.")
+            .Require(CmmsActions.All.Contains(action), nameof(command.Action), "accepted, started or closed.")
+            .ThrowIfInvalid();
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var request = await maintenance.FindByNumberForUpdateAsync(number, cancellationToken)
+            ?? throw new NotFoundException($"There is no maintenance request {number}.");
+
+        // A CMMS sends again when it isn't sure it was heard: what is done already stays done.
+        if ((action == CmmsActions.Started && request.Status != MaintenanceStatuses.Open) || (action == CmmsActions.Closed && request.IsClosed))
+        {
+            return new MaintenanceRequestResponse(request.Id, request.Number, request.Status);
+        }
+
+        var envelope = events.Create(
+            action switch
+            {
+                CmmsActions.Accepted => EventTypes.MaintenanceRequestLinked,
+                CmmsActions.Started => EventTypes.MaintenanceRequestStarted,
+                _ => EventTypes.MaintenanceRequestClosed,
+            },
+            "maintenance_request", request.Id,
+            new { request.Number, Before = new { request.Status, request.ExternalReference }, command.Feed, Action = action, command.Reference, command.Resolution });
+
+        // Started and closed take the event's moment and actor (receiver:{feed}), as when a person does it.
+        var after = action switch
+        {
+            CmmsActions.Accepted => request.LinkExternal(command.Feed, command.Reference),
+            CmmsActions.Started => request.Start(envelope.OccurredAt, envelope.ActorId),
+            _ => request.Close(envelope.OccurredAt, envelope.ActorId, command.Resolution),
+        };
+        if (after == request)
+        {
+            return new MaintenanceRequestResponse(request.Id, request.Number, request.Status);
+        }
+
+        await maintenance.UpdateAsync(after, time.GetUtcNow(), cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new MaintenanceRequestResponse(after.Id, after.Number, after.Status);
+    }
+}
+
+/// <summary>
 /// The site's maintenance requests (#127): those not closed when <paramref name="OpenOnly"/>, else those raised in the period (at most 92 days);
 /// for a piece of equipment and what is below it when given (a line's requests include its machines'). How long each waited and its age are
 /// worked out now.

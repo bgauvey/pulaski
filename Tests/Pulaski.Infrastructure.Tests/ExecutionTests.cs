@@ -929,7 +929,14 @@ public sealed class ExecutionTests(DatabaseFixture db)
             "SELECT count(*) FROM evt.event WHERE subject = @Id AND type LIKE 'pulaski.maintenance.request_%'", new { raised.Id }));
 
         // Once closed, the stop can have a new request.
-        Assert.NotEqual(raised.Id, (await db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Extruder, null, "Back again", stopId, stopStart))).Id);
+        var newer = await db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Extruder, null, "Back again", stopId, stopStart));
+        Assert.NotEqual(raised.Id, newer.Id);
+
+        // A CMMS takes it on with its number and closes it (#127c); the list shows its number.
+        await db.SendAsync(new Pulaski.Application.Maintenance.UpdateMaintenanceFromCmmsCommand("cmms", newer.Number, "accepted", "WO-55", null));
+        await db.SendAsync(new Pulaski.Application.Maintenance.UpdateMaintenanceFromCmmsCommand("cmms", newer.Number, "closed", null, "Reset the drive"));
+        var fromCmms = (await ListAsync(false)).Single(r => r.Id == newer.Id);
+        Assert.Equal(("cmms", "WO-55", "closed", "Reset the drive"), (fromCmms.ExternalSystem, fromCmms.ExternalReference, fromCmms.Status, fromCmms.Resolution));
     }
 
     [Fact]
