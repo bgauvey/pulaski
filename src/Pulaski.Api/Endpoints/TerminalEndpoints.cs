@@ -134,6 +134,13 @@ internal static class TerminalEndpoints
             });
         });
 
+        // Live changes for boards and stations (#143b, D-117): those at the terminal's site, as server-sent events like /api/live.
+        terminal.MapGet("/live", (HttpContext http, Application.Live.LiveHub hub, TimeProvider time, CancellationToken ct) =>
+        {
+            var site = TerminalFilter.Current(http).SiteId;
+            return LiveEndpoints.StreamAsync(http, hub, time, change => change.SiteId is null || change.SiteId == site, ct);
+        }).ExcludeFromDescription();
+
         // A file of the running job's instructions (#126b): only one the station shows, for a line of the terminal's.
         terminal.MapGet("/station/instructions/{id:guid}/files/{fileId:guid}", async (
             Guid id, Guid fileId, string? line, HttpContext http, IQueryHandler<GetStationQuery, StationDto> station,

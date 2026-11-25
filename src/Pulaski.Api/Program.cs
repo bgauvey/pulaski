@@ -88,6 +88,8 @@ if (builder.Configuration.GetValue("Pulaski:DatabaseMaintenance", true))
     builder.Services.AddHostedService<ConnectionScheduleService>();
     builder.Services.AddHostedService<QualificationNoticeService>();
     builder.Services.AddHostedService<AlertService>();
+    // Live updates (#143): the database's change notices to open screens.
+    builder.Services.AddHostedService<LiveListener>();
 }
 
 // The ERP feed (D-061): its settings for screens, and the HTTP client it sends with.
@@ -134,6 +136,7 @@ api.MapOverviewEndpoints();
 api.MapAndonEndpoints();
 api.MapMaintenanceEndpoints();
 api.MapInstructionEndpoints();
+api.MapLiveEndpoints();
 api.MapAlertEndpoints();
 api.MapHandoverEndpoints();
 api.MapLanguageEndpoints();

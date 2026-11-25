@@ -40,6 +40,8 @@ builder.Services.AddHttpClient(Pulaski.Web.Services.Localization.TranslationCach
 });
 builder.Services.AddScoped<Pulaski.Web.Services.Localization.Text>();
 builder.Services.AddHttpClient<PulaskiApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+// Live updates (#143): one stream of the API's changes per circuit.
+builder.Services.AddScoped<Pulaski.Web.Services.Live.LiveFeed>();
 
 var app = builder.Build();
 

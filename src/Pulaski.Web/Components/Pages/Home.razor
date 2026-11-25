@@ -5,6 +5,7 @@
    and held lots come from GET /overview (D-070); OEE from the machine report; labor to approve from
    the shift review. *@
 @implements IDisposable
+@inject LiveFeed LiveFeed
 @using System.Globalization
 @using Pulaski.Contracts.MachineData
 @using Pulaski.Web.Services.MachineData
@@ -825,5 +826,24 @@
 
     private static string Number(decimal? value) => (value ?? 0m).ToString("#,##0.###", CultureInfo.CurrentCulture);
 
-    public void Dispose() => _timer?.Dispose();
+    // Live updates (#143): reload when something it shows changes, as the timer does.
+    private IDisposable? _liveFeed;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _liveFeed = LiveFeed.Subscribe(LiveFilters.At(() => _siteId == Guid.Empty ? null : _siteId, "job", "work_order", "lot", "partial_batch", "labor_session", "equipment", LiveFilters.Machine, "andon_call", "handover_entry"), () => InvokeAsync(async () =>
+            {
+                await LoadAsync();
+                StateHasChanged();
+            }), TimeSpan.FromSeconds(10));
+        }
+    }
+
+    public void Dispose()
+    {
+        _liveFeed?.Dispose();
+        _timer?.Dispose();
+    }
 }

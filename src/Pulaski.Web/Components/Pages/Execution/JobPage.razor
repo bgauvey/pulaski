@@ -5,6 +5,8 @@
 @inject TimeProvider Clock
 @inject CurrentUser User
 @inject Downloads Downloads
+@inject LiveFeed LiveFeed
+@implements IDisposable
 
 <PageTitle>@(_job?.JobNumber ?? L["Job"]) · Pulaski</PageTitle>
 
@@ -553,6 +555,26 @@ else if (_error is null)
         Pause,
         Complete,
     }
+
+    // Live updates (#143): a change to this job (a report, a start, a checklist) shows here within seconds, unless a form is open.
+    private IDisposable? _liveFeed;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _liveFeed = LiveFeed.Subscribe(LiveFilters.To("job", () => JobId), () => InvokeAsync(async () =>
+            {
+                if (!_busy && !_reporting && _stop is null && _reversing is null)
+                {
+                    await LoadAsync();
+                    StateHasChanged();
+                }
+            }));
+        }
+    }
+
+    public void Dispose() => _liveFeed?.Dispose();
 
     protected override async Task OnParametersSetAsync()
     {

@@ -18,7 +18,7 @@ public sealed record ReportEdgeMetricsCommand(Guid EdgeNodeId, IReadOnlyList<Edg
 
 internal sealed class IngestEdgeSignalsHandler(
     IUnitOfWork unitOfWork, IEdgeRepository edge, IStopAdjustmentRepository adjustments, IEventLog eventLog, IEventFactory events, IRequestContext request,
-    IIdGenerator ids, TimeProvider time, Inventory.FeedCounterPoster? feedCounts = null)
+    IIdGenerator ids, TimeProvider time, Inventory.FeedCounterPoster? feedCounts = null, Live.ILiveSignals? liveSignals = null)
     : ICommandHandler<IngestEdgeSignalsCommand, EdgeSignalBatchResponse>
 {
     public const int MaxSignals = 5000;
@@ -241,6 +241,16 @@ internal sealed class IngestEdgeSignalsHandler(
         foreach (var ((equipment, kind), (value, at)) in changedCounters)
         {
             await edge.UpsertCounterAsync(equipment, kind, value, at, cancellationToken);
+        }
+
+        // Open screens hear of the machines whose state, stops, counts or alarms changed, once this commits (#143); process values alone don't.
+        if (liveSignals is not null)
+        {
+            HashSet<Guid> touched = [.. changedLive, .. counts.Select(c => c.EquipmentId), .. raised.Select(a => a.EquipmentId), .. touchedStops.Values.Select(t => t.Stop.EquipmentId)];
+            if (touched.Count > 0)
+            {
+                await liveSignals.MachinesChangedAsync(touched, cancellationToken);
+            }
         }
 
         return applied;

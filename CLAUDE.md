@@ -320,6 +320,13 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (d) checklist `secondSignOff` → answer `sign_off` pending/signed/rejected (counts only signed), by someone else with `checklists.sign_off`
   (`ChecklistSignOffs.Decide`, `SignOffChecklistCommand`, `/api/checklist-responses/{id}/sign-off`, station `/station/checklist/sign-off`);
   Inbox kind `checklist`; history `GetJobChecklistsQuery` (`/api/jobs/{id}/checklists`). Not Part 11 signatures.
+- Live updates (D-117, proposed, in pieces, #143): `EventLog` appends `pg_notify('pulaski_live', {type, kind, id})` with every event; ingest
+  notifies touched machines (`ILiveSignals`, kind `machine`). `LiveListener` (API, `Live:Enabled`) LISTENs, adds the site (`LiveSites.For` →
+  `ISiteLookup`) and publishes to `LiveHub`; `GET /api/live` = SSE `changes` batches filtered to visible sites. Web `LiveFeed` (scoped, one
+  stream per circuit) → `Subscribe(LiveFilters.At(...)|To(...), refresh, gap)`; pages reload through the API, not while a form is open;
+  `LiveStatus Relevant=`. Timers stay as fallback.
+  (b) `/api/terminal/live` (terminal's site) → web `/terminal/live` (terminal cookie, passed through) → `js/terminal-live.js` on pages with
+  `<meta name="pulaski-live" content="board|station" data-every data-idle>`: GET reload ≤ every 3 s; stations wait while a form is typed in.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

@@ -112,6 +112,8 @@ public sealed class InMemoryStores
 
     public InMemoryInstructions Instructions { get; } = new();
 
+    public InMemoryLiveSignals LiveSignals { get; } = new();
+
     public InMemoryAlerts Alerts { get; } = new();
 
     public InMemoryLineOutput LineOutput { get; } = new();
@@ -219,6 +221,7 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Instructions.IInstructionRepository>();
         services.RemoveAll<Application.Instructions.IInstructionReadStore>();
         services.RemoveAll<Application.Instructions.IChecklistRepository>();
+        services.RemoveAll<Application.Live.ILiveSignals>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -318,6 +321,7 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Instructions.IInstructionRepository>(Instructions);
         services.AddSingleton<Application.Instructions.IInstructionReadStore>(Instructions);
         services.AddSingleton<Application.Instructions.IChecklistRepository>(Instructions);
+        services.AddSingleton<Application.Live.ILiveSignals>(LiveSignals);
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);
@@ -402,6 +406,22 @@ public sealed class InMemoryEventLog : IEventLog
         lock (_events)
         {
             _events.Add(envelope);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Machines ingest said changed (#143), kept for tests to look at.</summary>
+public sealed class InMemoryLiveSignals : Application.Live.ILiveSignals
+{
+    public System.Collections.Concurrent.ConcurrentQueue<Guid> Machines { get; } = new();
+
+    public Task MachinesChangedAsync(IReadOnlyCollection<Guid> equipmentIds, CancellationToken cancellationToken)
+    {
+        foreach (var id in equipmentIds)
+        {
+            Machines.Enqueue(id);
         }
 
         return Task.CompletedTask;

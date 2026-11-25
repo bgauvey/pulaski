@@ -1,6 +1,7 @@
 @page "/machines"
 @attribute [RequiresView(PermissionCodes.MachinesView)]
 @implements IDisposable
+@inject LiveFeed LiveFeed
 @using Pulaski.Web.Services.MachineData
 @inject PulaskiApiClient Api
 @inject SiteSelection Sites
@@ -505,8 +506,32 @@ else
         _ = TickAsync(_cts.Token);
     }
 
+    // Live updates (#143): reload when something it shows changes, as the timer does.
+    private IDisposable? _liveFeed;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _liveFeed = LiveFeed.Subscribe(LiveFilters.At(() => Sites.SiteId, "equipment", LiveFilters.Machine, "maintenance_request"), () => InvokeAsync(async () =>
+            {
+                if (_coding is null && !_saving && !Adjusting)
+                {
+                    await LoadStatusAsync();
+                    if (_tab == "stops")
+                    {
+                        await LoadStopsAsync();
+                    }
+
+                    StateHasChanged();
+                }
+            }), TimeSpan.FromSeconds(2));
+        }
+    }
+
     public void Dispose()
     {
+        _liveFeed?.Dispose();
         _cts.Cancel();
         _cts.Dispose();
     }

@@ -7,10 +7,14 @@
 @inject PulaskiApiClient Api
 
 @* A line display board (#120) for a TV on the floor: read-only, no one signs in. The device is enrolled as a terminal (D-049), and its
-   secret in this device's cookie decides the lines shown: those in the terminal's scope. It reloads itself every few seconds, so it
-   recovers by itself after a network drop. ?line=CODE shows one line. *@
+   secret in this device's cookie decides the lines shown: those in the terminal's scope. It reloads itself when something changes
+   (#143b) and every few seconds, so it recovers by itself after a network drop. ?line=CODE shows one line. *@
 <PageTitle>@(_board?.Title ?? L["Line board"]) · Pulaski</PageTitle>
-<HeadContent><meta http-equiv="refresh" content="@LineDisplayView.RefreshSeconds" /></HeadContent>
+@* Live (#143b): terminal-live.js reloads it when something changes, and on the same timer while the stream is down; without scripts, the meta refresh. *@
+<HeadContent>
+    <meta name="pulaski-live" content="board" data-every="@LineDisplayView.RefreshSeconds" />
+    <noscript><meta http-equiv="refresh" content="@LineDisplayView.RefreshSeconds" /></noscript>
+</HeadContent>
 
 @if (_board is null)
 {

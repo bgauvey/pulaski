@@ -16,7 +16,7 @@
     <div class="inv-head-tools">
         @if (_inbox is not null)
         {
-            <LiveStatus OnRefresh="LoadAsync" LoadedAt="_loadedAt" />
+            <LiveStatus OnRefresh="LoadAsync" Relevant="@(c => c.Kind is "partial_batch" or "spc_alert" or "labor_session" or "work_order" or "run_standard" or "maintenance_request" or "job")" LoadedAt="_loadedAt" />
         }
     </div>
 </div>

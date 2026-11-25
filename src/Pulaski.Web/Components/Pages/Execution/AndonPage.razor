@@ -20,7 +20,7 @@
     <div class="inv-head-tools">
         @if (_open is not null)
         {
-            <LiveStatus OnRefresh="RefreshAsync" LoadedAt="_loadedAt" TimeZone="@Zone" />
+            <LiveStatus OnRefresh="RefreshAsync" Relevant="@(LiveFilters.At(() => Sites.SiteId, "andon_call"))" LoadedAt="_loadedAt" TimeZone="@Zone" />
         }
         @if (Sites.Sites.Count > 1)
         {

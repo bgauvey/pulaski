@@ -1,5 +1,6 @@
 @implements IDisposable
 @inject TimeProvider Clock
+@inject Pulaski.Web.Services.Live.LiveFeed Live
 
 @* A screen that refreshes itself (D-099, as the Overview, D-070): asks the page to reload every 30 seconds and says how fresh it is.
    The page keeps what it showed when a reload fails; the pill then turns stale. *@
@@ -23,7 +24,20 @@
     [Parameter]
     public string? TimeZone { get; set; }
 
+    /// <summary>The live changes that should reload the page at once (#143); without it the page reloads only on its timer.</summary>
+    [Parameter]
+    public Func<Pulaski.Contracts.Live.LiveChangeDto, bool>? Relevant { get; set; }
+
     private Timer? _timer;
+    private IDisposable? _live;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender && Relevant is { } relevant)
+        {
+            _live = Live.Subscribe(change => Relevant?.Invoke(change) ?? relevant(change), () => InvokeAsync(RefreshAsync));
+        }
+    }
     private bool _refreshing;
 
     protected override void OnInitialized() =>
@@ -48,5 +62,9 @@
         }
     }
 
-    public void Dispose() => _timer?.Dispose();
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _live?.Dispose();
+    }
 }
