@@ -3148,6 +3148,13 @@ CMMS (maintenance system); Pulaski shouldn't become one, but a plant without one
 - `GET /api/maintenance/requests?siteId=&open=&from=&to=&equipmentId=` (open by default; a period at most 92 days), `POST /api/maintenance/requests`,
   `/requests/{id}/start`, `/requests/{id}/close`. Machines gets a **Maintenance** tab (`MaintenanceRequests`) and **Request maintenance** on a stop.
 - **Andon stays separate:** a call brings someone now; a request is work tracked to closure.
+- **Station, boards and Inbox (b).** Each request carries its line (`LineId`/`LineCode`: the nearest equipment at or above it that runs jobs,
+  through `core.equipment_closure`), and the list's equipment filter takes what is below it too. `LineDisplayLineDto.Maintenance` holds a line's
+  requests not closed (`MaintenanceOrder.Waiting`: waiting first, high priority first, then oldest); the station takes its line's
+  (`StationDto.MaintenanceRequests`) and offers raising to a signed-on person with `maintenance.request` (`CanRequestMaintenance`):
+  `POST /api/terminal/station/maintenance/request` for the line or one of its stops to code, `Urgent` = high, raised from the terminal's code.
+  Working requests stays on Machines. The Inbox kind `maintenance` (`maintenance.work`) lists requests not started, titled by number and
+  equipment code with the asker's words, so nothing in it needs translating; it opens `machines?tab=maintenance`.
 - **Pieces:** (a) requests from a stop or the line, statuses, the Machines tab; (b) the operator station, line boards and Inbox; (c) a CMMS feed
   and its answer back (work order number, closing); (d) preventive triggers by run hours or machine counts.
 

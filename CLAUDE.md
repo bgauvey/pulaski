@@ -300,8 +300,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Maintenance requests (D-115, proposed, in pieces, #127): `core.maintenance_request` for equipment below an area, on its own or from a stop
   (`downtime_id` + `downtime_started_at`, one open per stop, `AlreadyOpen`): open → in_progress → closed with `resolution` (closing one not
   started starts it); `MR-000042` from `core.maintenance_request_no`; locks the equipment first. Permissions `maintenance.request` /
-  `maintenance.work` (role `maintenance`); `/api/maintenance/requests`; Machines → Maintenance tab and **Request maintenance** on a stop. Pulaski
-  keeps the request; a CMMS link (c) and preventive triggers (d) come later.
+  `maintenance.work` (role `maintenance`); `/api/maintenance/requests`; Machines → Maintenance tab and **Request maintenance** on a stop.
+  (b) requests carry their line (closure); boards (`LineDisplayLineDto.Maintenance`), the station (`/api/terminal/station/maintenance/request`)
+  and Inbox kind `maintenance`. Pulaski keeps the request; a CMMS link (c) and preventive triggers (d) come later.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

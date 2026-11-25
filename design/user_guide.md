@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-24 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-25 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -148,11 +148,13 @@ In detail:
 
 1. Click **Inbox** at the top of the menu; its number says how many items wait.
 2. Items are grouped by what they are, oldest first: **Partial batches to approve or reject**, **SPC alerts to close**, **Labor to approve**,
-   **ERP changes to work orders** and **Planning rates to review**. Each says where it is and how long it has waited.
+   **ERP changes to work orders**, **Planning rates to review** and **Maintenance requests waiting**. Each says where it is and how long it
+   has waited.
 3. Click an item to open the page where it is decided, and decide it there. It leaves the inbox once decided.
 
 In detail: each kind shows only where you hold the permission that decides it (*partial batches: decide*, *quality: record*, *labor: approve*,
-*work orders: manage*, *rates: modify*). Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
+*work orders: manage*, *rates: modify*, *Work maintenance requests*). A maintenance request shows by its number and machine with what was asked,
+until someone starts it; it opens the **Maintenance** tab of Machines. Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
 does. The page refreshes every 30 seconds; the menu's number every minute, and when you move to another page.
 
 ### How saving works
@@ -966,6 +968,16 @@ for a kind of help that is still waiting doesn't make a second call; the station
 acknowledged too: it counts as answered then. The kinds of help and their times are kept on **Site settings** (see [Andon: calls for
 help](#andon-calls-for-help)).
 
+**Request maintenance at a station.** When something needs fixing but not someone right now (a squeal, a loose guard), ask maintenance:
+
+1. Badge in, with a role that requests maintenance (Operator, Supervisor and Maintenance do).
+2. Tap **Request maintenance**, under **Something to fix?**, or on one of the stops waiting for a reason, to ask about that stop's machine.
+3. Say **What needs looking at** and tap **Request**, or **Request, urgent** for high priority. The station gives its number, such as MR-000042.
+
+In detail: the station lists every request of its line and its machines that isn't closed, even before anyone badges in, with its state
+(waiting, or in progress and who is on it). Asking again for the same stop while its request is open doesn't make a second one; the station
+says it already has one. Starting and closing requests is done on the **Maintenance** tab of Machines (see [Maintenance requests](#maintenance-requests)).
+
 **Who may do what at a station.** What someone may do there is what their Pulaski user may do at the station's site, as if they had signed
 in: an operator's role lets them start, pause and complete jobs, report production and code stops; a planner's doesn't. Link a person to their
 user on **People** (their user name). Someone with no user can still clock on and off at the badge terminal, and the station tells them what it
@@ -982,7 +994,9 @@ A TV on the floor can show each line's state, running job, output, down time and
 In detail: the board reloads every 15 seconds, so it recovers by itself after a network drop. Its figures are the Overview's: a line that tracks
 machine state but has no signal shows **No signal**, and down time counts no-signal time. Colour is kept for what needs attention: down, no
 signal, waiting, OEE below target, stops to code. Switching the terminal off stops the board at once. A line's calls for help that aren't
-resolved show under its name: amber while waiting, quiet once someone is on it, and red, with the line's frame, once escalated.
+resolved show under its name: amber while waiting, quiet once someone is on it, and red, with the line's frame, once escalated. Its
+maintenance requests that aren't closed, its machines' too, show under them with a dashed frame: up to three, the waiting ones first, with
+**and … more** after that.
 
 ### Answer calls for help from the Andon page
 
@@ -3174,7 +3188,9 @@ In detail:
 - **Who:** anyone who can see machines sees requests. Raising one needs *Request maintenance* (Operator, Supervisor, Maintenance); starting
   and closing needs *Work maintenance requests* (Supervisor, Maintenance). The Maintenance role comes with a new Pulaski and is added to
   an existing one by its upgrade.
-- The tab refreshes itself, as the Andon page does. **Equipment** narrows it to one line or machine.
+- The tab refreshes itself, as the Andon page does. **Equipment** narrows it to a line or machine; a line includes its machines' requests.
+- **Elsewhere:** a line's open requests show on its [operator station](#use-an-operator-station), where they can be raised too, and on its
+  [line board](#show-a-line-board-on-a-tv); requests nobody has started are in the [Inbox](#your-inbox) of whoever may work them.
 
 ---
 
@@ -3260,8 +3276,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Languages:** alert e-mails are in English, and so is what Pulaski keeps as history: a connection run's summary, why a planning rate was
   put up for review, a delivery's error. Dates and quantities inside a message keep Pulaski's usual form (*2026-11-24*, *1,234.5*), and the
   screens that haven't moved to regional formats yet still write them that way.
-- **Maintenance requests** are on the Machines page only: not yet at the operator station, on the line boards or in the Inbox, and no e-mail
-  alert says one is waiting. Pulaski doesn't send them to a CMMS yet, and nothing raises one by itself (after so many run hours or counts).
+- **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
+  waiting. Pulaski doesn't send them to a CMMS yet, and nothing raises one by itself (after so many run hours or counts).
+- **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).
 - **The inbox** gathers five kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It
