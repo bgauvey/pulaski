@@ -306,6 +306,11 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`accepted` + number → `external_system`/`external_reference`, `started`, `closed`; repeats change nothing). (d) `core.maintenance_plan` (run_hours
   from Execute time / counts from machine counts, interval): `MaintenancePlanService` → `MaintenancePlanRunner` raises a request as `system` when
   the reading since its start or last close reaches the interval, one open per plan; `/api/maintenance/plans`.
+- Work instructions (D-116, proposed, in pieces, #126): `core.work_instruction` per site (code fixed) with numbered versions draft → released →
+  obsolete (one draft, one released; releasing obsoletes the last; `NextDraft` copies text + file rows). Body is plain text rendered by
+  `InstructionText.ToHtml` (headings, steps, points, bold; all else escaped). Files PDF/PNG/JPEG ≤ 10 MB, ≤ 20 per version (`InstructionFiles.Check`),
+  bytes in insert-only `work_instruction_content`, placed by `work_instruction_file` (`removed_at`). Targets operation (process + number) /
+  material / line, ended not deleted. Writes lock the instruction; `/api/instructions`, `instructions.view` / `instructions.manage`.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

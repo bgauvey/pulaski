@@ -24,6 +24,7 @@ public static class Permissions
     public const string SiteSettingsView = "site_settings.view";
     public const string IntegrationsView = "integrations.view";
     public const string QualityView = "quality.view";
+    public const string InstructionsView = "instructions.view";
 
     // Changing (D-037).
     public const string SchedulePlan = "schedule.plan";
@@ -70,6 +71,7 @@ public static class Permissions
     public const string Terminals = "terminals.manage";
     public const string LotAttributes = "lot_attributes.manage";
     public const string Specs = "specs.manage";
+    public const string Instructions = "instructions.manage";
     public const string Security = "security.manage";
 
     /// <summary>Give or take away a role held at every site (D-092); alone it does nothing, beside <see cref="Security"/>.</summary>
@@ -98,6 +100,7 @@ public static class Permissions
         new(SiteSettingsView, Term.Mark("Viewing"), Term.Mark("See a site's settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions")),
         new(IntegrationsView, Term.Mark("Viewing"), Term.Mark("See outbound deliveries to the ERP and how they went")),
         new(QualityView, Term.Mark("Viewing"), Term.Mark("See specifications, characteristics and quality results")),
+        new(InstructionsView, Term.Mark("Viewing"), Term.Mark("See work instructions and their versions")),
         new(SchedulePlan, Term.Mark("Planning"), Term.Mark("Plan jobs: create, sequence, pin, assign to lines and cancel them")),
         new(SchedulePlanPartial, Term.Mark("Planning"), Term.Mark("Replace a cancelled job with exactly what is left, even when that isn't whole batches")),
         new(WorkOrderManage, Term.Mark("Planning"), Term.Mark("Create work orders, dispatch, un-dispatch and firm them")),
@@ -141,6 +144,7 @@ public static class Permissions
         new(Terminals, Term.Mark("Configuration"), Term.Mark("Register and enrol shop-floor terminals")),
         new(LotAttributes, Term.Mark("Configuration"), Term.Mark("Maintain lot attribute definitions")),
         new(Specs, Term.Mark("Configuration"), Term.Mark("Maintain quality characteristics and material specifications")),
+        new(Instructions, Term.Mark("Configuration"), Term.Mark("Maintain work instructions: write, attach and release them")),
         new(Security, Term.Mark("Administration"), Term.Mark("Maintain users, roles and what each role may do")),
         new(Languages, Term.Mark("Administration"), Term.Mark("Add languages and keep their translations")),
         new(SecurityGrantEverywhere, Term.Mark("Administration"), Term.Mark("Give or take away a role held at every site, rather than at one")),
@@ -213,6 +217,7 @@ public static class Permissions
         [QualityDecide] = [QualityView, InventoryView],
         // Specifications belong to materials.
         [Specs] = [QualityView, MaterialsView],
+        [Instructions] = [InstructionsView],
     };
 }
 
@@ -250,7 +255,7 @@ public static class Roles
             [Permissions.OverviewView, Permissions.WorkOrdersView, Permissions.ScheduleView, Permissions.FloorView, Permissions.InventoryView,
              Permissions.MaterialsView, Permissions.ProcessesView, Permissions.MachinesView, Permissions.SiteSettingsView,
              Permissions.SchedulePlan, Permissions.SchedulePlanPartial, Permissions.WorkOrderManage, Permissions.WorkOrderClose, Permissions.RateModify, Permissions.Materials,
-             Permissions.LotAllocate, Permissions.Changeovers, Permissions.QualityView],
+             Permissions.LotAllocate, Permissions.Changeovers, Permissions.QualityView, Permissions.InstructionsView],
             "Plans and sequences jobs, manages work orders, planning rates, changeover times and materials. Sees the floor, inventory and processes."),
         new(Supervisor, "Supervisor", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView, Permissions.SiteSettingsView,
@@ -258,19 +263,19 @@ public static class Roles
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
              Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode,
              Permissions.DowntimeAdjust, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.AndonRespond, Permissions.Handover,
-             Permissions.MaintenanceRequest, Permissions.MaintenanceWork],
+             Permissions.MaintenanceRequest, Permissions.MaintenanceWork, Permissions.InstructionsView],
             "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results; calls for and answers andon calls; requests and works maintenance. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,
              Permissions.MachinesView, Permissions.DowntimeCode, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.Handover,
-             Permissions.MaintenanceRequest],
+             Permissions.MaintenanceRequest, Permissions.InstructionsView],
             "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results, calls for help, requests maintenance."),
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
              Permissions.InventoryBackdate, Permissions.LotAllocate, Permissions.QualityView, Permissions.QualityRecord, Permissions.QualityDecide,
-             Permissions.Specs, Permissions.AndonRespond, Permissions.Handover],
+             Permissions.Specs, Permissions.AndonRespond, Permissions.Handover, Permissions.InstructionsView, Permissions.Instructions],
             "Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality, answers andon calls."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,
@@ -281,11 +286,11 @@ public static class Roles
             "Views everything, corrects inventory and reverses production reports; counts stock. Doesn't plan or run jobs."),
         new(ProcessEngineer, "Process engineer", false,
             [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes, Permissions.Changeovers,
-             Permissions.QualityView, Permissions.Specs],
+             Permissions.QualityView, Permissions.Specs, Permissions.InstructionsView, Permissions.Instructions],
             "Maintains processes, BOMs, capabilities, changeover times and specifications. Sees equipment, materials, units and the schedule."),
         new(Maintenance, "Maintenance", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.MachinesView, Permissions.EquipmentView, Permissions.DowntimeCode,
-             Permissions.AndonRespond, Permissions.Handover, Permissions.MaintenanceRequest, Permissions.MaintenanceWork],
+             Permissions.AndonRespond, Permissions.Handover, Permissions.MaintenanceRequest, Permissions.MaintenanceWork, Permissions.InstructionsView],
             "Works maintenance requests: starts and closes them, raises them, codes machine stops and answers andon calls. Sees the floor, machines and equipment."),
         new(EdgeNode, "Edge node", false, [Permissions.EdgeIngest],
             "For the service user a Pulaski Edge node signs in as: reads its configuration and forwards machine data. Sees no screens."),

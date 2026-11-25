@@ -119,6 +119,7 @@ public static class DependencyInjection
         services.AddScoped<ILineOutputRepository, LineOutputRepository>();
         services.AddScoped<Application.Andon.IAndonRepository, Andon.AndonRepository>();
         services.AddScoped<Application.Maintenance.IMaintenanceRepository, Maintenance.MaintenanceRepository>();
+        services.AddScoped<Application.Instructions.IInstructionRepository, Instructions.InstructionRepository>();
         services.AddScoped<Application.Maintenance.IMaintenancePlanRepository, Maintenance.MaintenancePlanRepository>();
         services.AddScoped<Application.Alerts.IAlertRepository, Alerts.AlertRepository>();
         services.AddSingleton<Application.Alerts.IAlertReadStore, Alerts.AlertQueries>();
@@ -131,6 +132,7 @@ public static class DependencyInjection
         services.AddSingleton<Application.Handover.IHandoverReadStore, Handover.HandoverQueries>();
         services.AddSingleton<Application.Andon.IAndonReadStore, Andon.AndonQueries>();
         services.AddSingleton<Application.Maintenance.IMaintenanceReadStore, Maintenance.MaintenanceQueries>();
+        services.AddSingleton<Application.Instructions.IInstructionReadStore, Instructions.InstructionQueries>();
         services.AddSingleton<Application.Maintenance.IMaintenancePlanReadStore, Maintenance.MaintenancePlanQueries>();
         services.AddScoped<ILotFillingStore, LotFillingStore>();
         services.AddScoped<ISecurityRepository, SecurityRepository>();

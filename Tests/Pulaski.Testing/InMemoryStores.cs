@@ -110,6 +110,8 @@ public sealed class InMemoryStores
 
     public InMemoryMaintenancePlans MaintenancePlans { get; } = new();
 
+    public InMemoryInstructions Instructions { get; } = new();
+
     public InMemoryAlerts Alerts { get; } = new();
 
     public InMemoryLineOutput LineOutput { get; } = new();
@@ -214,6 +216,8 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Maintenance.IMaintenanceReadStore>();
         services.RemoveAll<Application.Maintenance.IMaintenancePlanRepository>();
         services.RemoveAll<Application.Maintenance.IMaintenancePlanReadStore>();
+        services.RemoveAll<Application.Instructions.IInstructionRepository>();
+        services.RemoveAll<Application.Instructions.IInstructionReadStore>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -310,6 +314,8 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Maintenance.IMaintenanceReadStore>(Maintenance);
         services.AddSingleton<Application.Maintenance.IMaintenancePlanRepository>(MaintenancePlans);
         services.AddSingleton<Application.Maintenance.IMaintenancePlanReadStore>(MaintenancePlans);
+        services.AddSingleton<Application.Instructions.IInstructionRepository>(Instructions);
+        services.AddSingleton<Application.Instructions.IInstructionReadStore>(Instructions);
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);

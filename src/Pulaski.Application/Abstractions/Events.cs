@@ -254,6 +254,17 @@ public static class EventTypes
     /// <summary>Preventive plans (#127d): made and changed; the requests they raise are <see cref="MaintenanceRequestRaised"/>.</summary>
     public const string MaintenancePlanCreated = "pulaski.maintenance.plan_created.v1";
     public const string MaintenancePlanChanged = "pulaski.maintenance.plan_changed.v1";
+
+    /// <summary>Work instructions (#126a, D-116): made, changed, drafted, given files, released and attached.</summary>
+    public const string InstructionCreated = "pulaski.work_instruction.created.v1";
+    public const string InstructionChanged = "pulaski.work_instruction.changed.v1";
+    public const string InstructionDraftSaved = "pulaski.work_instruction.draft_saved.v1";
+    public const string InstructionDraftStarted = "pulaski.work_instruction.draft_started.v1";
+    public const string InstructionFileAdded = "pulaski.work_instruction.file_added.v1";
+    public const string InstructionFileRemoved = "pulaski.work_instruction.file_removed.v1";
+    public const string InstructionReleased = "pulaski.work_instruction.released.v1";
+    public const string InstructionTargetAdded = "pulaski.work_instruction.target_added.v1";
+    public const string InstructionTargetEnded = "pulaski.work_instruction.target_ended.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

@@ -228,6 +228,9 @@ public enum SiteOf
     MaintenanceRequest,
     MaintenancePlan,
 
+    /// <summary>A work instruction (#126): its site.</summary>
+    WorkInstruction,
+
     /// <summary>A shift handover entry (#124): its site.</summary>
     HandoverEntry,
 }

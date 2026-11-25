@@ -69,6 +69,8 @@ public static class PermissionCodes
     public const string AndonRespond = "andon.respond";
     public const string Handover = "handover.write";
     public const string MaintenanceRequest = "maintenance.request";
+    public const string InstructionsView = "instructions.view";
+    public const string Instructions = "instructions.manage";
     public const string MaintenanceWork = "maintenance.work";
     public const string Languages = "languages.manage";
     public const string DowntimeAdjust = "downtime.adjust";

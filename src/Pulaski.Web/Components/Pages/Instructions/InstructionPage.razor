@@ -1,0 +1,377 @@
+@page "/instructions/{Id:guid}"
+@attribute [RequiresView(PermissionCodes.InstructionsView)]
+@using Pulaski.Web.Services.Instructions
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject Downloads Downloads
+
+<PageTitle>@(_instruction?.Code ?? L["Work instruction"]) · Pulaski</PageTitle>
+
+@* One work instruction (#126a, D-116): its draft (text and files) to write and release, its released version as the job shows it, its history,
+   and what it is shown for. *@
+<p class="small mb-1"><a href="instructions">@L["Work instructions"]</a></p>
+<ProblemAlert Error="_error" />
+@if (_readProblem is { } problem)
+{
+    <div class="alert alert-warning small" role="alert">@problem</div>
+}
+@if (_message is { } message)
+{
+    <div class="alert alert-success small" role="status">@message</div>
+}
+
+@if (_instruction is not { } wi)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">@L["Loading…"]</p>
+    }
+}
+else
+{
+    var draft = wi.Versions.FirstOrDefault(v => v.Status == "draft");
+    var released = wi.Versions.FirstOrDefault(v => v.Status == "released");
+    <div class="inv-head">
+        <div>
+            <h1 class="mb-1">@wi.Code <span class="fw-normal">· @wi.Title</span></h1>
+            <p class="text-muted mb-0">
+                @(released is null ? L["Not released yet: jobs show nothing of it."] : L["Version {0} is released: jobs show it.", released.Number])
+                @if (!wi.IsActive) {<span class="chip ms-1">@L["Off"]</span>}
+            </p>
+        </div>
+    </div>
+    <ViewOnlyNote Permission="@PermissionCodes.Instructions" What="@L["write and release work instructions"]" SiteId="wi.SiteId" />
+
+    @if (CanManage)
+    {
+        <form class="inv-facts row g-2 align-items-end mb-3" @onsubmit="SaveHeaderAsync" @onsubmit:preventDefault>
+            <div class="col-md-7">
+                <label class="form-label small fw-semibold" for="wi-title">@L["Title"]</label>
+                <input id="wi-title" class="form-control form-control-sm" maxlength="200" @bind="_title" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2 form-check ms-2">
+                <input id="wi-active" class="form-check-input" type="checkbox" @bind="_active" />
+                <label class="form-check-label small" for="wi-active">@L["Shown at jobs"]</label>
+            </div>
+            <div class="col-md-2 form-actions">
+                <ActionButton Type="submit" Class="btn btn-sm btn-outline-primary" Busy="_busy">@L["Save"]</ActionButton>
+            </div>
+        </form>
+    }
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            @if (draft is not null)
+            {
+                <section class="inv-facts mb-3" aria-labelledby="wi-draft">
+                    <h2 class="h6" id="wi-draft">@L["Draft {0}", draft.Number]</h2>
+                    @if (CanManage)
+                    {
+                        <label class="form-label small fw-semibold" for="wi-body">@L["Text"]</label>
+                        <textarea id="wi-body" class="form-control form-control-sm font-monospace" rows="14" maxlength="20000" @bind="_body" @bind:event="oninput"></textarea>
+                        <p class="small text-muted mt-1">@L["Start a line with # or ## for a heading, 1. for a numbered step, - for a point; **words** are bold. A blank line starts a new paragraph."]</p>
+                        <div class="form-actions mb-3">
+                            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(_body == draft.Body ? L["Nothing changed yet."] : null)" OnClick="() => SaveDraftAsync(draft)">@L["Save the draft"]</ActionButton>
+                        </div>
+                    }
+                    <h3 class="h6 small text-muted">@L["How it reads"]</h3>
+                    <div class="instruction-text border rounded p-2 mb-3">@((MarkupString)InstructionText.ToHtml(CanManage ? _body : draft.Body))</div>
+
+                    <h3 class="h6 small text-muted">@L["Files"]</h3>
+                    @Files(wi, draft, CanManage)
+                    @if (CanManage)
+                    {
+                        <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                            <InputFile @key="_fileKey" class="form-control form-control-sm w-auto" accept="@InstructionFileFormat.Accept" OnChange="UploadAsync" />
+                            <span class="small text-muted">@L["PDF, PNG or JPEG, at most 10 MB."]</span>
+                        </div>
+                        <form class="row g-2 align-items-end mt-3" @onsubmit="() => ReleaseAsync(draft)" @onsubmit:preventDefault>
+                            <div class="col-md-8">
+                                <label class="form-label small fw-semibold" for="wi-note">@L["Why this version"] <span class="fw-normal text-muted">@L["(optional)"]</span></label>
+                                <input id="wi-note" class="form-control form-control-sm" maxlength="1000" @bind="_note" @bind:event="oninput" />
+                            </div>
+                            <div class="col-md-4 form-actions">
+                                <ActionButton Type="submit" Class="btn btn-sm btn-success" Busy="_busy"
+                                              Reason="@(_body != draft.Body ? L["Save the draft first."] : null)">@L["Release version {0}", draft.Number]</ActionButton>
+                            </div>
+                        </form>
+                    }
+                </section>
+            }
+            else if (CanManage && released is not null)
+            {
+                <div class="mb-3"><ActionButton Class="btn btn-sm btn-outline-primary" Busy="_busy" OnClick="NewDraftAsync">@L["Start version {0}", released.Number + 1]</ActionButton></div>
+            }
+
+            @if (released is not null)
+            {
+                <section class="inv-facts mb-3" aria-labelledby="wi-released">
+                    <h2 class="h6" id="wi-released">@L["Released: version {0}", released.Number]</h2>
+                    <div class="instruction-text mb-2">@((MarkupString)InstructionText.ToHtml(released.Body))</div>
+                    @Files(wi, released, false)
+                </section>
+            }
+        </div>
+        <div class="col-lg-5">
+            <section class="inv-facts mb-3" aria-labelledby="wi-targets">
+                <h2 class="h6" id="wi-targets">@L["Shown for"]</h2>
+                <ul class="list-unstyled small mb-2">
+                    @foreach (var t in wi.Targets)
+                    {
+                        <li @key="t.Id" class="d-flex justify-content-between align-items-center">
+                            <span>@TargetText(t)</span>
+                            @if (CanManage)
+                            {
+                                <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => EndTargetAsync(t)">@L["Remove"]</button>
+                            }
+                        </li>
+                    }
+                    @if (wi.Targets.Count == 0)
+                    {
+                        <li class="text-muted">@L["Nothing yet: jobs show it once it is shown for their operation, material or line."]</li>
+                    }
+                </ul>
+                @if (CanManage)
+                {
+                    <form class="row g-2 align-items-end" @onsubmit="AddTargetAsync" @onsubmit:preventDefault>
+                        <div class="col-12">
+                            <select class="form-select form-select-sm" aria-label="@L["Shown for"]" @bind="_kind">
+                                <option value="operation">@L["A process's operation"]</option>
+                                <option value="material">@L["A material"]</option>
+                                <option value="line">@L["A line"]</option>
+                            </select>
+                        </div>
+                        @if (_kind == "operation")
+                        {
+                            <div class="col-8">
+                                <select class="form-select form-select-sm" aria-label="@L["Process"]" @bind="_processId">
+                                    <option value="">@L["Process…"]</option>
+                                    @foreach (var p in _processes)
+                                    {
+                                        <option value="@p.Id">@p.Code · @p.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <input type="number" inputmode="numeric" min="1" class="form-control form-control-sm" aria-label="@L["Operation number"]" placeholder="@L["Op"]" @bind="_operation" />
+                            </div>
+                        }
+                        else if (_kind == "material")
+                        {
+                            <div class="col-12"><MaterialPicker Id="wi-material" Materials="_materials" @bind-Value="_materialId" /></div>
+                        }
+                        else
+                        {
+                            <div class="col-12">
+                                <select class="form-select form-select-sm" aria-label="@L["Line"]" @bind="_lineId">
+                                    <option value="">@L["Line…"]</option>
+                                    @foreach (var l in _lines)
+                                    {
+                                        <option value="@l.Id">@l.Code · @l.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        <div class="col-12 form-actions">
+                            <ActionButton Type="submit" Class="btn btn-sm btn-outline-primary" Busy="_busy">@L["Add"]</ActionButton>
+                        </div>
+                    </form>
+                }
+            </section>
+
+            <section class="inv-facts" aria-labelledby="wi-history">
+                <h2 class="h6" id="wi-history">@L["Versions"]</h2>
+                <ul class="list-unstyled small mb-0">
+                    @foreach (var v in wi.Versions)
+                    {
+                        <li @key="v.Id" class="mb-1">
+                            <span class="fw-semibold">@L["Version {0}", v.Number]</span> · @L.Word(v.Status)
+                            @if (v.ReleasedAt is { } at)
+                            {
+                                <span class="text-muted">· @L["released {0} by {1}", Display.SiteTime(at, null), v.ReleasedByName ?? v.ReleasedBy ?? ""]</span>
+                            }
+                            @if (v.Note is { } note)
+                            {
+                                <div class="text-muted">@note</div>
+                            }
+                        </li>
+                    }
+                </ul>
+            </section>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private InstructionDto? _instruction;
+    private string? _title;
+    private bool _active;
+    private string? _body;
+    private string? _note;
+    private string _kind = "operation";
+    private Guid? _processId;
+    private int? _operation;
+    private Guid? _materialId;
+    private Guid? _lineId;
+    private IReadOnlyList<ProcessSummaryDto> _processes = [];
+    private IReadOnlyList<MaterialDto> _materials = [];
+    private IReadOnlyList<EquipmentDto> _lines = [];
+    private int _fileKey;
+    private bool _busy;
+    private string? _message;
+    private string? _readProblem;
+    private ApiException? _error;
+
+    private bool CanManage => _instruction is { } wi && User.Can(PermissionCodes.Instructions, wi.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        if (CanManage && _instruction is { } wi)
+        {
+            try
+            {
+                _processes = [.. (await Api.ListProcessesAsync(wi.SiteId)).Where(p => p.ReleasedVersion is not null)];
+                _materials = [.. (await Api.ListMaterialsAsync()).Where(m => m.IsActive)];
+                _lines = [.. (await Api.ListEquipmentAsync(wi.SiteId)).Where(e => e.CanRunJob && e.IsActive).OrderBy(e => e.Code, StringComparer.Ordinal)];
+            }
+            catch (ApiException ex)
+            {
+                _error = ex;
+            }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _instruction = await Api.GetInstructionAsync(Id);
+            (_title, _active) = (_instruction.Title, _instruction.IsActive);
+            _body = _instruction.Versions.FirstOrDefault(v => v.Status == "draft")?.Body;
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private RenderFragment Files(InstructionDto wi, InstructionVersionDto version, bool removable) =>
+        @<ul class="list-unstyled small mb-0">
+            @foreach (var f in version.Files)
+            {
+                <li @key="f.Id" class="d-flex justify-content-between align-items-center">
+                    <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => DownloadAsync(wi, f)">@f.FileName</button>
+                    <span class="text-muted">@L["{0} KB", Math.Max(1, f.SizeBytes / 1024)]</span>
+                    @if (removable)
+                    {
+                        <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => RemoveFileAsync(f)">@L["Remove"]</button>
+                    }
+                </li>
+            }
+            @if (version.Files.Count == 0)
+            {
+                <li class="text-muted">@L["No files."]</li>
+            }
+        </ul>;
+
+    private string TargetText(InstructionTargetDto t) => t.Kind switch
+    {
+        "operation" => L["{0}, operation {1}{2}", t.ProcessCode ?? "", t.OperationNumber ?? 0, t.OperationName is { } name ? $" · {name}" : ""],
+        "material" => L["Material {0}", t.MaterialCode ?? ""],
+        _ => L["Line {0}", t.EquipmentCode ?? ""],
+    };
+
+    private Task SaveHeaderAsync() => RunAsync(async () =>
+    {
+        await Api.UpdateInstructionAsync(Id, new UpdateInstructionRequest { Version = _instruction!.Version, Title = _title ?? "", IsActive = _active });
+        _message = L["Saved."];
+    });
+
+    private Task SaveDraftAsync(InstructionVersionDto draft) => RunAsync(async () =>
+    {
+        await Api.SaveInstructionDraftAsync(Id, new SaveInstructionDraftRequest { Version = draft.Version, Body = _body ?? "" });
+        _message = L["The draft is saved."];
+    });
+
+    private Task ReleaseAsync(InstructionVersionDto draft) => RunAsync(async () =>
+    {
+        await Api.ReleaseInstructionAsync(Id, new ReleaseInstructionRequest { Version = draft.Version, Note = _note });
+        (_note, _message) = (null, L["Version {0} is released.", draft.Number]);
+    });
+
+    private Task NewDraftAsync() => RunAsync(async () =>
+    {
+        await Api.NewInstructionDraftAsync(Id);
+        _message = null;
+    });
+
+    private Task RemoveFileAsync(InstructionFileDto f) => RunAsync(() => Api.RemoveInstructionFileAsync(Id, f.Id));
+
+    private Task EndTargetAsync(InstructionTargetDto t) => RunAsync(() => Api.EndInstructionTargetAsync(Id, t.Id));
+
+    private Task AddTargetAsync() => RunAsync(async () =>
+    {
+        await Api.AddInstructionTargetAsync(Id, new AddInstructionTargetRequest
+        {
+            Kind = _kind,
+            ProcessId = _kind == "operation" ? _processId : null,
+            OperationNumber = _kind == "operation" ? _operation : null,
+            MaterialId = _kind == "material" ? _materialId : null,
+            EquipmentId = _kind == "line" ? _lineId : null,
+        });
+        (_processId, _operation, _materialId, _lineId) = (null, null, null, null);
+    });
+
+    private async Task UploadAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var buffer = new MemoryStream();
+            await e.File.OpenReadStream(InstructionFileFormat.MaxBytes).CopyToAsync(buffer);
+            _readProblem = null;
+            await RunAsync(() => Api.AddInstructionFileAsync(Id, e.File.Name, buffer.ToArray()));
+        }
+        catch (IOException ex)
+        {
+            (_message, _readProblem) = (null, L["{0} couldn't be read: {1}", e.File.Name, ex.Message]);
+            _fileKey++;
+        }
+    }
+
+    private async Task DownloadAsync(InstructionDto wi, InstructionFileDto f)
+    {
+        try
+        {
+            var (content, type, name) = await Api.GetInstructionFileAsync(wi.Id, f.Id);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            await LoadAsync();
+            _fileKey++;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

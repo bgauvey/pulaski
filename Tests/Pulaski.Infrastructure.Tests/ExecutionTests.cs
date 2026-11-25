@@ -1008,6 +1008,69 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_work_instruction_is_drafted_with_files_released_in_versions_and_shown_for_operations_materials_and_lines()
+    {
+        var plant = await PlantAsync();
+        var processId = await ScalarAsync<Guid>("SELECT id FROM core.process WHERE site_id = @Site", new { plant.Site });
+        CreatedResponse created = await db.SendAsync(new Pulaski.Application.Instructions.CreateInstructionCommand(plant.Site, "wi-" + _s, "Start the extruder"));
+        await Assert.ThrowsAsync<Application.Errors.ConflictException>(
+            () => db.SendAsync(new Pulaski.Application.Instructions.CreateInstructionCommand(plant.Site, "WI-" + _s, "Again")));
+
+        async Task<Contracts.Instructions.InstructionDto> GetAsync() =>
+            await QueryAsync<Pulaski.Application.Instructions.GetInstructionQuery, Contracts.Instructions.InstructionDto>(
+                new Pulaski.Application.Instructions.GetInstructionQuery(created.Id));
+
+        // An empty first draft; written and given a file, it is released.
+        var draft = Assert.Single((await GetAsync()).Versions);
+        Assert.Equal((1, "draft", ""), (draft.Number, draft.Status, draft.Body));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Instructions.ReleaseInstructionCommand(created.Id, draft.Version, null)));
+        var saved = await db.SendAsync(new Pulaski.Application.Instructions.SaveInstructionDraftCommand(created.Id, draft.Version, "# Start\n1. Heat the zones"));
+        await Assert.ThrowsAsync<Application.Errors.ConflictException>(
+            () => db.SendAsync(new Pulaski.Application.Instructions.SaveInstructionDraftCommand(created.Id, draft.Version, "Stale")));
+        byte[] pdf = [0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x37];
+        CreatedResponse file = await db.SendAsync(new Pulaski.Application.Instructions.AddInstructionFileCommand(created.Id, "die-setup.pdf", pdf));
+        await Assert.ThrowsAsync<DomainRuleException>(
+            () => db.SendAsync(new Pulaski.Application.Instructions.AddInstructionFileCommand(created.Id, "notes.txt", "hello"u8.ToArray())));
+        await db.SendAsync(new Pulaski.Application.Instructions.ReleaseInstructionCommand(created.Id, saved.Version, "First issue"));
+
+        var released = Assert.Single((await GetAsync()).Versions);
+        Assert.Equal(("released", "First issue", "# Start\n1. Heat the zones"), (released.Status, released.Note, released.Body));
+        Assert.Equal(("die-setup.pdf", "application/pdf", pdf.Length), (Assert.Single(released.Files).FileName, released.Files[0].ContentType, released.Files[0].SizeBytes));
+        var content = await QueryAsync<Pulaski.Application.Instructions.GetInstructionFileQuery, Pulaski.Application.Instructions.InstructionFileContent>(
+            new Pulaski.Application.Instructions.GetInstructionFileQuery(created.Id, file.Id));
+        Assert.Equal(pdf, content.Content);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Instructions.AddInstructionFileCommand(created.Id, "more.pdf", pdf)));
+
+        // The next draft starts from the released text and files; taking a file out of it leaves the released one alone; releasing it makes v1 obsolete.
+        await db.SendAsync(new Pulaski.Application.Instructions.NewInstructionDraftCommand(created.Id));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Instructions.NewInstructionDraftCommand(created.Id)));
+        var second = (await GetAsync()).Versions.Single(v => v.Status == "draft");
+        Assert.Equal((2, "# Start\n1. Heat the zones"), (second.Number, second.Body));
+        await db.SendAsync(new Pulaski.Application.Instructions.RemoveInstructionFileCommand(created.Id, Assert.Single(second.Files).Id));
+        await db.SendAsync(new Pulaski.Application.Instructions.ReleaseInstructionCommand(created.Id, second.Version, null));
+        var versions = (await GetAsync()).Versions;
+        Assert.Equal([(2, "released", 0), (1, "obsolete", 1)], versions.Select(v => (v.Number, v.Status, v.Files.Count)));
+
+        // Shown for an operation of the process, a material and a line; not twice, not for what isn't there.
+        await db.SendAsync(new Pulaski.Application.Instructions.AddInstructionTargetCommand(created.Id, "operation", processId, 10, null, null));
+        await db.SendAsync(new Pulaski.Application.Instructions.AddInstructionTargetCommand(created.Id, "material", null, null, db.MaterialId, null));
+        CreatedResponse line = await db.SendAsync(new Pulaski.Application.Instructions.AddInstructionTargetCommand(created.Id, "line", null, null, null, plant.Extruder));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Instructions.AddInstructionTargetCommand(created.Id, "line", null, null, null, plant.Extruder)));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Instructions.AddInstructionTargetCommand(created.Id, "operation", processId, 99, null, null)));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Instructions.AddInstructionTargetCommand(created.Id, "line", null, null, null, plant.Staging)));
+        var targets = (await GetAsync()).Targets;
+        Assert.Equal(3, targets.Count);
+        Assert.Equal(("Extrude", 10), (targets.Single(t => t.Kind == "operation").OperationName, targets.Single(t => t.Kind == "operation").OperationNumber!.Value));
+        await db.SendAsync(new Pulaski.Application.Instructions.EndInstructionTargetCommand(created.Id, line.Id));
+
+        var list = await QueryAsync<Pulaski.Application.Instructions.ListInstructionsQuery, IReadOnlyList<Contracts.Instructions.InstructionSummaryDto>>(
+            new Pulaski.Application.Instructions.ListInstructionsQuery(plant.Site));
+        var listed = Assert.Single(list);
+        Assert.Equal(("WI-" + _s, 2, (int?)null, 2), (listed.Code, listed.ReleasedNumber!.Value, listed.DraftNumber, listed.Targets.Count));
+        Assert.Contains($"P-{_s} · 10", listed.Targets);
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

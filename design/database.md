@@ -1724,6 +1724,78 @@ because it changes as it is worked and is referred to, by a CMMS too (D-010). Nu
 | `external_system`, `external_reference` | text | yes | The delivery feed a CMMS took it on through and the CMMS's own number (#127c), at most 100 characters. Both or neither. |
 | `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
 
+### core.work_instruction — work instructions (#126a, D-116) · *In use*
+
+A site's instruction for setting up or running: its text and files live in versions. Switched off rather than deleted.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The site. |
+| `code` | text | no | 1 to 30 upper-case letters, digits, `-`, `_` and `.`; unique per site (`work_instruction_code_uq`), fixed once made. |
+| `title` | text | no | At most 200 characters. |
+| `is_active` | boolean | no | Shown at jobs; switched off, never deleted. |
+| `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
+
+### core.work_instruction_version — an instruction's versions (#126a, D-116) · *In use*
+
+Numbered 1, 2, …: `draft` → `released` → `obsolete`. At most one draft (`work_instruction_version_draft_uq`) and one released version
+(`work_instruction_version_released_uq`) per instruction; releasing makes the one released before it obsolete. Only a draft changes.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `instruction_id` | uuid → work_instruction | no | The instruction. |
+| `version_number` | integer | no | 1, 2, …; unique per instruction. |
+| `status` | text | no | `draft`, `released` or `obsolete`. |
+| `body` | text | no | The text, at most 20,000 characters: lines starting `#`/`##` are headings, `1.` numbered steps, `-` points, `**…**` bold; nothing else is markup. |
+| `released_at`, `released_by` | timestamptz, text | yes | When and by whom it was released; set exactly when not a draft (`work_instruction_version_released_ck`). |
+| `note` | text | yes | Why this version, given on release (at most 1,000 characters). |
+| `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
+
+### core.work_instruction_content — instruction files' bytes (#126a, D-116) · *In use*
+
+Insert-only (the app role has SELECT and INSERT): a file's bytes, shared by the versions that carry it.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `sha256` | text | no | SHA-256 of the bytes, lower-case hex. |
+| `size_bytes` | integer | no | At most 10 MB, above 0. |
+| `content` | bytea | no | The file: PDF, PNG or JPEG by its bytes. |
+| `created_at` | timestamptz | no | When it was stored. |
+
+### core.work_instruction_file — a version's files (#126a, D-116) · *In use*
+
+Places stored bytes in a version, at most 20 per version. A new draft gets rows of its own pointing at the same content; taking a file out of a
+draft sets `removed_at`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `version_id` | uuid → work_instruction_version | no | The version. |
+| `content_id` | uuid → work_instruction_content | no | The bytes. |
+| `file_name` | text | no | As uploaded, at most 200 characters. |
+| `content_type` | text | no | `application/pdf`, `image/png` or `image/jpeg`. |
+| `sort_order` | integer | no | Order in the version. |
+| `removed_at` | timestamptz | yes | Taken out of the draft; never deleted. |
+| `created_at` | timestamptz | no | When it was added. |
+
+### core.work_instruction_target — what an instruction is shown for (#126a, D-116) · *In use*
+
+One row per operation, material or line (`work_instruction_target_shape_ck` keeps exactly the columns of its kind). One active per same target.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `instruction_id` | uuid → work_instruction | no | The instruction. |
+| `kind` | text | no | `operation`, `material` or `line`. |
+| `process_id`, `operation_number` | uuid → process, integer | yes | An operation: the process and its operation's number, in whichever version. |
+| `material_id` | uuid → material | yes | A material. |
+| `equipment_id` | uuid → equipment | yes | A line of the site (runs jobs). |
+| `is_active` | boolean | no | Ended rather than deleted. |
+| `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
+
 ### core.andon_call — andon calls (#125, D-108) · *In use*
 
 A call for help from a line: raised, acknowledged by whoever comes, resolved with what was done. One not resolved per line and type

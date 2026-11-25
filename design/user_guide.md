@@ -498,6 +498,44 @@ Orders already made keep the version they were made from. If a draft already exi
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
 - The link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule then also waits for the earlier operation's jobs as they are projected: see [Process links on the schedule](#process-links-on-the-schedule).
 
+### Work instructions
+
+**Configure → Work instructions** holds how to set up and run: the steps for a process's operation, a material or a line, written once and
+released in versions, with drawings or photos attached. Everyone who works on the floor can read them; Quality and Process engineers write
+and release them.
+
+Make one:
+
+1. Open **Configure → Work instructions**, choose the site if you have more than one.
+2. Type a **Code** (such as *WI-EXT-001*) and a **Title**, then click **New instruction**. Its page opens with **Draft 1**.
+3. Write the steps under **Text**. Start a line with `#` for a heading, `1.` for a numbered step and `-` for a point; put words between `**`
+   to make them bold. **How it reads** shows the result as you type.
+4. Click **Save the draft**.
+5. To attach a drawing or photo, choose a file under **Files** (PDF, PNG or JPEG, at most 10 MB). It is added at once; **Remove** takes it out
+   of the draft again.
+6. Optionally say **Why this version**, then click **Release version 1**.
+7. Under **Shown for**, choose **A process's operation** (the process and the operation's number), **A material** or **A line**, and click
+   **Add**. Add as many as it applies to.
+
+Change one: click **Start version 2** on its page. The new draft starts from the released text and files; edit it and release it, and the
+version before becomes obsolete.
+
+#### In detail
+
+- **One released version at a time.** A released version never changes; only the draft does. **Versions** lists every version with who released
+  it, when and why. While there is a draft, the released version stays in force.
+- **Releasing needs something in it:** text, a file or both. Release is off while the text has unsaved changes (*Save the draft first.*).
+- **The text holds no formatting of its own** beyond headings, numbered steps, points, bold and paragraphs. Anything else, such as HTML, is
+  shown as typed. Up to 20,000 characters; put longer material in a file.
+- **Files** are checked by their contents, not their names: a renamed text file is refused. A version holds at most 20. A new draft shares the
+  released version's files; removing one from the draft leaves the released version as it was.
+- **Shown for an operation** means that operation number of the process in whichever version, so it carries on when the process is revised.
+  A line must be one of the site's that runs jobs. The same target can't be added twice; **Remove** ends it.
+- **The code** is 1 to 30 letters, digits, `-`, `_` and `.`, unique at the site, and fixed once made. Clear **Shown at jobs** to switch an
+  instruction off without deleting it.
+- Permissions: *See work instructions* (Planner, Supervisor, Operator, Maintenance, Quality, Process engineer, Manager, Auditor) and *Maintain
+  work instructions* (Quality, Process engineer).
+
 ---
 
 ## 6. Units and conversions
@@ -2415,10 +2453,10 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; changeover rules; materials; allocating lots to jobs. |
 | **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results; request maintenance and start and close requests. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off; record quality results; request maintenance. |
-| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality. |
+| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality; write and release work instructions. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
-| **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, and characteristics and specifications. |
+| **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, characteristics and specifications, and work instructions. |
 | **Maintenance** | Start and close maintenance requests, and raise them; code machine stops; answer andon calls; write handover notes. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
@@ -2433,12 +2471,12 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | Role | Sees |
 | --- | --- |
 | **Administrator**, **Auditor**, **Manager** | Every screen (Users only for Administrator). |
-| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Quality, Materials, Processes and BOMs, Specifications, Changeovers, Site settings (to look at). |
-| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications (to look at), Labor, Site settings (to look at). |
-| **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications (to look at). |
-| **Quality** | Overview, Floor, Machines, Inventory, Quality, Materials, Specifications. |
-| **Process engineer** | Equipment, Materials, Processes and BOMs, Specifications, Units, Schedule, Changeovers. |
-| **Maintenance** | Overview, Floor, Machines, Equipment (to look at). |
+| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Quality, Materials, Processes and BOMs, Specifications, Work instructions, Changeovers, Site settings (to look at). |
+| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications and Work instructions (to look at), Labor, Site settings (to look at). |
+| **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications and Work instructions (to look at). |
+| **Quality** | Overview, Floor, Machines, Inventory, Quality, Materials, Specifications, Work instructions. |
+| **Process engineer** | Equipment, Materials, Processes and BOMs, Specifications, Work instructions, Units, Schedule, Changeovers. |
+| **Maintenance** | Overview, Floor, Machines, Equipment and Work instructions (to look at). |
 
 - **Start page.** After signing in you land on the Overview, or, if you can't see it, the first screen in the menu you can.
 - **A screen you can't see** isn't in the menu, links to it show as plain text and buttons for it are left out. Typing its address shows **Page not found**.
@@ -3300,6 +3338,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
   waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
   and machine counts, not days on the calendar.
+- **Work instructions** are kept and released, but jobs, the Floor and the operator station don't show them yet, and there are no checklists or
+  sign-offs. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).

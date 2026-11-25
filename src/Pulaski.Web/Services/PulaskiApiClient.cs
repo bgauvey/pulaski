@@ -10,6 +10,7 @@ using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Integrations;
+using Pulaski.Contracts.Instructions;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.MachineData;
@@ -935,6 +936,50 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Post, $"api/lots/{lotId}/documents") { Content = form }, ct);
         return await ReadAsync<CreatedResponse>(response, ct);
     }
+
+    /// <summary>The site's work instructions (#126a).</summary>
+    public Task<IReadOnlyList<InstructionSummaryDto>> ListInstructionsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<InstructionSummaryDto>>($"api/instructions?siteId={siteId}", ct);
+
+    public Task<InstructionDto> GetInstructionAsync(Guid id, CancellationToken ct = default) => GetAsync<InstructionDto>($"api/instructions/{id}", ct);
+
+    public Task<CreatedResponse> CreateInstructionAsync(CreateInstructionRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/instructions", request, ct);
+
+    public Task<VersionResponse> UpdateInstructionAsync(Guid id, UpdateInstructionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/instructions/{id}", request, ct);
+
+    public Task<VersionResponse> SaveInstructionDraftAsync(Guid id, SaveInstructionDraftRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/instructions/{id}/draft", request, ct);
+
+    public Task<CreatedResponse> NewInstructionDraftAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/instructions/{id}/draft", new { }, ct);
+
+    public Task<VersionResponse> ReleaseInstructionAsync(Guid id, ReleaseInstructionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/instructions/{id}/release", request, ct);
+
+    public Task<VersionResponse> RemoveInstructionFileAsync(Guid id, Guid fileId, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/instructions/{id}/draft/files/{fileId}/remove", new { }, ct);
+
+    public Task<CreatedResponse> AddInstructionTargetAsync(Guid id, AddInstructionTargetRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/instructions/{id}/targets", request, ct);
+
+    public Task<VersionResponse> EndInstructionTargetAsync(Guid id, Guid targetId, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/instructions/{id}/targets/{targetId}/end", new { }, ct);
+
+    public async Task<CreatedResponse> AddInstructionFileAsync(Guid id, string fileName, byte[] content, CancellationToken ct = default)
+    {
+        // The form disposes its parts, and the request (disposed in SendCoreAsync) the form.
+#pragma warning disable CA2000
+        var form = new MultipartFormDataContent { { new ByteArrayContent(content), "file", fileName } };
+#pragma warning restore CA2000
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Post, $"api/instructions/{id}/draft/files") { Content = form }, ct);
+        return await ReadAsync<CreatedResponse>(response, ct);
+    }
+
+    /// <summary>An instruction's file, to hand to the browser.</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetInstructionFileAsync(Guid id, Guid fileId, CancellationToken ct = default) =>
+        GetFileAsync($"api/instructions/{id}/files/{fileId}", ct);
 
     /// <summary>A stored document's file, to hand to the browser.</summary>
     public Task<(byte[] Content, string ContentType, string FileName)> GetLotDocumentContentAsync(Guid documentId, CancellationToken ct = default) =>

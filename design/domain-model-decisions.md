@@ -3173,6 +3173,38 @@ CMMS (maintenance system); Pulaski shouldn't become one, but a plant without one
 - **Pieces:** (a) requests from a stop or the line, statuses, the Machines tab; (b) the operator station, line boards and Inbox; (c) a CMMS feed
   and its answer back (work order number, closing); (d) preventive triggers by run hours or machine counts.
 
+### D-116 · Work instructions (#126) · *Proposed, in pieces*
+
+**Context.** Operators set up and run from paper or a shared drive, and nothing ties the instruction in force to the job in front of them. A
+document system is out of scope, but the floor needs the released instruction for what it runs, and the plant needs to know which version
+that was.
+
+**Decision.**
+- **Documents (a, #193).** `core.work_instruction` per site: code (fixed, `^[A-Z0-9][A-Z0-9_.-]{0,29}$`, unique per site), title, `is_active`
+  (switched off, never deleted). Its text and files live in versions, `core.work_instruction_version` numbered 1, 2, …: draft → released →
+  obsolete. At most one draft and one released version at a time (partial unique indexes); releasing the draft makes the one released before it
+  obsolete in the same transaction. A released version is fixed (`InstructionVersion.EnsureDraft`); a change is a new draft started from it
+  (`NextDraft`), carrying its text and its file rows. Releasing needs text or a file and records who, when and an optional note (≤ 1000).
+- **Text, not markup.** The body (≤ 20 000 characters, line ends kept as LF) is plain text read by the web as headings (`#`, `##`), numbered
+  steps (`1.`), points (`-`, `*`), `**bold**` and paragraphs (`InstructionText.ToHtml`); everything else is HTML-escaped, so no script or link
+  can be written into it. Longer or richer material goes in a file.
+- **Files** are PDF, PNG or JPEG by their bytes (`LotDocumentFiles.Sniff`, as lot documents), ≤ 10 MB, ≤ 20 per version
+  (`InstructionFiles.Check`). The bytes go once into insert-only `core.work_instruction_content` (SHA-256 kept; the app role has no UPDATE on
+  it); `core.work_instruction_file` places them in a version and is taken out of a draft with `removed_at`, so a new draft points at the same
+  bytes and a released version's files never change. Served as an attachment with `nosniff`.
+- **Targets** say what an instruction is shown for: `core.work_instruction_target` kind `operation` (a process + operation number, so it
+  follows the operation through process versions), `material` or `line` (equipment of the site that runs jobs); one active per same target,
+  ended (`is_active` false), never deleted. Which instructions a job shows, and in what order, is (b).
+- **Every change locks the instruction first** (`FOR UPDATE`); the draft's own `xmin` guards saving and releasing it. Events
+  `pulaski.work_instruction.created/changed/draft_saved/draft_started/file_added/file_removed/released/target_added/target_ended.v1`.
+- **Permissions** `instructions.view` (Viewing; Planner, Supervisor, Operator, Maintenance, Quality, Process engineer) and `instructions.manage`
+  (Configuration; Quality, Process engineer), which implies it. Migration 0079. `/api/instructions` (`?siteId=`, `/{id}`, `/{id}/draft`,
+  `/{id}/draft/files`, `/{id}/draft/files/{fileId}/remove`, `/{id}/release`, `/{id}/targets`, `/{id}/targets/{targetId}/end`,
+  `/{id}/files/{fileId}`, which `floor.view` may also read). Configure → **Work instructions** (`/instructions`, `/instructions/{id}`).
+- **Pieces:** (a) documents, versions, files and targets; (b) the released instructions at the job, on the floor and the operator station,
+  with the version shown; (c) checklists for setup and first article in a version; (d) sign-off by the operator, with an optional second, kept
+  against the run.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
