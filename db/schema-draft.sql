@@ -2467,6 +2467,106 @@ CREATE INDEX andon_call_site_ix ON core.andon_call (site_id, raised_at DESC);
 
 -- Maintenance requests (#127, D-115): raised for a line or machine, on its own or from a stop; started and closed with what was done.
 -- A request changes as it is worked and is referred to (by a CMMS too), so it lives here (D-010).
+-- Work instructions (#126a, D-116): versioned documents of a site (text and files), shown for process operations, materials or lines.
+CREATE TABLE core.work_instruction (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    code            text NOT NULL,                                  -- upper case; fixed once made
+    title           text NOT NULL,
+    is_active       boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT work_instruction_code_uq UNIQUE (site_id, code)
+);
+
+CREATE TABLE core.work_instruction_version (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    instruction_id  uuid NOT NULL REFERENCES core.work_instruction(id),
+    version_number  integer NOT NULL CHECK (version_number > 0),
+    status          text NOT NULL DEFAULT 'draft' CONSTRAINT work_instruction_version_status_ck CHECK (status IN ('draft', 'released', 'obsolete')),
+    body            text NOT NULL DEFAULT '',                       -- the text: headings, numbered steps, bold (#126a)
+    released_at     timestamptz,
+    released_by     text,
+    note            text,                                           -- why this version, given on release
+    checklists      jsonb NOT NULL DEFAULT '[]',                    -- setup and first-article checklists (#126c): [{phase, items: [...]}]
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT work_instruction_version_uq UNIQUE (instruction_id, version_number),
+    CONSTRAINT work_instruction_version_released_ck CHECK ((status = 'draft') = (released_at IS NULL))
+);
+CREATE UNIQUE INDEX work_instruction_version_draft_uq ON core.work_instruction_version (instruction_id) WHERE status = 'draft';
+CREATE UNIQUE INDEX work_instruction_version_released_uq ON core.work_instruction_version (instruction_id) WHERE status = 'released';
+
+-- A file's bytes, written once; the versions that carry the file point at them, so a new draft copies no bytes.
+CREATE TABLE core.work_instruction_content (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    sha256          text NOT NULL,
+    size_bytes      integer NOT NULL CHECK (size_bytes > 0),
+    content         bytea NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE core.work_instruction_file (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    version_id      uuid NOT NULL REFERENCES core.work_instruction_version(id),
+    content_id      uuid NOT NULL REFERENCES core.work_instruction_content(id),
+    file_name       text NOT NULL,
+    content_type    text NOT NULL CONSTRAINT work_instruction_file_type_ck CHECK (content_type IN ('application/pdf', 'image/png', 'image/jpeg')),
+    sort_order      integer NOT NULL DEFAULT 0,
+    removed_at      timestamptz,                                    -- taken out of a draft; never deleted
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX work_instruction_file_version_ix ON core.work_instruction_file (version_id);
+
+CREATE TABLE core.work_instruction_target (
+    id                  uuid PRIMARY KEY DEFAULT uuidv7(),
+    instruction_id      uuid NOT NULL REFERENCES core.work_instruction(id),
+    kind                text NOT NULL CONSTRAINT work_instruction_target_kind_ck CHECK (kind IN ('operation', 'material', 'line')),
+    process_id          uuid REFERENCES core.process(id),           -- an operation: the process and its operation's number, whatever the version
+    operation_number    integer CHECK (operation_number > 0),
+    material_id         uuid REFERENCES core.material(id),
+    equipment_id        uuid REFERENCES core.equipment(id),         -- a line
+    is_active           boolean NOT NULL DEFAULT true,              -- ended, never deleted
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT work_instruction_target_shape_ck CHECK (
+        (kind = 'operation' AND process_id IS NOT NULL AND operation_number IS NOT NULL AND material_id IS NULL AND equipment_id IS NULL)
+        OR (kind = 'material' AND material_id IS NOT NULL AND process_id IS NULL AND operation_number IS NULL AND equipment_id IS NULL)
+        OR (kind = 'line' AND equipment_id IS NOT NULL AND process_id IS NULL AND operation_number IS NULL AND material_id IS NULL))
+);
+CREATE INDEX work_instruction_target_instruction_ix ON core.work_instruction_target (instruction_id);
+CREATE INDEX work_instruction_target_process_ix ON core.work_instruction_target (process_id, operation_number) WHERE is_active;
+CREATE INDEX work_instruction_target_material_ix ON core.work_instruction_target (material_id) WHERE is_active;
+CREATE INDEX work_instruction_target_line_ix ON core.work_instruction_target (equipment_id) WHERE is_active;
+
+-- Checklists answered (#126c, D-116): for a job on a line, kept with the run; a failed one is kept and the job needs one that passes.
+CREATE TABLE core.checklist_response (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    job_id          uuid NOT NULL REFERENCES core.job(id),
+    equipment_id    uuid NOT NULL REFERENCES core.equipment(id),           -- the line it was answered for
+    run_id          uuid REFERENCES core.job_run(id),                      -- the run it belongs to: the open one, else the next started
+    instruction_id  uuid NOT NULL REFERENCES core.work_instruction(id),
+    version_id      uuid NOT NULL REFERENCES core.work_instruction_version(id),
+    phase           text NOT NULL CONSTRAINT checklist_response_phase_ck CHECK (phase IN ('setup', 'first_article')),
+    result          text NOT NULL CONSTRAINT checklist_response_result_ck CHECK (result IN ('passed', 'failed')),
+    answers         jsonb NOT NULL,                                        -- [{item, value, ok}]
+    completed_at    timestamptz NOT NULL,
+    completed_by    text NOT NULL,
+    sign_off        text,                                                  -- second sign-off (#126d): pending / signed / rejected
+    sign_off_by     text,
+    sign_off_at     timestamptz,
+    sign_off_note   text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT checklist_response_sign_off_ck CHECK (
+        (sign_off IS NULL OR sign_off IN ('pending', 'signed', 'rejected'))
+        AND (sign_off IS NULL OR result = 'passed')
+        AND ((sign_off IN ('signed', 'rejected')) = (sign_off_at IS NOT NULL AND sign_off_by IS NOT NULL)))
+);
+CREATE INDEX checklist_response_pending_ix ON core.checklist_response (site_id) WHERE sign_off = 'pending';
+CREATE INDEX checklist_response_job_ix ON core.checklist_response (job_id, equipment_id, phase);
+CREATE INDEX checklist_response_run_ix ON core.checklist_response (run_id) WHERE run_id IS NOT NULL;
+
 -- Preventive plans (#127d): every so many run hours or counts a request is raised; referred to by requests, switched off not deleted.
 CREATE TABLE core.maintenance_plan (
     id                  uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -2818,7 +2918,10 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0075_languages'),
     ('0076_maintenance_requests'),
     ('0077_maintenance_cmms'),
-    ('0078_maintenance_plans');
+    ('0078_maintenance_plans'),
+    ('0079_work_instructions'),
+    ('0080_instruction_checklists'),
+    ('0081_checklist_sign_off');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2888,7 +2991,10 @@ INSERT INTO sec.permission (code, description) VALUES
     ('handover.write', 'Write shift handover notes and open items for lines, and close open items'),
     ('languages.manage', 'Add languages and keep their translations'),
     ('maintenance.request', 'Request maintenance for a line or machine, on its own or from a stop'),
-    ('maintenance.work', 'Work maintenance requests: start them and close them with what was done')
+    ('maintenance.work', 'Work maintenance requests: start them and close them with what was done'),
+    ('instructions.view', 'See work instructions and their versions'),
+    ('instructions.manage', 'Maintain work instructions: write, attach and release them'),
+    ('checklists.sign_off', 'Give setup and first-article checklists their second sign-off, or reject them')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
@@ -2911,6 +3017,18 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('operator', 'handover.write'),
     ('supervisor', 'handover.write'),
     ('quality', 'handover.write'),
+    ('planner', 'instructions.view'),
+    ('supervisor', 'instructions.view'),
+    ('operator', 'instructions.view'),
+    ('quality', 'instructions.view'),
+    ('quality', 'instructions.manage'),
+    ('manager', 'instructions.view'),
+    ('auditor', 'instructions.view'),
+    ('process_engineer', 'instructions.view'),
+    ('process_engineer', 'instructions.manage'),
+    ('maintenance', 'instructions.view'),
+    ('supervisor', 'checklists.sign_off'),
+    ('quality', 'checklists.sign_off'),
     ('operator', 'maintenance.request'),
     ('supervisor', 'maintenance.request'),
     ('supervisor', 'maintenance.work'),

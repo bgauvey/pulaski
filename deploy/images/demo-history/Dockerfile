@@ -6,7 +6,9 @@ WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props nuget.config .editorconfig ./
 COPY src/ src/
 COPY tools/Pulaski.DemoHistory/ tools/Pulaski.DemoHistory/
-RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
+# Each image keeps its own package cache: docker compose builds them in parallel, and two restores unpacking the same package into a
+# shared cache race (NuGet's temporary file vanishes under the other).
+RUN --mount=type=cache,id=nuget-demo-history,target=/root/.nuget/packages \
     dotnet publish tools/Pulaski.DemoHistory -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0.15

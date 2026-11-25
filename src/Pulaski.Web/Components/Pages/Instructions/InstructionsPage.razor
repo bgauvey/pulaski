@@ -1,0 +1,159 @@
+@page "/instructions"
+@attribute [RequiresView(PermissionCodes.InstructionsView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Work instructions"] · Pulaski</PageTitle>
+
+@* Work instructions (#126a, D-116): each site's documents, their released version and what they are shown for. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">@L["Work instructions"]</h1>
+        <p class="text-muted mb-0">@L["How to set up and run: written once, released in versions, and shown at the job for a process's operation, a material or a line."]</p>
+    </div>
+    @if (Sites.Sites.Count > 1)
+    {
+        <div class="inv-head-tools">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.Instructions" What="@L["write and release work instructions"]" SiteId="Sites.SiteId" />
+
+@if (CanManage)
+{
+    <form class="inv-facts row g-2 align-items-end mb-3" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold" for="wi-code">@L["Code"]</label>
+            <input id="wi-code" class="form-control form-control-sm" maxlength="30" placeholder="WI-EXT-001" @bind="_code" @bind:event="oninput" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label small fw-semibold" for="wi-title">@L["Title"]</label>
+            <input id="wi-title" class="form-control form-control-sm" maxlength="200" @bind="_title" @bind:event="oninput" />
+        </div>
+        <div class="col-md-2 form-actions">
+            <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
+                          Reason="@(string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_title) ? L["Give the code and the title first."] : null)">@L["New instruction"]</ActionButton>
+        </div>
+    </form>
+}
+
+@if (_list is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">@L["Loading…"]</p>
+    }
+}
+else
+{
+    <div class="table-panel">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>@L["Code"]</th><th>@L["Title"]</th><th>@L["Released"]</th><th>@L["Shown for"]</th></tr></thead>
+            <tbody>
+                @foreach (var i in _list)
+                {
+                    <tr @key="i.Id" class="@(i.IsActive ? "" : "text-muted")">
+                        <td class="fw-semibold"><a href="instructions/@i.Id">@i.Code</a></td>
+                        <td>@i.Title@if (!i.IsActive) {<span class="chip ms-1">@L["Off"]</span>}</td>
+                        <td class="small">
+                            @(i.ReleasedNumber is { } n ? L["Version {0}, {1}", n, Display.SiteTime(i.ReleasedAt, Sites.Site?.TimeZone)] : L["Not released"])
+                            @if (i.DraftNumber is { } d)
+                            {
+                                <div class="text-muted">@L["Draft {0}", d]</div>
+                            }
+                        </td>
+                        <td class="small">@(i.Targets.Count == 0 ? "—" : string.Join(", ", i.Targets))</td>
+                    </tr>
+                }
+                @if (_list.Count == 0)
+                {
+                    <tr><td colspan="4" class="text-muted small">@L["No work instructions yet."]</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<InstructionSummaryDto>? _list;
+    private string? _code;
+    private string? _title;
+    private bool _busy;
+    private ApiException? _error;
+
+    private bool CanManage => User.Can(PermissionCodes.Instructions, Sites.SiteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            _list = [];
+            return;
+        }
+
+        try
+        {
+            _list = await Api.ListInstructionsAsync(site);
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _list = null;
+        await LoadAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        if (Sites.SiteId is not { } site || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_title))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var created = await Api.CreateInstructionAsync(new CreateInstructionRequest { SiteId = site, Code = _code, Title = _title });
+            Navigation.NavigateTo($"instructions/{created.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

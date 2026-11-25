@@ -126,6 +126,16 @@ public sealed record StationDto
     /// <summary>The line's maintenance requests not closed (#127), its machines' too, the waiting ones first. Shown even while the station waits.</summary>
     public IReadOnlyList<Pulaski.Contracts.Maintenance.MaintenanceRequestDto> MaintenanceRequests { get; init; } = [];
 
+    /// <summary>
+    /// The released work instructions (#126b) for the running job, else for the line's next job (to set up before starting it, #126c): its
+    /// operation's, its line's and its material's, with their checklists. Shown even while the station waits.
+    /// </summary>
+    public IReadOnlyList<Pulaski.Contracts.Instructions.JobInstructionDto> Instructions { get; init; } = [];
+
+    /// <summary>The job <see cref="Instructions"/> are for; null when there are none.</summary>
+    public Guid? InstructionsJobId { get; init; }
+    public string? InstructionsJobNumber { get; init; }
+
     /// <summary>Why a run ends (reasons of kind <c>run_end</c> at the site), offered when pausing or completing at the station (#147).</summary>
     public IReadOnlyList<Pulaski.Contracts.Inventory.ReasonCodeDto> RunEndReasons { get; init; } = [];
 
@@ -145,6 +155,9 @@ public sealed record StationDto
     /// <summary>Whether the signed-on person may call for help (<c>andon.call</c>) and answer calls (<c>andon.respond</c>) here (#157).</summary>
     public bool CanCallForHelp { get; init; }
     public bool CanAnswerCalls { get; init; }
+
+    /// <summary>Whether the signed-on person may give checklists their second sign-off here (<c>checklists.sign_off</c>, #126d).</summary>
+    public bool CanSignOffChecklists { get; init; }
 
     /// <summary>Whether the signed-on person may request maintenance here (<c>maintenance.request</c>, #127).</summary>
     public bool CanRequestMaintenance { get; init; }
@@ -271,6 +284,29 @@ public sealed record StationMaintenanceRequest
 }
 
 /// <summary>Code a stop at a station (#149), as the signed-on person: one of the station's stops to code, with its reason.</summary>
+/// <summary>A checklist answered at the station (#126c): one of the job's its instructions show, as the signed-on person.</summary>
+public sealed record StationChecklistRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public Guid JobId { get; init; }
+    public Guid InstructionId { get; init; }
+
+    /// <summary><c>setup</c> (needs a role that runs jobs) or <c>first_article</c> (a role that reports).</summary>
+    public string Phase { get; init; } = "";
+    public IReadOnlyDictionary<int, string?> Answers { get; init; } = new Dictionary<int, string?>();
+}
+
+/// <summary>A second sign-off at the station (#126d), as the signed-on person, of one of the shown job's checklists waiting for it.</summary>
+public sealed record StationChecklistSignOffRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public Guid ResponseId { get; init; }
+    public bool Approve { get; init; }
+    public string? Note { get; init; }
+}
+
 public sealed record StationStopRequest
 {
     public string? Ticket { get; init; }

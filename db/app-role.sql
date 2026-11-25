@@ -26,6 +26,8 @@ GRANT USAGE ON SCHEMA core, evt, ts TO pulaski_app;
 
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA core TO pulaski_app;
 GRANT DELETE ON core.equipment_tag TO pulaski_app;
+-- Instruction files' bytes are written once (#126a).
+REVOKE UPDATE ON core.work_instruction_content FROM pulaski_app;
 -- A stored lot document is written once and kept (D-056).
 REVOKE UPDATE ON core.lot_document_content FROM pulaski_app;
 

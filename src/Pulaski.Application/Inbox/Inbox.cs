@@ -16,6 +16,7 @@ public static class InboxKinds
     public const string SpcAlert = "spc_alert";
     public const string Labor = "labor";
     public const string Maintenance = "maintenance";
+    public const string Checklist = "checklist";
 
     public static IReadOnlyList<(string Kind, string Permission)> All { get; } =
     [
@@ -25,6 +26,7 @@ public static class InboxKinds
         (ErpChange, Permissions.WorkOrderManage),
         (RateProposal, Permissions.RateModify),
         (Maintenance, Permissions.MaintenanceWork),
+        (Checklist, Permissions.ChecklistSignOff),
     ];
 }
 

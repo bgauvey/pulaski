@@ -446,6 +446,58 @@ else
                 }
             </section>
 
+            @if (_station.Instructions.Count > 0)
+            {
+                @* The running job's released instructions (#126b): anyone at the station may read them; files open through the web, as the terminal. *@
+                <section class="station-panel station-instructions" aria-labelledby="station-instructions">
+                    <h2 id="station-instructions" class="h5">
+                        @(_station.Instructions.Count == 1 ? L["Work instruction"] : L["Work instructions"])
+                        @if (line.Running is null && _station.InstructionsJobNumber is { } nextJob)
+                        {
+                            <span class="text-muted fw-normal">· @L["for the next job, {0}", nextJob]</span>
+                        }
+                    </h2>
+                    <JobInstructions Instructions="_station.Instructions" FileHref="StationFileHref">
+                        <Answer Context="shown">
+                            @if (shown.Checklist.Phase == "setup" ? _station.CanRunJobs : _station.CanReport)
+                            {
+                                <EditForm Model="Input" FormName="@($"station-checklist-{shown.Instruction.InstructionId:N}-{shown.Checklist.Phase}")" OnSubmit="ActAsync" method="post">
+                                    <input type="hidden" name="Input.JobId" value="@_station.InstructionsJobId" />
+                                    <input type="hidden" name="Input.InstructionId" value="@shown.Instruction.InstructionId" />
+                                    <input type="hidden" name="Input.Phase" value="@shown.Checklist.Phase" />
+                                    <ChecklistFields Items="shown.Checklist.Items" IdPrefix="@($"st-{shown.Instruction.InstructionId:N}-{shown.Checklist.Phase}")" />
+                                    <div class="station-actions">
+                                        <button type="submit" name="Input.Action" value="checklist" class="btn btn-primary">@L["Save the answers"]</button>
+                                    </div>
+                                </EditForm>
+                            }
+                            else if (_station.PersonName is null)
+                            {
+                                <p class="text-muted mb-0">@L["Badge in to answer it."]</p>
+                            }
+                        </Answer>
+                        <SignOff Context="waiting">
+                            @if (_station.CanSignOffChecklists)
+                            {
+                                <EditForm Model="Input" FormName="@($"station-signoff-{waiting.Checklist.ResponseId:N}")" OnSubmit="ActAsync" method="post" class="mt-2">
+                                    <input type="hidden" name="Input.ResponseId" value="@waiting.Checklist.ResponseId" />
+                                    <label class="form-label" for="@($"station-so-{waiting.Checklist.ResponseId:N}")">@L["Note"] <span class="text-muted">@L["(needed to reject)"]</span></label>
+                                    <InputText id="@($"station-so-{waiting.Checklist.ResponseId:N}")" class="form-control mb-2" maxlength="500" @bind-Value="Input.Comment" />
+                                    <div class="station-actions">
+                                        <button type="submit" name="Input.Action" value="checklist-sign-off" class="btn btn-success">@L["Sign it off"]</button>
+                                        <button type="submit" name="Input.Action" value="checklist-reject" class="btn btn-outline-danger">@L["Reject"]</button>
+                                    </div>
+                                </EditForm>
+                            }
+                            else if (_station.PersonName is null)
+                            {
+                                <p class="text-muted mb-0 mt-1">@L["Badge in to sign it off."]</p>
+                            }
+                        </SignOff>
+                    </JobInstructions>
+                </section>
+            }
+
             <section class="station-panel" aria-labelledby="station-next">
                 <h2 id="station-next" class="h5">@L["Next"]</h2>
                 @if (_station.Next.Count == 0)
@@ -531,6 +583,9 @@ else
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
+
+    private string StationFileHref(JobInstructionDto wi, InstructionFileDto file) =>
+        $"terminal/station/instructions/{wi.InstructionId}/files/{file.Id}" + (_station?.Line is { } l ? $"?line={Uri.EscapeDataString(l.Code)}" : "");
 
     [SupplyParameterFromQuery(Name = "line")]
     private string? Line { get; set; }
@@ -717,6 +772,61 @@ else
                 }
 
                 return;
+            case "checklist" when Input.JobId is { } checklistJob && Input.InstructionId is { } instructionId:
+                try
+                {
+                    var phase = Input.Phase ?? "";
+                    var items = _station?.Instructions.FirstOrDefault(i => i.InstructionId == instructionId)?.Checklists.FirstOrDefault(c => c.Phase == phase)?.Items ?? [];
+                    var answered = await Api.StationChecklistAsync(Secret!, new StationChecklistRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        JobId = checklistJob,
+                        InstructionId = instructionId,
+                        Phase = phase,
+                        Answers = Services.Instructions.ChecklistView.ToSend(items, (Input.Answers ?? []).ToDictionary(a => a.Key, a => (string?)a.Value)),
+                    });
+                    TerminalCookie.SetStation(HttpContext, answered.Ticket, answered.TicketExpiresAt);
+                    _station = answered.Station;
+                    _notes = L.Notes(answered.Notes);
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
+                return;
+            case "checklist-sign-off" or "checklist-reject" when Input.ResponseId is { } responseId:
+                try
+                {
+                    var signed = await Api.StationChecklistSignOffAsync(Secret!, new StationChecklistSignOffRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        ResponseId = responseId,
+                        Approve = action == "checklist-sign-off",
+                        Note = Input.Comment,
+                    });
+                    TerminalCookie.SetStation(HttpContext, signed.Ticket, signed.TicketExpiresAt);
+                    _station = signed.Station;
+                    _notes = L.Notes(signed.Notes);
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
+                return;
             case "sign-off":
                 TerminalCookie.ClearStation(HttpContext);
                 Navigation.NavigateTo(Here, forceLoad: true);
@@ -817,5 +927,13 @@ else
         public decimal? MachineScrap { get; set; }
         public Guid? MachineUomId { get; set; }
         public DateTimeOffset? MachineThrough { get; set; }
+
+        /// <summary>A checklist answered (#126c): which, and its answers by item number.</summary>
+        public Guid? InstructionId { get; set; }
+        public string? Phase { get; set; }
+        public Dictionary<int, string>? Answers { get; set; }
+
+        /// <summary>A checklist answer given its second sign-off or rejected (#126d).</summary>
+        public Guid? ResponseId { get; set; }
     }
 }

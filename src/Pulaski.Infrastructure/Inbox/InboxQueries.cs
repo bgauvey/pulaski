@@ -78,6 +78,21 @@ internal sealed class InboxQueries(NpgsqlDataSource dataSource) : IInboxReadStor
         WHERE r.status = 'open' AND r.site_id = ANY(@SiteIds)
         """;
 
+    // Checklists waiting for their second sign-off (#126d): signed off at the job. Title the job and the instruction's code, detail the line and
+    // who answered it, so neither needs translating.
+    private const string Checklists = """
+        SELECT 'checklist' AS kind, 'checklist:' || r.id AS key, j.job_number || ' · ' || i.code AS title,
+               e.code || ' · ' || COALESCE((SELECT u.display_name FROM sec.app_user u
+                   WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = r.completed_by), r.completed_by) AS detail,
+               r.site_id, s.code AS site_code, r.completed_at AS since, 'jobs/' || r.job_id AS link
+        FROM core.checklist_response r
+        JOIN core.job j ON j.id = r.job_id
+        JOIN core.work_instruction i ON i.id = r.instruction_id
+        JOIN core.equipment e ON e.id = r.equipment_id
+        JOIN core.equipment s ON s.id = r.site_id
+        WHERE r.sign_off = 'pending' AND r.site_id = ANY(@SiteIds)
+        """;
+
     public async Task<IReadOnlyList<(Guid Id, string Code)>> ListSitesAsync(CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -93,6 +108,7 @@ internal sealed class InboxQueries(NpgsqlDataSource dataSource) : IInboxReadStor
             InboxKinds.ErpChange => ErpChanges,
             InboxKinds.SpcAlert => SpcAlerts,
             InboxKinds.Maintenance => Maintenance,
+            InboxKinds.Checklist => Checklists,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Not an inbox kind read from SQL."),
         };
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

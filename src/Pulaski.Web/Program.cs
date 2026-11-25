@@ -77,6 +77,7 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapAccountEndpoints();
+app.MapTerminalFileEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .RequireAuthorization();

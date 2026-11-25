@@ -306,6 +306,20 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`accepted` + number → `external_system`/`external_reference`, `started`, `closed`; repeats change nothing). (d) `core.maintenance_plan` (run_hours
   from Execute time / counts from machine counts, interval): `MaintenancePlanService` → `MaintenancePlanRunner` raises a request as `system` when
   the reading since its start or last close reaches the interval, one open per plan; `/api/maintenance/plans`.
+- Work instructions (D-116, proposed, in pieces, #126): `core.work_instruction` per site (code fixed) with numbered versions draft → released →
+  obsolete (one draft, one released; releasing obsoletes the last; `NextDraft` copies text + file rows). Body is plain text rendered by
+  `InstructionText.ToHtml` (headings, steps, points, bold; all else escaped). Files PDF/PNG/JPEG ≤ 10 MB, ≤ 20 per version (`InstructionFiles.Check`),
+  bytes in insert-only `work_instruction_content`, placed by `work_instruction_file` (`removed_at`). Targets operation (process + number) /
+  material / line, ended not deleted. Writes lock the instruction; `/api/instructions`, `instructions.view` / `instructions.manage`.
+  (b) `GetJobInstructionsQuery` (`/api/jobs/{id}/instructions`): released versions matching the job's operation, line (closure) or material,
+  `JobInstructions.Gather` order; shared `JobInstructions` component on the job page and the station (`StationDto.Instructions`, running job;
+  files via the web's `/terminal/station/instructions/...` → API terminal endpoint, only files the station shows).
+  (c) version `checklists` jsonb (setup / first_article; `Checklists.Check`/`Evaluate`); `core.checklist_response` passed/failed per job + line,
+  `run_id` open run else attached at start. `ChecklistGate`: start needs setup (not group jobs), reports (`ProductionReporter.Checklists`, not
+  corrections/stops) need both; once per job and line. `/api/jobs/{id}/checklists/{setup|first-article}`, station `/station/checklist`.
+  (d) checklist `secondSignOff` → answer `sign_off` pending/signed/rejected (counts only signed), by someone else with `checklists.sign_off`
+  (`ChecklistSignOffs.Decide`, `SignOffChecklistCommand`, `/api/checklist-responses/{id}/sign-off`, station `/station/checklist/sign-off`);
+  Inbox kind `checklist`; history `GetJobChecklistsQuery` (`/api/jobs/{id}/checklists`). Not Part 11 signatures.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

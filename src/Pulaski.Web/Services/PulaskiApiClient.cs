@@ -10,6 +10,7 @@ using Pulaski.Contracts.Common;
 using Pulaski.Contracts.EquipmentModel;
 using Pulaski.Contracts.Execution;
 using Pulaski.Contracts.Integrations;
+using Pulaski.Contracts.Instructions;
 using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.MachineData;
@@ -935,6 +936,92 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Post, $"api/lots/{lotId}/documents") { Content = form }, ct);
         return await ReadAsync<CreatedResponse>(response, ct);
     }
+
+    /// <summary>The site's work instructions (#126a).</summary>
+    public Task<IReadOnlyList<InstructionSummaryDto>> ListInstructionsAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<InstructionSummaryDto>>($"api/instructions?siteId={siteId}", ct);
+
+    public Task<InstructionDto> GetInstructionAsync(Guid id, CancellationToken ct = default) => GetAsync<InstructionDto>($"api/instructions/{id}", ct);
+
+    public Task<CreatedResponse> CreateInstructionAsync(CreateInstructionRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, "api/instructions", request, ct);
+
+    public Task<VersionResponse> UpdateInstructionAsync(Guid id, UpdateInstructionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/instructions/{id}", request, ct);
+
+    public Task<VersionResponse> SaveInstructionDraftAsync(Guid id, SaveInstructionDraftRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/instructions/{id}/draft", request, ct);
+
+    public Task<CreatedResponse> NewInstructionDraftAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/instructions/{id}/draft", new { }, ct);
+
+    public Task<VersionResponse> ReleaseInstructionAsync(Guid id, ReleaseInstructionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/instructions/{id}/release", request, ct);
+
+    public Task<VersionResponse> RemoveInstructionFileAsync(Guid id, Guid fileId, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/instructions/{id}/draft/files/{fileId}/remove", new { }, ct);
+
+    public Task<CreatedResponse> AddInstructionTargetAsync(Guid id, AddInstructionTargetRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/instructions/{id}/targets", request, ct);
+
+    public Task<VersionResponse> EndInstructionTargetAsync(Guid id, Guid targetId, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/instructions/{id}/targets/{targetId}/end", new { }, ct);
+
+    public async Task<CreatedResponse> AddInstructionFileAsync(Guid id, string fileName, byte[] content, CancellationToken ct = default)
+    {
+        // The form disposes its parts, and the request (disposed in SendCoreAsync) the form.
+#pragma warning disable CA2000
+        var form = new MultipartFormDataContent { { new ByteArrayContent(content), "file", fileName } };
+#pragma warning restore CA2000
+        using var response = await SendCoreAsync(new HttpRequestMessage(HttpMethod.Post, $"api/instructions/{id}/draft/files") { Content = form }, ct);
+        return await ReadAsync<CreatedResponse>(response, ct);
+    }
+
+    /// <summary>The released instructions a job shows (#126b).</summary>
+    public Task<IReadOnlyList<JobInstructionDto>> GetJobInstructionsAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<JobInstructionDto>>($"api/jobs/{jobId}/instructions", ct);
+
+    /// <summary>Answers a job's checklist (#126c): <paramref name="phase"/> <c>setup</c> or <c>first_article</c>.</summary>
+    public Task<ChecklistCompletedResponse> CompleteChecklistAsync(Guid jobId, string phase, CompleteChecklistRequest request, CancellationToken ct = default) =>
+        SendAsync<ChecklistCompletedResponse>(HttpMethod.Post, $"api/jobs/{jobId}/checklists/{(phase == "setup" ? "setup" : "first-article")}", request, ct);
+
+    /// <summary>A job's checklists as answered (#126d), latest first.</summary>
+    public Task<IReadOnlyList<ChecklistRecordDto>> GetJobChecklistsAsync(Guid jobId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ChecklistRecordDto>>($"api/jobs/{jobId}/checklists", ct);
+
+    /// <summary>A checklist's second sign-off, given or refused (#126d).</summary>
+    public Task<ChecklistSignedOffResponse> SignOffChecklistAsync(Guid responseId, SignOffChecklistRequest request, CancellationToken ct = default) =>
+        SendAsync<ChecklistSignedOffResponse>(HttpMethod.Post, $"api/checklist-responses/{responseId}/sign-off", request, ct);
+
+    /// <summary>A second sign-off at the station (#126d), as the signed-on person.</summary>
+    public Task<StationActionResponse> StationChecklistSignOffAsync(string secret, StationChecklistSignOffRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/checklist/sign-off", request, ct);
+
+    /// <summary>Answers a checklist at the station (#126c), as the signed-on person.</summary>
+    public Task<StationActionResponse> StationChecklistAsync(string secret, StationChecklistRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/checklist", request, ct);
+
+    /// <summary>A file of the running job's instructions at a station (#126b), as the terminal.</summary>
+    public async Task<(byte[] Content, string ContentType, string FileName)> GetStationInstructionFileAsync(
+        string secret, Guid id, Guid fileId, string? line, CancellationToken ct = default)
+    {
+        var uri = $"api/terminal/station/instructions/{id}/files/{fileId}" + (string.IsNullOrWhiteSpace(line) ? "" : $"?line={Uri.EscapeDataString(line)}");
+        var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Terminal", secret);
+        using var response = await SendCoreAsync(request, ct, signedIn: false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ApiException.FromResponseAsync(response, ct);
+        }
+
+        return (await response.Content.ReadAsByteArrayAsync(ct),
+            response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream",
+            response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "document");
+    }
+
+    /// <summary>An instruction's file, to hand to the browser.</summary>
+    public Task<(byte[] Content, string ContentType, string FileName)> GetInstructionFileAsync(Guid id, Guid fileId, CancellationToken ct = default) =>
+        GetFileAsync($"api/instructions/{id}/files/{fileId}", ct);
 
     /// <summary>A stored document's file, to hand to the browser.</summary>
     public Task<(byte[] Content, string ContentType, string FileName)> GetLotDocumentContentAsync(Guid documentId, CancellationToken ct = default) =>

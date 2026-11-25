@@ -104,6 +104,95 @@
         <div class="inv-tile"><span class="metric @(job.Runs.Count == 0 ? "is-zero" : "")">@job.Runs.Count</span><span class="inv-tile-label">@(job.Runs.Count == 1 ? L["Run"] : L["Runs"])</span></div>
     </div>
 
+    @if (_instructions.Count > 0)
+    {
+        <section class="inv-section" aria-labelledby="instructions-title">
+            <h2 id="instructions-title">@(_instructions.Count == 1 ? L["Work instruction"] : L["Work instructions"])</h2>
+            <JobInstructions Instructions="_instructions" OnFile="DownloadInstructionFileAsync">
+                <Answer>
+                    @if (May(context.Checklist.Phase == "setup" ? PermissionCodes.JobExecute : PermissionCodes.ProductionReport))
+                    {
+                        var key = (context.Instruction.InstructionId, context.Checklist.Phase);
+                        <form @onsubmit="() => AnswerChecklistAsync(context.Instruction, context.Checklist)" @onsubmit:preventDefault>
+                            <ChecklistFields Items="context.Checklist.Items" Answers="AnswersFor(key)" IdPrefix="@($"cl-{context.Instruction.InstructionId:N}-{context.Checklist.Phase}")" />
+                            <div class="form-actions">
+                                <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy">@L["Save the answers"]</ActionButton>
+                            </div>
+                        </form>
+                    }
+                </Answer>
+                <SignOff Context="waiting">
+                    @if (May(PermissionCodes.ChecklistSignOff))
+                    {
+                        <form class="row g-2 align-items-end mt-1" @onsubmit:preventDefault>
+                            <div class="col-md-6">
+                                <label class="form-label small" for="@($"so-{waiting.Checklist.ResponseId:N}")">@L["Note"] <span class="text-muted">@L["(needed to reject)"]</span></label>
+                                <input id="@($"so-{waiting.Checklist.ResponseId:N}")" class="form-control form-control-sm" maxlength="500" @bind="_signOffNote" />
+                            </div>
+                            <div class="col-md-6 form-actions">
+                                <ActionButton Class="btn btn-sm btn-success" Busy="_busy" OnClick="() => SignOffAsync(waiting.Checklist, approve: true)">@L["Sign it off"]</ActionButton>
+                                <ActionButton Class="btn btn-sm btn-outline-danger" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_signOffNote) ? L["Say why first."] : null)"
+                                              OnClick="() => SignOffAsync(waiting.Checklist, approve: false)">@L["Reject"]</ActionButton>
+                            </div>
+                        </form>
+                    }
+                </SignOff>
+            </JobInstructions>
+        </section>
+    }
+
+    @if (_checklistHistory.Count > 0)
+    {
+        <section class="inv-section" aria-labelledby="checklists-title">
+            <h2 id="checklists-title">@L["Checklists answered"]</h2>
+            <div class="table-panel">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>@L["Run"]</th><th>@L["Checklist"]</th><th>@L["Outcome"]</th><th>@L["Answered"]</th><th>@L["Second sign-off"]</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _checklistHistory)
+                        {
+                            <tr @key="r.Id">
+                                <td>@(r.RunNo is { } no ? L["Run {0} on {1}", no, r.LineCode] : L["Before a run, on {0}", r.LineCode])</td>
+                                <td>
+                                    @Services.Instructions.ChecklistView.Title(L, r.Phase) · @r.InstructionCode v@(r.VersionNumber)
+                                    <details class="small">
+                                        <summary>@L["Answers"]</summary>
+                                        <ol class="mb-0">
+                                            @foreach (var a in r.Answers)
+                                            {
+                                                <li value="@a.Item" class="@(a.Ok ? "" : "text-danger")">@(r.Items.ElementAtOrDefault(a.Item - 1)?.Prompt): @Services.Instructions.ChecklistView.Answer(L, a.Value)</li>
+                                            }
+                                        </ol>
+                                    </details>
+                                </td>
+                                <td>@Services.Instructions.ChecklistView.Outcome(L, r)</td>
+                                <td class="small">@Display.SiteTime(r.CompletedAt, job.SiteTimeZone) · @r.CompletedByName</td>
+                                <td class="small">
+                                    @if (r.SignedOffAt is { } at)
+                                    {
+                                        @Display.SiteTime(at, job.SiteTimeZone)<span> · @r.SignedOffByName</span>
+                                        @if (r.SignOffNote is { } note)
+                                        {
+                                            <div class="text-muted">@note</div>
+                                        }
+                                    }
+                                    else if (r.SignOff == "pending")
+                                    {
+                                        <span class="text-muted">@L["Waiting"]</span>
+                                    }
+                                    else
+                                    {
+                                        <span>—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+
     @if (_stop is { } stop)
     {
         <StopJobForm JobId="job.JobId" Version="job.Version" SiteId="job.SiteId" Complete="stop == StopMode.Complete"
@@ -387,6 +476,78 @@ else if (_error is null)
     private Guid _fixScrapReason;
     private string? _fixBatches;
 
+    private IReadOnlyList<JobInstructionDto> _instructions = [];
+
+    private readonly Dictionary<(Guid, string), Dictionary<int, string?>> _answers = [];
+    private IReadOnlyList<ChecklistRecordDto> _checklistHistory = [];
+    private string? _signOffNote;
+
+    private async Task SignOffAsync(JobChecklistDto checklist, bool approve)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.SignOffChecklistAsync(checklist.ResponseId!.Value, new SignOffChecklistRequest { Approve = approve, Note = _signOffNote });
+            _signOffNote = null;
+            _notes = [approve ? L["{0} is signed off.", Services.Instructions.ChecklistView.Title(L, checklist.Phase)]
+                : L["{0} is rejected: it is to be answered again.", Services.Instructions.ChecklistView.Title(L, checklist.Phase)]];
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Dictionary<int, string?> AnswersFor((Guid, string) key) =>
+        _answers.TryGetValue(key, out var answers) ? answers : _answers[key] = [];
+
+    private async Task AnswerChecklistAsync(JobInstructionDto instruction, JobChecklistDto checklist)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var key = (instruction.InstructionId, checklist.Phase);
+            var done = await Api.CompleteChecklistAsync(JobId, checklist.Phase, new CompleteChecklistRequest
+            {
+                InstructionId = instruction.InstructionId,
+                Answers = Services.Instructions.ChecklistView.ToSend(checklist.Items, AnswersFor(key)),
+            });
+            _answers.Remove(key);
+            _notes = [done.WaitsForSignOff ? L["{0} passed and waits for a second sign-off.", Services.Instructions.ChecklistView.Title(L, checklist.Phase)]
+                : done.Passed ? L["{0} passed.", Services.Instructions.ChecklistView.Title(L, checklist.Phase)]
+                : L["{0} failed: put it right and answer it again.", Services.Instructions.ChecklistView.Title(L, checklist.Phase)]];
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DownloadInstructionFileAsync((JobInstructionDto Instruction, InstructionFileDto File) chosen)
+    {
+        try
+        {
+            var (content, type, name) = await Api.GetInstructionFileAsync(chosen.Instruction.InstructionId, chosen.File.Id);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
     private enum StopMode
     {
         Pause,
@@ -404,6 +565,10 @@ else if (_error is null)
         try
         {
             _job = await Api.GetJobExecutionAsync(JobId);
+            // The released instructions for its operation, line and material (#126b).
+            var mayRead = User.Can(PermissionCodes.FloorView, _job.SiteId) || User.Can(PermissionCodes.InstructionsView, _job.SiteId);
+            _instructions = mayRead ? await Api.GetJobInstructionsAsync(JobId) : [];
+            _checklistHistory = mayRead ? await Api.GetJobChecklistsAsync(JobId) : [];
             if (_job.PartialBatches.Any(p => p.Status == "pending") && _scrapReasons.Count == 0)
             {
                 _scrapReasons = await Api.ListReasonCodesAsync("scrap", _job.SiteId);

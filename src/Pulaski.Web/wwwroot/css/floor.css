@@ -76,3 +76,17 @@
     padding-top: var(--space-2);
     border-top: 1px solid var(--border);
 }
+
+/* Work instructions (#126): their text, on the instruction's page, the job page and the station. */
+.instruction-text h3 { font-size: 1.1rem; margin: var(--space-3) 0 var(--space-2); }
+.instruction-text h4 { font-size: 1rem; margin: var(--space-3) 0 var(--space-1); }
+.instruction-text > :first-child { margin-top: 0; }
+.instruction-text ol, .instruction-text ul { padding-left: 1.5rem; margin-bottom: var(--space-2); }
+.instruction-text li { margin-bottom: var(--space-1); }
+.instruction-text p:last-child { margin-bottom: 0; }
+.job-instruction { border-top: 1px solid var(--border); padding: var(--space-2) 0; }
+.job-instruction:first-child { border-top: 0; padding-top: 0; }
+.job-instruction > summary { cursor: pointer; }
+.job-checklist { border-left: 3px solid var(--border); padding-left: var(--space-2); }
+.job-checklist.is-passed { border-left-color: var(--success); }
+.job-checklist.is-failed { border-left-color: var(--danger); }

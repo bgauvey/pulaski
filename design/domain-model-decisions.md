@@ -3173,6 +3173,69 @@ CMMS (maintenance system); Pulaski shouldn't become one, but a plant without one
 - **Pieces:** (a) requests from a stop or the line, statuses, the Machines tab; (b) the operator station, line boards and Inbox; (c) a CMMS feed
   and its answer back (work order number, closing); (d) preventive triggers by run hours or machine counts.
 
+### D-116 · Work instructions (#126) · *Proposed, in pieces*
+
+**Context.** Operators set up and run from paper or a shared drive, and nothing ties the instruction in force to the job in front of them. A
+document system is out of scope, but the floor needs the released instruction for what it runs, and the plant needs to know which version
+that was.
+
+**Decision.**
+- **Documents (a, #193).** `core.work_instruction` per site: code (fixed, `^[A-Z0-9][A-Z0-9_.-]{0,29}$`, unique per site), title, `is_active`
+  (switched off, never deleted). Its text and files live in versions, `core.work_instruction_version` numbered 1, 2, …: draft → released →
+  obsolete. At most one draft and one released version at a time (partial unique indexes); releasing the draft makes the one released before it
+  obsolete in the same transaction. A released version is fixed (`InstructionVersion.EnsureDraft`); a change is a new draft started from it
+  (`NextDraft`), carrying its text and its file rows. Releasing needs text or a file and records who, when and an optional note (≤ 1000).
+- **Text, not markup.** The body (≤ 20 000 characters, line ends kept as LF) is plain text read by the web as headings (`#`, `##`), numbered
+  steps (`1.`), points (`-`, `*`), `**bold**` and paragraphs (`InstructionText.ToHtml`); everything else is HTML-escaped, so no script or link
+  can be written into it. Longer or richer material goes in a file.
+- **Files** are PDF, PNG or JPEG by their bytes (`LotDocumentFiles.Sniff`, as lot documents), ≤ 10 MB, ≤ 20 per version
+  (`InstructionFiles.Check`). The bytes go once into insert-only `core.work_instruction_content` (SHA-256 kept; the app role has no UPDATE on
+  it); `core.work_instruction_file` places them in a version and is taken out of a draft with `removed_at`, so a new draft points at the same
+  bytes and a released version's files never change. Served as an attachment with `nosniff`.
+- **Targets** say what an instruction is shown for: `core.work_instruction_target` kind `operation` (a process + operation number, so it
+  follows the operation through process versions), `material` or `line` (equipment of the site that runs jobs); one active per same target,
+  ended (`is_active` false), never deleted. Which instructions a job shows, and in what order, is (b).
+- **Every change locks the instruction first** (`FOR UPDATE`); the draft's own `xmin` guards saving and releasing it. Events
+  `pulaski.work_instruction.created/changed/draft_saved/draft_started/file_added/file_removed/released/target_added/target_ended.v1`.
+- **Permissions** `instructions.view` (Viewing; Planner, Supervisor, Operator, Maintenance, Quality, Process engineer) and `instructions.manage`
+  (Configuration; Quality, Process engineer), which implies it. Migration 0079. `/api/instructions` (`?siteId=`, `/{id}`, `/{id}/draft`,
+  `/{id}/draft/files`, `/{id}/draft/files/{fileId}/remove`, `/{id}/release`, `/{id}/targets`, `/{id}/targets/{targetId}/end`,
+  `/{id}/files/{fileId}`, which `floor.view` may also read). Configure → **Work instructions** (`/instructions`, `/instructions/{id}`).
+- **At the job (b, #194).** `GetJobInstructionsQuery` (`GET /api/jobs/{id}/instructions`, `floor.view` or `instructions.view` at the job's
+  site) gives the released version of each active instruction of the job's site with an active target matching it: its operation (the job's
+  `process_operation_id` → process + operation number), its line or one above it (`equipment_closure`), its material. One entry per
+  instruction with the kinds that matched (`JobInstructions.Gather`: operation first, then line, then material, then by code). Worked out on
+  read: a new release shows at once. The job page shows them under its figures; the operator station's `StationDto.Instructions` are the
+  running job's, shown to anyone at it. The station is static, so its files are links to the web's `/terminal/station/instructions/{id}/files/
+  {fileId}`, which calls `GET /api/terminal/station/instructions/{id}/files/{fileId}?line=` with the terminal's secret; the API serves only a
+  file of an instruction the station shows now (else 404). Which version a run used is recorded with sign-off (d).
+- **Checklists (c, #195).** A version carries at most one `setup` and one `first_article` checklist (`work_instruction_version.checklists`
+  `jsonb`, migration 0080), written in the draft and fixed on release; a checklist alone is enough to release. Items, numbered from 1 in order:
+  `yes_no` (optionally expecting yes or no), `number` (optional limits and unit), `choice` (2–20 choices), `text`; each required or not
+  (`Checklists.Check`, ≤ 50 items). User's choices: **once per job and line**, and **a failed checklist is kept but doesn't count**.
+  `Checklists.Evaluate` refuses a missing required answer or one the item doesn't take, and fails the checklist for an answer against what is
+  expected or outside the limits. `CompleteChecklistCommand` (locks the job; the instruction must apply to the job on its line, released,
+  `ApplicableAsync`) writes `core.checklist_response` (version, phase, `passed`/`failed`, answers `jsonb`, who and when; `run_id` = the open run,
+  else attached to the next run started on that line, `AttachToRunAsync`). `ChecklistGate`: **start** needs every applicable setup checklist
+  passed for the job on that line (not for a department's job, whose line is chosen at start); **a report** (not a correction or a stop's
+  partial batch) needs setup and first article passed on the run's line. Pausing and resuming on the same line needs neither again; another
+  line needs both. Permissions: setup `job.execute` (`POST /api/jobs/{id}/checklists/setup`), first article `production.report`
+  (`/first-article`); at the station `POST /api/terminal/station/checklist` as the signed-on person, for the job its instructions show: the
+  running one, else the next (`StationDto.InstructionsJobId`), so setup can be done before starting it. Event `pulaski.job.checklist_completed.v1`.
+- **Sign-off and history (d, #196).** Whoever answers a checklist signs it (`completed_by`, their user at the Floor or the badged station). A
+  checklist may need a **second sign-off** (`secondSignOff` in its definition): a passed answer is then `sign_off = 'pending'` and doesn't count
+  (`PassedAsync`: passed and `sign_off` null or `signed`) until someone else holding `checklists.sign_off` (new, Quality and Supervisor; implies
+  `floor.view` and `instructions.view`; migration 0081) signs it off, or rejects it with a note (`ChecklistSignOffs.Decide`: not who answered
+  it, only while pending; rejected = answer again). `SignOffChecklistCommand` locks the job, then the answer; `POST /api/checklist-responses/
+  {id}/sign-off`, at the station `/api/terminal/station/checklist/sign-off`; event `pulaski.job.checklist_signed_off.v1`. A failed answer needs
+  no sign-off. One permission for every checklist rather than one chosen per checklist, to keep the role model as it is. Waiting sign-offs are
+  Inbox kind `checklist`. History: `GetJobChecklistsQuery` (`GET /api/jobs/{id}/checklists`) lists every answer of the job, latest first, with
+  run, line, version, answers and sign-off; the job page's **Checklists answered**. A record of who did what, not a Part 11 electronic
+  signature (a v1 non-goal). With (d), #126 is complete.
+- **Pieces:** (a) documents, versions, files and targets; (b) the released instructions at the job, on the floor and the operator station,
+  with the version shown; (c) checklists for setup and first article in a version; (d) sign-off by the operator, with an optional second, kept
+  against the run.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

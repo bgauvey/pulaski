@@ -175,7 +175,8 @@ internal sealed class StartJobHandler(
     TimeProvider timeProvider,
     Boms.IBomRepository? boms = null,
     Units.IUnitRepository? units = null,
-    ILineBatchSizes? lineBatches = null) : ICommandHandler<StartJobCommand, ExecutionResponse>
+    ILineBatchSizes? lineBatches = null,
+    Instructions.IChecklistRepository? checklists = null) : ICommandHandler<StartJobCommand, ExecutionResponse>
 {
     public async Task<ExecutionResponse> HandleAsync(StartJobCommand command, CancellationToken cancellationToken)
     {
@@ -239,6 +240,12 @@ internal sealed class StartJobHandler(
                 return new ExecutionResponse(changeover.Job.Id, changeover.Version, changeover.RunId, notes);
             }
 
+            // Its setup checklists, once per job and line (#126c); a department's job only learns its line now, so its first report asks instead.
+            if (!locked.Job.Value.IsOnGroup)
+            {
+                await Instructions.ChecklistGate.EnsureAsync(checklists, job.Id, job.JobNumber, line.Id, [Domain.Instructions.ChecklistPhases.Setup], cancellationToken);
+            }
+
             job = await FirmOrderAsync(locked, job, now, cancellationToken);
         }
 
@@ -248,6 +255,11 @@ internal sealed class StartJobHandler(
             EventTypes.JobStarted, "job", job.Id,
             new { Before = new { job.Status }, After = new { started.Status }, RunId = run.Id, run.RunNo, LineId = line.Id });
         await execution.InsertRunAsync(run, cancellationToken);
+        if (checklists is not null)
+        {
+            await checklists.AttachToRunAsync(job.Id, line.Id, run.Id, cancellationToken);
+        }
+
         var version = await writes.SaveJobAsync(job, started, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 

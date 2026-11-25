@@ -52,6 +52,22 @@ public sealed class TerminalEndpointTests(ApiFactory factory) : IClassFixture<Ap
     }
 
     [Fact]
+    public async Task A_station_serves_only_the_files_of_the_instructions_it_shows()
+    {
+        // #126b: a file of an instruction the station doesn't show (no job running on its line) isn't served, whatever the terminal knows.
+        var (terminal, secret) = await EnrolledAsync();
+        var instruction = Pulaski.Domain.Instructions.WorkInstruction.Create(Guid.CreateVersion7(), terminal.SiteId, "WI-T", "Setup");
+        await factory.Stores.Instructions.InsertAsync(instruction, DateTimeOffset.UtcNow, CancellationToken.None);
+        var content = await factory.Stores.Instructions.InsertContentAsync(Guid.CreateVersion7(), [0x25, 0x50, 0x44, 0x46], "x", CancellationToken.None);
+        var file = Guid.CreateVersion7();
+        await factory.Stores.Instructions.InsertFileAsync(file, Guid.CreateVersion7(), content, "setup.pdf", "application/pdf", 0, CancellationToken.None);
+
+        var uri = new Uri($"/api/terminal/station/instructions/{instruction.Id}/files/{file}", UriKind.Relative);
+        Assert.Equal(HttpStatusCode.NotFound, (await TerminalClient(secret).GetAsync(uri)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateSignedOutClient().GetAsync(uri)).StatusCode);
+    }
+
+    [Fact]
     public async Task A_badge_gives_a_ticket_for_this_terminal_only_and_never_a_sign_in()
     {
         var (terminal, secret) = await EnrolledAsync();

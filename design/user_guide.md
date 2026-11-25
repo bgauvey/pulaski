@@ -148,13 +148,14 @@ In detail:
 
 1. Click **Inbox** at the top of the menu; its number says how many items wait.
 2. Items are grouped by what they are, oldest first: **Partial batches to approve or reject**, **SPC alerts to close**, **Labor to approve**,
-   **ERP changes to work orders**, **Planning rates to review** and **Maintenance requests waiting**. Each says where it is and how long it
-   has waited.
+   **ERP changes to work orders**, **Planning rates to review**, **Maintenance requests waiting** and **Checklists to sign off**. Each says
+   where it is and how long it has waited.
 3. Click an item to open the page where it is decided, and decide it there. It leaves the inbox once decided.
 
 In detail: each kind shows only where you hold the permission that decides it (*partial batches: decide*, *quality: record*, *labor: approve*,
-*work orders: manage*, *rates: modify*, *Work maintenance requests*). A maintenance request shows by its number and machine with what was asked,
-until someone starts it; it opens the **Maintenance** tab of Machines. Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
+*work orders: manage*, *rates: modify*, *Work maintenance requests*, *Give setup and first-article checklists their second sign-off*). A maintenance request shows by its
+number and machine with what was asked, until someone starts it; it opens the **Maintenance** tab of Machines. A checklist shows by its job and
+instruction, with the line and who answered it, until it is signed off or rejected; it opens the job's page. Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
 does. The page refreshes every 30 seconds; the menu's number every minute, and when you move to another page.
 
 ### How saving works
@@ -497,6 +498,59 @@ Orders already made keep the version they were made from. If a draft already exi
 - A released process with more than one operation must be connected.
 - Only lines and departments of the process's own site can be used; machines and other equipment that neither runs nor plans jobs are refused.
 - The link's *after start/after end* and lag set the **earliest** time each operation's jobs may start, counted from the order's start. The schedule then also waits for the earlier operation's jobs as they are projected: see [Process links on the schedule](#process-links-on-the-schedule).
+
+### Work instructions
+
+**Configure → Work instructions** holds how to set up and run: the steps for a process's operation, a material or a line, written once and
+released in versions, with drawings or photos attached. Everyone who works on the floor can read them; Quality and Process engineers write
+and release them.
+
+Make one:
+
+1. Open **Configure → Work instructions**, choose the site if you have more than one.
+2. Type a **Code** (such as *WI-EXT-001*) and a **Title**, then click **New instruction**. Its page opens with **Draft 1**.
+3. Write the steps under **Text**. Start a line with `#` for a heading, `1.` for a numbered step and `-` for a point; put words between `**`
+   to make them bold. **How it reads** shows the result as you type.
+4. Click **Save the draft**.
+5. To attach a drawing or photo, choose a file under **Files** (PDF, PNG or JPEG, at most 10 MB). It is added at once; **Remove** takes it out
+   of the draft again.
+6. Optionally say **Why this version**, then click **Release version 1**.
+7. Under **Shown for**, choose **A process's operation** (the process and the operation's number), **A material** or **A line**, and click
+   **Add**. Add as many as it applies to.
+
+Change one: click **Start version 2** on its page. The new draft starts from the released text and files; edit it and release it, and the
+version before becomes obsolete.
+
+Add checklists: a version can hold a **Setup checklist**, answered before the job starts on a line, and a **First-article checklist**, answered
+before its first production report there.
+
+1. In the draft, under **Setup checklist** or **First-article checklist**, click **Add an item**.
+2. Type the question, and choose its **Answer**: **Yes or no** (with **Passes when** *Yes*, *No* or *Either answer*), **A number** (with the
+   lowest and highest allowed and a unit, any of them optional), **A choice** (one per line) or **Text**. Clear **Required** for a question that
+   may be left blank. **↑** moves an item up; **Remove** takes it out.
+3. To have someone else check the answers, tick **Needs a second sign-off**: a passed checklist then counts only once someone who may sign
+   off checklists (Quality and Supervisor to start with) signs it off.
+4. Click **Save the draft**, then release it. A checklist on its own is enough to release a version.
+
+#### In detail
+
+- **One released version at a time.** A released version never changes; only the draft does. **Versions** lists every version with who released
+  it, when and why. While there is a draft, the released version stays in force.
+- **Releasing needs something in it:** text, a file or a checklist. Release is off while the text or the checklists have unsaved changes (*Save
+  the draft first.*).
+- **Checklists** hold at most 50 items each. A new draft starts with the released version's checklists. Answers are kept against the version
+  answered, so changing a checklist never changes what was answered.
+- **The text holds no formatting of its own** beyond headings, numbered steps, points, bold and paragraphs. Anything else, such as HTML, is
+  shown as typed. Up to 20,000 characters; put longer material in a file.
+- **Files** are checked by their contents, not their names: a renamed text file is refused. A version holds at most 20. A new draft shares the
+  released version's files; removing one from the draft leaves the released version as it was.
+- **Shown for an operation** means that operation number of the process in whichever version, so it carries on when the process is revised.
+  A line must be one of the site's that runs jobs. The same target can't be added twice; **Remove** ends it.
+- **The code** is 1 to 30 letters, digits, `-`, `_` and `.`, unique at the site, and fixed once made. Clear **Shown at jobs** to switch an
+  instruction off without deleting it.
+- Permissions: *See work instructions* (Planner, Supervisor, Operator, Maintenance, Quality, Process engineer, Manager, Auditor) and *Maintain
+  work instructions* (Quality, Process engineer). Giving checklists their second sign-off needs *Give setup and first-article checklists their
+  second sign-off* (Quality, Supervisor).
 
 ---
 
@@ -920,6 +974,14 @@ In detail: the station always uses the [touch layout](#use-a-touch-screen) and r
 while they use it; after 15 minutes with nothing done there, it signs them off and waits for a badge. A terminal with no first line offered
 asks which of its lines the station is for (`/terminal/station?line=EXT-01` chooses one). Switching the terminal off stops it at once.
 
+**Read the job's instructions at a station.** Below the running job, the station shows its released work instructions, as the job page
+does, to anyone there: no badge is needed. While nothing runs, it shows the next job's (*for the next job, J10*), so its setup can be done
+before starting it. Tap a folded one to open it, and a file's name to open the file.
+
+**Answer a checklist at a station.** Badge in (setup needs a role that runs jobs, first article one that reports), answer the questions under
+the instruction and tap **Save the answers**. The station says whether it passed, or which items failed. A checklist waiting for its second
+sign-off can be signed off (**Sign it off**) or rejected with a note at the station too, by someone else badged in who may sign off checklists.
+
 **Run the job at a station.** Signed on with a role that runs jobs:
 
 1. **Start** (or **Resume**) is on the line's next job that is ready, while nothing runs.
@@ -1155,6 +1217,45 @@ The run's rate check still applies: an hour-long run can't take more than an hou
 ### The job page
 
 `jobs/<job>` shows the job's status, planned, good and scrap quantities, its **runs** (line, start, end, length, good, scrap, the most the run can hold, and why it ended) and its **production reports** (when entered, which run, good, scrap, scrap reason, who and any comment; a reversed report is marked *reversed*). The buttons offer what the job's status allows: **Start** or **Resume**, **Pause**, **Complete**, **Reopen** for a completed job whose order isn't closed, and **Report production**. **Materials and lots** opens the job's inventory page. For a production job, **Production performance (B2MML)** downloads its totals as an ISA-95 production performance for the ERP (see [Production performance for the ERP](#production-performance-for-the-erp)).
+
+**Work instructions at the job.** Under the figures, the job page shows every released [work instruction](#work-instructions) for it: those
+shown for its process's operation, for its line (or one the line belongs to) and for its material, in that order. Each gives its code, title
+and version, and what it is shown for (*version 2 · for its operation, material*). A lone instruction is open; with more than one, each
+starts folded: click its title to open it. Its files open by name.
+The job always shows the version released now: a new release shows at once, and a draft never does. Seeing them needs the Floor or *See work
+instructions* at the job's site.
+
+**Answer a checklist at the job.** An instruction with a checklist shows it under its text, with how it stands: *To do before the job starts
+on this line*, *Passed … by …* (with the answers), or *Failed on item 2*.
+
+1. Answer each question (those marked * are required) and click **Save the answers**.
+2. If every answer is within what its question allows, the checklist **passed**. If one isn't (a *No* where *Yes* is expected, a number
+   outside its limits), it **failed**: the answers are kept, and the job needs it answered again once the problem is put right.
+
+In detail:
+
+- **Start waits for setup.** Until every setup checklist for the job on its line has passed, **Start** is refused: *Complete the setup
+  checklist of WI-EXT-001 for J10 on this line first.* A department's job learns its line only as it starts, so its setup checklist is asked
+  for at its first report instead.
+- **Reporting waits for both.** A production report is refused until the setup and first-article checklists have passed on the run's line.
+  Correcting or reversing a report, and the partial batch of a stop, aren't held up.
+- **Once per job and line.** Pausing and resuming on the same line needs neither again; moving the job to another line needs both there.
+- **Kept with the run.** Answers given during a run belong to it; setup answered before the start belongs to the run that start opens.
+- **Who answers:** setup, whoever may start jobs (Operator, Supervisor); first article, whoever may report production. The person answering
+  signs it: Pulaski records their user and the time.
+
+**Give a checklist its second sign-off.** A checklist that *needs a second sign-off* says, once passed, *Answered … by …; waiting for a second
+sign-off*, and the job waits as if it weren't answered. It is in the [Inbox](#your-inbox) of everyone who may sign off checklists at the site.
+
+1. Open the job's page (from the Inbox, or the Floor) and read the answers under the checklist.
+2. Click **Sign it off**, or type a **Note** saying what is wrong and click **Reject**.
+3. Signed off, the checklist counts. Rejected, it doesn't: the job needs it answered again, and the new answers wait for a sign-off in turn.
+
+In detail: someone other than who answered it signs it off. Only a passed checklist waits for a sign-off; a failed one is simply answered
+again. The **Checklists answered** table on the job's page keeps every checklist answered for the job, latest first: its run (or *Before a run*
+until the run starts) and line, the instruction and version, the outcome (*Passed*, *Failed*, *Waiting for sign-off*, *Signed off*,
+*Rejected*), who answered and when, and who signed or rejected it and why; **Answers** shows each answer, failed ones in red. Signing is a
+record of who did what, not an electronic signature (Pulaski has no 21 CFR Part 11 features).
 
 ### Reverse a production report
 
@@ -2413,12 +2514,12 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; changeover rules; materials; allocating lots to jobs. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results; request maintenance and start and close requests. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results; request maintenance and start and close requests; give checklists their second sign-off. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off; record quality results; request maintenance. |
-| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality. |
+| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality; write and release work instructions; give checklists their second sign-off. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
-| **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, and characteristics and specifications. |
+| **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, characteristics and specifications, and work instructions. |
 | **Maintenance** | Start and close maintenance requests, and raise them; code machine stops; answer andon calls; write handover notes. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
@@ -2433,12 +2534,12 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | Role | Sees |
 | --- | --- |
 | **Administrator**, **Auditor**, **Manager** | Every screen (Users only for Administrator). |
-| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Quality, Materials, Processes and BOMs, Specifications, Changeovers, Site settings (to look at). |
-| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications (to look at), Labor, Site settings (to look at). |
-| **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications (to look at). |
-| **Quality** | Overview, Floor, Machines, Inventory, Quality, Materials, Specifications. |
-| **Process engineer** | Equipment, Materials, Processes and BOMs, Specifications, Units, Schedule, Changeovers. |
-| **Maintenance** | Overview, Floor, Machines, Equipment (to look at). |
+| **Planner** | Overview, Work orders, Schedule, Floor, Machines, Inventory, Quality, Materials, Processes and BOMs, Specifications, Work instructions, Changeovers, Site settings (to look at). |
+| **Supervisor** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications and Work instructions (to look at), Labor, Site settings (to look at). |
+| **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications and Work instructions (to look at). |
+| **Quality** | Overview, Floor, Machines, Inventory, Quality, Materials, Specifications, Work instructions. |
+| **Process engineer** | Equipment, Materials, Processes and BOMs, Specifications, Work instructions, Units, Schedule, Changeovers. |
+| **Maintenance** | Overview, Floor, Machines, Equipment and Work instructions (to look at). |
 
 - **Start page.** After signing in you land on the Overview, or, if you can't see it, the first screen in the menu you can.
 - **A screen you can't see** isn't in the menu, links to it show as plain text and buttons for it are left out. Typing its address shows **Page not found**.
@@ -3300,10 +3401,14 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
   waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
   and machine counts, not days on the calendar.
+- **Work instructions** show on the job page and at the station, not on the Floor's board or line boards. At a station only the running job's
+  show, or the next job's while nothing runs. A failed or rejected checklist only holds up the job; it doesn't put lots on hold or raise a quality
+  alert, and nothing e-mails anyone about a checklist waiting for its sign-off (it is in the Inbox). Who may give the second sign-off is one
+  permission for every checklist, not chosen per checklist. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).
-- **The inbox** gathers five kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It
+- **The inbox** gathers seven kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It
   links to the page where an item is decided rather than deciding it in place.
 - **Alerts** come by e-mail only. Each person keeps their own; nobody can subscribe others. A lot made on hold (rather than put on hold
   later) doesn't alert, and a shortage that clears and comes back for the same job isn't e-mailed again.
