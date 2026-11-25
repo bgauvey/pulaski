@@ -65,29 +65,33 @@ public sealed record InstructionVersion(
     public const int MaxBody = 20_000;
     public const int MaxNote = 1000;
 
+    /// <summary>Its setup and first-article checklists (#126c), at most one each; released with the text and fixed with it.</summary>
+    public IReadOnlyList<Checklist> Checklists { get; init; } = [];
+
     public bool IsDraft => Status == InstructionVersionStatus.Draft;
 
     public static InstructionVersion FirstDraft(Guid id, Guid instructionId) => new(id, instructionId, 1, InstructionVersionStatus.Draft, "");
 
-    /// <exception cref="DomainRuleException">It isn't a draft, or the text is too long.</exception>
-    public InstructionVersion SaveDraft(string? body)
+    /// <summary>The draft's text, and its checklists when given (null keeps them).</summary>
+    /// <exception cref="DomainRuleException">It isn't a draft, the text is too long, or a checklist isn't right.</exception>
+    public InstructionVersion SaveDraft(string? body, IReadOnlyList<Checklist>? checklists = null)
     {
         EnsureDraft();
         var text = (body ?? "").Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd();
         return text.Length > MaxBody
             ? throw new DomainRuleException($"Keep the instruction to {MaxBody} characters; put the rest in an attached file.")
-            : this with { Body = text };
+            : this with { Body = text, Checklists = checklists is null ? Checklists : Instructions.Checklists.Check(checklists) };
     }
 
     /// <summary>Fixes the version, as of <paramref name="at"/> by <paramref name="by"/> with an optional <paramref name="note"/>: jobs show it from now on.
-    /// A version needs text or a file (<paramref name="files"/>: how many the draft has).</summary>
+    /// A version needs text, a file (<paramref name="files"/>: how many the draft has) or a checklist.</summary>
     /// <exception cref="DomainRuleException">It isn't a draft, it is empty, or the note is too long.</exception>
     public InstructionVersion Release(DateTimeOffset at, string by, string? note, int files)
     {
         EnsureDraft();
-        if (Body.Trim().Length == 0 && files == 0)
+        if (Body.Trim().Length == 0 && files == 0 && Checklists.Count == 0)
         {
-            throw new DomainRuleException("Write the instruction or attach a file before releasing it.");
+            throw new DomainRuleException("Write the instruction, attach a file or add a checklist before releasing it.");
         }
 
         var trimmed = note?.Trim();
@@ -99,8 +103,8 @@ public sealed record InstructionVersion(
     /// <summary>Replaced by a newer release.</summary>
     public InstructionVersion MakeObsolete() => this with { Status = InstructionVersionStatus.Obsolete };
 
-    /// <summary>The next draft, from this version's text.</summary>
-    public InstructionVersion NextDraft(Guid id) => new(id, InstructionId, Number + 1, InstructionVersionStatus.Draft, Body);
+    /// <summary>The next draft, from this version's text and checklists.</summary>
+    public InstructionVersion NextDraft(Guid id) => new(id, InstructionId, Number + 1, InstructionVersionStatus.Draft, Body) { Checklists = Checklists };
 
     /// <exception cref="DomainRuleException">It isn't a draft.</exception>
     public void EnsureDraft()

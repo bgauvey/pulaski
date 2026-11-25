@@ -46,7 +46,60 @@ public sealed record InstructionVersionDto
     /// <summary>The version row's version, for saving a draft.</summary>
     public long Version { get; init; }
     public IReadOnlyList<InstructionFileDto> Files { get; init; } = [];
+
+    /// <summary>Its setup and first-article checklists (#126c), setup first.</summary>
+    public IReadOnlyList<ChecklistDto> Checklists { get; init; } = [];
 }
+
+/// <summary>A checklist of a version (#126c): <c>setup</c> (before the job starts on a line) or <c>first_article</c> (before its first report there).</summary>
+public sealed record ChecklistDto
+{
+    public required string Phase { get; init; }
+    public IReadOnlyList<ChecklistItemDto> Items { get; init; } = [];
+}
+
+/// <summary>
+/// One item, numbered from 1 in order: kind <c>yes_no</c> (optionally expecting yes or no), <c>number</c> (optionally within limits, with a unit),
+/// <c>choice</c> (one of its choices) or <c>text</c>.
+/// </summary>
+public sealed record ChecklistItemDto
+{
+    public string Prompt { get; init; } = "";
+    public string Kind { get; init; } = "yes_no";
+    public bool Required { get; init; }
+    public bool? Expected { get; init; }
+    public decimal? Min { get; init; }
+    public decimal? Max { get; init; }
+    public string? Unit { get; init; }
+    public IReadOnlyList<string>? Choices { get; init; }
+}
+
+/// <summary>One item's answer as kept: the item's number, the answer, and whether it is within what the item allows.</summary>
+public sealed record ChecklistAnswerDto(int Item, string? Value, bool Ok);
+
+/// <summary>
+/// A checklist as a job on its line shows it (#126c): its items and how it stands there: null until answered, <c>passed</c> once an answer
+/// passed, else <c>failed</c> (answer it again), with the latest answer.
+/// </summary>
+public sealed record JobChecklistDto
+{
+    public required string Phase { get; init; }
+    public IReadOnlyList<ChecklistItemDto> Items { get; init; } = [];
+    public string? Result { get; init; }
+    public DateTimeOffset? CompletedAt { get; init; }
+    public string? CompletedByName { get; init; }
+    public IReadOnlyList<ChecklistAnswerDto> Answers { get; init; } = [];
+}
+
+/// <summary>A checklist answered at the job: each item's answer by its number (blank = not answered).</summary>
+public sealed record CompleteChecklistRequest
+{
+    public required Guid InstructionId { get; init; }
+    public IReadOnlyDictionary<int, string?> Answers { get; init; } = new Dictionary<int, string?>();
+}
+
+/// <summary>Whether the answers passed; a failed checklist is kept, and the job needs one that passes.</summary>
+public sealed record ChecklistCompletedResponse(Guid Id, bool Passed, IReadOnlyList<int> FailedItems);
 
 public sealed record InstructionFileDto
 {
@@ -90,6 +143,9 @@ public sealed record SaveInstructionDraftRequest
 {
     public long Version { get; init; }
     public string Body { get; init; } = "";
+
+    /// <summary>The draft's checklists (#126c); null keeps them as they are.</summary>
+    public IReadOnlyList<ChecklistDto>? Checklists { get; init; }
 }
 
 public sealed record ReleaseInstructionRequest
@@ -128,6 +184,12 @@ public sealed record JobInstructionDto
     public DateTimeOffset? ReleasedAt { get; init; }
     public string Body { get; init; } = "";
     public IReadOnlyList<InstructionFileDto> Files { get; init; } = [];
+
+    /// <summary>The job's site's time zone, for when its checklists were answered.</summary>
+    public string? SiteTimeZone { get; init; }
+
+    /// <summary>Its checklists (#126c) and how each stands for the job on its line.</summary>
+    public IReadOnlyList<JobChecklistDto> Checklists { get; init; } = [];
 
     /// <summary><c>operation</c>, <c>line</c> and/or <c>material</c>, in that order.</summary>
     public IReadOnlyList<string> ShownFor { get; init; } = [];

@@ -265,6 +265,9 @@ public static class EventTypes
     public const string InstructionReleased = "pulaski.work_instruction.released.v1";
     public const string InstructionTargetAdded = "pulaski.work_instruction.target_added.v1";
     public const string InstructionTargetEnded = "pulaski.work_instruction.target_ended.v1";
+
+    /// <summary>A job's setup or first-article checklist answered (#126c), passed or failed; subject the job.</summary>
+    public const string ChecklistCompleted = "pulaski.job.checklist_completed.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

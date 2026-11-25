@@ -1751,6 +1751,7 @@ Numbered 1, 2, …: `draft` → `released` → `obsolete`. At most one draft (`w
 | `body` | text | no | The text, at most 20,000 characters: lines starting `#`/`##` are headings, `1.` numbered steps, `-` points, `**…**` bold; nothing else is markup. |
 | `released_at`, `released_by` | timestamptz, text | yes | When and by whom it was released; set exactly when not a draft (`work_instruction_version_released_ck`). |
 | `note` | text | yes | Why this version, given on release (at most 1,000 characters). |
+| `checklists` | jsonb | no | Its setup and first-article checklists (#126c): `[{phase, items: [{prompt, kind, required, expected, min, max, unit, choices}]}]`, at most one per phase. |
 | `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
 
 ### core.work_instruction_content — instruction files' bytes (#126a, D-116) · *In use*
@@ -1795,6 +1796,25 @@ One row per operation, material or line (`work_instruction_target_shape_ck` keep
 | `equipment_id` | uuid → equipment | yes | A line of the site (runs jobs). |
 | `is_active` | boolean | no | Ended rather than deleted. |
 | `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
+
+### core.checklist_response — checklists answered (#126c, D-116) · *In use*
+
+A job's setup or first-article checklist answered on a line. A failed one is kept and doesn't count; a start (setup) or a report (both) needs
+one that passed for the job on that line, once per job and line. Never changed but for `run_id`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The job's site. |
+| `job_id` | uuid → job | no | The job. |
+| `equipment_id` | uuid → equipment | no | The line it was answered for. |
+| `run_id` | uuid → job_run | yes | The run it belongs to: the job's open run on the line, else set when the next run starts there. |
+| `instruction_id`, `version_id` | uuid → work_instruction, work_instruction_version | no | The instruction and the released version answered. |
+| `phase` | text | no | `setup` or `first_article`. |
+| `result` | text | no | `passed`, or `failed` (an answer against what an item expects, or outside its limits). |
+| `answers` | jsonb | no | `[{item, value, ok}]`: item number, the answer (numbers invariant, yes/no as `yes`/`no`), whether it passed. |
+| `completed_at`, `completed_by` | timestamptz, text | no | When and by whom (the actor). |
+| `created_at` | timestamptz | no | Row timestamp. |
 
 ### core.andon_call — andon calls (#125, D-108) · *In use*
 

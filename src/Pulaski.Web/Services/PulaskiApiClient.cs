@@ -981,6 +981,14 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<IReadOnlyList<JobInstructionDto>> GetJobInstructionsAsync(Guid jobId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<JobInstructionDto>>($"api/jobs/{jobId}/instructions", ct);
 
+    /// <summary>Answers a job's checklist (#126c): <paramref name="phase"/> <c>setup</c> or <c>first_article</c>.</summary>
+    public Task<ChecklistCompletedResponse> CompleteChecklistAsync(Guid jobId, string phase, CompleteChecklistRequest request, CancellationToken ct = default) =>
+        SendAsync<ChecklistCompletedResponse>(HttpMethod.Post, $"api/jobs/{jobId}/checklists/{(phase == "setup" ? "setup" : "first-article")}", request, ct);
+
+    /// <summary>Answers a checklist at the station (#126c), as the signed-on person.</summary>
+    public Task<StationActionResponse> StationChecklistAsync(string secret, StationChecklistRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/checklist", request, ct);
+
     /// <summary>A file of the running job's instructions at a station (#126b), as the terminal.</summary>
     public async Task<(byte[] Content, string ContentType, string FileName)> GetStationInstructionFileAsync(
         string secret, Guid id, Guid fileId, string? line, CancellationToken ct = default)

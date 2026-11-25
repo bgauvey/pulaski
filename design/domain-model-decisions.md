@@ -3209,6 +3209,19 @@ that was.
   running job's, shown to anyone at it. The station is static, so its files are links to the web's `/terminal/station/instructions/{id}/files/
   {fileId}`, which calls `GET /api/terminal/station/instructions/{id}/files/{fileId}?line=` with the terminal's secret; the API serves only a
   file of an instruction the station shows now (else 404). Which version a run used is recorded with sign-off (d).
+- **Checklists (c, #195).** A version carries at most one `setup` and one `first_article` checklist (`work_instruction_version.checklists`
+  `jsonb`, migration 0080), written in the draft and fixed on release; a checklist alone is enough to release. Items, numbered from 1 in order:
+  `yes_no` (optionally expecting yes or no), `number` (optional limits and unit), `choice` (2–20 choices), `text`; each required or not
+  (`Checklists.Check`, ≤ 50 items). User's choices: **once per job and line**, and **a failed checklist is kept but doesn't count**.
+  `Checklists.Evaluate` refuses a missing required answer or one the item doesn't take, and fails the checklist for an answer against what is
+  expected or outside the limits. `CompleteChecklistCommand` (locks the job; the instruction must apply to the job on its line, released,
+  `ApplicableAsync`) writes `core.checklist_response` (version, phase, `passed`/`failed`, answers `jsonb`, who and when; `run_id` = the open run,
+  else attached to the next run started on that line, `AttachToRunAsync`). `ChecklistGate`: **start** needs every applicable setup checklist
+  passed for the job on that line (not for a department's job, whose line is chosen at start); **a report** (not a correction or a stop's
+  partial batch) needs setup and first article passed on the run's line. Pausing and resuming on the same line needs neither again; another
+  line needs both. Permissions: setup `job.execute` (`POST /api/jobs/{id}/checklists/setup`), first article `production.report`
+  (`/first-article`); at the station `POST /api/terminal/station/checklist` as the signed-on person, for the job its instructions show: the
+  running one, else the next (`StationDto.InstructionsJobId`), so setup can be done before starting it. Event `pulaski.job.checklist_completed.v1`.
 - **Pieces:** (a) documents, versions, files and targets; (b) the released instructions at the job, on the floor and the operator station,
   with the version shown; (c) checklists for setup and first article in a version; (d) sign-off by the operator, with an optional second, kept
   against the run.

@@ -70,8 +70,10 @@ else
                         <label class="form-label small fw-semibold" for="wi-body">@L["Text"]</label>
                         <textarea id="wi-body" class="form-control form-control-sm font-monospace" rows="14" maxlength="20000" @bind="_body" @bind:event="oninput"></textarea>
                         <p class="small text-muted mt-1">@L["Start a line with # or ## for a heading, 1. for a numbered step, - for a point; **words** are bold. A blank line starts a new paragraph."]</p>
+                        <ChecklistEditor Phase="setup" Items="_setup" OnChanged="() => _checklistsChanged = true" />
+                        <ChecklistEditor Phase="first_article" Items="_firstArticle" OnChanged="() => _checklistsChanged = true" />
                         <div class="form-actions mb-3">
-                            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(_body == draft.Body ? L["Nothing changed yet."] : null)" OnClick="() => SaveDraftAsync(draft)">@L["Save the draft"]</ActionButton>
+                            <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(!Unsaved(draft) ? L["Nothing changed yet."] : null)" OnClick="() => SaveDraftAsync(draft)">@L["Save the draft"]</ActionButton>
                         </div>
                     }
                     <h3 class="h6 small text-muted">@L["How it reads"]</h3>
@@ -92,7 +94,7 @@ else
                             </div>
                             <div class="col-md-4 form-actions">
                                 <ActionButton Type="submit" Class="btn btn-sm btn-success" Busy="_busy"
-                                              Reason="@(_body != draft.Body ? L["Save the draft first."] : null)">@L["Release version {0}", draft.Number]</ActionButton>
+                                              Reason="@(Unsaved(draft) ? L["Save the draft first."] : null)">@L["Release version {0}", draft.Number]</ActionButton>
                             </div>
                         </form>
                     }
@@ -108,6 +110,16 @@ else
                 <section class="inv-facts mb-3" aria-labelledby="wi-released">
                     <h2 class="h6" id="wi-released">@L["Released: version {0}", released.Number]</h2>
                     <div class="instruction-text mb-2">@((MarkupString)InstructionText.ToHtml(released.Body))</div>
+                    @foreach (var checklist in released.Checklists)
+                    {
+                        <h3 class="h6 small text-muted mt-2" @key="checklist.Phase">@ChecklistView.Title(L, checklist.Phase)</h3>
+                        <ol class="small">
+                            @foreach (var item in checklist.Items)
+                            {
+                                <li>@item.Prompt@if (item.Required) {<span class="text-danger"> *</span>}@if (ChecklistView.Allows(L, item) is { } allows) {<span class="text-muted"> · @allows</span>}@if (item.Kind == "choice") {<span class="text-muted"> · @string.Join(" / ", item.Choices ?? [])</span>}</li>
+                            }
+                        </ol>
+                    }
                     @Files(wi, released, false)
                 </section>
             }
@@ -219,6 +231,9 @@ else
     private IReadOnlyList<ProcessSummaryDto> _processes = [];
     private IReadOnlyList<MaterialDto> _materials = [];
     private IReadOnlyList<EquipmentDto> _lines = [];
+    private List<ChecklistDraftItem> _setup = [];
+    private List<ChecklistDraftItem> _firstArticle = [];
+    private bool _checklistsChanged;
     private int _fileKey;
     private bool _busy;
     private string? _message;
@@ -251,7 +266,11 @@ else
         {
             _instruction = await Api.GetInstructionAsync(Id);
             (_title, _active) = (_instruction.Title, _instruction.IsActive);
-            _body = _instruction.Versions.FirstOrDefault(v => v.Status == "draft")?.Body;
+            var draft = _instruction.Versions.FirstOrDefault(v => v.Status == "draft");
+            _body = draft?.Body;
+            _setup = [.. (draft?.Checklists.FirstOrDefault(c => c.Phase == "setup")?.Items ?? []).Select(ChecklistDraftItem.From)];
+            _firstArticle = [.. (draft?.Checklists.FirstOrDefault(c => c.Phase == "first_article")?.Items ?? []).Select(ChecklistDraftItem.From)];
+            _checklistsChanged = false;
             _error = null;
         }
         catch (ApiException ex)
@@ -259,6 +278,8 @@ else
             _error = ex;
         }
     }
+
+    private bool Unsaved(InstructionVersionDto draft) => _body != draft.Body || _checklistsChanged;
 
     private RenderFragment Files(InstructionDto wi, InstructionVersionDto version, bool removable) =>
         @<ul class="list-unstyled small mb-0">
@@ -294,7 +315,16 @@ else
 
     private Task SaveDraftAsync(InstructionVersionDto draft) => RunAsync(async () =>
     {
-        await Api.SaveInstructionDraftAsync(Id, new SaveInstructionDraftRequest { Version = draft.Version, Body = _body ?? "" });
+        await Api.SaveInstructionDraftAsync(Id, new SaveInstructionDraftRequest
+        {
+            Version = draft.Version,
+            Body = _body ?? "",
+            Checklists =
+            [
+                new ChecklistDto { Phase = "setup", Items = [.. _setup.Select(i => i.ToDto())] },
+                new ChecklistDto { Phase = "first_article", Items = [.. _firstArticle.Select(i => i.ToDto())] },
+            ],
+        });
         _message = L["The draft is saved."];
     });
 

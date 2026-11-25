@@ -1,0 +1,97 @@
+@using Pulaski.Web.Services.Instructions
+@* One phase's checklist in a draft (#126c): its items, each a question with what it accepts; added, removed and moved here, saved with the draft. *@
+<div class="checklist-editor mb-3">
+    <h3 class="h6 small text-muted">@ChecklistView.Title(L, Phase)</h3>
+    @if (Items.Count == 0)
+    {
+        <p class="small text-muted mb-2">@(Phase == "setup" ? L["None: the job starts without one."] : L["None: the job reports without one."])</p>
+    }
+    @for (var i = 0; i < Items.Count; i++)
+    {
+        var index = i;
+        var item = Items[i];
+        var id = $"ce-{Phase}-{index}";
+        <div class="row g-2 align-items-end border-top pt-2 mb-2" @key="item">
+            <div class="col-md-5">
+                <label class="form-label small" for="@id-prompt">@L["Item {0}", index + 1]</label>
+                <input id="@id-prompt" class="form-control form-control-sm" maxlength="300" @bind="item.Prompt" @bind:after="Changed" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small" for="@id-kind">@L["Answer"]</label>
+                <select id="@id-kind" class="form-select form-select-sm" @bind="item.Kind" @bind:after="Changed">
+                    <option value="yes_no">@L["Yes or no"]</option>
+                    <option value="number">@L["A number"]</option>
+                    <option value="choice">@L["A choice"]</option>
+                    <option value="text">@L["Text"]</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                @switch (item.Kind)
+                {
+                    case "yes_no":
+                        <label class="form-label small" for="@id-expected">@L["Passes when"]</label>
+                        <select id="@id-expected" class="form-select form-select-sm" @bind="item.Expected" @bind:after="Changed">
+                            <option value="">@L["Either answer"]</option>
+                            <option value="yes">@L["Yes"]</option>
+                            <option value="no">@L["No"]</option>
+                        </select>
+                        break;
+                    case "number":
+                        <div class="d-flex gap-1">
+                            <input class="form-control form-control-sm" inputmode="decimal" aria-label="@L["Lowest allowed"]" placeholder="@L["Min"]" @bind="item.Min" @bind:after="Changed" />
+                            <input class="form-control form-control-sm" inputmode="decimal" aria-label="@L["Highest allowed"]" placeholder="@L["Max"]" @bind="item.Max" @bind:after="Changed" />
+                            <input class="form-control form-control-sm" maxlength="20" aria-label="@L["Unit"]" placeholder="@L["Unit"]" @bind="item.Unit" @bind:after="Changed" />
+                        </div>
+                        break;
+                    case "choice":
+                        <label class="form-label small" for="@id-choices">@L["Choices, one per line"]</label>
+                        <textarea id="@id-choices" class="form-control form-control-sm" rows="2" @bind="item.Choices" @bind:after="Changed"></textarea>
+                        break;
+                }
+            </div>
+            <div class="col-md-2 d-flex gap-2 align-items-center">
+                <div class="form-check">
+                    <input id="@id-required" class="form-check-input" type="checkbox" @bind="item.Required" @bind:after="Changed" />
+                    <label class="form-check-label small" for="@id-required">@L["Required"]</label>
+                </div>
+                @if (index > 0)
+                {
+                    <button type="button" class="btn btn-sm btn-link px-1" aria-label="@L["Move up"]" title="@L["Move up"]" @onclick="() => MoveUp(index)">↑</button>
+                }
+                <button type="button" class="btn btn-sm btn-link px-1" @onclick="() => Remove(index)">@L["Remove"]</button>
+            </div>
+        </div>
+    }
+    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Add">@L["Add an item"]</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Phase { get; set; } = "setup";
+
+    [Parameter, EditorRequired]
+    public List<ChecklistDraftItem> Items { get; set; } = [];
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private Task Changed() => OnChanged.InvokeAsync();
+
+    private Task Add()
+    {
+        Items.Add(new ChecklistDraftItem());
+        return Changed();
+    }
+
+    private Task Remove(int index)
+    {
+        Items.RemoveAt(index);
+        return Changed();
+    }
+
+    private Task MoveUp(int index)
+    {
+        (Items[index - 1], Items[index]) = (Items[index], Items[index - 1]);
+        return Changed();
+    }
+}

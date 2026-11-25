@@ -6,7 +6,7 @@ using Pulaski.Domain.Instructions;
 namespace Pulaski.Testing;
 
 /// <summary>In-memory work instructions (#126a): every site is known and every target exists.</summary>
-public sealed class InMemoryInstructions : IInstructionRepository, IInstructionReadStore
+public sealed class InMemoryInstructions : IInstructionRepository, IInstructionReadStore, IChecklistRepository
 {
     private readonly Lock _lock = new();
     private readonly Dictionary<Guid, (WorkInstruction Value, long Version)> _instructions = [];
@@ -191,6 +191,21 @@ public sealed class InMemoryInstructions : IInstructionRepository, IInstructionR
     /// <summary>The fake knows no jobs: tests of what a job shows run against the database.</summary>
     public Task<IReadOnlyList<JobInstructionDto>> ForJobAsync(Guid jobId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<JobInstructionDto>>([]);
+
+    // Checklists (#126c): the fake knows no jobs, so none apply and nothing is held up.
+    public Task<ChecklistJob?> LockJobAsync(Guid jobId, CancellationToken cancellationToken) => Task.FromResult<ChecklistJob?>(null);
+
+    public Task<IReadOnlyList<ApplicableChecklist>> ApplicableAsync(Guid jobId, Guid lineId, string phase, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ApplicableChecklist>>([]);
+
+    public Task<IReadOnlyList<Guid>> PassedAsync(Guid jobId, Guid lineId, string phase, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Guid>>([]);
+
+    public Task<Guid?> OpenRunAsync(Guid jobId, Guid lineId, CancellationToken cancellationToken) => Task.FromResult<Guid?>(null);
+
+    public Task InsertAsync(ChecklistResponse response, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task AttachToRunAsync(Guid jobId, Guid lineId, Guid runId, CancellationToken cancellationToken) => Task.CompletedTask;
 
     private Task<Versioned<InstructionVersion>?> Find(Guid instructionId, string status)
     {

@@ -2488,6 +2488,7 @@ CREATE TABLE core.work_instruction_version (
     released_at     timestamptz,
     released_by     text,
     note            text,                                           -- why this version, given on release
+    checklists      jsonb NOT NULL DEFAULT '[]',                    -- setup and first-article checklists (#126c): [{phase, items: [...]}]
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT work_instruction_version_uq UNIQUE (instruction_id, version_number),
@@ -2537,6 +2538,25 @@ CREATE INDEX work_instruction_target_instruction_ix ON core.work_instruction_tar
 CREATE INDEX work_instruction_target_process_ix ON core.work_instruction_target (process_id, operation_number) WHERE is_active;
 CREATE INDEX work_instruction_target_material_ix ON core.work_instruction_target (material_id) WHERE is_active;
 CREATE INDEX work_instruction_target_line_ix ON core.work_instruction_target (equipment_id) WHERE is_active;
+
+-- Checklists answered (#126c, D-116): for a job on a line, kept with the run; a failed one is kept and the job needs one that passes.
+CREATE TABLE core.checklist_response (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    job_id          uuid NOT NULL REFERENCES core.job(id),
+    equipment_id    uuid NOT NULL REFERENCES core.equipment(id),           -- the line it was answered for
+    run_id          uuid REFERENCES core.job_run(id),                      -- the run it belongs to: the open one, else the next started
+    instruction_id  uuid NOT NULL REFERENCES core.work_instruction(id),
+    version_id      uuid NOT NULL REFERENCES core.work_instruction_version(id),
+    phase           text NOT NULL CONSTRAINT checklist_response_phase_ck CHECK (phase IN ('setup', 'first_article')),
+    result          text NOT NULL CONSTRAINT checklist_response_result_ck CHECK (result IN ('passed', 'failed')),
+    answers         jsonb NOT NULL,                                        -- [{item, value, ok}]
+    completed_at    timestamptz NOT NULL,
+    completed_by    text NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX checklist_response_job_ix ON core.checklist_response (job_id, equipment_id, phase);
+CREATE INDEX checklist_response_run_ix ON core.checklist_response (run_id) WHERE run_id IS NOT NULL;
 
 -- Preventive plans (#127d): every so many run hours or counts a request is raised; referred to by requests, switched off not deleted.
 CREATE TABLE core.maintenance_plan (
@@ -2890,7 +2910,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0076_maintenance_requests'),
     ('0077_maintenance_cmms'),
     ('0078_maintenance_plans'),
-    ('0079_work_instructions');
+    ('0079_work_instructions'),
+    ('0080_instruction_checklists');
 
 -- =====================================================================
 -- 17. SEED DATA

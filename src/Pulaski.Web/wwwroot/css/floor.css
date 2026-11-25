@@ -87,3 +87,6 @@
 .job-instruction { border-top: 1px solid var(--border); padding: var(--space-2) 0; }
 .job-instruction:first-child { border-top: 0; padding-top: 0; }
 .job-instruction > summary { cursor: pointer; }
+.job-checklist { border-left: 3px solid var(--border); padding-left: var(--space-2); }
+.job-checklist.is-passed { border-left-color: var(--success); }
+.job-checklist.is-failed { border-left-color: var(--danger); }

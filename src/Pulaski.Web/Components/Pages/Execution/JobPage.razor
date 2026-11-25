@@ -108,7 +108,20 @@
     {
         <section class="inv-section" aria-labelledby="instructions-title">
             <h2 id="instructions-title">@(_instructions.Count == 1 ? L["Work instruction"] : L["Work instructions"])</h2>
-            <JobInstructions Instructions="_instructions" OnFile="DownloadInstructionFileAsync" />
+            <JobInstructions Instructions="_instructions" OnFile="DownloadInstructionFileAsync">
+                <Answer>
+                    @if (May(context.Checklist.Phase == "setup" ? PermissionCodes.JobExecute : PermissionCodes.ProductionReport))
+                    {
+                        var key = (context.Instruction.InstructionId, context.Checklist.Phase);
+                        <form @onsubmit="() => AnswerChecklistAsync(context.Instruction, context.Checklist)" @onsubmit:preventDefault>
+                            <ChecklistFields Items="context.Checklist.Items" Answers="AnswersFor(key)" IdPrefix="@($"cl-{context.Instruction.InstructionId:N}-{context.Checklist.Phase}")" />
+                            <div class="form-actions">
+                                <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy">@L["Save the answers"]</ActionButton>
+                            </div>
+                        </form>
+                    }
+                </Answer>
+            </JobInstructions>
         </section>
     }
 
@@ -396,6 +409,38 @@ else if (_error is null)
     private string? _fixBatches;
 
     private IReadOnlyList<JobInstructionDto> _instructions = [];
+
+    private readonly Dictionary<(Guid, string), Dictionary<int, string?>> _answers = [];
+
+    private Dictionary<int, string?> AnswersFor((Guid, string) key) =>
+        _answers.TryGetValue(key, out var answers) ? answers : _answers[key] = [];
+
+    private async Task AnswerChecklistAsync(JobInstructionDto instruction, JobChecklistDto checklist)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var key = (instruction.InstructionId, checklist.Phase);
+            var done = await Api.CompleteChecklistAsync(JobId, checklist.Phase, new CompleteChecklistRequest
+            {
+                InstructionId = instruction.InstructionId,
+                Answers = Services.Instructions.ChecklistView.ToSend(checklist.Items, AnswersFor(key)),
+            });
+            _answers.Remove(key);
+            _notes = [done.Passed ? L["{0} passed.", Services.Instructions.ChecklistView.Title(L, checklist.Phase)]
+                : L["{0} failed: put it right and answer it again.", Services.Instructions.ChecklistView.Title(L, checklist.Phase)]];
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 
     private async Task DownloadInstructionFileAsync((JobInstructionDto Instruction, InstructionFileDto File) chosen)
     {

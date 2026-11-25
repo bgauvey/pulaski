@@ -314,6 +314,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (b) `GetJobInstructionsQuery` (`/api/jobs/{id}/instructions`): released versions matching the job's operation, line (closure) or material,
   `JobInstructions.Gather` order; shared `JobInstructions` component on the job page and the station (`StationDto.Instructions`, running job;
   files via the web's `/terminal/station/instructions/...` → API terminal endpoint, only files the station shows).
+  (c) version `checklists` jsonb (setup / first_article; `Checklists.Check`/`Evaluate`); `core.checklist_response` passed/failed per job + line,
+  `run_id` open run else attached at start. `ChecklistGate`: start needs setup (not group jobs), reports (`ProductionReporter.Checklists`, not
+  corrections/stops) need both; once per job and line. `/api/jobs/{id}/checklists/{setup|first-article}`, station `/station/checklist`.
 - Nested containers (D-081, proposed): `container.parent_container_id` (at the parent's location; no cycles; ≤ 5 deep, `Container.PackInto`). Moving or
   packing carries everything inside (`ContainerCarry`): lock the container (packing: both, id order), then all inside, then their lots, in id order.
 - Mixing containers (D-082, proposed): `container.mixes_lots` (changed only while empty, holds no containers): a packed lot merges into the

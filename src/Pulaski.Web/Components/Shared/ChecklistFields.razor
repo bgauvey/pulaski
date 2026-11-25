@@ -1,0 +1,80 @@
+@using Pulaski.Web.Services.Instructions
+@* A checklist's items to answer (#126c). Interactive: bound to Answers. Static (the station): named inputs Input.Answers[n] inside the page's form. *@
+@for (var n = 1; n <= Items.Count; n++)
+{
+    var number = n;
+    var item = Items[n - 1];
+    var id = $"{IdPrefix}-{number}";
+    var allows = ChecklistView.Allows(L, item);
+    <div class="checklist-item mb-2" @key="number">
+        <div class="fw-semibold">
+            @number. @item.Prompt@if (item.Required) {<span class="text-danger" title="@L["Required"]"> *</span>}
+            @if (allows is not null)
+            {
+                <span class="text-muted fw-normal small"> · @allows</span>
+            }
+        </div>
+        @switch (item.Kind)
+        {
+            case "yes_no":
+                <div class="d-flex gap-3">
+                    @foreach (var (value, label) in new[] { ("yes", L["Yes"]), ("no", L["No"]) })
+                    {
+                        <div class="form-check">
+                            @if (Answers is null)
+                            {
+                                <input class="form-check-input" type="radio" id="@($"{id}-{value}")" name="@Name(number)" value="@value" />
+                            }
+                            else
+                            {
+                                <input class="form-check-input" type="radio" id="@($"{id}-{value}")" name="@id" value="@value" checked="@(Answers.GetValueOrDefault(number) == value)"
+                                       @onchange="() => Answers[number] = value" />
+                            }
+                            <label class="form-check-label" for="@($"{id}-{value}")">@label</label>
+                        </div>
+                    }
+                </div>
+                break;
+            case "choice":
+                <select id="@id" class="form-select form-select-sm w-auto" name="@(Answers is null ? Name(number) : null)" aria-label="@item.Prompt"
+                        value="@(Answers?.GetValueOrDefault(number) ?? "")" @onchange="e => Set(number, e)">
+                    <option value="">@L["Choose…"]</option>
+                    @foreach (var choice in item.Choices ?? [])
+                    {
+                        <option value="@choice">@choice</option>
+                    }
+                </select>
+                break;
+            case "number":
+                <input id="@id" class="form-control form-control-sm w-auto" inputmode="decimal" name="@(Answers is null ? Name(number) : null)" aria-label="@item.Prompt"
+                       value="@(Answers?.GetValueOrDefault(number))" @onchange="e => Set(number, e)" />
+                break;
+            default:
+                <input id="@id" class="form-control form-control-sm" maxlength="500" name="@(Answers is null ? Name(number) : null)" aria-label="@item.Prompt"
+                       value="@(Answers?.GetValueOrDefault(number))" @onchange="e => Set(number, e)" />
+                break;
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ChecklistItemDto> Items { get; set; } = [];
+
+    /// <summary>Interactive: the answers by item number, kept as typed. Null: static inputs for the page's form.</summary>
+    [Parameter]
+    public Dictionary<int, string?>? Answers { get; set; }
+
+    [Parameter]
+    public string IdPrefix { get; set; } = "cl";
+
+    private static string Name(int number) => $"Input.Answers[{number}]";
+
+    private void Set(int number, ChangeEventArgs e)
+    {
+        if (Answers is not null)
+        {
+            Answers[number] = e.Value?.ToString();
+        }
+    }
+}

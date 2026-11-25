@@ -520,11 +520,23 @@ Make one:
 Change one: click **Start version 2** on its page. The new draft starts from the released text and files; edit it and release it, and the
 version before becomes obsolete.
 
+Add checklists: a version can hold a **Setup checklist**, answered before the job starts on a line, and a **First-article checklist**, answered
+before its first production report there.
+
+1. In the draft, under **Setup checklist** or **First-article checklist**, click **Add an item**.
+2. Type the question, and choose its **Answer**: **Yes or no** (with **Passes when** *Yes*, *No* or *Either answer*), **A number** (with the
+   lowest and highest allowed and a unit, any of them optional), **A choice** (one per line) or **Text**. Clear **Required** for a question that
+   may be left blank. **↑** moves an item up; **Remove** takes it out.
+3. Click **Save the draft**, then release it. A checklist on its own is enough to release a version.
+
 #### In detail
 
 - **One released version at a time.** A released version never changes; only the draft does. **Versions** lists every version with who released
   it, when and why. While there is a draft, the released version stays in force.
-- **Releasing needs something in it:** text, a file or both. Release is off while the text has unsaved changes (*Save the draft first.*).
+- **Releasing needs something in it:** text, a file or a checklist. Release is off while the text or the checklists have unsaved changes (*Save
+  the draft first.*).
+- **Checklists** hold at most 50 items each. A new draft starts with the released version's checklists. Answers are kept against the version
+  answered, so changing a checklist never changes what was answered.
 - **The text holds no formatting of its own** beyond headings, numbered steps, points, bold and paragraphs. Anything else, such as HTML, is
   shown as typed. Up to 20,000 characters; put longer material in a file.
 - **Files** are checked by their contents, not their names: a renamed text file is refused. A version holds at most 20. A new draft shares the
@@ -959,7 +971,11 @@ while they use it; after 15 minutes with nothing done there, it signs them off a
 asks which of its lines the station is for (`/terminal/station?line=EXT-01` chooses one). Switching the terminal off stops it at once.
 
 **Read the job's instructions at a station.** Below the running job, the station shows its released work instructions, as the job page
-does, to anyone there: no badge is needed. Tap a folded one to open it, and a file's name to open the file. They change with the running job.
+does, to anyone there: no badge is needed. While nothing runs, it shows the next job's (*for the next job, J10*), so its setup can be done
+before starting it. Tap a folded one to open it, and a file's name to open the file.
+
+**Answer a checklist at a station.** Badge in (setup needs a role that runs jobs, first article one that reports), answer the questions under
+the instruction and tap **Save the answers**. The station says whether it passed, or which items failed.
 
 **Run the job at a station.** Signed on with a role that runs jobs:
 
@@ -1203,6 +1219,24 @@ and version, and what it is shown for (*version 2 · for its operation, material
 starts folded: click its title to open it. Its files open by name.
 The job always shows the version released now: a new release shows at once, and a draft never does. Seeing them needs the Floor or *See work
 instructions* at the job's site.
+
+**Answer a checklist at the job.** An instruction with a checklist shows it under its text, with how it stands: *To do before the job starts
+on this line*, *Passed … by …* (with the answers), or *Failed on item 2*.
+
+1. Answer each question (those marked * are required) and click **Save the answers**.
+2. If every answer is within what its question allows, the checklist **passed**. If one isn't (a *No* where *Yes* is expected, a number
+   outside its limits), it **failed**: the answers are kept, and the job needs it answered again once the problem is put right.
+
+In detail:
+
+- **Start waits for setup.** Until every setup checklist for the job on its line has passed, **Start** is refused: *Complete the setup
+  checklist of WI-EXT-001 for J10 on this line first.* A department's job learns its line only as it starts, so its setup checklist is asked
+  for at its first report instead.
+- **Reporting waits for both.** A production report is refused until the setup and first-article checklists have passed on the run's line.
+  Correcting or reversing a report, and the partial batch of a stop, aren't held up.
+- **Once per job and line.** Pausing and resuming on the same line needs neither again; moving the job to another line needs both there.
+- **Kept with the run.** Answers given during a run belong to it; setup answered before the start belongs to the run that start opens.
+- **Who answers:** setup, whoever may start jobs (Operator, Supervisor); first article, whoever may report production.
 
 ### Reverse a production report
 
@@ -3348,8 +3382,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
   waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
   and machine counts, not days on the calendar.
-- **Work instructions** show on the job page and at the station, not on the Floor's board or line boards, and there are no checklists or
-  sign-offs yet. At a station only the running job's show, not the next jobs'. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
+- **Work instructions** show on the job page and at the station, not on the Floor's board or line boards. At a station only the running job's
+  show, or the next job's while nothing runs. Checklists are signed by whoever answers them; a second sign-off and the run's checklist history
+  come next. A failed checklist only holds up the job; it doesn't put lots on hold or raise a quality alert. Text has headings, steps, points and bold only: no tables, links or pictures inside it (attach them as files).
 - **The Inbox** words its items (partial batches, SPC alerts, labor, ERP changes, planning rates) in English whatever your language.
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).

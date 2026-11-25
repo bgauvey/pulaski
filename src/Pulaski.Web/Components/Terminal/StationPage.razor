@@ -450,8 +450,33 @@ else
             {
                 @* The running job's released instructions (#126b): anyone at the station may read them; files open through the web, as the terminal. *@
                 <section class="station-panel station-instructions" aria-labelledby="station-instructions">
-                    <h2 id="station-instructions" class="h5">@(_station.Instructions.Count == 1 ? L["Work instruction"] : L["Work instructions"])</h2>
-                    <JobInstructions Instructions="_station.Instructions" FileHref="StationFileHref" />
+                    <h2 id="station-instructions" class="h5">
+                        @(_station.Instructions.Count == 1 ? L["Work instruction"] : L["Work instructions"])
+                        @if (line.Running is null && _station.InstructionsJobNumber is { } nextJob)
+                        {
+                            <span class="text-muted fw-normal">· @L["for the next job, {0}", nextJob]</span>
+                        }
+                    </h2>
+                    <JobInstructions Instructions="_station.Instructions" FileHref="StationFileHref">
+                        <Answer Context="shown">
+                            @if (shown.Checklist.Phase == "setup" ? _station.CanRunJobs : _station.CanReport)
+                            {
+                                <EditForm Model="Input" FormName="@($"station-checklist-{shown.Instruction.InstructionId:N}-{shown.Checklist.Phase}")" OnSubmit="ActAsync" method="post">
+                                    <input type="hidden" name="Input.JobId" value="@_station.InstructionsJobId" />
+                                    <input type="hidden" name="Input.InstructionId" value="@shown.Instruction.InstructionId" />
+                                    <input type="hidden" name="Input.Phase" value="@shown.Checklist.Phase" />
+                                    <ChecklistFields Items="shown.Checklist.Items" IdPrefix="@($"st-{shown.Instruction.InstructionId:N}-{shown.Checklist.Phase}")" />
+                                    <div class="station-actions">
+                                        <button type="submit" name="Input.Action" value="checklist" class="btn btn-primary">@L["Save the answers"]</button>
+                                    </div>
+                                </EditForm>
+                            }
+                            else if (_station.PersonName is null)
+                            {
+                                <p class="text-muted mb-0">@L["Badge in to answer it."]</p>
+                            }
+                        </Answer>
+                    </JobInstructions>
                 </section>
             }
 
@@ -729,6 +754,35 @@ else
                 }
 
                 return;
+            case "checklist" when Input.JobId is { } checklistJob && Input.InstructionId is { } instructionId:
+                try
+                {
+                    var phase = Input.Phase ?? "";
+                    var items = _station?.Instructions.FirstOrDefault(i => i.InstructionId == instructionId)?.Checklists.FirstOrDefault(c => c.Phase == phase)?.Items ?? [];
+                    var answered = await Api.StationChecklistAsync(Secret!, new StationChecklistRequest
+                    {
+                        Ticket = TerminalCookie.GetStation(HttpContext),
+                        Line = LineCode,
+                        JobId = checklistJob,
+                        InstructionId = instructionId,
+                        Phase = phase,
+                        Answers = Services.Instructions.ChecklistView.ToSend(items, (Input.Answers ?? []).ToDictionary(a => a.Key, a => (string?)a.Value)),
+                    });
+                    TerminalCookie.SetStation(HttpContext, answered.Ticket, answered.TicketExpiresAt);
+                    _station = answered.Station;
+                    _notes = L.Notes(answered.Notes);
+                }
+                catch (ApiException ex)
+                {
+                    _actionError = StationView.Problem(L.Problem(ex), L.FieldErrors(ex));
+                    if (ex.Status == 401)
+                    {
+                        TerminalCookie.ClearStation(HttpContext);
+                        await LoadAsync(null);
+                    }
+                }
+
+                return;
             case "sign-off":
                 TerminalCookie.ClearStation(HttpContext);
                 Navigation.NavigateTo(Here, forceLoad: true);
@@ -829,5 +883,10 @@ else
         public decimal? MachineScrap { get; set; }
         public Guid? MachineUomId { get; set; }
         public DateTimeOffset? MachineThrough { get; set; }
+
+        /// <summary>A checklist answered (#126c): which, and its answers by item number.</summary>
+        public Guid? InstructionId { get; set; }
+        public string? Phase { get; set; }
+        public Dictionary<int, string>? Answers { get; set; }
     }
 }

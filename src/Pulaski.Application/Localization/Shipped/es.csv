@@ -39,6 +39,7 @@ term,translation
 '{0}' is not a non-production job type.,'{0}' no es un tipo de trabajo no productivo.
 '{0}' is not a valid role for level '{1}'.,'{0}' no es un rol válido para el nivel '{1}'.
 '{0}' isn't a batch rule; use exact or near.,'{0}' no es una regla de lote de producción; use exacta o aproximada.
+'{0}' isn't a checklist's phase; use setup or first_article.,'{0}' no es una fase de lista de verificación; use setup o first_article.
 '{0}' isn't a container kind; use {1}.,'{0}' no es un tipo de contenedor; use {1}.
 '{0}' isn't a kind of event.,'{0}' no es un tipo de evento.
 '{0}' isn't a material type; use {1}.,'{0}' no es un tipo de material; use {1}.
@@ -187,6 +188,8 @@ A capability must end after it starts.,Una capacidad debe terminar después de e
 A change applies to the next report on the site's lines; reports already made aren't checked again.,Un cambio se aplica al siguiente reporte en las líneas del sitio; los reportes ya hechos no se vuelven a revisar.
 A changeover takes from 0 minutes to 7 days.,Un cambio de producto dura de 0 minutos a 7 días.
 A chart covers at most 366 days.,Una gráfica cubre como máximo 366 días.
+A checklist has at most {0} items.,Una lista de verificación tiene como máximo {0} puntos.
+A choice,Una opción
 A choice attribute needs at least one choice.,Un atributo de opciones necesita al menos una opción.
 "A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's configuration, never here.","Una conexión se ejecuta al hacer clic en Importar, o según su programación. Las credenciales y cadenas de conexión a bases de datos se guardan en la configuración de la API, nunca aquí."
 A connection's code is fixed once made: it names its credentials in the configuration ({0}).,El código de una conexión es fijo una vez creada: nombra sus credenciales en la configuración ({0}).
@@ -248,6 +251,7 @@ A move,Un traslado
 A new ideal rate also updates the calculated planning rate.,Una nueva tasa ideal también actualiza la tasa de planeación calculada.
 A new lot was started: {0}.,Se inició un lote nuevo: {0}.
 A new lot without an expiry expires this long after it arrives. Lots already on hand keep theirs.,Un lote nuevo sin vencimiento vence este tiempo después de llegar. Los lotes ya en existencia conservan el suyo.
+A number,Un número
 A packaging unit has no standard factor; give it a conversion per material.,Una unidad de empaque no tiene factor estándar; dele una conversión por material.
 A partial batch is less than a batch: more than 0 and less than {0} {1}. Report a whole batch as a batch.,Una tanda parcial es menos que una tanda: más de 0 y menos de {0} {1}. Reporte una tanda completa como tanda.
 "A partial batch is reported when the line stops: pause or complete the job with a reason, and report it there.",Una tanda parcial se reporta cuando la línea se detiene: pause o complete el trabajo con un motivo y repórtela ahí.
@@ -293,6 +297,7 @@ A stop still without a reason,Una parada aún sin motivo
 A tree has at most {0} levels.,Un árbol tiene como máximo {0} niveles.
 A utilization reason's class says what the time means for OEE:,La clase de un motivo de utilización indica qué significa el tiempo para el OEE:
 A version has at most {0} files.,Una versión tiene como máximo {0} archivos.
+A version has one {0} checklist.,Una versión tiene una sola lista de verificación de {0}.
 A warning:,Una advertencia:
 A webhook (HTTPS),Un webhook (HTTPS)
 A weekly schedule repeats every 7 days; a rotation such as four crews on 12-hour shifts repeats every 28. A shift belongs to the day it starts on.,Un horario semanal se repite cada 7 días; una rotación como cuatro cuadrillas en turnos de 12 horas se repite cada 28. Un turno pertenece al día en que empieza.
@@ -341,6 +346,7 @@ Add a supplier format,Agregar un formato de proveedor
 Add a work center that can run jobs on,Agregue un centro de trabajo que pueda ejecutar trabajos en
 Add an alert,Agregar una alerta
 Add an approved alternate,Agregar un alterno aprobado
+Add an item,Agregar un punto
 Add an open item,Agregar un asunto abierto
 Add at least one characteristic.,Agregue al menos una característica.
 Add at least one component.,Agregue al menos un componente.
@@ -475,7 +481,9 @@ Another material already has that external key.,Otro material ya tiene esa clave
 Another material already has the code {0} ({1} key {2}).,Otro material ya tiene el código {0} (clave {2} de {1}).
 Another material already has the code {0}.,Otro material ya tiene el código {0}.
 Another version of this process was released at the same time. Reload and try again.,Se liberó otra versión de este proceso al mismo tiempo. Recargue e inténtelo de nuevo.
+Answer,Respuesta
 Answer andon calls: acknowledge them on arrival and resolve them,Atender llamadas andon: confirmarlas al llegar y resolverlas
+Answer item {0}: {1},Responda el punto {0}: {1}
 Answered by,Atendida por
 "Answered in, on average","Atendida en, en promedio"
 Any,Cualquiera
@@ -957,6 +965,8 @@ Comment (optional),Comentario (opcional)
 Comment (required),Comentario (obligatorio)
 Complete,Terminar
 "Complete it: why did it stop, if short?","Terminarlo: ¿por qué se detuvo, si quedó corto?"
+Complete the first-article checklist of {0} for {1} on this line before reporting.,Complete la lista de verificación de primera pieza de {0} para {1} en esta línea antes de reportar.
+Complete the setup checklist of {0} for {1} on this line first.,Complete primero la lista de verificación de preparación de {0} para {1} en esta línea.
 Complete with no reason,Terminar sin motivo
 Completed,Terminado
 Completed.,Terminado.
@@ -1211,6 +1221,7 @@ Edge nodes: connections and tags that collect machine data,Nodos de borde: conex
 Edge quiet,Borde inactivo
 Edit,Editar
 Efficiency,Eficiencia
+Either answer,Cualquier respuesta
 Employee no.,Núm. de empleado
 Employee number,Número de empleado
 Employee number {0} appears earlier in the file.,El número de empleado {0} aparece antes en el archivo.
@@ -1352,6 +1363,8 @@ Extra shift {0},Turno extra {0}
 Extra wait after the start or end before the next operation begins.,Espera adicional después del inicio o del fin antes de que empiece la siguiente operación.
 Extrude and Pack,Extruir y empacar
 Failed,Fallido
+Failed on item {0} ({1}): put it right and answer it again.,Falló en el punto {0} ({1}): corríjalo y responda de nuevo.
+Failed on items {0} ({1}): put them right and answer it again.,Falló en los puntos {0} ({1}): corríjalos y responda de nuevo.
 Failed to rejoin.,No se pudo reconectar.
 Failed to resume the session.,No se pudo reanudar la sesión.
 False,Falso
@@ -1398,11 +1411,13 @@ Firmed,En firme
 "Firmed to start {0:u}, but the operation it follows lets it start only at {1:u}.","En firme para empezar {0:u}, pero la operación a la que sigue solo le permite empezar a las {1:u}."
 "Firmed to start {0:u}, but {1} lets it start only at {2:u}.","En firme para empezar {0:u}, pero {1} solo le permite empezar a las {2:u}."
 "Firmed: it keeps its start, so it takes its place on the new line by time.","En firme: conserva su inicio, así que toma su lugar en la nueva línea por hora."
+First article,Primera pieza
 "First in, first out","Primero en entrar, primero en salir"
 First line,Primera línea
 First line offered,Primera línea ofrecida
 First operation,Primera operación
 First short,Primer faltante
+First-article checklist,Lista de verificación de primera pieza
 Fits the window,Cabe en la ventana
 Fix the items listed below first.,Corrija primero los puntos de abajo.
 "Fix what the check found, then pick the file again.",Corrija lo que encontró la revisión y vuelva a elegir el archivo.
@@ -1533,6 +1548,7 @@ Hide properties,Ocultar propiedades
 Hierarchy,Jerarquía
 High,Alta
 Highest,Más alto
+Highest allowed,Máximo permitido
 History,Historial
 Hold,Retener
 Hold it,Retenerla
@@ -1701,6 +1717,16 @@ It waits on {0} until one of its lines takes it; the floor decides which.,Espera
 It works once; this is the only time it is shown. Enrolling again later replaces the terminal's credential.,Funciona una sola vez; esta es la única vez que se muestra. Registrarla de nuevo después reemplaza la credencial de la terminal.
 Item,Elemento
 Item element,Elemento del artículo
+Item {0},Punto {0}
+"Item {0}: '{1}' isn't a kind of item; use yes_no, number, choice or text.","Punto {0}: '{1}' no es un tipo de punto; use yes_no, number, choice o text."
+Item {0}: answer yes or no.,Punto {0}: responda sí o no.
+"Item {0}: ask something, in at most {1} characters.","Punto {0}: pregunte algo, en como máximo {1} caracteres."
+Item {0}: choose one of {1}.,Punto {0}: elija una de {1}.
+Item {0}: give a number.,Punto {0}: indique un número.
+Item {0}: keep the answer to {1} characters.,Punto {0}: limite la respuesta a {1} caracteres.
+Item {0}: keep the unit to {1} characters.,Punto {0}: limite la unidad a {1} caracteres.
+Item {0}: offer 2 to {1} choices of at most {2} characters.,Punto {0}: ofrezca de 2 a {1} opciones de como máximo {2} caracteres.
+Item {0}: the lowest allowed is above the highest.,Punto {0}: el mínimo permitido está por encima del máximo.
 Items at,Elementos en
 Items inspected a sample,Piezas inspeccionadas por muestra
 Its BOMs,Sus listas de materiales
@@ -2000,6 +2026,7 @@ Lower limit,Límite inferior
 "Lower-case letters, digits and _ only, starting with a letter.","Solo minúsculas, dígitos y _, empezando por una letra."
 "Lower-case letters, digits and _. It can't change later.","Letras minúsculas, dígitos y _. No puede cambiar después."
 Lowest,Más bajo
+Lowest allowed,Mínimo permitido
 MQTT broker,Broker MQTT
 Machine,Máquina
 Machine counts are reported from inside their run.,Las cuentas de máquina se reportan desde dentro de su corrida.
@@ -2080,6 +2107,7 @@ Materials and classes,Materiales y clases
 Materials and lots,Materiales y lotes
 "Materials from the ERP arrive through its import, not this form.","Los materiales del ERP llegan por su importación, no por este formulario."
 Materials: {0} · in stock: {1} · lots: {2},Materiales: {0} · en existencia: {1} · lotes: {2}
+Max,Máx.
 "May be held at every site: then it can also be given for all sites at once, by someone who may grant roles everywhere. Leave it off for roles that belong to one plant.","Puede tenerse en todos los sitios: entonces también puede darse para todos los sitios a la vez, por alguien que pueda otorgar roles en todas partes. Déjelo desactivado para roles que pertenecen a una planta."
 May change,Puede cambiar
 Mean,Media
@@ -2097,6 +2125,7 @@ Message of {0},Mensaje de {0}
 Micro-stop,Microparo
 Micro-stop threshold,Umbral de microparo
 Micro-stops,Microparos
+Min,Mín.
 Min. minutes,Mín. minutos
 Minimum residence in minutes,Permanencia mínima en minutos
 Minutes,Minutos
@@ -2119,6 +2148,7 @@ Most defects allowed,Máximo de defectos permitido
 Move,Mover
 Move lots between locations,Mover lotes entre ubicaciones
 Move the window,Mover la ventana
+Move up,Subir
 Move what is in {0} out first: {1}.,Saque primero lo que hay en {0}: {1}.
 Move with what it holds,Mover con lo que contiene
 Move {0} and its lot to…,Mover {0} y su lote a…
@@ -2407,6 +2437,8 @@ None.,Ninguno.
 None. Anyone can be put on {0}.,Ninguna. Cualquiera puede asignarse a {0}.
 None: it converts only between standard units of its own kind.,Ninguna: solo se convierte entre unidades estándar de su propio tipo.
 None: no components planned,Ninguno: no hay componentes planeados
+None: the job reports without one.,Ninguna: el trabajo reporta sin ella.
+None: the job starts without one.,Ninguna: el trabajo arranca sin ella.
 Normal,Normal
 Not a number,No es un número
 Not a page of this list: start again from the first page.,No es una página de esta lista: empiece de nuevo desde la primera página.
@@ -2726,6 +2758,9 @@ Partial batches,Tandas parciales
 Partial batches to approve or reject,Tandas parciales por aprobar o rechazar
 Partial batches waiting for approval: {0}.,Tandas parciales en espera de aprobación: {0}.
 Partly received,Recibida en parte
+Passed,Aprobado
+Passed {0} by {1}.,Aprobada el {0} por {1}.
+Passes when,Aprueba cuando
 Password,Contraseña
 Past,Pasada
 Pattern,Patrón
@@ -3250,6 +3285,7 @@ Save settings,Guardar ajustes
 Save sites,Guardar sitios
 Save targets,Guardar metas
 Save terminal,Guardar terminal
+Save the answers,Guardar las respuestas
 Save the counts first.,Guarde primero los conteos.
 Save the draft,Guardar el borrador
 Save the draft first.,Guarde primero el borrador.
@@ -3390,6 +3426,7 @@ Set window,Fijar ventana
 Settings,Ajustes
 Setup,Preparación
 Setup ({0}),Preparación ({0})
+Setup checklist,Lista de verificación de preparación
 Setup time is for a job: choose it.,El tiempo de preparación es para un trabajo: elíjalo.
 Setup time is for a job; choose it.,El tiempo de preparación es para un trabajo; elíjalo.
 "Several processes make {0} ({1}); send the process code, or set the material's default process.","Varios procesos hacen {0} ({1}); envíe el código del proceso, o fije el proceso predeterminado del material."
@@ -3655,6 +3692,7 @@ That break has ended already.,Ese descanso ya terminó.
 That break was changed by someone else. Reload and try again.,Alguien más cambió ese descanso. Recargue e intente de nuevo.
 That break was corrected already; correct the correction.,Ese descanso ya se corrigió; corrija la corrección.
 That call isn't waiting on this station's line any more.,Esa llamada ya no espera en la línea de esta estación.
+That checklist isn't one this station shows; answer it on the job's page.,Esa lista de verificación no es una que muestre esta estación; respóndala en la página del trabajo.
 That class code is already used.,Ese código de clase ya se usa.
 That code belongs to a built-in feed.,Ese código pertenece a un canal incorporado.
 That code is already used for this kind of reason.,Ese código ya se usa para este tipo de motivo.
@@ -3678,6 +3716,7 @@ That file isn't one of the running job's instructions.,Ese archivo no es de las 
 That grant is revoked already.,Esa otorgación ya está revocada.
 That grant is revoked; grant the qualification again instead.,Esa otorgación está revocada; otorgue la calificación de nuevo en su lugar.
 That group isn't one of this kind's reasons.,Ese grupo no es uno de los motivos de este tipo.
+That instruction has no released {0} checklist for {1}.,Esa instrucción no tiene una lista de verificación de {0} liberada para {1}.
 "That is {0}'s only role, and every user needs one. Give them another first, or switch them off.","Ese es el único rol de {0}, y todo usuario necesita uno. Dele otro primero, o desactívelo."
 That isn't a line of this site.,Esa no es una línea de este sitio.
 That isn't one of the instruction's targets.,Ese no es uno de los destinos de la instrucción.
@@ -3766,6 +3805,9 @@ The change breaks the rule '{0}'.,El cambio rompe la regla '{0}'.
 The changeover rule was changed by someone else. Reload and try again.,Alguien más cambió la regla de cambio. Recargue e intente de nuevo.
 The characteristic is already sampled on that line; switch that off first.,La característica ya se muestrea en esa línea; desactive eso primero.
 "The chart signals (beyond the limits or a run rule), so the process isn't stable: capability describes it poorly until the cause is dealt with.","El gráfico da señales (fuera de los límites o una regla de corrida), así que el proceso no es estable: la capacidad lo describe mal hasta que se atienda la causa."
+The checklist failed on item {0}: put it right and answer it again.,La lista de verificación falló en el punto {0}: corríjalo y responda de nuevo.
+The checklist failed on items {0}: put them right and answer it again.,La lista de verificación falló en los puntos {0}: corríjalos y responda de nuevo.
+The checklist passed.,La lista de verificación se aprobó.
 The code said {0},El código decía {0}
 "The code, kind and factor can't change later, because quantities are stored in the unit.","El código, el tipo y el factor no pueden cambiar después, porque las cantidades se guardan en la unidad."
 "The code, what it sends to and its format can't change later. A B2MML feed sends a production job's totals each time they change. It starts switched off: set its address and what it sends under Settings. Its secret (and a broker's username and password) go in the API's configuration under","El código, a dónde envía y su formato no pueden cambiar después. Un canal B2MML envía los totales de un trabajo de producción cada vez que cambian. Empieza desactivado: configure su dirección y lo que envía en Ajustes. Su secreto (y el usuario y contraseña de un broker) van en la configuración de la API en"
@@ -4123,6 +4165,8 @@ Title,Título
 To,Hasta
 "To back-date it, up to 31 days, to when it was really done; it is recorded now as well. A comment saying why is required.","Para fecharlo hacia atrás, hasta 31 días, a cuando realmente se hizo; también se registra ahora. Se requiere un comentario que diga por qué."
 "To change one shift on one day instead, use","Para cambiar en su lugar un turno en un día, use"
+To do before the first report on this line.,Por hacer antes del primer reporte en esta línea.
+To do before the job starts on this line.,Por hacer antes de que el trabajo arranque en esta línea.
 To location,A la ubicación
 To make,Por hacer
 To place,Por colocar
@@ -4454,7 +4498,7 @@ Would,Haría
 Would change: {0}. Unchanged: {1}.,Cambiarían: {0}. Sin cambio: {1}.
 Write off,Dar de baja
 "Write shift handover notes and open items for lines, and close open items","Escribir notas de entrega de turno y asuntos abiertos para líneas, y cerrar asuntos abiertos"
-Write the instruction or attach a file before releasing it.,Escriba la instrucción o adjunte un archivo antes de liberarla.
+"Write the instruction, attach a file or add a checklist before releasing it.","Escriba la instrucción, adjunte un archivo o agregue una lista de verificación antes de liberarla."
 Write the item first.,Escriba primero el asunto.
 Write the note first.,Escriba primero la nota.
 Write up,Ajuste positivo
@@ -4470,6 +4514,7 @@ Xbar r,X-barra R
 Xbar s,X-barra S
 Yes,Sí
 Yes / no,Sí / no
+Yes or no,Sí o no
 You already have this alert there; it is listed above.,Ya tiene esta alerta allí; aparece arriba.
 You aren't on a break.,No está en descanso.
 You aren't on a line.,No está en una línea.
@@ -4542,12 +4587,16 @@ anonymous,anónimo
 another site,otro sitio
 answer calls,atender llamadas
 answer calls for help,responder llamadas de ayuda
+answer first-article checklists,responder listas de verificación de primera pieza
+answer setup checklists,responder listas de verificación de preparación
 "answered in {0}, resolved in {1}","atendida en {0}, resuelta en {1}"
 any process,cualquier proceso
 as it stands then.,tal como esté en ese momento.
 as publishing,igual que la publicación
 at a site or every site,en un sitio o en todos
 at a site or every site ({0} everywhere),en un sitio o en todos ({0} en todas partes)
+at least {0} {1},al menos {0} {1}
+at most {0} {1},como máximo {0} {1}
 at the end,al final
 at the line,en la línea
 at their published times,en sus horas publicadas
@@ -4613,10 +4662,13 @@ effective_to must be after effective_from.,effective_to debe ser posterior a eff
 employeeNumber (enterprise extension) is missing; it is the person's employee number.,Falta employeeNumber (extensión enterprise); es el número de empleado de la persona.
 everywhere,en todas partes
 exact or near.,exact o near.
+expects no,espera no
+expects yes,espera sí
 expired {0:yyyy-MM-dd},vencida el {0:yyyy-MM-dd}
 expiry {0:yyyy-MM-dd},caducidad {0:yyyy-MM-dd}
 finishes after its due date,termina después de su fecha de entrega
 for a planner; a modified rate always stays in force.,para un planeador; una tasa modificada siempre sigue vigente.
+"for the next job, {0}","para el siguiente trabajo, {0}"
 for {0},desde hace {0}
 from run history,del historial de corridas
 "from run history, stops taken out","del historial de corridas, sin paros"
@@ -4956,6 +5008,7 @@ yes,sí
 "{0} expired on {1}; it can't be put into the balance at {2}. If quality has extended it, correct its expiry first.","{0} venció el {1}; no se puede poner en el saldo de {2}. Si calidad lo extendió, corrija primero su vencimiento."
 "{0} expired on {1}; it can't be shipped. If quality has extended it, correct its expiry first.","{0} venció el {1}; no se puede enviar. Si calidad lo extendió, corrija primero su vencimiento."
 "{0} expired on {1}; nothing can be merged into it. If quality has extended it, correct its expiry first.","{0} venció el {1}; no se puede combinar nada en él. Si calidad lo extendió, corrija primero su vencimiento."
+{0} failed: put it right and answer it again.,{0}: falló; corríjala y responda de nuevo.
 {0} file,Archivo {0}
 {0} follow {1}; give them another schedule first.,{0} siguen {1}; deles otro calendario primero.
 {0} follows {1}; give it another schedule first.,{0} sigue {1}; dele otro calendario primero.
@@ -5131,6 +5184,7 @@ yes,sí
 {0} is true or false.,{0} es true o false.
 {0} is up to date: {1} unchanged.,{0} está al día: {1} sin cambio.
 {0} is waiting for maintenance.,{0} está en espera de mantenimiento.
+{0} is waiting on its department: answer its checklists once it runs on a line.,{0} espera en su departamento: responda sus listas de verificación cuando corra en una línea.
 {0} is {1} and the stock it joins is {2}; lots merge only in the same status. Release or hold one of them first.,{0} está {1} y la existencia a la que se une está {2}; los lotes se unen solo en el mismo estado. Libere o retenga uno de ellos primero.
 {0} is {1} in Pulaski; the ERP's change comes too late and is left out.,{0} está {1} en Pulaski; el cambio del ERP llega tarde y se deja fuera.
 "{0} is {1} now, not {2}; reverse what changed it first.","{0} está {1} ahora, no {2}; revierta primero lo que lo cambió."
@@ -5147,6 +5201,7 @@ yes,sí
 {0} is {1}; it can't be shipped.,{0} está {1}; no se puede enviar.
 {0} is {1}; it can't be split.,{0} está {1}; no se puede dividir.
 {0} is {1}; it can't be written off.,{0} está {1}; no se puede dar de baja.
+{0} is {1}; its checklists are closed.,{0} está {1}; sus listas de verificación están cerradas.
 {0} is {1}; nothing can be merged into it.,{0} está {1}; no se puede combinar nada en él.
 {0} is {1}; nothing is allocated to it.,{0} está {1}; no tiene nada asignado.
 {0} is {1}; nothing more can be declared against it.,{0} está {1}; ya no se puede declarar nada contra él.
@@ -5264,6 +5319,7 @@ yes,sí
 {0} overlaps on this line,{0} traslapes en esta línea
 {0} overlaps: a line can't run these at the same time,{0} traslapes: una línea no puede ejecutar estos al mismo tiempo
 {0} packed into {1}.,{0} empacado en {1}.
+{0} passed.,{0}: aprobada.
 {0} per {1} of the component · priority,{0} por {1} del componente · prioridad
 "{0} planned to {1} for {2}, {3} to {4}.","{0} planeado a {1} por {2}, de {3} a {4}."
 {0} points; no targets.,{0} puntos; sin metas.
@@ -5313,6 +5369,7 @@ yes,sí
 {0} to wait for a planner,{0} que esperan a un planificador
 {0} to {1},{0} a {1}
 {0} to {1} days.,{0} a {1} días.
+{0} to {1} {2},{0} a {1} {2}
 {0} trimmed,{0} recortados
 {0} unchanged,{0} sin cambios
 {0} uncoded,{0} sin codificar

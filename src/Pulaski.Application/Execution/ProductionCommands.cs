@@ -135,12 +135,13 @@ internal sealed class ReportProductionHandler(
     IFeedRepository? feeds = null,
     IAllocationRepository? allocations = null,
     ILotFillingStore? lotFilling = null,
-    ILineLabels? labels = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
+    ILineLabels? labels = null,
+    Instructions.IChecklistRepository? checklists = null) : ICommandHandler<ReportProductionCommand, ReportProductionResponse>
 {
     public async Task<ReportProductionResponse> HandleAsync(ReportProductionCommand command, CancellationToken cancellationToken)
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
-        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations, lotFilling)
+        var result = await new ProductionReporter(inventory, units, execution, eventLog, events, ids, lineBatches, feeds, allocations, lotFilling) { Checklists = checklists }
             .ReportAsync(command, onStop: false, timeProvider.GetUtcNow(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return await LineLabelNotes.AddAsync(labels, result, cancellationToken);
@@ -164,6 +165,9 @@ internal sealed class ProductionReporter(
     IAllocationRepository? allocations = null,
     ILotFillingStore? lotFilling = null)
 {
+    /// <summary>When set, a report needs the job's setup and first-article checklists passed on the run's line (#126c); corrections and stops leave it out.</summary>
+    public Instructions.IChecklistRepository? Checklists { get; init; }
+
     /// <param name="command">The report.</param>
     /// <param name="onStop">The report is the partial batch of a run being ended now, by a pause or completion with a reason.</param>
     /// <param name="now">The time of the report.</param>
@@ -192,6 +196,12 @@ internal sealed class ProductionReporter(
         var backdated = MovementTime.Backdated(effective, now);
         var job = await InventoryRules.JobAsync(inventory, command.JobId, null, cancellationToken);
         var run = await RunReporting.RunForAsync(execution, job, command.RunId, "production", cancellationToken, backdated);
+        if (!onStop)
+        {
+            await Instructions.ChecklistGate.EnsureAsync(
+                Checklists, job.Id, job.JobNumber, run.EquipmentId, [Domain.Instructions.ChecklistPhases.Setup, Domain.Instructions.ChecklistPhases.FirstArticle], cancellationToken);
+        }
+
         var material = await InventoryRules.MaterialAsync(inventory, job.MaterialId!.Value, cancellationToken);
         var jobUom = job.UomId ?? throw new DomainRuleException($"{job.JobNumber} has no unit.");
         var converter = await RunReporting.ConverterAsync(units, material.Id, cancellationToken);

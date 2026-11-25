@@ -71,6 +71,11 @@ internal sealed class GetStationHandler(
             ? (await andonTypes.HandleAsync(new ListAndonTypesQuery(terminal.SiteId), cancellationToken)).Where(t => t.IsActive).ToList()
             : [];
 
+        // Instructions for the running job, else the next one, to set up before it starts (#126c).
+        (Guid Id, string Number)? instructionsFor = row?.Running is { } runningJob
+            ? (runningJob.JobId, runningJob.JobNumber)
+            : row?.Next is [var next, ..] ? (next.JobId, next.JobNumber) : null;
+
         return new StationDto
         {
             TerminalName = terminal.Name,
@@ -87,9 +92,11 @@ internal sealed class GetStationHandler(
             AndonCalls = line?.Calls ?? [],
             AndonTypes = types,
             MaintenanceRequests = line?.Maintenance ?? [],
-            Instructions = row?.Running is { } runningJob
-                ? await instructions.HandleAsync(new Instructions.GetJobInstructionsQuery(runningJob.JobId), cancellationToken)
+            Instructions = instructionsFor is { } shownFor
+                ? await instructions.HandleAsync(new Instructions.GetJobInstructionsQuery(shownFor.Id), cancellationToken)
                 : [],
+            InstructionsJobId = instructionsFor?.Id,
+            InstructionsJobNumber = instructionsFor?.Number,
             RunEndReasons = query.PersonId is null ? [] : await reasons.HandleAsync(new ListReasonCodesQuery("run_end", terminal.SiteId), cancellationToken),
             Report = row?.Running is { JobType: "production" } running && May(Permissions.ProductionReport)
                 ? await ReportAsync(running.JobId, terminal.SiteId, cancellationToken)

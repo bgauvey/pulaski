@@ -12,6 +12,26 @@
                     <span class="text-muted small ms-1">@L["version {0} · for its {1}", wi.Number, string.Join(", ", wi.ShownFor.Select(k => Text.Lower(L.Label(k))))]</span>
                 </summary>
                 <div class="instruction-text mt-2">@((MarkupString)InstructionText.ToHtml(wi.Body))</div>
+                @foreach (var checklist in wi.Checklists)
+                {
+                    <div class="job-checklist mt-2 @(checklist.Result switch { "passed" => "is-passed", "failed" => "is-failed", _ => "" })" @key="checklist.Phase">
+                        <div class="fw-semibold">@ChecklistView.Title(L, checklist.Phase)</div>
+                        <div class="small mb-2">@ChecklistView.Standing(L, checklist, wi.SiteTimeZone)</div>
+                        @if (checklist.Result != "passed" && Answer is not null)
+                        {
+                            @Answer((wi, checklist))
+                        }
+                        else if (checklist.Result == "passed")
+                        {
+                            <ul class="list-unstyled small mb-0">
+                                @foreach (var a in checklist.Answers)
+                                {
+                                    <li @key="a.Item">@a.Item. @(checklist.Items.ElementAtOrDefault(a.Item - 1)?.Prompt): <span class="fw-semibold">@(a.Value is "yes" ? L["Yes"] : a.Value is "no" ? L["No"] : a.Value)</span></li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                }
                 @if (wi.Files.Count > 0)
                 {
                     <ul class="list-unstyled mb-0 mt-2">
@@ -47,6 +67,10 @@
     /// <summary>Static pages: the address each file opens at.</summary>
     [Parameter]
     public Func<JobInstructionDto, InstructionFileDto, string>? FileHref { get; set; }
+
+    /// <summary>The form to answer a checklist not yet passed, when the reader may; the host renders it (interactive or static).</summary>
+    [Parameter]
+    public RenderFragment<(JobInstructionDto Instruction, JobChecklistDto Checklist)>? Answer { get; set; }
 
     /// <summary>Interactive pages: a file was chosen.</summary>
     [Parameter]

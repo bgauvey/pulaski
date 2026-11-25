@@ -15,7 +15,11 @@ public sealed record CreateInstructionCommand(Guid SiteId, string? Code, string?
 public sealed record UpdateInstructionCommand(Guid Id, long ExpectedVersion, string? Title, bool IsActive) : ICommand<VersionResponse>;
 
 /// <summary>The draft's text; <paramref name="ExpectedVersion"/> is the draft's own version.</summary>
-public sealed record SaveInstructionDraftCommand(Guid Id, long ExpectedVersion, string? Body) : ICommand<VersionResponse>;
+public sealed record SaveInstructionDraftCommand(Guid Id, long ExpectedVersion, string? Body) : ICommand<VersionResponse>
+{
+    /// <summary>The draft's checklists (#126c); null keeps them.</summary>
+    public IReadOnlyList<ChecklistDto>? Checklists { get; init; }
+}
 
 /// <summary>A file added to the draft: PDF, PNG or JPEG, at most 10 MB.</summary>
 public sealed record AddInstructionFileCommand(Guid Id, string? FileName, byte[] Content) : ICommand<CreatedResponse>;
@@ -103,13 +107,13 @@ internal sealed class SaveInstructionDraftHandler(IUnitOfWork unitOfWork, IInstr
             throw new ConflictException($"The draft of {instruction.Code} was changed by someone else. Reload and try again.");
         }
 
-        var after = draft.Value.SaveDraft(command.Body);
+        var after = draft.Value.SaveDraft(command.Body, command.Checklists?.Select(ChecklistMapping.ToDomain).ToList());
         if (after == draft.Value)
         {
             return new VersionResponse(draft.Version);
         }
 
-        var envelope = events.Create(EventTypes.InstructionDraftSaved, "work_instruction", instruction.Id, new { draft.Value.Number, Length = after.Body.Length });
+        var envelope = events.Create(EventTypes.InstructionDraftSaved, "work_instruction", instruction.Id, new { draft.Value.Number, Length = after.Body.Length, Checklists = after.Checklists.Select(c => new { c.Phase, Items = c.Items.Count }) });
         var version = await instructions.UpdateVersionAsync(after, time.GetUtcNow(), cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);

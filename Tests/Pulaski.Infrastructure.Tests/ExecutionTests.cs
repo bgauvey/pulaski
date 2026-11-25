@@ -1131,13 +1131,90 @@ public sealed class ExecutionTests(DatabaseFixture db)
         await db.SendAsync(new Pulaski.Application.Instructions.EndInstructionTargetCommand(packer, lineTarget.Id));
         Assert.Equal(["B-MAT" + _s], (await ForAsync(plant.Pack)).Select(i => i.Code));
 
-        // The extruder's station shows them for the running job, with no one signed on; nothing while no job runs.
+        // The extruder's station shows them with no one signed on: for its next job while nothing runs (to set up, #126c), then the running one.
         var terminal = new Pulaski.Application.Labor.TerminalRecord(
             Guid.CreateVersion7(), plant.Site, "SI-" + _s, "Extruder station", plant.Site, plant.Extruder, "badge", true, TestTime.Now);
-        Assert.Empty((await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null))).Instructions);
+        var idle = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
+        Assert.Equal((plant.Extrude, 2), (idle.InstructionsJobId!.Value, idle.Instructions.Count));
         await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
         var station = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
         Assert.Equal(["A-OP" + _s, "B-MAT" + _s], station.Instructions.Select(i => i.Code));
+        Assert.Equal(plant.Extrude, station.InstructionsJobId);
+    }
+
+    [Fact]
+    public async Task Setup_and_first_article_checklists_must_pass_once_per_job_and_line_before_it_starts_and_reports()
+    {
+        var plant = await PlantAsync();
+        var processId = await ScalarAsync<Guid>("SELECT id FROM core.process WHERE site_id = @Site", new { plant.Site });
+        CreatedResponse wi = await db.SendAsync(new Pulaski.Application.Instructions.CreateInstructionCommand(plant.Site, "WI-CL-" + _s, "Extruder checks"));
+        var draft = Assert.Single((await QueryAsync<Pulaski.Application.Instructions.GetInstructionQuery, Contracts.Instructions.InstructionDto>(
+            new Pulaski.Application.Instructions.GetInstructionQuery(wi.Id))).Versions);
+        Contracts.Instructions.ChecklistDto setup = new()
+        {
+            Phase = "setup",
+            Items =
+            [
+                new() { Prompt = "Guard in place?", Kind = "yes_no", Required = true, Expected = true },
+                new() { Prompt = "Die temperature", Kind = "number", Required = true, Min = 180, Max = 220, Unit = "°C" },
+                new() { Prompt = "Remarks", Kind = "text" },
+            ],
+        };
+        Contracts.Instructions.ChecklistDto first = new()
+        {
+            Phase = "first_article",
+            Items = [new() { Prompt = "Profile look", Kind = "choice", Required = true, Choices = ["Good", "Marks"] }],
+        };
+        var saved = await db.SendAsync(new Pulaski.Application.Instructions.SaveInstructionDraftCommand(wi.Id, draft.Version, "") { Checklists = [first, setup] });
+        await db.SendAsync(new Pulaski.Application.Instructions.AddInstructionTargetCommand(wi.Id, "operation", processId, 10, null, null));
+
+        // Not released yet: nothing holds the job up, and a checklist alone is enough to release.
+        var released = await db.SendAsync(new Pulaski.Application.Instructions.ReleaseInstructionCommand(wi.Id, saved.Version, null));
+        Assert.True(released.Version > 0);
+        var version = (await QueryAsync<Pulaski.Application.Instructions.GetInstructionQuery, Contracts.Instructions.InstructionDto>(
+            new Pulaski.Application.Instructions.GetInstructionQuery(wi.Id))).Versions.Single();
+        Assert.Equal(["setup", "first_article"], version.Checklists.Select(c => c.Phase));
+
+        // Start is refused until setup passed; a failed setup is kept and doesn't count.
+        var refused = await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude))));
+        Assert.Contains("setup checklist of WI-CL-" + _s, refused.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Instructions.CompleteChecklistCommand(
+            plant.Extrude, wi.Id, "setup", new Dictionary<int, string?> { [1] = "yes" })));
+        var failed = await db.SendAsync(new Pulaski.Application.Instructions.CompleteChecklistCommand(
+            plant.Extrude, wi.Id, "setup", new Dictionary<int, string?> { [1] = "yes", [2] = "235" }));
+        Assert.Equal((false, 2), (failed.Passed, Assert.Single(failed.FailedItems)));
+        await Assert.ThrowsAsync<DomainRuleException>(async () => await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude))));
+        var passed = await db.SendAsync(new Pulaski.Application.Instructions.CompleteChecklistCommand(
+            plant.Extrude, wi.Id, "setup", new Dictionary<int, string?> { [1] = "Yes", [2] = "205.5", [3] = " " }));
+        Assert.True(passed.Passed);
+        var started = await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+
+        // The answers before the start belong to the run it started.
+        Assert.Equal(2, await ScalarAsync<int>("SELECT count(*)::int FROM core.checklist_response WHERE run_id = @Run", new { Run = started.RunId }));
+
+        // Reporting waits for first article; answered during the run, it is the run's. (The run is back-dated an hour to leave room for output.)
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync("UPDATE core.job_run SET started_at = started_at - interval '1 hour' WHERE id = @Id", new { Id = started.RunId });
+        }
+
+        var noFirst = await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReportProductionCommand(plant.Extrude, null, 10m, 0m, null, null, plant.Staging)));
+        Assert.Contains("first-article checklist", noFirst.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Instructions.CompleteChecklistCommand(
+            plant.Extrude, wi.Id, "first_article", new Dictionary<int, string?> { [1] = "Fine" })));
+        await db.SendAsync(new Pulaski.Application.Instructions.CompleteChecklistCommand(
+            plant.Extrude, wi.Id, "first_article", new Dictionary<int, string?> { [1] = "Good" }));
+        await db.SendAsync(new ReportProductionCommand(plant.Extrude, null, 10m, 0m, null, null, plant.Staging));
+        Assert.Equal(3, await ScalarAsync<int>("SELECT count(*)::int FROM core.checklist_response WHERE run_id = @Run", new { Run = started.RunId }));
+
+        // The job shows each checklist passed, with its answers; a pause and resume on the same line needs neither again.
+        var shown = Assert.Single(await QueryAsync<Pulaski.Application.Instructions.GetJobInstructionsQuery, IReadOnlyList<Contracts.Instructions.JobInstructionDto>>(
+            new Pulaski.Application.Instructions.GetJobInstructionsQuery(plant.Extrude)));
+        Assert.Equal([("setup", "passed"), ("first_article", "passed")], shown.Checklists.Select(c => (c.Phase, c.Result!)));
+        Assert.Equal(["yes", "205.5"], shown.Checklists[0].Answers.Select(a => a.Value));
+        await db.SendAsync(new PauseJobCommand(plant.Extrude, await VersionAsync(plant.Extrude), null, null));
+        await db.SendAsync(new StartJobCommand(plant.Extrude, await VersionAsync(plant.Extrude)));
+        await db.SendAsync(new ReportProductionCommand(plant.Extrude, started.RunId, 5m, 0m, null, null, plant.Staging));
     }
 
     [Fact]

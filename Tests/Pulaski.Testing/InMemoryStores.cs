@@ -218,6 +218,7 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Maintenance.IMaintenancePlanReadStore>();
         services.RemoveAll<Application.Instructions.IInstructionRepository>();
         services.RemoveAll<Application.Instructions.IInstructionReadStore>();
+        services.RemoveAll<Application.Instructions.IChecklistRepository>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -316,6 +317,7 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Maintenance.IMaintenancePlanReadStore>(MaintenancePlans);
         services.AddSingleton<Application.Instructions.IInstructionRepository>(Instructions);
         services.AddSingleton<Application.Instructions.IInstructionReadStore>(Instructions);
+        services.AddSingleton<Application.Instructions.IChecklistRepository>(Instructions);
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);

@@ -12,7 +12,8 @@ namespace Pulaski.Infrastructure.Instructions;
 internal sealed class InstructionRepository(DbSession session) : IInstructionRepository
 {
     private const string VersionColumns = """
-        id, instruction_id, version_number AS number, status, body, released_at, released_by, note, xmin::text::bigint AS version
+        id, instruction_id, version_number AS number, status, body, released_at, released_by, note, checklists::text AS checklists_json,
+        xmin::text::bigint AS version
         """;
 
     public Task<bool> IsSiteAsync(Guid siteId, CancellationToken cancellationToken) =>
@@ -58,21 +59,34 @@ internal sealed class InstructionRepository(DbSession session) : IInstructionRep
     public Task<long> InsertVersionAsync(InstructionVersion version, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(
             """
-            INSERT INTO core.work_instruction_version (id, instruction_id, version_number, status, body, created_at, updated_at)
-            VALUES (@Id, @InstructionId, @Number, @Status, @Body, @At, @At)
+            INSERT INTO core.work_instruction_version (id, instruction_id, version_number, status, body, checklists, created_at, updated_at)
+            VALUES (@Id, @InstructionId, @Number, @Status, @Body, @Checklists::jsonb, @At, @At)
             RETURNING xmin::text::bigint
             """,
-            new { version.Id, version.InstructionId, version.Number, version.Status, version.Body, At = at }, cancellationToken);
+            new { version.Id, version.InstructionId, version.Number, version.Status, version.Body, Checklists = ChecklistJson.Write(version.Checklists), At = at },
+            cancellationToken);
 
     public Task<long> UpdateVersionAsync(InstructionVersion version, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(
             """
             UPDATE core.work_instruction_version
-            SET status = @Status, body = @Body, released_at = @ReleasedAt, released_by = @ReleasedBy, note = @Note, updated_at = @At
+            SET status = @Status, body = @Body, checklists = @Checklists::jsonb, released_at = @ReleasedAt, released_by = @ReleasedBy, note = @Note,
+                updated_at = @At
             WHERE id = @Id
             RETURNING xmin::text::bigint
             """,
-            new { version.Id, version.Status, version.Body, version.ReleasedAt, version.ReleasedBy, version.Note, At = at }, cancellationToken);
+            new
+            {
+                version.Id,
+                version.Status,
+                version.Body,
+                Checklists = ChecklistJson.Write(version.Checklists),
+                version.ReleasedAt,
+                version.ReleasedBy,
+                version.Note,
+                At = at,
+            },
+            cancellationToken);
 
     public async Task<IReadOnlyList<(Guid Id, Guid ContentId, string FileName, string ContentType, int SortOrder)>> ListFilesAsync(Guid versionId, CancellationToken cancellationToken) =>
         [.. await session.QueryAsync<(Guid, Guid, string, string, int)>(
@@ -154,9 +168,10 @@ internal sealed class InstructionRepository(DbSession session) : IInstructionRep
         public DateTimeOffset? ReleasedAt { get; init; }
         public string? ReleasedBy { get; init; }
         public string? Note { get; init; }
+        public string ChecklistsJson { get; init; } = "[]";
         public long Version { get; init; }
 
-        public InstructionVersion ToDomain() => new(Id, InstructionId, Number, Status, Body, ReleasedAt, ReleasedBy, Note);
+        public InstructionVersion ToDomain() => new(Id, InstructionId, Number, Status, Body, ReleasedAt, ReleasedBy, Note) { Checklists = ChecklistJson.Read(ChecklistsJson) };
     }
 }
 
@@ -207,10 +222,11 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
             return null;
         }
 
-        var versions = (await connection.QueryAsync<InstructionVersionDto>(new CommandDefinition(
-            """
+        var versions = (await connection.QueryAsync<VersionDtoRow>(new CommandDefinition(
+            $"""
             SELECT v.id, v.version_number AS number, v.status, v.body, v.released_at, v.released_by, v.note, v.xmin::text::bigint AS version,
-                   (SELECT u.display_name FROM sec.app_user u WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = v.released_by) AS released_by_name
+                   v.checklists::text AS checklists_json,
+                   {InstructionSql.UserName("v.released_by")} AS released_by_name
             FROM core.work_instruction_version v
             WHERE v.instruction_id = @Id
             ORDER BY v.version_number DESC
@@ -228,9 +244,19 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
             TargetSelect + " AND t.instruction_id = @Id ORDER BY t.kind, t.created_at", new { Id = id }, cancellationToken: cancellationToken));
         return instruction with
         {
-            Versions = [.. versions.Select(v => v with
+            Versions = [.. versions.Select(v => new InstructionVersionDto
             {
+                Id = v.Id,
+                Number = v.Number,
+                Status = v.Status,
+                Body = v.Body,
+                ReleasedAt = v.ReleasedAt,
+                ReleasedBy = v.ReleasedBy,
+                ReleasedByName = v.ReleasedByName,
+                Note = v.Note,
+                Version = v.Version,
                 Files = [.. files[v.Id].Select(f => new InstructionFileDto { Id = f.Id, FileName = f.FileName, ContentType = f.ContentType, SizeBytes = f.SizeBytes })],
+                Checklists = [.. ChecklistJson.Read(v.ChecklistsJson).Select(Application.Instructions.ChecklistMapping.ToDto)],
             })],
             Targets = [.. targets.Select(t => t.ToDto())],
         };
@@ -249,29 +275,11 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
             """, new { FileId = fileId, InstructionId = instructionId }, cancellationToken: cancellationToken));
     }
 
-    // A job's targets: its operation (the process and number, whatever the version), its line or one above it, its material (#126b).
-    private const string JobMatches = """
-        WITH j AS (
-            SELECT j.site_id, j.material_id, j.equipment_id, v.process_id, o.operation_number
-            FROM core.job j
-            LEFT JOIN core.process_operation o ON o.id = j.process_operation_id
-            LEFT JOIN core.process_version v ON v.id = o.process_version_id
-            WHERE j.id = @JobId)
-        SELECT DISTINCT i.id, i.code, t.kind
-        FROM j
-        JOIN core.work_instruction i ON i.site_id = j.site_id AND i.is_active
-        JOIN core.work_instruction_target t ON t.instruction_id = i.id AND t.is_active
-        WHERE EXISTS (SELECT 1 FROM core.work_instruction_version r WHERE r.instruction_id = i.id AND r.status = 'released')
-          AND ((t.kind = 'operation' AND t.process_id = j.process_id AND t.operation_number = j.operation_number)
-            OR (t.kind = 'material' AND t.material_id = j.material_id)
-            OR (t.kind = 'line' AND EXISTS (
-                    SELECT 1 FROM core.equipment_closure c WHERE c.ancestor_id = t.equipment_id AND c.descendant_id = j.equipment_id)))
-        """;
-
     public async Task<IReadOnlyList<JobInstructionDto>> ForJobAsync(Guid jobId, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        var matches = await connection.QueryAsync<(Guid, string, string)>(new CommandDefinition(JobMatches, new { JobId = jobId }, cancellationToken: cancellationToken));
+        var matches = await connection.QueryAsync<(Guid, string, string)>(new CommandDefinition(
+            InstructionSql.Matching + " SELECT id, code, kind FROM matched", new { JobId = jobId, LineId = (Guid?)null }, cancellationToken: cancellationToken));
         var shown = JobInstructions.Gather(matches);
         if (shown.Count == 0)
         {
@@ -279,9 +287,12 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
         }
 
         var ids = shown.Select(s => s.InstructionId).ToArray();
+        var timeZone = await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT s.time_zone FROM core.job j JOIN core.equipment s ON s.id = j.site_id WHERE j.id = @JobId", new { JobId = jobId }, cancellationToken: cancellationToken));
         var versions = (await connection.QueryAsync<ReleasedRow>(new CommandDefinition(
             """
-            SELECT i.id AS instruction_id, i.code, i.title, v.id AS version_id, v.version_number AS number, v.released_at, v.body
+            SELECT i.id AS instruction_id, i.code, i.title, v.id AS version_id, v.version_number AS number, v.released_at, v.body,
+                   v.checklists::text AS checklists_json
             FROM core.work_instruction i
             JOIN core.work_instruction_version v ON v.instruction_id = i.id AND v.status = 'released'
             WHERE i.id = ANY(@Ids)
@@ -294,6 +305,17 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
             WHERE f.version_id = ANY(@Versions) AND f.removed_at IS NULL
             ORDER BY f.sort_order, f.id
             """, new { Versions = versions.Values.Select(v => v.VersionId).ToArray() }, cancellationToken: cancellationToken))).ToLookup(f => f.VersionId);
+
+        // How each checklist stands for the job on its line: passed if one passed, else the latest answer (#126c).
+        var answered = (await connection.QueryAsync<AnsweredRow>(new CommandDefinition(
+            $"""
+            SELECT DISTINCT ON (r.instruction_id, r.phase) r.instruction_id, r.phase, r.result, r.completed_at, r.answers::text AS answers_json,
+                   {InstructionSql.UserName("r.completed_by")} AS completed_by_name
+            FROM core.checklist_response r
+            JOIN core.job j ON j.id = r.job_id AND j.equipment_id = r.equipment_id
+            WHERE r.job_id = @JobId AND r.instruction_id = ANY(@Ids)
+            ORDER BY r.instruction_id, r.phase, r.result = 'passed' DESC, r.completed_at DESC
+            """, new { JobId = jobId, Ids = ids }, cancellationToken: cancellationToken))).ToDictionary(a => (a.InstructionId, a.Phase));
         return [.. shown.Where(s => versions.ContainsKey(s.InstructionId)).Select(s =>
         {
             var v = versions[s.InstructionId];
@@ -308,8 +330,48 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
                 Body = v.Body,
                 Files = [.. files[v.VersionId].Select(f => new InstructionFileDto { Id = f.Id, FileName = f.FileName, ContentType = f.ContentType, SizeBytes = f.SizeBytes })],
                 ShownFor = s.Kinds,
+                SiteTimeZone = timeZone,
+                Checklists = [.. ChecklistJson.Read(v.ChecklistsJson).Select(c =>
+                {
+                    var dto = Application.Instructions.ChecklistMapping.ToDto(c);
+                    return answered.TryGetValue((v.InstructionId, c.Phase), out var a)
+                        ? new JobChecklistDto
+                        {
+                            Phase = c.Phase,
+                            Items = dto.Items,
+                            Result = a.Result,
+                            CompletedAt = a.CompletedAt,
+                            CompletedByName = a.CompletedByName,
+                            Answers = [.. ChecklistJson.ReadAnswers(a.AnswersJson).Select(x => new ChecklistAnswerDto(x.Item, x.Value, x.Ok))],
+                        }
+                        : new JobChecklistDto { Phase = c.Phase, Items = dto.Items };
+                })],
             };
         })];
+    }
+
+    private sealed class AnsweredRow
+    {
+        public Guid InstructionId { get; init; }
+        public string Phase { get; init; } = "";
+        public string Result { get; init; } = "";
+        public DateTimeOffset CompletedAt { get; init; }
+        public string AnswersJson { get; init; } = "[]";
+        public string? CompletedByName { get; init; }
+    }
+
+    private sealed class VersionDtoRow
+    {
+        public Guid Id { get; init; }
+        public int Number { get; init; }
+        public string Status { get; init; } = "";
+        public string Body { get; init; } = "";
+        public DateTimeOffset? ReleasedAt { get; init; }
+        public string? ReleasedBy { get; init; }
+        public string? ReleasedByName { get; init; }
+        public string? Note { get; init; }
+        public long Version { get; init; }
+        public string ChecklistsJson { get; init; } = "[]";
     }
 
     private sealed class ReleasedRow
@@ -321,6 +383,7 @@ internal sealed class InstructionQueries(NpgsqlDataSource dataSource) : IInstruc
         public int Number { get; init; }
         public DateTimeOffset? ReleasedAt { get; init; }
         public string Body { get; init; } = "";
+        public string ChecklistsJson { get; init; } = "[]";
     }
 
     private sealed class FileRow

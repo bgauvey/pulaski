@@ -227,6 +227,36 @@ internal static class TerminalEndpoints
             });
         });
 
+        // A checklist at the station (#126c): one of the job's its instructions show, as the signed-on person; setup needs a role that runs
+        // jobs, first article one that reports.
+        terminal.MapPost("/station/checklist", async Task<Ok<StationActionResponse>> (
+            StationChecklistRequest request, HttpContext http, StationServices station,
+            ICommandHandler<Application.Instructions.CompleteChecklistCommand, Contracts.Instructions.ChecklistCompletedResponse> complete, CancellationToken ct) =>
+        {
+            var setup = request.Phase == Domain.Instructions.ChecklistPhases.Setup;
+            var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+                http, station.Tickets, station.Security, station.Time, request.Ticket,
+                setup ? Domain.Security.Permissions.JobExecute : Domain.Security.Permissions.ProductionReport,
+                setup ? UserMessage.Of("answer setup checklists") : UserMessage.Of("answer first-article checklists"));
+            var personId = station.Tickets.PersonOf(ticket, terminal.Id);
+            var before = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct);
+            if (before.InstructionsJobId != request.JobId || !before.Instructions.Any(i => i.InstructionId == request.InstructionId && i.Checklists.Any(c => c.Phase == request.Phase)))
+            {
+                throw new DomainRuleException("That checklist isn't one this station shows; answer it on the job's page.");
+            }
+
+            var done = await complete.HandleAsync(new Application.Instructions.CompleteChecklistCommand(request.JobId, request.InstructionId, request.Phase, request.Answers), ct);
+            return TypedResults.Ok(new StationActionResponse
+            {
+                Notes = [done.Passed ? Notes.Of($"The checklist passed.")
+                    : done.FailedItems.Count == 1 ? Notes.Of($"The checklist failed on item {done.FailedItems[0]}: put it right and answer it again.")
+                    : Notes.Of($"The checklist failed on items {string.Join(", ", done.FailedItems)}: put them right and answer it again.")],
+                Ticket = ticket,
+                TicketExpiresAt = expires,
+                Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
+            });
+        });
+
         // Andon at the station (#157): call for help on its line, or answer one of its line's calls, as the signed-on person.
         terminal.MapPost("/station/andon/call", async Task<Ok<StationActionResponse>> (
             StationAndonRequest request, HttpContext http, StationServices station, ICommandHandler<RaiseAndonCallCommand, AndonCallResponse> raise,

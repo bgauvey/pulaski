@@ -51,7 +51,7 @@ internal static class InstructionEndpoints
 
         instructions.MapPut("/{id:guid}/draft", async Task<Ok<VersionResponse>> (
             Guid id, SaveInstructionDraftRequest request, ICommandHandler<SaveInstructionDraftCommand, VersionResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new SaveInstructionDraftCommand(id, request.Version, request.Body), ct)))
+            TypedResults.Ok(await handler.HandleAsync(new SaveInstructionDraftCommand(id, request.Version, request.Body) { Checklists = request.Checklists }, ct)))
         .RequirePermission(Permissions.Instructions, Site.Of(SiteOf.WorkInstruction));
 
         instructions.MapPost("/{id:guid}/draft", async Task<Ok<CreatedResponse>> (
@@ -112,6 +112,19 @@ internal static class InstructionEndpoints
             TypedResults.Ok(await handler.HandleAsync(new GetJobInstructionsQuery(id), ct)))
         .WithTags("Work instructions")
         .RequireAny(Site.Of(SiteOf.Job), Permissions.FloorView, Permissions.InstructionsView);
+
+        // Checklists at the job (#126c): setup by whoever runs jobs, first article by whoever reports production, at the job's site.
+        routes.MapPost("/jobs/{id:guid}/checklists/setup", async Task<Ok<ChecklistCompletedResponse>> (
+            Guid id, CompleteChecklistRequest request, ICommandHandler<CompleteChecklistCommand, ChecklistCompletedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CompleteChecklistCommand(id, request.InstructionId, Domain.Instructions.ChecklistPhases.Setup, request.Answers), ct)))
+        .WithTags("Work instructions")
+        .RequirePermission(Permissions.JobExecute, Site.Of(SiteOf.Job));
+
+        routes.MapPost("/jobs/{id:guid}/checklists/first-article", async Task<Ok<ChecklistCompletedResponse>> (
+            Guid id, CompleteChecklistRequest request, ICommandHandler<CompleteChecklistCommand, ChecklistCompletedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CompleteChecklistCommand(id, request.InstructionId, Domain.Instructions.ChecklistPhases.FirstArticle, request.Answers), ct)))
+        .WithTags("Work instructions")
+        .RequirePermission(Permissions.ProductionReport, Site.Of(SiteOf.Job));
 
         return routes;
     }
