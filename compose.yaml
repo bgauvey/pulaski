@@ -7,7 +7,7 @@
 # materials (pulaski-db), then the API and the UI. The machine simulators (deploy/simulator/compose.yaml: an MQTT broker, three PackML
 # simulators publishing Sparkplug B, an OPC UA server) start beside them; demo-setup connects an edge node to them and starts the
 # simulated machines, and the edge forwards their states to Pulaski. demo-history then records the previous shift and the current one so
-# far, so the screens have something to show from the start.
+# far, so the screens have something to show from the start. The API's e-mail goes to a mail catcher, read at http://localhost:8025.
 #
 # Every password and key below is for this demo only. Each can be overridden from the environment or a .env file beside this one, as can
 # the ports, if something on this machine already uses them.
@@ -59,10 +59,27 @@ services:
       Security__SigningKey: ${PULASKI_SIGNING_KEY:-pulaski-demo-signing-key-not-for-production-use}
       Security__BootstrapAdmin__Username: admin
       Security__BootstrapAdmin__Password: ${PULASKI_ADMIN_PASSWORD:-Pulaski-demo-1}
+      # E-mail goes to the mail catcher below, never out: alerts, qualification notices and password reset links.
+      Email__Host: mail
+      Email__Port: "1025"
+      Email__UseTls: "false"
+      Email__From: pulaski@demo.local
+      Email__FromName: Pulaski demo
+      Security__PasswordReset__Enabled: "true"
+      Security__PasswordReset__UiBaseUrl: http://localhost:${PULASKI_WEB_PORT:-5090}
+      Alerts__UiBaseUrl: http://localhost:${PULASKI_WEB_PORT:-5090}
     ports:
       - "${PULASKI_API_PORT:-5080}:8080"
     volumes:
       - api-keys:/home/app/.aspnet/DataProtection-Keys
+    restart: unless-stopped
+
+  # A fake mail server (Mailpit): it accepts every message the API sends and keeps it for reading at http://localhost:8025. Nothing is
+  # delivered anywhere.
+  mail:
+    image: axllent/mailpit:latest
+    ports:
+      - "${PULASKI_MAIL_PORT:-8025}:8025"
     restart: unless-stopped
 
   web:
