@@ -9,17 +9,19 @@ namespace Pulaski.Api.Infrastructure;
 /// Sends e-mail alerts (#121, D-109) every <c>Alerts:PollSeconds</c> (60, at least 15), shortages every 10 minutes (#165);
 /// <c>Alerts:Enabled</c> = false stops it. Without a mail server nothing is sent or recorded.
 /// </summary>
-internal sealed partial class AlertService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<AlertService> logger) : BackgroundService
+internal sealed partial class AlertService(IServiceScopeFactory scopes, IConfiguration configuration, Application.Health.ServiceHealth health, ILogger<AlertService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!configuration.GetValue("Alerts:Enabled", true))
         {
+            health.Disabled(Application.Health.BackgroundServices.Alerts);
             return;
         }
 
         var poll = TimeSpan.FromSeconds(Math.Max(15, configuration.GetValue("Alerts:PollSeconds", 60)));
         using var timer = new PeriodicTimer(poll);
+        health.Started(Application.Health.BackgroundServices.Alerts, poll);
         var shortagesAt = DateTimeOffset.MinValue;
         do
         {
@@ -39,10 +41,13 @@ internal sealed partial class AlertService(IServiceScopeFactory scopes, IConfigu
                 {
                     LogSent(logger, sent);
                 }
+
+                health.Succeeded(Application.Health.BackgroundServices.Alerts);
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
                 logger.LogError(ex, "Couldn't send alerts; trying again in {Interval}.", poll);
+                health.Failed(Application.Health.BackgroundServices.Alerts, ex.Message);
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

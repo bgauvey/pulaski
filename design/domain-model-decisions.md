@@ -3265,6 +3265,24 @@ writes an event for every change in the same transaction (D-007); machine ingest
 - **Pieces:** (a) the channel, the stream and the signed-in pages (Overview, Floor, job page, Machines, Andon, Handover, Inbox); (b) line boards
   and operator stations (static pages): boards reload at once, a station only while nobody is typing in one of its forms.
 
+### D-118 · System health (#141) · *Proposed*
+
+**Context.** Edge nodes, delivery feeds and background services reported their health on separate pages, or only in the logs.
+
+**Decision.**
+- **One page, worked out on request.** `GetSystemHealthQuery` (`GET /api/system/health`) gives sections `database` (latest migration vs
+  `DatabaseMaintenance.RequiredMigration`; history tables without next month's `_pYYYYMM` partition), `services`, `edge` (`last_seen_at`),
+  `deliveries` (per feed, or per sink with deliveries: waiting, oldest waiting, failed), `connections` (material and people connections' last
+  outcome and `next_run_at`), `rollups` (`ts.oee_rollup_day` dirty for more than a day) and `mail`. Statuses `ok` / `warning` / `failing` /
+  `off`, from the pure `HealthRules` (edge quiet after 2 min, lost after 1 h; a delivery late after 15 min; a schedule late after 1 h; a
+  service late after 3 of its intervals). Items carry the screen where they are fixed; messages are `MessageDto`s.
+- **Background services say how their rounds went.** `ServiceHealth` (singleton, in memory, per API process, from its start): each hosted
+  service calls `Started(key, every)` (or `Disabled`), then `Succeeded`/`Failed(error)` each round; keys in `BackgroundServices`. Nothing is
+  stored: a restart starts over, and the page says since when. A table was considered and left out: the API is one process today, and the
+  rounds' outcomes are in the logs.
+- **Permission** `system.view` (Administration; no role but the administrator to start with; migration 0082). Configure → **System health**
+  (`/system-health`). No alerts from it yet.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

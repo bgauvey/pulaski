@@ -2921,7 +2921,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0078_maintenance_plans'),
     ('0079_work_instructions'),
     ('0080_instruction_checklists'),
-    ('0081_checklist_sign_off');
+    ('0081_checklist_sign_off'),
+    ('0082_system_health');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2994,7 +2995,8 @@ INSERT INTO sec.permission (code, description) VALUES
     ('maintenance.work', 'Work maintenance requests: start them and close them with what was done'),
     ('instructions.view', 'See work instructions and their versions'),
     ('instructions.manage', 'Maintain work instructions: write, attach and release them'),
-    ('checklists.sign_off', 'Give setup and first-article checklists their second sign-off, or reject them')
+    ('checklists.sign_off', 'Give setup and first-article checklists their second sign-off, or reject them'),
+    ('system.view', 'See system health: edge nodes, deliveries, connections, background services and the database')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.

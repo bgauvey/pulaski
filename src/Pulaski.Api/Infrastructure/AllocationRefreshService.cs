@@ -9,12 +9,13 @@ namespace Pulaski.Api.Infrastructure;
 /// <c>Allocations:Refresh:AtMostSeconds</c> (900). <c>Allocations:Refresh:Enabled</c> (true) switches the service off for every site;
 /// <c>Allocations:Refresh:PollSeconds</c> (30) paces it. Failures are logged and retried on the next round.
 /// </summary>
-internal sealed partial class AllocationRefreshService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<AllocationRefreshService> logger) : BackgroundService
+internal sealed partial class AllocationRefreshService(IServiceScopeFactory scopes, IConfiguration configuration, Application.Health.ServiceHealth health, ILogger<AllocationRefreshService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!configuration.GetValue("Allocations:Refresh:Enabled", true))
         {
+            health.Disabled(Application.Health.BackgroundServices.AllocationRefresh);
             return;
         }
 
@@ -22,6 +23,7 @@ internal sealed partial class AllocationRefreshService(IServiceScopeFactory scop
         var quiet = TimeSpan.FromSeconds(Math.Max(0, configuration.GetValue("Allocations:Refresh:QuietSeconds", 60)));
         var atMost = TimeSpan.FromSeconds(Math.Max(60, configuration.GetValue("Allocations:Refresh:AtMostSeconds", 900)));
         using var timer = new PeriodicTimer(poll);
+        health.Started(Application.Health.BackgroundServices.AllocationRefresh, poll);
         do
         {
             try
@@ -32,10 +34,13 @@ internal sealed partial class AllocationRefreshService(IServiceScopeFactory scop
                 {
                     LogRefreshed(logger, refreshed);
                 }
+
+                health.Succeeded(Application.Health.BackgroundServices.AllocationRefresh);
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
                 logger.LogError(ex, "Couldn't refresh allocations; trying again in {Interval}.", poll);
+                health.Failed(Application.Health.BackgroundServices.AllocationRefresh, ex.Message);
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

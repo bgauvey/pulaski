@@ -135,7 +135,8 @@ public sealed class WebhookDeliveryService(
     IServiceScopeFactory scopes,
     IConfiguration configuration,
     TimeProvider time,
-    ILogger<WebhookDeliveryService> logger) : BackgroundService
+    ILogger<WebhookDeliveryService> logger,
+    Application.Health.ServiceHealth? health = null) : BackgroundService
 {
     private const int Batch = 200;
 
@@ -148,6 +149,8 @@ public sealed class WebhookDeliveryService(
     // Feeds and their settings are read each tick (#73, #74): a change, or a new feed, takes effect without a restart.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Health (#141): the relay's rounds of reading its feeds; a feed's own queue shows on the page as what waits and what failed.
+        health?.Started(Application.Health.BackgroundServices.Deliveries, Tick);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -157,10 +160,13 @@ public sealed class WebhookDeliveryService(
                 {
                     Launch(WebhookFeedOptions.From(configuration, feed).Apply(saved.GetValueOrDefault(feed)), stoppingToken);
                 }
+
+                health?.Succeeded(Application.Health.BackgroundServices.Deliveries);
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
                 logger.LogError(ex, "The delivery relay couldn't read its feeds; trying again shortly.");
+                health?.Failed(Application.Health.BackgroundServices.Deliveries, ex.Message);
             }
 
             await Task.Delay(Tick, time, stoppingToken);
@@ -298,7 +304,8 @@ public sealed class WebhookDeliveryService(
 /// Clears delivered rows older than <c>Retention:DeliveredDays</c> (90 by default, at least 7) once an hour (#74), through
 /// <c>evt.purge_delivered</c>. Failed, pending and skipped rows stay, and the event log is never touched. Failures are retried next time.
 /// </summary>
-internal sealed partial class DeliveryRetentionService(DeliveryRelay relay, IConfiguration configuration, ILogger<DeliveryRetentionService> logger) : BackgroundService
+internal sealed partial class DeliveryRetentionService(
+    DeliveryRelay relay, IConfiguration configuration, Application.Health.ServiceHealth health, ILogger<DeliveryRetentionService> logger) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
 
@@ -306,6 +313,7 @@ internal sealed partial class DeliveryRetentionService(DeliveryRelay relay, ICon
     {
         var keepDays = Math.Max(7, configuration.GetValue("Retention:DeliveredDays", 90));
         using var timer = new PeriodicTimer(Interval);
+        health.Started(Application.Health.BackgroundServices.DeliveryRetention, Interval);
         do
         {
             try
@@ -315,10 +323,13 @@ internal sealed partial class DeliveryRetentionService(DeliveryRelay relay, ICon
                 {
                     LogCleared(logger, deleted, keepDays);
                 }
+
+                health.Succeeded(Application.Health.BackgroundServices.DeliveryRetention);
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
                 logger.LogError(ex, "Couldn't clear old deliveries; trying again in {Interval}.", Interval);
+                health.Failed(Application.Health.BackgroundServices.DeliveryRetention, ex.Message);
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

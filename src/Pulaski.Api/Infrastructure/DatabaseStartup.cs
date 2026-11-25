@@ -39,7 +39,8 @@ internal sealed class SchemaVersionCheck(DatabaseMaintenance database, ILogger<S
 /// partitions the seed made run out. Each round also drops process values older than
 /// <c>Retention:ProcessValueDays</c> (90 by default, #26). Failures are logged and retried on the next round.
 /// </summary>
-internal sealed partial class PartitionMaintenance(DatabaseMaintenance database, IConfiguration configuration, ILogger<PartitionMaintenance> logger)
+internal sealed partial class PartitionMaintenance(
+    DatabaseMaintenance database, IConfiguration configuration, Application.Health.ServiceHealth health, ILogger<PartitionMaintenance> logger)
     : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(12);
@@ -49,6 +50,7 @@ internal sealed partial class PartitionMaintenance(DatabaseMaintenance database,
         var months = configuration.GetValue("Pulaski:PartitionMonthsAhead", 3);
         var keepDays = Math.Max(7, configuration.GetValue("Retention:ProcessValueDays", 90));
         using var timer = new PeriodicTimer(Interval);
+        health.Started(Application.Health.BackgroundServices.Partitions, Interval);
         do
         {
             try
@@ -64,10 +66,13 @@ internal sealed partial class PartitionMaintenance(DatabaseMaintenance database,
                 {
                     LogDropped(logger, dropped, keepDays);
                 }
+
+                health.Succeeded(Application.Health.BackgroundServices.Partitions);
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
                 logger.LogError(ex, "Could not create history partitions ahead; retrying in {Interval}.", Interval);
+                health.Failed(Application.Health.BackgroundServices.Partitions, ex.Message);
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

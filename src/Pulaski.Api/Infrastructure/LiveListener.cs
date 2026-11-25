@@ -13,7 +13,8 @@ namespace Pulaski.Api.Infrastructure;
 /// (<c>resync</c>), since what changed meanwhile wasn't heard. <c>Live:Enabled</c> (true) switches it off.
 /// </summary>
 internal sealed partial class LiveListener(
-    NpgsqlDataSource dataSource, ISiteLookup sites, LiveHub hub, IConfiguration configuration, TimeProvider time, ILogger<LiveListener> logger)
+    NpgsqlDataSource dataSource, ISiteLookup sites, LiveHub hub, IConfiguration configuration, TimeProvider time, Application.Health.ServiceHealth health,
+    ILogger<LiveListener> logger)
     : BackgroundService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -26,8 +27,11 @@ internal sealed partial class LiveListener(
     {
         if (!configuration.GetValue("Live:Enabled", true))
         {
+            health.Disabled(Application.Health.BackgroundServices.Live);
             return;
         }
+
+        health.Started(Application.Health.BackgroundServices.Live, null);
 
         var notices = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
         var publishing = PublishAsync(notices.Reader, stoppingToken);
@@ -43,6 +47,7 @@ internal sealed partial class LiveListener(
                     await listen.ExecuteNonQueryAsync(stoppingToken);
                 }
 
+                health.Succeeded(Application.Health.BackgroundServices.Live);
                 if (lost)
                 {
                     LogBack(logger);
@@ -62,6 +67,7 @@ internal sealed partial class LiveListener(
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException or IOException)
             {
                 lost = true;
+                health.Failed(Application.Health.BackgroundServices.Live, ex.Message);
                 LogLost(logger, ex, Retry);
                 await Task.Delay(Retry, time, stoppingToken).ContinueWith(_ => { }, TaskScheduler.Default);
             }

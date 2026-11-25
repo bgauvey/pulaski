@@ -8,17 +8,19 @@ namespace Pulaski.Api.Infrastructure;
 /// <c>Quality:AutoSampling:Enabled</c> (true) switches it off; <c>Quality:AutoSampling:PollSeconds</c> (60) paces it. Failures are logged and
 /// retried on the next round.
 /// </summary>
-internal sealed partial class TagSamplingService(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<TagSamplingService> logger) : BackgroundService
+internal sealed partial class TagSamplingService(IServiceScopeFactory scopes, IConfiguration configuration, Application.Health.ServiceHealth health, ILogger<TagSamplingService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!configuration.GetValue("Quality:AutoSampling:Enabled", true))
         {
+            health.Disabled(Application.Health.BackgroundServices.TagSampling);
             return;
         }
 
         var poll = TimeSpan.FromSeconds(Math.Max(10, configuration.GetValue("Quality:AutoSampling:PollSeconds", 60)));
         using var timer = new PeriodicTimer(poll);
+        health.Started(Application.Health.BackgroundServices.TagSampling, poll);
         do
         {
             try
@@ -29,10 +31,13 @@ internal sealed partial class TagSamplingService(IServiceScopeFactory scopes, IC
                 {
                     LogMade(logger, made);
                 }
+
+                health.Succeeded(Application.Health.BackgroundServices.TagSampling);
             }
             catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
             {
                 logger.LogError(ex, "Couldn't sample process values; trying again in {Interval}.", poll);
+                health.Failed(Application.Health.BackgroundServices.TagSampling, ex.Message);
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

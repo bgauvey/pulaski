@@ -135,6 +135,7 @@ public static class DependencyInjection
         services.AddSingleton<Application.Andon.IAndonReadStore, Andon.AndonQueries>();
         services.AddSingleton<Application.Maintenance.IMaintenanceReadStore, Maintenance.MaintenanceQueries>();
         services.AddSingleton<Application.Instructions.IInstructionReadStore, Instructions.InstructionQueries>();
+        services.AddSingleton<Application.Health.ISystemHealthReadStore, Health.SystemHealthQueries>();
         services.AddSingleton<Application.Maintenance.IMaintenancePlanReadStore, Maintenance.MaintenancePlanQueries>();
         services.AddScoped<ILotFillingStore, LotFillingStore>();
         services.AddScoped<ISecurityRepository, SecurityRepository>();
