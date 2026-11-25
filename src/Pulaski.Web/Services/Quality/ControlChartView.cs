@@ -172,22 +172,68 @@ public static class ControlChartView
 
     /// <summary>The points of one of a chart's two plots: the statistic, or (<paramref name="dispersion"/>) its range, standard deviation or moving range.</summary>
     public static IReadOnlyList<PlotPoint> Plot(Text l, ControlChartDto chart, bool dispersion, string? timeZone) =>
-        [.. chart.Points.Select(p => dispersion
-            ? new PlotPoint(p.At, p.Dispersion, p.DispersionCenter, p.DispersionUcl, p.DispersionLcl, p.IsDispersionBeyondLimits, Tip(l, chart, p, true, timeZone))
-            : new PlotPoint(p.At, p.Value, p.Center, p.Ucl, p.Lcl, p.IsBeyondLimits, Tip(l, chart, p, false, timeZone)) { Rules = RunsBroken(p.Rules) })];
+        Plot(l, chart, dispersion ? OwnDispersion(chart.ChartType) : "location", timeZone);
+
+    /// <summary>One view's points (#198): <c>location</c> (with its run rules), <c>range</c>, <c>std_dev</c> or <c>moving_range</c>.</summary>
+    public static IReadOnlyList<PlotPoint> Plot(Text l, ControlChartDto chart, string view, string? timeZone) =>
+        [.. chart.Points.Select(p =>
+        {
+            var (value, center, ucl, lcl, beyond) = Series(chart, p, view);
+            return new PlotPoint(p.At, value, center, ucl, lcl, beyond, Tip(l, chart, p, view, timeZone)) { Rules = view == "location" ? RunsBroken(p.Rules) : [] };
+        })];
+
+    /// <summary>The dispersion a chart was set up with: range for X̄-R, standard deviation for X̄-S, moving range for I-MR.</summary>
+    public static string OwnDispersion(string chartType) => chartType switch
+    {
+        "xbar_s" => "std_dev",
+        "i_mr" => "moving_range",
+        _ => "range",
+    };
+
+    /// <summary>A point's value in a view, with the limits in force for it and whether it is beyond them.</summary>
+    public static (double? Value, double? Center, double? Ucl, double? Lcl, bool Beyond) Series(ControlChartDto chart, ControlChartPointDto p, string view) => view switch
+    {
+        "range" when chart.ChartType == "xbar_r" => (p.Dispersion, p.DispersionCenter, p.DispersionUcl, p.DispersionLcl, p.IsDispersionBeyondLimits),
+        "std_dev" when chart.ChartType == "xbar_s" => (p.Dispersion, p.DispersionCenter, p.DispersionUcl, p.DispersionLcl, p.IsDispersionBeyondLimits),
+        "range" => (p.Range, p.RangeCenter, p.RangeUcl, p.RangeLcl, p.IsRangeBeyondLimits),
+        "std_dev" => (p.StdDev, p.StdDevCenter, p.StdDevUcl, p.StdDevLcl, p.IsStdDevBeyondLimits),
+        "moving_range" => (p.Dispersion, p.DispersionCenter, p.DispersionUcl, p.DispersionLcl, p.IsDispersionBeyondLimits),
+        _ => (p.Value, p.Center, p.Ucl, p.Lcl, p.IsBeyondLimits),
+    };
+
+    /// <summary>A view's name, as its tab and its column say.</summary>
+    public static string ViewName(Text l, string chartType, string view) => (chartType, view) switch
+    {
+        ("xbar_r" or "xbar_s", "location") => l["X̄ chart (means)"],
+        ("i_mr", "location") => l["Individuals"],
+        (_, "range") => l["R chart (ranges)"],
+        (_, "std_dev") => l["S chart (standard deviations)"],
+        (_, "moving_range") => l["Moving range"],
+        _ => l["Chart"],
+    };
+
+    /// <summary>What a view's values are, for its column: the mean, the range, the standard deviation, the moving range, or the chart's statistic.</summary>
+    public static string? ViewNote(Text l, string chartType, string view) => (chartType, view) switch
+    {
+        ("xbar_r", "std_dev") => l["This chart is set up as X̄-R: its standard deviation limits come from the same sigma as its range limits."],
+        ("xbar_s", "range") => l["This chart is set up as X̄-S: its range limits come from the same sigma as its standard deviation limits."],
+        _ => null,
+    };
 
     /// <summary>What hovering a point says: when, the value against its limits, and where it came from.</summary>
-    public static string Tip(Text l, ControlChartDto chart, ControlChartPointDto p, bool dispersion, string? timeZone)
+    public static string Tip(Text l, ControlChartDto chart, ControlChartPointDto p, bool dispersion, string? timeZone) =>
+        Tip(l, chart, p, dispersion ? OwnDispersion(chart.ChartType) : "location", timeZone);
+
+    public static string Tip(Text l, ControlChartDto chart, ControlChartPointDto p, string view, string? timeZone)
     {
-        var value = dispersion ? p.Dispersion : p.Value;
-        var (lcl, ucl, beyond) = dispersion ? (p.DispersionLcl, p.DispersionUcl, p.IsDispersionBeyondLimits) : (p.Lcl, p.Ucl, p.IsBeyondLimits);
+        var (value, _, ucl, lcl, beyond) = Series(chart, p, view);
         var limits = ucl is null
             ? l["no limits in force"]
             : beyond
                 ? l["limits {0} to {1}, beyond them", Number(lcl, chart.Decimals), Number(ucl, chart.Decimals)]
                 : l["limits {0} to {1}", Number(lcl, chart.Decimals), Number(ucl, chart.Decimals)];
         var from = string.Join(" · ", new[] { p.LineCode, p.JobNumber, p.LotLabel }.Where(x => x is not null));
-        var runs = dispersion ? [] : RunsBroken(p.Rules);
+        var runs = view == "location" ? RunsBroken(p.Rules) : [];
         return $"{Display.SiteTime(p.At, timeZone)}: {Number(value, chart.Decimals)} ({limits}){(from.Length > 0 ? $". {from}" : "")}"
             + string.Concat(runs.Select(r => ". " + l["Rule {0}: {1}", r, l[RuleName(r)]]));
     }

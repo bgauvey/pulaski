@@ -968,10 +968,13 @@ public sealed class InventoryTests(DatabaseFixture db)
         var chart = await QueryAsync<Application.Quality.GetControlChartQuery, Contracts.Quality.ControlChartDto>(new Application.Quality.GetControlChartQuery(
             plant.Site, melt.Id, plant.Profile, plant.Line, start.AddMinutes(-1), TestTime.Now.AddMinutes(1)));
         Assert.Equal(("i_mr", "PRF-" + _suffix, "LINE-" + _suffix), (chart.ChartType, chart.MaterialCode, chart.EquipmentCode));
+        Assert.Equal(["location", "moving_range"], chart.Views);
         Assert.Equal(22, chart.Points.Count);
         Assert.All(chart.Points.Take(20), p => Assert.Null(p.Ucl));
         var beyond = chart.Points[20];
         Assert.Equal(20, beyond.Value);
+        Assert.Equal([20d], beyond.Values);
+        Assert.Null(beyond.Range);
         Assert.Equal(16.32, beyond.Ucl!.Value, 1e-9);
         Assert.True(beyond.IsBeyondLimits);
         Assert.True(beyond.IsDispersionBeyondLimits);

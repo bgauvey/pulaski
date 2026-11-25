@@ -66,3 +66,40 @@ public class ControlChartPlotTests
         Assert.Equal("Rule 8", ControlChartView.RuleList(Text.English, [8]));
     }
 }
+
+/// <summary>A chart's views pick their values and limits from the point (#198).</summary>
+public class ControlChartViewsTests
+{
+    [Fact]
+    public void Each_view_plots_its_own_values_against_its_own_limits()
+    {
+        var point = new ControlChartPointDto
+        {
+            At = DateTimeOffset.UnixEpoch,
+            Value = 10,
+            Center = 10,
+            Ucl = 11,
+            Lcl = 9,
+            Dispersion = 2,
+            DispersionCenter = 2.3,
+            DispersionUcl = 4.9,
+            DispersionLcl = 0,
+            Values = [9, 10, 11],
+            Range = 2,
+            StdDev = 1,
+            StdDevCenter = 0.9,
+            StdDevUcl = 1.9,
+            StdDevLcl = 0,
+            Rules = [2],
+        };
+        var chart = new ControlChartDto { ChartType = "xbar_r", Points = [point], Views = ["location", "range", "std_dev"] };
+        Assert.Equal((10d, 11d), (ControlChartView.Plot(Text.English, chart, "location", "UTC")[0].Value!.Value, ControlChartView.Plot(Text.English, chart, "location", "UTC")[0].Ucl!.Value));
+        Assert.Equal((2d, 4.9), (ControlChartView.Plot(Text.English, chart, "range", "UTC")[0].Value!.Value, ControlChartView.Plot(Text.English, chart, "range", "UTC")[0].Ucl!.Value));
+        var s = ControlChartView.Plot(Text.English, chart, "std_dev", "UTC")[0];
+        Assert.Equal((1d, 1.9), (s.Value!.Value, s.Ucl!.Value));
+        Assert.Empty(s.Rules);
+        Assert.Equal("S chart (standard deviations)", ControlChartView.ViewName(Text.English, "xbar_r", "std_dev"));
+        Assert.NotNull(ControlChartView.ViewNote(Text.English, "xbar_r", "std_dev"));
+        Assert.Null(ControlChartView.ViewNote(Text.English, "xbar_r", "range"));
+    }
+}

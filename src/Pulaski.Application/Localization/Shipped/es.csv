@@ -801,6 +801,7 @@ Characteristic,Característica
 Characteristic {0} not found.,Característica {0} no encontrada.
 Characteristics,Características
 Chart,Gráfico
+Chart views,Vistas del gráfico
 Check,Revisar
 Check crew in,Registrar entrada de cuadrilla
 Check every (s),Revisar cada (s)
@@ -1692,6 +1693,7 @@ Indirect,Indirecto
 Indirect labor,Mano de obra indirecta
 Indirect time needs a reason.,El tiempo indirecto necesita un motivo.
 Indirect time needs a reason: choose it.,El tiempo indirecto necesita un motivo: elíjalo.
+Individuals,Valores individuales
 Individuals and moving range,Individuales y rango móvil
 Inherit,Heredar
 Inherit (nothing above: around the clock),Heredar (nada arriba: las 24 horas)
@@ -1855,6 +1857,7 @@ Key,Clave
 Kind,Tipo
 Kind of time,Tipo de tiempo
 Kind: a SCIM connection reads people.,Kind: una conexión SCIM lee personas.
+LCL,LIC
 Lab,Laboratorio
 Label,Etiqueta
 Label format,Formato de etiqueta
@@ -2153,6 +2156,7 @@ Max,Máx.
 May change,Puede cambiar
 Mean,Media
 Measured,Medido
+Measurements,Mediciones
 Merge,Unir
 Merge 1 lot,Unir 1 lote
 Merge in,Unir aquí
@@ -3041,6 +3045,7 @@ Queued,En cola
 "Queued, retrying or held","En cola, reintentando o retenidos"
 Quiet,Sin actividad
 Quiet for {0} minutes.,En silencio desde hace {0} minutos.
+R chart (ranges),Gráfico R (rangos)
 REST (JSON),REST (JSON)
 Raised,Generada
 Raised {0}.,Generada el {0}.
@@ -3305,6 +3310,7 @@ Runs that ended in the last,Corridas que terminaron en los últimos
 Runs under {0} or over {1} {2}/h count as unusual.,Las corridas de menos de {0} o más de {1} {2}/h cuentan como inusuales.
 Runtime,Tiempo productivo
 "Runtime, downtime or planned.","Funcionamiento, paro o planeado."
+S chart (standard deviations),Gráfico S (desviaciones estándar)
 SAP-PRD,SAP-PRD
 "SCIM 2.0 users (RFC 7643) in JSON: a ListResponse, an array of users, or one user.","Usuarios SCIM 2.0 (RFC 7643) en JSON: un ListResponse, un arreglo de usuarios o un usuario."
 SCIM base address,Dirección base de SCIM
@@ -3546,7 +3552,6 @@ Shortfall {0} not found.,Faltante {0} no encontrado.
 Show,Mostrar
 Show all,Mostrar todo
 Show all {0},Mostrar los {0}
-Show as a table,Mostrar como tabla
 Show earlier and ended targets,Mostrar metas anteriores y terminadas
 Show earlier changes too,Mostrar también cambios anteriores
 Show ended ({0}),Mostrar terminadas ({0})
@@ -3899,6 +3904,7 @@ The code said {0},El código decía {0}
 The constraint machine is equipment below {0} that tracks state.,La máquina restricción es equipo debajo de {0} que rastrea estado.
 The crew size must be greater than 0 and at most {0}.,El tamaño de la cuadrilla debe ser mayor que 0 y como máximo {0}.
 The cycle is 1 to {0} days.,El ciclo es de 1 a {0} días.
+The data plotted: {0},Los datos graficados: {0}
 The default document,El documento predeterminado
 The document's own,El propio del documento
 The draft is saved.,El borrador está guardado.
@@ -4186,6 +4192,8 @@ This call is resolved already.,Esta llamada ya está resuelta.
 This capability has already ended.,Esta capacidad ya terminó.
 This capability hasn't started yet; change its dates instead.,Esta capacidad aún no empieza; cambie sus fechas en su lugar.
 This chart has a dispersion chart: give its centre line and upper limit (and a lower limit from 0 to the centre).,Este gráfico tiene un gráfico de dispersión: indique su línea central y su límite superior (y un límite inferior de 0 a la línea central).
+This chart is set up as X̄-R: its standard deviation limits come from the same sigma as its range limits.,Este gráfico está configurado como X̄-R: sus límites de desviación estándar salen de la misma sigma que sus límites de rango.
+This chart is set up as X̄-S: its range limits come from the same sigma as its standard deviation limits.,Este gráfico está configurado como X̄-S: sus límites de rango salen de la misma sigma que sus límites de desviación estándar.
 This device is enrolled already; enrolling again replaces that.,Este dispositivo ya está inscrito; inscribirlo de nuevo lo reemplaza.
 This expected receipt,Esta recepción esperada
 "This is a placeholder, not a job yet.","Esto es un marcador, aún no un trabajo."
@@ -4299,6 +4307,7 @@ Type a material code or name,Escriba un código o nombre de material
 Type your user name or e-mail address.,Escriba su nombre de usuario o correo electrónico.
 Type your user name or the e-mail address Pulaski has for you. We'll send a link to choose a new password.,Escriba su nombre de usuario o el correo electrónico que Pulaski tiene de usted. Le enviaremos un enlace para elegir una contraseña nueva.
 U,U
+UCL,LSC
 Un-dispatch,Deshacer despacho
 Unchanged,Sin cambio
 Uncoded,Sin codificar
@@ -4599,6 +4608,7 @@ X-bar and R,X-barra y R
 X-bar and S,X-barra y S
 Xbar r,X-barra R
 Xbar s,X-barra S
+X̄ chart (means),Gráfico X̄ (medias)
 Yes,Sí
 Yes / no,Sí / no
 Yes or no,Sí o no

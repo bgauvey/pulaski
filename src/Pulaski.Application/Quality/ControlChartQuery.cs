@@ -44,6 +44,12 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
         {
             var sample = bySample[e.Point.SampleId];
             var limit = e.Limit;
+
+            // Both dispersions of a subgroup and their limits (#198): the chart shows whichever view the reader picks.
+            var values = sample.Subgroup.Values ?? [];
+            double? range = values.Count >= 2 ? values.Max() - values.Min() : null;
+            double? stdDev = values.Count >= 2 ? ControlLimits.StdDev(values) : null;
+            var (rangeLimits, stdDevLimits) = limit is null ? (null, null) : DispersionLimits.For(characteristic.ChartType, limit.Limits, e.Point.Size);
             return new ControlChartPointDto
             {
                 SampleId = e.Point.SampleId,
@@ -64,6 +70,17 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
                 IsBeyondLimits = e.IsBeyond,
                 IsDispersionBeyondLimits = e.IsDispersionBeyond,
                 Rules = e.Rules,
+                Values = values,
+                Range = range,
+                StdDev = stdDev,
+                RangeCenter = rangeLimits?.Center,
+                RangeUcl = rangeLimits?.Ucl,
+                RangeLcl = rangeLimits?.Lcl,
+                StdDevCenter = stdDevLimits?.Center,
+                StdDevUcl = stdDevLimits?.Ucl,
+                StdDevLcl = stdDevLimits?.Lcl,
+                IsRangeBeyondLimits = range is { } r && rangeLimits is { } rl && (r > rl.Ucl || r < rl.Lcl),
+                IsStdDevBeyondLimits = stdDev is { } sd && stdDevLimits is { } sl && (sd > sl.Ucl || sd < sl.Lcl),
             };
         }).ToList();
 
@@ -85,6 +102,7 @@ internal sealed class GetControlChartHandler(IQualityReadStore store, TimeProvid
             From = query.From,
             To = query.To,
             Points = plotted,
+            Views = ChartViews.For(characteristic.ChartType),
             Unusable = samples.Count - plotted.Count,
             IsTruncated = truncated,
             MaxPoints = MaxPoints,

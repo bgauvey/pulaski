@@ -800,6 +800,7 @@ Characteristic
 Characteristic {0} not found.
 Characteristics
 Chart
+Chart views
 Check
 Check crew in
 Check every (s)
@@ -1691,6 +1692,7 @@ Indirect
 Indirect labor
 Indirect time needs a reason.
 Indirect time needs a reason: choose it.
+Individuals
 Individuals and moving range
 Inherit
 Inherit (nothing above: around the clock)
@@ -1854,6 +1856,7 @@ Key
 Kind
 Kind of time
 Kind: a SCIM connection reads people.
+LCL
 Lab
 Label
 Label format
@@ -2152,6 +2155,7 @@ May be held at every site: then it can also be given for all sites at once, by s
 May change
 Mean
 Measured
+Measurements
 Merge
 Merge 1 lot
 Merge in
@@ -3040,6 +3044,7 @@ Queued
 Queued, retrying or held
 Quiet
 Quiet for {0} minutes.
+R chart (ranges)
 REST (JSON)
 Raised
 Raised {0}.
@@ -3304,6 +3309,7 @@ Runs that ended in the last
 Runs under {0} or over {1} {2}/h count as unusual.
 Runtime
 Runtime, downtime or planned.
+S chart (standard deviations)
 SAP-PRD
 SCIM 2.0 users (RFC 7643) in JSON: a ListResponse, an array of users, or one user.
 SCIM base address
@@ -3545,7 +3551,6 @@ Shortfall {0} not found.
 Show
 Show all
 Show all {0}
-Show as a table
 Show earlier and ended targets
 Show earlier changes too
 Show ended ({0})
@@ -3898,6 +3903,7 @@ The configuration also sends {0}, which no kind covers; saving keeps only the ki
 The constraint machine is equipment below {0} that tracks state.
 The crew size must be greater than 0 and at most {0}.
 The cycle is 1 to {0} days.
+The data plotted: {0}
 The default document
 The document's own
 The draft is saved.
@@ -4185,6 +4191,8 @@ This call is resolved already.
 This capability has already ended.
 This capability hasn't started yet; change its dates instead.
 This chart has a dispersion chart: give its centre line and upper limit (and a lower limit from 0 to the centre).
+This chart is set up as X̄-R: its standard deviation limits come from the same sigma as its range limits.
+This chart is set up as X̄-S: its range limits come from the same sigma as its standard deviation limits.
 This device is enrolled already; enrolling again replaces that.
 This expected receipt
 This is a placeholder, not a job yet.
@@ -4298,6 +4306,7 @@ Type the ten-character code, such as K7QM2-XW9PD.
 Type your user name or e-mail address.
 Type your user name or the e-mail address Pulaski has for you. We'll send a link to choose a new password.
 U
+UCL
 Un-dispatch
 Unchanged
 Uncoded
@@ -4598,6 +4607,7 @@ X-bar and R
 X-bar and S
 Xbar r
 Xbar s
+X̄ chart (means)
 Yes
 Yes / no
 Yes or no

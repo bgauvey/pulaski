@@ -200,6 +200,9 @@ public sealed record ControlChartDto
     public DateTimeOffset To { get; init; }
     public IReadOnlyList<ControlChartPointDto> Points { get; init; } = [];
 
+    /// <summary>The views the chart can show (#198): <c>location</c> (the default), <c>range</c>, <c>std_dev</c> or <c>moving_range</c>.</summary>
+    public IReadOnlyList<string> Views { get; init; } = [];
+
     /// <summary>Results the chart can't take (a size that doesn't fit, no values), left off.</summary>
     public int Unusable { get; init; }
 
@@ -277,6 +280,22 @@ public sealed record ControlChartPointDto
     public double? DispersionLcl { get; init; }
     public bool IsBeyondLimits { get; init; }
     public bool IsDispersionBeyondLimits { get; init; }
+
+    /// <summary>
+    /// The subgroup's measurements, its range and standard deviation (#198, subgroups of 2 or more), and both views' limits in force for it:
+    /// the chart's own dispersion as stored, the other from the same sigma (<c>DispersionLimits</c>).
+    /// </summary>
+    public IReadOnlyList<double> Values { get; init; } = [];
+    public double? Range { get; init; }
+    public double? StdDev { get; init; }
+    public double? RangeCenter { get; init; }
+    public double? RangeUcl { get; init; }
+    public double? RangeLcl { get; init; }
+    public double? StdDevCenter { get; init; }
+    public double? StdDevUcl { get; init; }
+    public double? StdDevLcl { get; init; }
+    public bool IsRangeBeyondLimits { get; init; }
+    public bool IsStdDevBeyondLimits { get; init; }
 
     /// <summary>The characteristic's run rules this point completes a break of (D-099), rule 1 (beyond the limits) among them.</summary>
     public IReadOnlyList<int> Rules { get; init; } = [];

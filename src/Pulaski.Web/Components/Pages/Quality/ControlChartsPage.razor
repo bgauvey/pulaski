@@ -95,12 +95,27 @@
             <span><svg width="22" height="14"><line x1="0" x2="22" y1="7" y2="7" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="5 4" /></svg>@L["Control limits"]</span>
             <span><svg width="22" height="14"><line x1="0" x2="22" y1="7" y2="7" stroke="var(--text-muted)" stroke-width="1" /></svg>@L["Centre line"]</span>
         </div>
-        <ControlChartPlot Id="spc-main" Points="ControlChartView.Plot(L, chart, false, Zone)" Label="@MainLabel(chart.ChartType)" Decimals="chart.Decimals" TimeZone="@Zone" />
-        @if (dispersion is not null)
-        {
-            <div class="small fw-semibold mt-2">@dispersion</div>
-            <ControlChartPlot Id="spc-dispersion" Points="ControlChartView.Plot(L, chart, true, Zone)" Label="@dispersion" Decimals="chart.Decimals" Height="160" TimeZone="@Zone" />
+        @* Views (#198): X̄, R and S for subgroups, individuals and moving range for single values; the plot and its table follow the view. *@
+        @{
+            var view = chart.Views.Contains(_view) ? _view : "location";
+            var viewName = chart.Views.Count > 1 ? ControlChartView.ViewName(L, chart.ChartType, view) : MainLabel(chart.ChartType);
         }
+        @if (chart.Views.Count > 1)
+        {
+            <nav class="inv-tabs mb-2" aria-label="@L["Chart views"]">
+                @foreach (var v in chart.Views)
+                {
+                    <button type="button" class="inv-tab btn btn-link @(v == view ? "active" : "")" aria-pressed="@(v == view ? "true" : "false")" @onclick="() => _view = v">
+                        @ControlChartView.ViewName(L, chart.ChartType, v)
+                    </button>
+                }
+            </nav>
+        }
+        @if (ControlChartView.ViewNote(L, chart.ChartType, view) is { } note)
+        {
+            <p class="small text-muted mb-1">@note</p>
+        }
+        <ControlChartPlot Id="spc-main" Points="ControlChartView.Plot(L, chart, view, Zone)" Label="@viewName" Decimals="chart.Decimals" TimeZone="@Zone" />
 
         @{ var cap = chart.Capability; }
         <div class="border-top mt-3 pt-2" aria-labelledby="capability-heading">
@@ -147,45 +162,61 @@
             }
         </div>
 
-        <details class="mt-2">
-            <summary class="small">@L["Show as a table"]</summary>
-            <div class="table-panel mt-2" style="max-height: 24rem; overflow-y: auto;">
-                <table class="table table-sm align-middle small mb-0">
-                    <thead>
-                        <tr>
-                            <th>@L["Sampled"]</th><th class="inv-num">@MainLabel(chart.ChartType)</th>@if (dispersion is not null) { <th class="inv-num">@dispersion</th> }
-                            <th class="inv-num">@L["Size"]</th><th class="inv-num">@L["Limits"]</th><th>@L["Line · job · lot"]</th><th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var p in chart.Points)
+        @* The data behind the plot (#198): each result with its measurements, the view's value and the limits in force for it. *@
+        @{ var measured = !(chart.ChartType is "p" or "np" or "c" or "u"); }
+        <h3 class="h6 mt-3 mb-1">@L["The data plotted: {0}", viewName]</h3>
+        <div class="table-panel" style="max-height: 24rem; overflow-y: auto;">
+            <table class="table table-sm align-middle small mb-0">
+                <thead>
+                    <tr>
+                        <th>@L["Sampled"]</th>
+                        @if (measured)
                         {
-                            <tr @key="p.SampleId">
-                                <td>@Display.SiteTime(p.At, Zone)</td>
-                                <td class="inv-num">@ControlChartView.Number(p.Value, chart.Decimals)</td>
-                                @if (dispersion is not null)
+                            <th>@L["Measurements"]</th>
+                        }
+                        <th class="inv-num">@L["Size"]</th>
+                        <th class="inv-num">@viewName</th>
+                        <th class="inv-num">@L["Centre"]</th>
+                        <th class="inv-num">@L["LCL"]</th>
+                        <th class="inv-num">@L["UCL"]</th>
+                        <th>@L["Line · job · lot"]</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in chart.Points.Reverse())
+                    {
+                        var (value, center, ucl, lcl, beyond) = ControlChartView.Series(chart, p, view);
+                        <tr @key="p.SampleId">
+                            <td class="text-nowrap">@Display.SiteTime(p.At, Zone)</td>
+                            @if (measured)
+                            {
+                                <td>@string.Join(" · ", p.Values.Select(v => ControlChartView.Number(v, chart.Decimals)))</td>
+                            }
+                            <td class="inv-num">@p.Size</td>
+                            <td class="inv-num fw-semibold">@ControlChartView.Number(value, chart.Decimals)</td>
+                            <td class="inv-num">@ControlChartView.Number(center, chart.Decimals)</td>
+                            <td class="inv-num">@ControlChartView.Number(lcl, chart.Decimals)</td>
+                            <td class="inv-num">@ControlChartView.Number(ucl, chart.Decimals)</td>
+                            <td>@string.Join(" · ", new[] { p.LineCode, p.JobNumber, p.LotLabel }.Where(x => x is not null))</td>
+                            <td>
+                                @if (beyond)
                                 {
-                                    <td class="inv-num">@ControlChartView.Number(p.Dispersion, chart.Decimals)</td>
+                                    <span class="chip chip-warn">@L["Beyond the limits"]</span>
                                 }
-                                <td class="inv-num">@p.Size</td>
-                                <td class="inv-num">@(p.Ucl is null ? "—" : L["{0} to {1}", ControlChartView.Number(p.Lcl, chart.Decimals), ControlChartView.Number(p.Ucl, chart.Decimals)])</td>
-                                <td>@string.Join(" · ", new[] { p.LineCode, p.JobNumber, p.LotLabel }.Where(x => x is not null))</td>
-                                <td>
-                                    @if (p.IsBeyondLimits || p.IsDispersionBeyondLimits)
-                                    {
-                                        <span class="chip chip-warn">@L["Beyond the limits"]</span>
-                                    }
+                                @if (view == "location")
+                                {
                                     @foreach (var rule in ControlChartView.RunsBroken(p.Rules))
                                     {
                                         <span class="chip chip-warn ms-1" title="@(L[ControlChartView.RuleName(rule)])">@L["Rule {0}", rule]</span>
                                     }
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </details>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </section>
 }
 
@@ -205,6 +236,9 @@
     private DateTime? _from;
     private DateTime? _to;
     private ControlChartDto? _chart;
+
+    // The view shown (#198): kept as the reader moves between charts, falling back to the means where a chart doesn't have it.
+    private string _view = "location";
     private Shown? _shown;
     private DateTimeOffset? _loadedAt;
     private bool _busy;
