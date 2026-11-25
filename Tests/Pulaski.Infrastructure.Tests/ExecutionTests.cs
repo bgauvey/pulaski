@@ -849,6 +849,63 @@ public sealed class ExecutionTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_stop_raises_one_maintenance_request_that_is_started_closed_and_kept()
+    {
+        var plant = await PlantAsync();
+        Guid stopId;
+        DateTimeOffset stopStart;
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            (stopId, stopStart) = await connection.QuerySingleAsync<(Guid, DateTimeOffset)>(
+                "INSERT INTO ts.downtime (started_at, ended_at, equipment_id, packml_state) VALUES (now() - interval '30 minutes', now() - interval '5 minutes', @Extruder, 2) RETURNING id, started_at",
+                new { plant.Extruder });
+        }
+
+        // From the stop: the stop's equipment is used, and asking again while it is open is the same request.
+        var raised = await db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Packer, "high", "Cutter blade chipped", stopId, stopStart));
+        var again = await db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Extruder, null, "Again", stopId, stopStart));
+        Assert.Equal((raised.Id, true), (again.Id, again.AlreadyOpen));
+        Assert.Matches("^MR-[0-9]{6}$", raised.Number);
+
+        // On its own, for a line; never for the site, nor without saying what, nor for a stop that isn't there.
+        var own = await db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Packer, null, "Squeal from the gearbox"));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Site, null, "Roof leak")));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Packer, null, " ")));
+        await Assert.ThrowsAsync<Application.Errors.NotFoundException>(
+            () => db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Packer, null, "Gone", Guid.CreateVersion7(), stopStart)));
+
+        async Task<IReadOnlyList<Contracts.Maintenance.MaintenanceRequestDto>> ListAsync(bool open) =>
+            await QueryAsync<Pulaski.Application.Maintenance.ListMaintenanceRequestsQuery, IReadOnlyList<Contracts.Maintenance.MaintenanceRequestDto>>(
+                new Pulaski.Application.Maintenance.ListMaintenanceRequestsQuery(plant.Site, open, open ? null : TestTime.Now.AddDays(-1), open ? null : TestTime.Now.AddDays(1)));
+
+        var open = await ListAsync(true);
+        Assert.Equal(2, open.Count);
+        var fromStop = open.Single(r => r.Id == raised.Id);
+        Assert.Equal((plant.Extruder, "open", "high", stopStart), (fromStop.EquipmentId, fromStop.Status, fromStop.Priority, fromStop.DowntimeStartedAt!.Value));
+        Assert.NotNull(fromStop.DowntimeEndedAt);
+
+        // Started, then closed with what was done; closing needs that, and a closed request stays closed.
+        await db.SendAsync(new Pulaski.Application.Maintenance.StartMaintenanceRequestCommand(raised.Id));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Maintenance.StartMaintenanceRequestCommand(raised.Id)));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Maintenance.CloseMaintenanceRequestCommand(raised.Id, "")));
+        var closed = await db.SendAsync(new Pulaski.Application.Maintenance.CloseMaintenanceRequestCommand(raised.Id, "Blade replaced"));
+        Assert.Equal("closed", closed.Status);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Maintenance.CloseMaintenanceRequestCommand(raised.Id, "Again")));
+
+        // Closing one nobody started starts it then.
+        await db.SendAsync(new Pulaski.Application.Maintenance.CloseMaintenanceRequestCommand(own.Id, "Greased; it was dry"));
+        Assert.Empty(await ListAsync(true));
+        var history = await ListAsync(false);
+        Assert.Equal(["Blade replaced", "Greased; it was dry"], history.OrderBy(r => r.Number, StringComparer.Ordinal).Select(r => r.Resolution));
+        Assert.All(history, r => Assert.NotNull(r.StartedAt));
+        Assert.Equal(3, await ScalarAsync<int>(
+            "SELECT count(*) FROM evt.event WHERE subject = @Id AND type LIKE 'pulaski.maintenance.request_%'", new { raised.Id }));
+
+        // Once closed, the stop can have a new request.
+        Assert.NotEqual(raised.Id, (await db.SendAsync(new Pulaski.Application.Maintenance.RaiseMaintenanceRequestCommand(plant.Extruder, null, "Back again", stopId, stopStart))).Id);
+    }
+
+    [Fact]
     public async Task A_paused_job_frees_the_line_and_the_site_policy_sets_the_tolerance()
     {
         var plant = await PlantAsync();

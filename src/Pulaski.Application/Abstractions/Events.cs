@@ -242,6 +242,11 @@ public static class EventTypes
     public const string AndonCallRaised = "pulaski.andon.call_raised.v1";
     public const string AndonCallAcknowledged = "pulaski.andon.call_acknowledged.v1";
     public const string AndonCallResolved = "pulaski.andon.call_resolved.v1";
+
+    /// <summary>Maintenance requests (#127, D-115): raised for a line or machine, started and closed.</summary>
+    public const string MaintenanceRequestRaised = "pulaski.maintenance.request_raised.v1";
+    public const string MaintenanceRequestStarted = "pulaski.maintenance.request_started.v1";
+    public const string MaintenanceRequestClosed = "pulaski.maintenance.request_closed.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

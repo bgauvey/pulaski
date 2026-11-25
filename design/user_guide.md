@@ -2398,12 +2398,13 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | --- | --- |
 | **Administrator** | Everything, at every site, including users and roles. |
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; changeover rules; materials; allocating lots to jobs. |
-| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results. |
-| **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off; record quality results. |
+| **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results; request maintenance and start and close requests. |
+| **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off; record quality results; request maintenance. |
 | **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
 | **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, and characteristics and specifications. |
+| **Maintenance** | Start and close maintenance requests, and raise them; code machine stops; answer andon calls; write handover notes. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
 Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
@@ -2422,6 +2423,7 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 | **Operator** | Overview, Work orders (to look at), Floor, Machines, Inventory, Quality, Specifications (to look at). |
 | **Quality** | Overview, Floor, Machines, Inventory, Quality, Materials, Specifications. |
 | **Process engineer** | Equipment, Materials, Processes and BOMs, Specifications, Units, Schedule, Changeovers. |
+| **Maintenance** | Overview, Floor, Machines, Equipment (to look at). |
 
 - **Start page.** After signing in you land on the Overview, or, if you can't see it, the first screen in the menu you can.
 - **A screen you can't see** isn't in the menu, links to it show as plain text and buttons for it are left out. Typing its address shows **Page not found**.
@@ -3137,6 +3139,43 @@ A dash means there is nothing to measure that figure against, such as performanc
 - **The trend** uses the rows of the **By shift** (or **By day**) table. By day adds a day's shifts up from their hours, as the totals do, never averaging percentages. Output reported on a day outside every shift is in the totals but not in the trend.
 - **Worked out when you ask:** up to 31 days nothing is stored, so coding a stop, changing a reason's class or correcting a shift schedule changes the report at once.
 
+### Maintenance requests
+
+A **maintenance request** asks maintenance to look at a line or machine, and keeps track of it until it is closed with what was done.
+An andon call brings someone to the line now; a request is work to do and to follow up.
+
+**Request maintenance for a stop:**
+
+1. On the **Stops** tab, click **Request maintenance** on the stop.
+2. Choose the **Priority** (normal, high or low), say **What needs looking at**, and click **Request**.
+3. Pulaski gives the request a number, such as **MR-000042**, and says it is waiting. **See the Maintenance tab** takes you to it.
+
+**Request maintenance on its own** (a noise, a leak, a guard that is loose):
+
+1. Open the **Maintenance** tab and click **Request maintenance**.
+2. Choose the **Line or machine**, the **Priority**, say what needs looking at, and click **Request**.
+
+**Work a request** (Maintenance and Supervisor roles):
+
+1. On the **Maintenance** tab, the requests not closed are listed, the ones waiting first and high priority first among them.
+2. Click **Start** when you begin: the request shows **In progress** and who is on it.
+3. Click **Close**, say **What was done** (or why nothing was), and click **Close**. It moves to **Closed in the last 7 days**, with who
+   closed it and how long it took.
+
+In detail:
+
+- **One request per stop.** While a stop's request isn't closed, asking again from the same stop gives the same request, and nothing new is
+  recorded. Once it is closed, the stop can have a new one. A stop that is later split or merged keeps its request, which still names it.
+- **Where.** A request is for equipment below an area: a line, a machine, a unit or a feed point that is switched on. Raised from a stop, it
+  is for the stop's machine.
+- **Closing one nobody started** starts it at the same moment, by the same person. A closed request stays closed; nothing is deleted. Each
+  step is recorded in the event log.
+- **Waiting** counts from when it was raised until someone starts it; **Took** counts until it was closed.
+- **Who:** anyone who can see machines sees requests. Raising one needs *Request maintenance* (Operator, Supervisor, Maintenance); starting
+  and closing needs *Work maintenance requests* (Supervisor, Maintenance). The Maintenance role comes with a new Pulaski and is added to
+  an existing one by its upgrade.
+- The tab refreshes itself, as the Andon page does. **Equipment** narrows it to one line or machine.
+
 ---
 
 ## 22. Reference
@@ -3221,6 +3260,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Languages:** alert e-mails are in English, and so is what Pulaski keeps as history: a connection run's summary, why a planning rate was
   put up for review, a delivery's error. Dates and quantities inside a message keep Pulaski's usual form (*2026-11-24*, *1,234.5*), and the
   screens that haven't moved to regional formats yet still write them that way.
+- **Maintenance requests** are on the Machines page only: not yet at the operator station, on the line boards or in the Inbox, and no e-mail
+  alert says one is waiting. Pulaski doesn't send them to a CMMS yet, and nothing raises one by itself (after so many run hours or counts).
 - **Shift handover** shows this shift and the last one; older notes aren't listed on screen, and entries can't be edited once written (add
   another note, or close an item with what was done).
 - **The inbox** gathers five kinds of decision; failed deliveries to the ERP, stops to code and andon calls stay on their own pages. It

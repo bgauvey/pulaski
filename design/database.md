@@ -41,7 +41,7 @@ Orders & scheduling                       Execution & inventory
                                                 lot_attribute(_class, _value), lot_document(_content, _link)
       └─ job ── job_material               labor_session, labor_break, labor_approval
           └─ job_run                       quality_characteristic ─ material_spec(_version, _item), control_limit,
- scheduling_policy, run_standard,             spc_rule, spc_alert, andon_type ─ andon_call,
+ scheduling_policy, run_standard,             spc_rule, spc_alert, andon_type ─ andon_call, maintenance_request,
  alert_subscription ─ alert_sent, handover_entry, language ─ translation,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
@@ -1679,6 +1679,29 @@ The kinds of help a line can call for at a site. Kept on Site settings; switched
 | `sort_order` | integer | no | Order offered. |
 | `is_active` | boolean | no | Offered for new calls. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
+
+### core.maintenance_request — maintenance requests (#127, D-115) · *In use*
+
+A request for maintenance to look at a line or machine, raised on its own or from one of its stops: open → in progress → closed with what was
+done. One not closed per stop (`maintenance_request_stop_uq`); asking again from the stop is the same request. Never deleted. Lives in `core`
+because it changes as it is worked and is referred to, by a CMMS too (D-010). Numbers come from the sequence `core.maintenance_request_no`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid → equipment | no | The equipment's site. |
+| `equipment_id` | uuid → equipment | no | The line or machine (below an area, active when raised). |
+| `number` | text | no | `MR-000042`, unique: what people and a CMMS call it. |
+| `status` | text | no | `open`, `in_progress` or `closed`; `started_at` is set exactly when not open, `closed_at` and `resolution` exactly when closed. |
+| `priority` | text | no | `low`, `normal` (default) or `high`. |
+| `description` | text | no | What needs looking at, at most 1000 characters. |
+| `raised_at`, `raised_by` | timestamptz, text | no | When and by whom (actor as on `evt.event`). |
+| `raised_from` | text | yes | The operator station's code, when raised there. |
+| `downtime_id`, `downtime_started_at` | uuid, timestamptz | yes | The stop it was raised from: `ts.downtime` (id, started_at), no FK (partitioned). Both or neither. |
+| `started_at`, `started_by` | timestamptz, text | yes | When someone started on it; closing one nobody started sets them to the close. |
+| `closed_at`, `closed_by` | timestamptz, text | yes | When and by whom it was closed. |
+| `resolution` | text | yes | What was done, at most 1000 characters; needed to close. |
+| `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
 
 ### core.andon_call — andon calls (#125, D-108) · *In use*
 

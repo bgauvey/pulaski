@@ -3128,6 +3128,29 @@ be one a plant runs itself (add a language, translate, import), not a release pe
   checks (then notes, warnings and draft-check problems), #188 refusals worded in parts and words inside messages, then imports, scans,
   the server's other text and the reconnect banner. With #188 #128 is done.
 
+### D-115 · Maintenance requests (#127) · *Proposed, in pieces*
+
+**Context.** Stops are coded, but nothing asks maintenance to act on them, and nothing keeps track of what maintenance did. Many plants run a
+CMMS (maintenance system); Pulaski shouldn't become one, but a plant without one still needs requests tracked to closure.
+
+**Decision.**
+- **Pulaski keeps the request; a CMMS is optional.** `core.maintenance_request` (in `core`: it changes as it is worked and is referred to, D-010)
+  is raised for a line or machine (equipment below an area, active), on its own or from one of its stops (`downtime_id` + `downtime_started_at`,
+  no FK into the partitioned `ts.downtime`; the stop's machine is used): open → in progress → closed with what was done (`resolution`
+  required). Closing one nobody started starts it at the same moment. Priority low / normal / high. Numbers `MR-000042` from the sequence
+  `core.maintenance_request_no`. Never deleted; each step is an event (`pulaski.maintenance.request_raised/started/closed.v1`).
+- **One open request per stop** (`maintenance_request_stop_uq`): asking again from it returns the same request (`AlreadyOpen`). Raising locks
+  the equipment first (`FOR NO KEY UPDATE`, as ingest and andon). A request on its own may sit beside others for the same machine.
+- **Waiting time and age are worked out on read** (`MaintenanceRules.Waited`/`Age`), never stored.
+- **Permissions** `maintenance.request` (Operator, Supervisor, Maintenance) and `maintenance.work` (Supervisor, Maintenance), both implying
+  `machines.view`; lists need `machines.view`. A **Maintenance** role ships (new databases and by migration 0076): sees the floor, machines and
+  equipment, codes stops, answers andon calls, writes handover notes, raises and works requests.
+- `GET /api/maintenance/requests?siteId=&open=&from=&to=&equipmentId=` (open by default; a period at most 92 days), `POST /api/maintenance/requests`,
+  `/requests/{id}/start`, `/requests/{id}/close`. Machines gets a **Maintenance** tab (`MaintenanceRequests`) and **Request maintenance** on a stop.
+- **Andon stays separate:** a call brings someone now; a request is work tracked to closure.
+- **Pieces:** (a) requests from a stop or the line, statuses, the Machines tab; (b) the operator station, line boards and Inbox; (c) a CMMS feed
+  and its answer back (work order number, closing); (d) preventive triggers by run hours or machine counts.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

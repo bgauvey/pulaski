@@ -35,12 +35,17 @@
     <button type="button" class="inv-tab btn btn-link @(_tab == "stops" ? "active" : "")" @onclick="ShowStopsAsync">
         @L["Stops"] @if (_status?.Sum(m => m.UncodedStops) is > 0 and var n) { <span class="chip chip-warning ms-1">@L["{0} to code", n]</span> }
     </button>
+    <button type="button" class="inv-tab btn btn-link @(_tab == "maintenance" ? "active" : "")" @onclick="@(() => _tab = "maintenance")">@L["Maintenance"]</button>
     <button type="button" class="inv-tab btn btn-link @(_tab == "alarms" ? "active" : "")" @onclick="@(() => _tab = "alarms")">@L["Alarms"]</button>
     <button type="button" class="inv-tab btn btn-link @(_tab == "values" ? "active" : "")" @onclick="@(() => _tab = "values")">@L["Process values"]</button>
     <button type="button" class="inv-tab btn btn-link @(_tab == "reports" ? "active" : "")" @onclick="@(() => _tab = "reports")">@L["Utilization and OEE"]</button>
 </nav>
 
 <ProblemAlert Error="_error" />
+@if (_requested is { } requested && _tab == "stops")
+{
+    <div class="alert alert-success small" role="status">@requested <button type="button" class="btn btn-sm btn-link p-0 align-baseline" @onclick="@(() => (_tab, _requested) = ("maintenance", null))">@L["See the Maintenance tab"]</button></div>
+}
 
 @if (_tab == "status")
 {
@@ -72,6 +77,13 @@
             </section>
         }
         <p class="small text-muted">@L["Updated {0} · refreshes every 5 seconds.", Display.SiteTime(_loadedAt, Sites.Site?.TimeZone)]</p>
+    }
+}
+else if (_tab == "maintenance")
+{
+    @if (Sites.SiteId is { } maintenanceSite)
+    {
+        <MaintenanceRequests @key="maintenanceSite" SiteId="maintenanceSite" TimeZone="@Sites.Site?.TimeZone" Machines="@(_status ?? [])" />
     }
 }
 else if (_tab == "alarms")
@@ -271,6 +283,10 @@ else
                             </td>
                             <td>@s.JobNumber</td>
                             <td class="text-end">
+                                @if (CanRequestMaintenance(s) && _requesting?.Id != s.Id)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary me-1" @onclick="() => StartRequest(s)">@L["Request maintenance"]</button>
+                                }
                                 @if (CanCode(s) && _coding?.Id != s.Id)
                                 {
                                     <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => StartCodingAsync(s)">@(s.OperatorReasonCode is null ? L["Code"] : L["Change"])</button>
@@ -308,6 +324,25 @@ else
                                         <button type="button" class="btn btn-link" @onclick="@(() => _acting = null)">@L["Cancel"]</button>
                                     </form>
                                     <div class="small text-muted mt-1">@ActionHelp(acting)</div>
+                                </td>
+                            </tr>
+                        }
+                        @if (_requesting?.Id == s.Id)
+                        {
+                            <tr @key="(s.Id, 4)">
+                                <td colspan="@Columns">
+                                    <form class="d-flex flex-wrap gap-2 align-items-center" @onsubmit="RequestMaintenanceAsync" @onsubmit:preventDefault>
+                                        <select class="form-select w-auto" aria-label="@L["Priority"]" @bind="_requestPriority">
+                                            @foreach (var (priority, priorityLabel) in MaintenanceRequestView.Priorities)
+                                            {
+                                                <option value="@priority">@L[priorityLabel]</option>
+                                            }
+                                        </select>
+                                        <input class="form-control inv-grow" maxlength="1000" aria-label="@L["What needs looking at"]" placeholder="@L["What needs looking at (needed)"]" @bind="_requestDescription" @bind:event="oninput" />
+                                        <button type="submit" class="btn btn-primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_requestDescription))">@L["Request"]</button>
+                                        <button type="button" class="btn btn-link" @onclick="@(() => _requesting = null)">@L["Cancel"]</button>
+                                    </form>
+                                    <div class="small text-muted mt-1">@L["The request names this stop; maintenance sees it on the Maintenance tab."]</div>
                                 </td>
                             </tr>
                         }
@@ -387,6 +422,48 @@ else
     private bool CanCode(DowntimeDto stop) => !stop.IsMicroStop && stop.SupersededAt is null && User.Can(PermissionCodes.DowntimeCode, Sites.SiteId);
 
     private bool CanAdjustAny => User.Can(PermissionCodes.DowntimeAdjust, Sites.SiteId);
+
+    private DowntimeDto? _requesting;
+    private string _requestPriority = "normal";
+    private string? _requestDescription;
+    private string? _requested;
+
+    private bool CanRequestMaintenance(DowntimeDto stop) => stop.SupersededAt is null && User.Can(PermissionCodes.MaintenanceRequest, Sites.SiteId);
+
+    private void StartRequest(DowntimeDto stop) => (_requesting, _requestPriority, _requestDescription, _requested) = (stop, "normal", null, null);
+
+    private async Task RequestMaintenanceAsync()
+    {
+        if (_requesting is not { } stop || string.IsNullOrWhiteSpace(_requestDescription))
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var raised = await Api.RaiseMaintenanceRequestAsync(new RaiseMaintenanceRequestRequest
+            {
+                EquipmentId = stop.EquipmentId,
+                DowntimeId = stop.Id,
+                DowntimeStartedAt = stop.StartedAt,
+                Priority = _requestPriority,
+                Description = _requestDescription,
+            });
+            _requested = raised.AlreadyOpen
+                ? L["This stop already has {0}, still waiting for maintenance.", raised.Number]
+                : L["{0} is waiting for maintenance.", raised.Number];
+            (_requesting, _error) = (null, null);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
 
     private int Columns => CanAdjustAny ? 9 : 8;
 
