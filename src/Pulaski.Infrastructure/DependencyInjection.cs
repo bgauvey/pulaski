@@ -141,6 +141,7 @@ public static class DependencyInjection
         services.AddSingleton<Application.Quality.ISamplingReadStore, Quality.SamplingQueries>();
         services.AddSingleton<Application.Approvals.IReleaseApprovalReadStore, Approvals.ReleaseApprovalQueries>();
         services.AddSingleton<Application.Quality.INcrReadStore, Quality.NcrQueries>();
+        services.AddSingleton<Application.Inventory.IScanContextReadStore, Inventory.ScanContextQueries>();
         services.AddSingleton<Application.Maintenance.IMaintenancePlanReadStore, Maintenance.MaintenancePlanQueries>();
         services.AddScoped<ILotFillingStore, LotFillingStore>();
         services.AddScoped<ISecurityRepository, SecurityRepository>();

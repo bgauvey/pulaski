@@ -361,6 +361,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
   `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
+- Scan to act (D-125, proposed, in pieces, #135): `GetScanActionsQuery` (`/api/inventory/scan/actions?siteId=&lineId=&code=`) = the scan +
+  `ScanSuggestions` (pure; `IScanContextReadStore`: line + open run + feed points, lot, container, components, shop order jobs) → `ScanActionDto`s
+  (consume / load / move / move_container / start, likely first, each with its permission) confirmed through the existing commands; Scan page
+  **Working at** line per browser (`ScanActionView`); (b) the station.
 - Certificates of analysis (D-123, proposed, #137): `GetCertificateQuery` (released spec items × the lot's results, else its job's lot-less ones;
   `Certificates.Summarize`; warnings, never refused but without a spec) → `IssueCertificateCommand` (`ICertificateRenderer` =
   `CertificatePdfRenderer` in the API, then `AttachLotDocumentCommand` kind `coa`); `/api/lots/{id}/certificate[.pdf]`; lot page panel, ship tick box.

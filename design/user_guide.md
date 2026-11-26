@@ -1882,6 +1882,31 @@ The **Scan** tab is for a barcode scanner that types like a keyboard (most USB a
 - When a second scan is asked for (where to move, or which container), only that kind counts; scanning something else says so.
 - Every movement made by scanning is the same as one made from the lot's or container's page, with the same rules, history and permissions.
 
+#### Scan at a line: one scan, one confirm
+
+At a line, the Scan page offers the likely action straight away.
+
+1. Choose the line under **Working at**, once: this browser keeps it for the site.
+2. Scan. Above the lot, Pulaski shows what fits at that line, the likely action first, ready to **Confirm**:
+   - **A lot** of a material the line's running job uses: **Consume … into …**, for what the job still needs of it (its planned quantity less
+     what it has used, at most what the lot holds). Change the quantity if you used another amount, then **Confirm**.
+   - **A lot** going to the line: **Load … at …** for each of the line's feed points it isn't at, or **Move … to …** when the line itself holds
+     stock and has no feed points.
+   - **A container**: **Move … and what it holds to …** the line or one of its feed points.
+   - **The barcode on a shop order** (order and operation): **Start … on …**, for its job planned on this line, or to a department or area
+     above it.
+3. Other offered actions are under **Or:**; clicking one makes it the one to confirm. The usual buttons stay below.
+
+In detail:
+
+- **Consuming** goes into the open run of the job running on the line. A lot of a material the job doesn't plan to use is still offered, whole,
+  with *"… doesn't plan to use …"*; when the job has used what it planned, the whole lot is offered with *"… has already used what it planned …"*.
+  Held lots aren't offered for consuming. A planned quantity in another unit is converted to the lot's.
+- **Starting** is offered for a dispatched, firmed or paused job. If another job is running on the line it says so, and the start refuses as it
+  would anywhere: stop that one first.
+- Only actions you may take are offered (consuming needs permission to report production; loading and moving, to move lots; starting, to
+  run jobs). **No line: inventory only** scans as before.
+
 ### Send movements to the ERP and certificates to a document system
 
 Pulaski can send every inventory movement (received, moved, consumed, produced, written up or off, shipped, held and so on) to your ERP as it happens, so the ERP's stock follows the floor's, and also production reports, orders and jobs, labor, machine stops and quality results if you choose. A second feed sends certificates and other lot documents, as they are attached and withdrawn, to a document system, with their files. **Configure → Integrations** is where each feed is set up, shows how it is doing, and is where failures are put right.

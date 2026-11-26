@@ -4,19 +4,35 @@
 @inject SiteSelection Sites
 @inject CurrentUser User
 @inject Downloads Downloads
+@inject IJSRuntime JS
 
 @* Scanning (D-059): a barcode scanner types into the box and presses Enter, like a keyboard. Scan a lot, container or location, then
    say what to do with it; a move or pack asks for a second scan of where it goes. Every movement is an ordinary one, with its
    own history. *@
 <PageTitle>@L["Scan · Inventory"] · Pulaski</PageTitle>
 
-<InventoryHeader Title="@L["Scan"]" SiteChanged="Reset">
+<InventoryHeader Title="@L["Scan"]" SiteChanged="OnSiteChangedAsync">
     <Description>
         @L["Scan a lot, container or location label, or type a lot or container number. Then move it, pack it, consume it or receive into it; a move or pack asks you to scan where it goes. A scanner that types like a keyboard works; click the box first."]
     </Description>
 </InventoryHeader>
 
 <ProblemAlert Error="_error" />
+
+@* The line this device works at (#135): a scan here then offers what fits there, ready to confirm. Kept per browser and site. *@
+@if (_lines.Count > 0)
+{
+    <div class="d-flex align-items-center gap-2 mb-2" style="max-width: 36rem">
+        <label class="form-label small mb-0 text-nowrap" for="scan-line">@L["Working at"]</label>
+        <select id="scan-line" class="form-select form-select-sm" value="@(_lineId?.ToString() ?? "")" @onchange="OnLineChangedAsync">
+            <option value="">@L["No line: inventory only"]</option>
+            @foreach (var line in _lines)
+            {
+                <option value="@line.Id">@line.Code · @line.Name</option>
+            }
+        </select>
+    </div>
+}
 
 <form class="mb-3" @onsubmit="ScanAsync" @onsubmit:preventDefault>
     <label class="form-label" for="scan-box">@Prompt</label>
@@ -33,6 +49,39 @@
 @if (_message is not null)
 {
     <div class="drawer-alert @(_messageIsWarning ? "is-warning" : "") mb-3" role="status"><Icon Name="@(_messageIsWarning ? "alert" : "info")" Size="18" /><span>@_message</span></div>
+}
+
+@if (_actions.Count > 0 && _next is null)
+{
+    var likely = _actions[0];
+    <section class="inv-facts mb-3" style="max-width: 36rem" aria-label="@L["What to do"]">
+        <div class="small text-muted">@L["At {0}", _scanLine ?? ""]</div>
+        <div class="fs-5 fw-semibold">@ScanActionView.Title(L, likely)</div>
+        @if (likely.Warning is { } warning)
+        {
+            <div class="drawer-alert is-warning mt-2" role="status"><Icon Name="alert" Size="18" /><span>@L.Of(warning)</span></div>
+        }
+        <form class="d-flex flex-wrap gap-2 align-items-end mt-2" @onsubmit="() => ConfirmAsync(likely)" @onsubmit:preventDefault>
+            @if (likely.Kind == "consume")
+            {
+                <div>
+                    <label class="form-label small" for="scan-qty">@L["Quantity ({0}, {1} in the lot)", likely.UomCode ?? "", InventoryView.Qty(likely.Available ?? 0)]</label>
+                    <input id="scan-qty" class="form-control" inputmode="decimal" type="number" step="any" min="0" @bind="_quantity" />
+                </div>
+            }
+            <ActionButton Type="submit" Class="btn btn-primary btn-lg" Busy="_busy" Reason="@(likely.Kind == "consume" && _quantity is not > 0 ? L["Give a quantity above zero."] : null)">@L["Confirm"]</ActionButton>
+        </form>
+        @if (_actions.Count > 1)
+        {
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <span class="small text-muted align-self-center">@L["Or:"]</span>
+                @foreach (var other in _actions.Skip(1))
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => Prefer(other)">@ScanActionView.Title(L, other)</button>
+                }
+            </div>
+        }
+    </section>
 }
 
 @if (_choices.Count > 0)
@@ -130,6 +179,13 @@
     private ElementReference _box;
     private string? _code;
     private ScanMatchDto? _item;
+
+    // Scanning at a line (#135): the lines, the one this device works at, and what the last scan offers there, the likely one first.
+    private IReadOnlyList<ScanLineOptionDto> _lines = [];
+    private Guid? _lineId;
+    private string? _scanLine;
+    private IReadOnlyList<ScanActionDto> _actions = [];
+    private decimal? _quantity;
     private LotSummaryDto? _lot;
     private ContainerDto? _container;
     private IReadOnlyList<ScanMatchDto> _choices = [];
@@ -149,10 +205,133 @@
 
     private string Prompt => _next?.Prompt ?? (_item is null ? L["Scan or type"] : L["Scan another, or choose what to do"]);
 
-    protected override async Task OnInitializedAsync() => await Sites.EnsureAsync(Api);
+    protected override async Task OnInitializedAsync()
+    {
+        await Sites.EnsureAsync(Api);
+        await LoadLinesAsync();
+    }
+
+    private async Task LoadLinesAsync()
+    {
+        (_lines, _lineId) = ([], null);
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        try
+        {
+            _lines = await Api.ListScanLinesAsync(site);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task OnSiteChangedAsync()
+    {
+        Reset();
+        await LoadLinesAsync();
+        await RestoreLineAsync();
+    }
+
+    private async Task RestoreLineAsync()
+    {
+        if (Sites.SiteId is not { } site || _lines.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var stored = await JS.InvokeAsync<string?>("pulaski.ui.load", ScanActionView.StorageKey(site));
+            _lineId = Guid.TryParse(stored, out var id) && _lines.Any(l => l.Id == id) ? id : null;
+            StateHasChanged();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task OnLineChangedAsync(ChangeEventArgs e)
+    {
+        _lineId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _actions = [];
+        if (Sites.SiteId is { } site)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("pulaski.ui.save", ScanActionView.StorageKey(site), _lineId?.ToString() ?? "");
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+
+    private void Offer(IReadOnlyList<ScanActionDto> actions)
+    {
+        _actions = ScanActionView.Allowed(actions, p => User.Can(p, Sites.SiteId));
+        _quantity = _actions.FirstOrDefault()?.Quantity;
+    }
+
+    // Another offered action becomes the one to confirm.
+    private void Prefer(ScanActionDto action)
+    {
+        _actions = [action, .. _actions.Where(a => a != action)];
+        _quantity = action.Quantity;
+    }
+
+    private async Task ConfirmAsync(ScanActionDto a)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            switch (a.Kind)
+            {
+                case "consume":
+                    await Api.ConsumeLotAsync(a.LotId!.Value, new ConsumeLotRequest { JobId = a.JobId!.Value, Quantity = _quantity ?? 0, UomId = a.UomId!.Value, RunId = a.RunId });
+                    break;
+                case "load":
+                    await Api.LoadLotAsync(a.LotId!.Value, new LoadLotRequest { Version = a.LotVersion ?? 0, FeedPointId = a.ToId!.Value });
+                    break;
+                case "move":
+                    await Api.MoveLotAsync(a.LotId!.Value, new MoveLotRequest { Version = a.LotVersion ?? 0, ToLocationId = a.ToId!.Value });
+                    break;
+                case "move_container":
+                    await Api.MoveContainerAsync(a.ContainerId!.Value, new MoveContainerRequest { Version = a.ContainerVersion ?? 0, ToLocationId = a.ToId!.Value });
+                    break;
+                case "start":
+                    await Api.StartJobAsync(a.JobId!.Value, new StartJobRequest { Version = a.JobVersion ?? 0, LineId = a.ToId });
+                    break;
+            }
+
+            Say(ScanActionView.Done(L, a, _quantity));
+            _actions = [];
+            if (_item is { } item)
+            {
+                await ChooseAsync(item);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            await RestoreLineAsync();
+        }
+
         if (_action is null)
         {
             try
@@ -169,6 +348,7 @@
     private void Reset()
     {
         (_item, _lot, _container, _next, _choices, _message, _code, _scanned) = (null, null, null, null, [], null, null, null);
+        _actions = [];
     }
 
     private void Await(string kind, string prompt)
@@ -187,10 +367,29 @@
         var code = _code.Trim();
         _code = null;
         _choices = [];
+        _actions = [];
         _error = null;
         try
         {
-            var result = await Api.ResolveScanAsync(site, code);
+            ScanResultDto result;
+            if (_next is null && _lineId is { } lineId)
+            {
+                var offered = await Api.GetScanActionsAsync(site, lineId, code);
+                result = offered.Scan;
+                _scanLine = offered.Line?.Code;
+                Offer(offered.Actions);
+                if (result.Status != "found" && _actions.Count > 0)
+                {
+                    // A shop order's barcode: nothing to open, only its job to start.
+                    (_item, _lot, _container, _scanned, _message) = (null, null, null, null, null);
+                    return;
+                }
+            }
+            else
+            {
+                result = await Api.ResolveScanAsync(site, code);
+            }
+
             if (_next is null && result.Status == "receivable")
             {
                 (_item, _lot, _container, _scanned) = (null, null, null, result.Parsed);

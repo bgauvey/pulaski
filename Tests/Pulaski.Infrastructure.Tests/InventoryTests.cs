@@ -1936,6 +1936,47 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_scan_at_the_line_offers_to_consume_what_the_running_job_still_needs_and_to_start_the_shop_orders_next_job()
+    {
+        var plant = await CreatePlantAsync();
+        var lot = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "SC-" + _suffix, 2000m, plant.Kg));
+        var first = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "SC0-" + _suffix, 1000m, plant.Kg));
+        await db.SendAsync(new ConsumeLotCommand(first.LotId, plant.Job, 450m, plant.Kg));
+
+        // The job plans 1450 kg of resin and has used 450: one scan offers the 1000 kg still needed, out of the 2000 kg lot.
+        var scanned = await QueryAsync<GetScanActionsQuery, ScanActionsDto>(new GetScanActionsQuery(plant.Site, plant.Line, "SC-" + _suffix));
+        Assert.Equal(plant.JobNumber, scanned.Line!.RunningJobNumber);
+        var consume = Assert.Single(scanned.Actions);
+        Assert.Equal(("consume", 1000m, 2000m, plant.Job, (string?)null), (consume.Kind, consume.Quantity!.Value, consume.Available!.Value, consume.JobId!.Value, consume.Warning?.Text));
+
+        // One confirm runs it as offered.
+        await db.SendAsync(new ConsumeLotCommand(consume.LotId!.Value, consume.JobId!.Value, consume.Quantity.Value, consume.UomId!.Value, RunId: consume.RunId));
+        var again = await QueryAsync<GetScanActionsQuery, ScanActionsDto>(new GetScanActionsQuery(plant.Site, plant.Line, "SC-" + _suffix));
+        Assert.Equal(1000m, again.Actions.Single().Quantity);
+        Assert.Contains("already used", again.Actions.Single().Warning!.Text, StringComparison.Ordinal);
+        Assert.Equal(lot.LotId, again.Actions.Single().LotId);
+
+        // The shop order barcode: the running job isn't offered; the order's next one on the line is, with a warning to stop this one first.
+        Guid next = Guid.CreateVersion7();
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO core.job (id, site_id, work_order_id, job_number, job_type, equipment_id, material_id, planned_qty, uom_id, status)
+                SELECT @Next, site_id, work_order_id, job_number || '-B', job_type, equipment_id, material_id, planned_qty, uom_id, 'firmed' FROM core.job WHERE id = @Job
+                """, new { Next = next, plant.Job });
+        }
+
+        var order = await QueryAsync<GetScanActionsQuery, ScanActionsDto>(new GetScanActionsQuery(plant.Site, plant.Line, $"WO-{_suffix}|OP-NA"));
+        var start = Assert.Single(order.Actions);
+        Assert.Equal(("start", next, plant.Line), (start.Kind, start.JobId!.Value, start.ToId!.Value));
+        Assert.Contains("stop it first", start.Warning!.Text, StringComparison.Ordinal);
+
+        // Without a line, only the scan itself.
+        Assert.Empty((await QueryAsync<GetScanActionsQuery, ScanActionsDto>(new GetScanActionsQuery(plant.Site, null, "SC-" + _suffix))).Actions);
+    }
+
+    [Fact]
     public async Task Results_are_checked_against_the_released_specification_hold_lots_and_rejected_lots_move_good_to_scrap()
     {
         var plant = await CreatePlantAsync();

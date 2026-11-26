@@ -586,6 +586,7 @@ At the line,En la línea
 At the start of the run,Al inicio de la corrida
 "At the start of the run, then {0}","Al inicio de la corrida, luego {0}"
 At the top,En la parte superior
+At {0},En {0}
 At {0} it goes into lot {1} ({2}).,En {0} va al lote {1} ({2}).
 At {0} it starts a new lot.,En {0} inicia un lote nuevo.
 "At {0}, as this version needs.","En {0}, como necesita esta versión."
@@ -1042,6 +1043,7 @@ Configuration,Configuración
 Configure,Configurar
 Configure → Users,Configurar → Usuarios
 Configured,Configurado
+Confirm,Confirmar
 Confirm cancellation,Confirmar cancelación
 Confirm {0},Confirmar {0}
 Confirmed,Confirmado
@@ -1058,6 +1060,7 @@ Consumable,Consumible
 Consume,Consumir
 Consume a lot,Consumir un lote
 Consume it,Consumirlo
+Consume {0} {1} of {2} into {3},Consumir {0} {1} de {2} en {3}
 Consumed,Consumido
 "Consumed automatically, not declared by hand","Consumido automáticamente, no declarado a mano"
 Consumed by,Consumido por
@@ -1554,6 +1557,7 @@ GS1-128,GS1-128
 GTIN,GTIN
 Gantt,Gantt
 Genealogy,Genealogía
+Give a quantity above zero.,Dé una cantidad mayor que cero.
 Give at least one target.,Indique al menos una meta.
 "Give both BeforeAt and BeforeId, or neither.","Dé BeforeAt y BeforeId, o ninguno."
 "Give both external_system and external_key, or neither.","Dé external_system y external_key, o ninguno."
@@ -2053,6 +2057,7 @@ Live · updated {0} site time,En vivo · actualizado {0} hora del sitio
 Load,Cargar
 Load at a feed point,Cargar en un punto de alimentación
 Load more,Cargar más
+Load {0} at {1},Cargar {0} en {1}
 Loaded,Cargado
 Loaded now,Cargado ahora
 Loading current-shift OEE…,Cargando el OEE del turno actual…
@@ -2275,6 +2280,8 @@ Move what is in {0} out first: {1}.,Saque primero lo que hay en {0}: {1}.
 Move with what it holds,Mover con lo que contiene
 Move {0} and its lot to…,Mover {0} y su lote a…
 Move {0} and its lots ({1}) to…,Mover {0} y sus lotes ({1}) a…
+Move {0} and what it holds to {1},Mover {0} y lo que contiene a {1}
+Move {0} to {1},Mover {0} a {1}
 Moved,Movido
 Moved since the count started,Movido desde que empezó el conteo
 Movement,Movimiento
@@ -2454,6 +2461,7 @@ No line in {0} can run {1}.,Ninguna línea en {0} puede ejecutar {1}.
 No line in {0} is set up to run material {1}; add a capability for it first.,Ninguna línea de {0} está configurada para ejecutar el material {1}; agregue primero una capacidad para él.
 No line or department yet,Aún no hay línea ni departamento
 No line reports its state,Ninguna línea reporta su estado
+No line: inventory only,Sin línea: solo inventario
 No lines,No hay líneas
 No lines in this site yet.,Aún no hay líneas en este sitio.
 No lines in {0} yet.,Aún no hay líneas en {0}.
@@ -2857,6 +2865,7 @@ Operator,Operador
 Optional,Opcional
 Optional notes about this equipment.,Notas opcionales sobre este equipo.
 Or with a Pulaski password:,O con una contraseña de Pulaski:
+Or:,O bien:
 Order,Orden
 Order creation pre-selects this process for {0}.,La creación de órdenes preselecciona este proceso para {0}.
 Order number,Número de orden
@@ -3146,6 +3155,7 @@ Quantity,Cantidad
 Quantity '{0}' isn't a number.,La cantidad '{0}' no es un número.
 Quantity (optional),Cantidad (opcional)
 Quantity ({0}),Cantidad ({0})
+"Quantity ({0}, {1} in the lot)","Cantidad ({0}, {1} en el lote)"
 Quantity and share of output,Cantidad y porcentaje de la producción
 Quantity to place,Cantidad por colocar
 "Quantity, {0}","Cantidad, {0}"
@@ -3805,6 +3815,7 @@ Start it (,Inícielo (
 Start paid break,Iniciar descanso pagado
 Start version {0},Empezar la versión {0}
 Start {0},Iniciar {0}
+Start {0} on {1},Iniciar {0} en {1}
 "Start, enter, post and cancel stock counts","Iniciar, ingresar, contabilizar y cancelar conteos de existencia"
 "Start, pause, resume and complete jobs","Iniciar, pausar, reanudar y completar trabajos"
 StartTime is missing (or a SegmentRequirement's EarliestStartTime); it is the order's planned start.,Falta StartTime (o el EarliestStartTime de un SegmentRequirement); es el inicio planeado de la orden.
@@ -3973,6 +3984,7 @@ That job isn't on this station's line; act on it from the Floor.,Ese trabajo no 
 That job isn't running on this station's line; report it from the Floor.,Ese trabajo no se está ejecutando en la línea de esta estación; repórtelo desde Piso.
 That job number is already used in this site.,Ese número de trabajo ya se usa en este sitio.
 That line doesn't exist.,Esa línea no existe.
+That line isn't at the site.,Esa línea no está en el sitio.
 That link would loop back; a process must flow one way.,Ese vínculo volvería hacia atrás; un proceso debe fluir en un solo sentido.
 That lot number is already used for this material in this site.,Ese número de lote ya se usa para este material en este sitio.
 That lot was made by a production report on {0}. Reverse the report on the job's page: it takes back every lot it made and its counts.,Ese lote lo hizo un reporte de producción en {0}. Revierta el reporte en la página del trabajo: retira cada lote que hizo y sus cuentas.
@@ -4666,6 +4678,7 @@ What people call it.,Cómo lo llama la gente.
 What that undo takes back has changed since it was checked. Check it again.,Lo que retira ese deshacer cambió desde que se revisó. Revíselo de nuevo.
 "What the open jobs still need of each component, against the stock available now and the deliveries expected. Jobs take stock in the order they are needed, then what is due by then, so a shortfall shows on the first job it reaches.","Lo que los trabajos abiertos aún necesitan de cada componente, contra la existencia disponible ahora y las entregas esperadas. Los trabajos toman existencia en el orden en que la necesitan, luego lo que llega para entonces, así que un faltante aparece en el primer trabajo al que llega."
 What the time is for,Para qué es el tiempo
+What to do,Qué hacer
 "What to fetch from the stores for open jobs' allocations, by location; the equipment chosen below narrows it","Qué traer de los almacenes para las asignaciones de los trabajos abiertos, por ubicación; el equipo elegido abajo lo acota"
 What uses it,Qué lo usa
 "What waits for you to decide, at your sites. Open an item to decide it where it is kept; it leaves the inbox once decided.","Lo que espera su decisión, en sus sitios. Abra un elemento para decidirlo donde se mantiene; sale de pendientes una vez decidido."
@@ -4782,6 +4795,7 @@ Work out limits from results,Calcular límites desde resultados
 "Work out the rate {0} really made {1} at: good output ÷ run time over its ended runs, or ÷ running time with the stops inside the runs taken out. Short runs, runs with no good output and unusually slow or fast runs are left out. Nothing changes until you accept it.","Calcule la tasa a la que {0} realmente hizo {1}: producción buena ÷ tiempo de ejecución en sus corridas terminadas, o ÷ tiempo en marcha con los paros dentro de las corridas excluidos. Las corridas cortas, las que no tienen producción buena y las inusualmente lentas o rápidas se excluyen. Nada cambia hasta que la acepte."
 Work unit,Unidad de trabajo
 Worked out from,Calculada a partir de
+Working at,Trabajando en
 Working it out…,Calculando…
 Working out where it lands…,Calculando dónde queda…
 Working time,Tiempo de trabajo
@@ -5312,6 +5326,7 @@ yes,sí
 "{0} doesn't normally run that day, so this adds it as an extra shift.","{0} normalmente no se trabaja ese día, así que esto lo agrega como turno extra."
 {0} doesn't offer that line.,{0} no ofrece esa línea.
 "{0} doesn't plan to consume that material, and it isn't an approved alternate on its BOM.","{0} no planea consumir ese material, y no es un alterno aprobado en su lista de materiales."
+{0} doesn't plan to use {1}.,{0} no tiene previsto usar {1}.
 "{0} doesn't run jobs, so nothing is reported there.","{0} no ejecuta trabajos, así que allí no se reporta nada."
 {0} doesn't run jobs; a capability goes on an active line that runs jobs.,{0} no ejecuta trabajos; una capacidad va en una línea activa que ejecute trabajos.
 {0} doesn't run jobs; a capability goes on an active line that runs jobs. A department gets its lines' capabilities.,{0} no ejecuta trabajos; una capacidad va en una línea activa que ejecute trabajos. Un departamento recibe las capacidades de sus líneas.
@@ -5344,6 +5359,7 @@ yes,sí
 {0} has a draft already.,{0} ya tiene un borrador.
 "{0} has a new temporary password, to change when they sign in.","{0} tiene una contraseña temporal nueva, que cambiará al iniciar sesión."
 "{0} has a {1} counting from {2}, after {3}. {4} can count from earlier only when it is the lot's latest movement: what happened later says where the lot was and what status it had.","{0} tiene un {1} que cuenta desde {2}, después de {3}. {4} puede contar desde antes solo cuando es el último movimiento del lote: lo que pasó después dice dónde estaba el lote y qué estado tenía."
+{0} has already used what it planned of {1}.,{0} ya usó lo previsto de {1}.
 "{0} has been used ({1}), so it stays a reason: what it recorded must keep its meaning. Make a new group and move {2} into it.","{0} se ha usado ({1}), así que sigue siendo un motivo: lo que registró debe conservar su significado. Cree un grupo nuevo y mueva {2} a él."
 {0} has changed since the merge ({1}); reverse that first.,{0} cambió desde la unión ({1}); revierta eso primero.
 {0} has changed since the split ({1}); reverse that first.,{0} cambió desde la división ({1}); revierta eso primero.
@@ -5487,6 +5503,7 @@ yes,sí
 {0} is retired; it can't be packed.,{0} está retirado; no se puede empacar.
 {0} is retired; it can't be taken out.,{0} está retirado; no se puede sacar.
 {0} is retired; nothing can be packed into it.,{0} está retirado; no se puede empacar nada en él.
+{0} is running on {1}: stop it first.,{0} está en marcha en {1}: deténgalo primero.
 {0} is running on {1}; pause or complete it first.,{0} se ejecuta en {1}; páuselo o termínelo primero.
 {0} is running.,{0} está en ejecución.
 "{0} is sampled from {1} {2}, from now on.","{0} se muestrea desde {1} {2}, a partir de ahora."
@@ -5684,6 +5701,7 @@ yes,sí
 {0} site time,{0} hora del sitio
 {0} skipped.,Se omitió {0}.
 {0} split off {1} into {2}.,{0} separado de {1} en {2}.
+{0} started on {1}.,{0} iniciado en {1}.
 {0} started.,{0} iniciado.
 {0} starts no earlier than {1}.,{0} empieza no antes de {1}.
 {0} stays at its site; register another terminal for another site.,{0} se queda en su sitio; registre otra terminal para otro sitio.
@@ -5754,6 +5772,7 @@ yes,sí
 {0} {1} isn't a batch: every batch is exactly {2} {3}. A short batch is reported as a partial batch when the line stops.,{0} {1} no es una tanda: cada tanda es exactamente {2} {3}. Una tanda corta se reporta como tanda parcial cuando la línea se detiene.
 {0} {1} of a {2} {3} batch,{0} {1} de una tanda de {2} {3}
 {0} {1} of {2},{0} {1} de {2}
+{0} {1} of {2} consumed into {3}.,{0} {1} de {2} consumidos en {3}.
 "{0} {1} of {2} is more than planned: the components allow {3} {4} for what the job has made, with the site's {5}% tolerance. It was recorded; check it.","{0} {1} de {2} es más de lo planeado: los componentes permiten {3} {4} para lo que el trabajo ha hecho, con la tolerancia del sitio de {5}%. Se registró; revíselo."
 {0} {1} of {2} is reserved for {3}; release or move their allocation first.,{0} {1} de {2} está reservado para {3}; libere o mueva primero su asignación.
 {0} · every site,{0} · todos los sitios

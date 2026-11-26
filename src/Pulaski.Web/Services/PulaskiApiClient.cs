@@ -794,6 +794,13 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> SetFlowAsync(Guid locationId, SetFlowRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/locations/{locationId}/flow", request, ct);
 
+    /// <summary>What a scan at a line can do in one step (#135).</summary>
+    public Task<ScanActionsDto> GetScanActionsAsync(Guid siteId, Guid? lineId, string code, CancellationToken ct = default) =>
+        GetAsync<ScanActionsDto>($"api/inventory/scan/actions?siteId={siteId}{(lineId is { } l ? $"&lineId={l}" : "")}&code={Uri.EscapeDataString(code)}", ct);
+
+    public Task<IReadOnlyList<ScanLineOptionDto>> ListScanLinesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ScanLineOptionDto>>($"api/inventory/scan/lines?siteId={siteId}", ct);
+
     public Task<LotTransactionResponse> LoadLotAsync(Guid lotId, LoadLotRequest request, CancellationToken ct = default) =>
         SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{lotId}/load", request, ct);
 
