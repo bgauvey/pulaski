@@ -3382,7 +3382,12 @@ none open, a disposition use as is / rework / scrap / return to supplier / not a
 permissions**, `ncr.raise` (Quality, Supervisor, Operator) and `ncr.manage` (Quality), both implying `quality.view`. Owners are active users
 with a role at the site. Every change locks the NCR; edits, investigation and close carry the xmin version. `/api/ncrs`; Quality →
 Nonconformances, the NCR page, the lot page's panel (found from the lot), **Raise an NCR** on failing results and SPC alerts.
-(b) overdue actions in the Inbox and e-mail alerts, raising from runs and checklists, and carrying out the disposition on the lots.
+(b) Raised also from a run (source `run`: the run and the lots it made) and from a failed or rejected checklist answer on the job page; lots
+linked later by number (`LinkNcrLotCommand`, every material's lot of it at the site). Inbox kind `ncr_action`: the caller's own open actions
+whatever their role, and overdue ones where they hold `ncr.manage`. Alert kind `ncr_action_overdue` (quality view, whole site only): once an
+open action passes its due day at the site's midnight. Carrying out the disposition stays with the lots' own commands, one lot at a time from
+the closed NCR (`NcrView.NextStep`: use as is → release a held lot; scrap → hold, then reject = write off good → scrap; rework / return →
+hold), each noted with the NCR number, so their permissions and checks apply unchanged; there is no NCR command that moves stock.
 
 ## Application architecture
 

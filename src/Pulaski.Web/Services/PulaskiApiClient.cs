@@ -1452,6 +1452,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateNcrAsync(Guid id, UpdateNcrRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/ncrs/{id}", request, ct);
 
+    public Task<VersionResponse> LinkNcrLotAsync(Guid id, LinkNcrLotRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/ncrs/{id}/lots", request, ct);
+
     public Task<VersionResponse> InvestigateNcrAsync(Guid id, InvestigateNcrRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/ncrs/{id}/investigation", request, ct);
 

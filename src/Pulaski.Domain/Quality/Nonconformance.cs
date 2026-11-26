@@ -31,7 +31,10 @@ public static class NcrSources
     public const string Checklist = "checklist";
     public const string Complaint = "complaint";
 
-    public static IReadOnlyList<string> All { get; } = [Manual, LotHold, LotRejection, QualityResult, SpcAlert, Checklist, Complaint];
+    /// <summary>A run (#133b): the job's site, the run and the lots it made.</summary>
+    public const string Run = "run";
+
+    public static IReadOnlyList<string> All { get; } = [Manual, LotHold, LotRejection, QualityResult, SpcAlert, Checklist, Complaint, Run];
 }
 
 /// <summary>What becomes of the lots concerned, decided on closing.</summary>

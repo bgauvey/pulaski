@@ -21,6 +21,9 @@ public interface INcrRepository
     /// <summary>Those of <paramref name="lotIds"/> at <paramref name="siteId"/>.</summary>
     Task<IReadOnlyList<Guid>> LotsAtAsync(Guid siteId, IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken);
 
+    /// <summary>The lots at <paramref name="siteId"/> numbered <paramref name="lotNumber"/> (one per material).</summary>
+    Task<IReadOnlyList<Guid>> FindLotsAsync(Guid siteId, string lotNumber, CancellationToken cancellationToken);
+
     Task<bool> IsSiteUserAsync(Guid userId, Guid siteId, CancellationToken cancellationToken);
 
     Task InsertAsync(Nonconformance ncr, CancellationToken cancellationToken);
@@ -60,6 +63,9 @@ public sealed record RaiseNcrCommand(
 
 public sealed record UpdateNcrCommand(Guid Id, long ExpectedVersion, string? Title, string? Description, string? Severity, Guid? OwnerUserId, IReadOnlyList<Guid> AddLotIds)
     : ICommand<VersionResponse>;
+
+/// <summary>Links a lot found later to an NCR that isn't closed (#133b), by its number at the NCR's site.</summary>
+public sealed record LinkNcrLotCommand(Guid Id, string? LotNumber) : ICommand<VersionResponse>;
 
 public sealed record InvestigateNcrCommand(Guid Id, long ExpectedVersion, string? RootCause, IReadOnlyList<string> Whys, bool Complete) : ICommand<VersionResponse>;
 
@@ -139,6 +145,34 @@ internal sealed class UpdateNcrHandler(IUnitOfWork unitOfWork, INcrRepository nc
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(version);
+    }
+}
+
+internal sealed class LinkNcrLotHandler(IUnitOfWork unitOfWork, INcrRepository ncrs, IEventLog eventLog, IEventFactory events)
+    : ICommandHandler<LinkNcrLotCommand, VersionResponse>
+{
+    public async Task<VersionResponse> HandleAsync(LinkNcrLotCommand command, CancellationToken cancellationToken)
+    {
+        var number = (command.LotNumber ?? "").Trim();
+        if (number.Length == 0)
+        {
+            throw ValidationException.Field("LotNumber", $"Give the lot number.");
+        }
+
+        await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
+        var ncr = await NcrLocks.LockAsync(ncrs, command.Id, null, cancellationToken);
+        ncr.EnsureOpen();
+        var lots = await ncrs.FindLotsAsync(ncr.SiteId, number, cancellationToken);
+        if (lots.Count == 0)
+        {
+            throw new NotFoundException($"There is no lot {number} at the NCR's site.");
+        }
+
+        var envelope = events.Create(EventTypes.NcrChanged, "nonconformance", ncr.Id, new { AddedLots = lots, LotNumber = number });
+        await ncrs.LinkAsync(ncr.Id, lots, [], cancellationToken);
+        await eventLog.AppendAsync(envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(0);
     }
 }
 

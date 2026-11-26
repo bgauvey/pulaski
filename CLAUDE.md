@@ -368,6 +368,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   acting → closed; root cause + ≤ 5 whys; close needs acting, ≥ 1 action, none open, disposition + note) raised from anything that flags
   (`NcrSources`; `INcrRepository.SourceAsync` gives the site + lots/runs → `nonconformance_lot`/`_run`) or on its own; `nonconformance_action`
   corrective/preventive, owner + due, finished by its owner or `ncr.manage`. `ncr.raise` / `ncr.manage`; `/api/ncrs`; Quality → Nonconformances, lot panel.
+  (b) source `run`, checklist answers on the job page, `LinkNcrLotCommand`; Inbox kind `ncr_action` (own + overdue where managing); alert kind
+  `ncr_action_overdue`; disposition carried out by the lots' own commands from the closed NCR (`NcrDispositionPanel`, `NcrView.NextStep`).
 - Sampling plans (D-121, proposed, in pieces, #136): `SpecItem.Sampling` (`SamplingPlan`: at start and/or every N h or N units, grace) in the
   spec definition jsonb; `SamplingSchedule.Evaluate` (pure) over open runs, processed output and the run's results → `GetDueSamplesQuery`
   (`/api/quality/samples-due?siteId=`, `/api/jobs/{id}/samples-due`); job page **Samples**, Floor card flags. (b) `StationDto.Samples` +

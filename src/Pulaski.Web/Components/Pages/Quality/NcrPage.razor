@@ -90,6 +90,16 @@
                 <li @key="run.RunId">@L["Job {0}, run {1} on {2}", run.JobNumber, run.RunNo, run.LineCode]</li>
             }
         </ul>
+        @if (manage)
+        {
+            <form class="d-flex gap-2 align-items-end" @onsubmit="LinkLotAsync" @onsubmit:preventDefault aria-label="@L["Add a lot"]">
+                <div>
+                    <label class="form-label small fw-semibold" for="ncr-lot-number">@L["Add a lot by its number"]</label>
+                    <input id="ncr-lot-number" class="form-control form-control-sm" maxlength="100" @bind="_lotNumber" @bind:event="oninput" />
+                </div>
+                <ActionButton Type="submit" Class="btn btn-sm btn-outline-secondary" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_lotNumber) ? L["Give the lot number."] : null)">@L["Add"]</ActionButton>
+            </form>
+        }
     </section>
 
     <section class="inv-section" aria-labelledby="ncr-investigation">
@@ -226,6 +236,11 @@
         {
             <p class="small">@L["Closed {0} by {1}. Disposition: {2}.", Display.SiteTime(n.ClosedAt, n.SiteTimeZone), n.ClosedByName ?? "—", L.Label(n.Disposition ?? "")]</p>
             <p class="small" style="white-space: pre-line">@n.ClosingNote</p>
+            @if (n.Lots.Count > 0 && n.Disposition is not "not_applicable")
+            {
+                <h3 class="h6">@L["Carry out the disposition"]</h3>
+                <NcrDispositionPanel @key="n.Version" Ncr="n" Changed="LoadAsync" />
+            }
         }
         else if (manage)
         {
@@ -279,6 +294,7 @@ else if (_error is null)
     private Guid? _finishing;
     private string? _finishNote;
     private string? _disposition;
+    private string? _lotNumber;
     private string? _closingNote;
     private bool _busy;
     private string? _message;
@@ -336,6 +352,13 @@ else if (_error is null)
         await Api.UpdateNcrAsync(Id, new UpdateNcrRequest { Version = _ncr!.Version, Title = _title, Description = _description, Severity = _severity, OwnerUserId = Owner(_owner) });
         _editing = false;
         return L["Saved."];
+    });
+
+    private Task LinkLotAsync() => RunAsync(async () =>
+    {
+        await Api.LinkNcrLotAsync(Id, new LinkNcrLotRequest { LotNumber = _lotNumber });
+        _lotNumber = null;
+        return L["The lot is linked."];
     });
 
     private Task InvestigateAsync(bool complete) => RunAsync(async () =>

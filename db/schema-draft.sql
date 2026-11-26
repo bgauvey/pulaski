@@ -2550,7 +2550,7 @@ CREATE TABLE core.nonconformance (
     description     text NOT NULL DEFAULT '',
     severity        text NOT NULL CONSTRAINT nonconformance_severity_ck CHECK (severity IN ('minor', 'major', 'critical')),
     status          text NOT NULL DEFAULT 'open' CONSTRAINT nonconformance_status_ck CHECK (status IN ('open', 'investigating', 'acting', 'closed')),
-    source_kind     text NOT NULL CONSTRAINT nonconformance_source_ck CHECK (source_kind IN ('manual', 'lot_hold', 'lot_rejection', 'quality_result', 'spc_alert', 'checklist', 'complaint')),
+    source_kind     text NOT NULL CONSTRAINT nonconformance_source_ck CHECK (source_kind IN ('manual', 'lot_hold', 'lot_rejection', 'quality_result', 'spc_alert', 'checklist', 'complaint', 'run')),
     source_id       uuid,                                               -- the lot, result, alert or checklist answer (no FK: by kind)
     source_at       timestamptz,                                        -- a result's sampled time (its partition key)
     owner_user_id   uuid REFERENCES sec.app_user(id),
@@ -2585,6 +2585,7 @@ CREATE TABLE core.nonconformance_action (
 );
 CREATE INDEX nonconformance_action_ncr_ix ON core.nonconformance_action (ncr_id);
 CREATE INDEX nonconformance_action_owner_ix ON core.nonconformance_action (owner_user_id) WHERE status = 'open';
+CREATE INDEX nonconformance_action_due_ix ON core.nonconformance_action (due_on) WHERE status = 'open';
 
 CREATE TABLE core.nonconformance_lot (
     ncr_id          uuid NOT NULL REFERENCES core.nonconformance(id),
@@ -2720,7 +2721,7 @@ CREATE TABLE core.alert_subscription (
     site_id             uuid NOT NULL REFERENCES core.equipment(id),
     equipment_id        uuid REFERENCES core.equipment(id),         -- only what happens at or below it; null = the whole site
     kind                text NOT NULL CONSTRAINT alert_subscription_kind_ck
-                            CHECK (kind IN ('long_stop', 'uncoded_stop', 'andon_escalated', 'spc_alert', 'lot_hold', 'shortage')),
+                            CHECK (kind IN ('long_stop', 'uncoded_stop', 'andon_escalated', 'spc_alert', 'lot_hold', 'shortage', 'ncr_action_overdue')),
     minutes             integer CONSTRAINT alert_subscription_minutes_ck CHECK (minutes IS NULL OR minutes BETWEEN 1 AND 10080),
     is_active           boolean NOT NULL DEFAULT true,
     created_at          timestamptz NOT NULL DEFAULT now(),
@@ -3014,7 +3015,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0081_checklist_sign_off'),
     ('0082_system_health'),
     ('0083_release_approval'),
-    ('0084_nonconformance');
+    ('0084_nonconformance'),
+    ('0085_nonconformance_follow_up');
 
 -- =====================================================================
 -- 17. SEED DATA

@@ -46,7 +46,8 @@ public sealed record NcrDto
     public IReadOnlyList<NcrActionDto> Actions { get; init; } = [];
 }
 
-public sealed record NcrLotDto(Guid LotId, string Label, string MaterialCode, string Status);
+/// <summary>A lot an NCR touches, with what is left of it, so its disposition can be carried out (#133b).</summary>
+public sealed record NcrLotDto(Guid LotId, string Label, string MaterialCode, string Status, decimal Quantity, string UomCode, long Version);
 
 public sealed record NcrRunDto(Guid RunId, string JobNumber, int RunNo, string LineCode);
 
@@ -122,3 +123,9 @@ public sealed record CloseNcrRequest
 }
 
 public sealed record NcrCreatedResponse(Guid Id, string Number);
+
+/// <summary>Links a lot of the NCR's site by its number (#133b).</summary>
+public sealed record LinkNcrLotRequest
+{
+    public string? LotNumber { get; init; }
+}

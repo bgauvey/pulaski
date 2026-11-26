@@ -19,6 +19,8 @@ public sealed class InMemoryNcrs : INcrRepository, INcrReadStore
     public Task<IReadOnlyList<Guid>> LotsAtAsync(Guid siteId, IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<Guid>>([.. lotIds]);
 
+    public Task<IReadOnlyList<Guid>> FindLotsAsync(Guid siteId, string lotNumber, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Guid>>([]);
+
     public Task<bool> IsSiteUserAsync(Guid userId, Guid siteId, CancellationToken cancellationToken) => Task.FromResult(true);
 
     public Task InsertAsync(Nonconformance ncr, CancellationToken cancellationToken)

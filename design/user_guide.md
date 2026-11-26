@@ -160,14 +160,17 @@ In detail:
 
 1. Click **Inbox** at the top of the menu; its number says how many items wait.
 2. Items are grouped by what they are, oldest first: **Partial batches to approve or reject**, **SPC alerts to close**, **Labor to approve**,
-   **ERP changes to work orders**, **Planning rates to review**, **Maintenance requests waiting** and **Checklists to sign off**. Each says
+   **ERP changes to work orders**, **Planning rates to review**, **Maintenance requests waiting**, **Checklists to sign off**, **Releases to
+   approve** and **NCR actions to do**. Each says
    where it is and how long it has waited.
 3. Click an item to open the page where it is decided, and decide it there. It leaves the inbox once decided.
 
 In detail: each kind shows only where you hold the permission that decides it (*partial batches: decide*, *quality: record*, *labor: approve*,
 *work orders: manage*, *rates: modify*, *Work maintenance requests*, *Give setup and first-article checklists their second sign-off*). A maintenance request shows by its
 number and machine with what was asked, until someone starts it; it opens the **Maintenance** tab of Machines. A checklist shows by its job and
-instruction, with the line and who answered it, until it is signed off or rejected; it opens the job's page. Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
+instruction, with the line and who answered it, until it is signed off or rejected; it opens the job's page. **NCR actions to do** lists
+every open action of a [nonconformance report](#nonconformance-reports-ncrs) that you own, whatever your role, with its due day, and, where
+you may work NCRs, every overdue one at the site; it opens the NCR. Labor counts shifts of the last two weeks that have ended with labor nobody approved, as the Overview
 does. The page updates [by itself](#screens-that-update-themselves) when something arrives, and every 30 seconds; the menu's number every minute,
 and when you move to another page.
 
@@ -2208,7 +2211,8 @@ An NCR records something found wrong, through to closure: what was found and how
 preventive actions, each with an owner and a due day) and what becomes of the lots.
 
 1. **Raise it** where the problem shows: **Raise an NCR** on a lot's page (under **Nonconformances**), on a result out of specification
-   (Quality results), or on an SPC alert's details; or on **Operate → Quality → Nonconformances**, on its own or from a customer complaint.
+   (Quality results), on an SPC alert's details, on a run or a failed or rejected checklist on the job's page; or on **Operate → Quality →
+   Nonconformances**, on its own or from a customer complaint.
    Say what was found, how severe it is (**Minor**, **Major**, **Critical**), and optionally who owns it, then click **Raise NCR**. It opens
    on its own page, numbered *NCR-000001*.
 2. **Investigate.** Under **Investigation**, ask why up to five times, write the **Root cause**, and click **Save the investigation** as you
@@ -2217,11 +2221,16 @@ preventive actions, each with an owner and a due day) and what becomes of the lo
    manages NCRs, clicks **Finish** and says what was done, then **Mark done** (or **Cancel the action**, saying why).
 4. **Close.** Once every action is done or cancelled, choose **What becomes of the lots** (*Use as is*, *Rework*, *Scrap*, *Return to
    supplier*, *Not applicable*), add a **Closing note** and click **Close NCR**.
+5. **Carry out the disposition.** Once closed, the NCR lists its lots still in stock with what to do to each: **Release it** (used as is,
+   held), **Hold it** (scrap, rework or return, not held yet: choose a hold reason), **Write it off** (scrap, held: choose a scrap reason). Each
+   is noted on the lot with the NCR's number.
 
 In detail:
 
 - **What it is linked to.** Raised from a lot, it lists that lot and the runs that made it; from a result or an SPC alert, the lot and run of
-  the result (an alert's latest). A lot's page lists every NCR about it. Raised from a held lot, its source is the hold.
+  the result (an alert's latest); from a run, the run and the lots it made; from a checklist, its run. A lot's page lists every NCR about it.
+  Raised from a held lot, its source is the hold. Until it is closed, **Add a lot by its number** links another lot of the site (every
+  material's lot of that number).
 - **Statuses:** *Open* when raised, *Investigating* once the investigation is saved, *Acting* once the root cause is found (it can still be
   edited), *Closed*. An action is **Overdue** once its due day has passed; the list shows how many each NCR has.
 - **Who:** raising needs permission to raise NCRs (Quality, Supervisor and Operator roles); editing, investigating, adding actions and closing
@@ -2229,7 +2238,9 @@ In detail:
 - If someone else changed the NCR since you opened it, you'll see *"changed by someone else"*: reload and try again.
 - **Audit.** Each step is an event: `pulaski.ncr.raised.v1`, `…changed.v1`, `…investigated.v1`, `…action_added.v1`, `…action_done.v1`,
   `…action_cancelled.v1`, `…closed.v1`.
-- The disposition is recorded, not carried out: hold, write off or move the lots yourself.
+- **Carrying out** uses the lots' own steps, so it needs their permissions: holding and releasing lots, or rejecting them on quality (writing
+  off moves the quantity good → scrap in the run that made it, like rejecting a lot). Rework and returns are done as usual once the lot is held.
+  Overdue actions reach the [inbox](#your-inbox) and an [e-mail alert](#get-e-mails-when-something-needs-you-my-alerts) you can subscribe to.
 
 ### Leave out a wrong result
 
@@ -2648,7 +2659,9 @@ its time, when a control chart signals, when a lot is put on hold, or when a job
   whole site); further breaks while it stays open don't e-mail again. *A lot put on hold*: when someone holds a lot that is at or below
   **Where** now, with the reason and comment. *A job will be short of a component*: what the **Shortages** check shows as not covered by
   stock or supply due in time, for jobs needing it within the minutes; checked every 10 minutes, and once per job and component.
-- You can only add alerts about what you can see at the site (machines for stops, the floor for andon, quality for SPC alerts, inventory for
+  *An NCR action is overdue*: once an open action of an NCR at the site is past its due day (at the site's midnight), with what it is and its
+  owner; for the whole site only.
+- You can only add alerts about what you can see at the site (machines for stops, the floor for andon, quality for SPC alerts and NCR actions, inventory for
   holds and shortages), and they are only sent while you still can; the list says when one isn't.
 - E-mails go to the address on your user. Without a mail server, or without an address, nothing is sent; the page says so. An alert added
   now is about what happens from now on, not before.
@@ -3630,8 +3643,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **The demo's history** stops where it was recorded: EXT-02 shows no signal after it (its edge node isn't live), and nothing more is reported on its running orders unless you do it. Labor of the current shift is left open, as if the crew were still on.
 - **The demo's** OEE on EXT-01 has no output until you report production on its running job (machine counts only fill in a report's *From the machine*), and its counts are pieces, counted as one unit of the material each. Its control limits are set by hand from the simulator's design, not from a baseline. The OPC UA simulator isn't connected.
 - **Units** have no temperature dimension, so a temperature characteristic has no unit (name it, as the demo's *Melt temperature (°C)*).
-- **Nonconformances:** an NCR's disposition isn't carried out on its lots, overdue actions don't reach the Inbox or e-mail, NCRs can't yet
-  be raised from a run or a checklist, and lots can't be added to an NCR after it is raised.
+- **Nonconformances:** a disposition is carried out lot by lot by hand (there is no one-click run over every lot); rework and returns to the
+  supplier have no steps of their own; runs can't be added to an NCR after it is raised; NCRs aren't sent on a delivery feed.
 - **Quality:** alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, so a certificate of analysis has one layout and no customer-specific
 requirements; it takes no results from the lots a lot was split or merged from, and is printed in English. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.

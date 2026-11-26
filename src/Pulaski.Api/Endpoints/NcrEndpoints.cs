@@ -49,6 +49,10 @@ internal static class NcrEndpoints
                 new UpdateNcrCommand(id, request.Version, request.Title, request.Description, request.Severity, request.OwnerUserId, request.AddLotIds), ct)))
         .RequirePermission(Permissions.NcrManage, Site.Of(SiteOf.Nonconformance));
 
+        ncrs.MapPost("/{id:guid}/lots", async Task<Ok<VersionResponse>> (Guid id, LinkNcrLotRequest request, ICommandHandler<LinkNcrLotCommand, VersionResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new LinkNcrLotCommand(id, request.LotNumber), ct)))
+        .RequirePermission(Permissions.NcrManage, Site.Of(SiteOf.Nonconformance));
+
         ncrs.MapPut("/{id:guid}/investigation", async Task<Ok<VersionResponse>> (
             Guid id, InvestigateNcrRequest request, ICommandHandler<InvestigateNcrCommand, VersionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new InvestigateNcrCommand(id, request.Version, request.RootCause, request.Whys, request.Complete), ct)))

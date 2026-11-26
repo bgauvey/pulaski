@@ -118,6 +118,31 @@ internal sealed class InboxQueries(NpgsqlDataSource dataSource) : IInboxReadStor
         WHERE r.status = 'pending'
         """;
 
+    // NCR actions (#133b): the user's own open ones, and those overdue at sites where they manage NCRs; overdue first, by due day.
+    private const string NcrActions = """
+        SELECT 'ncr_action' AS kind, 'ncr_action:' || a.id AS key, n.number || ': ' || a.description AS title,
+               concat_ws(' · ', CASE WHEN a.due_on < today.d THEN 'Overdue, due ' || to_char(a.due_on, 'YYYY-MM-DD')
+                                     WHEN a.due_on IS NOT NULL THEN 'Due ' || to_char(a.due_on, 'YYYY-MM-DD') END,
+                         coalesce(o.display_name, 'No owner')) AS detail,
+               n.site_id, s.code AS site_code,
+               coalesce((a.due_on + 1)::timestamp AT TIME ZONE coalesce(s.time_zone, 'UTC'), a.created_at) AS since, 'quality/ncrs/' || n.id AS link
+        FROM core.nonconformance_action a
+        JOIN core.nonconformance n ON n.id = a.ncr_id AND n.status <> 'closed'
+        JOIN core.equipment s ON s.id = n.site_id
+        LEFT JOIN sec.app_user o ON o.id = a.owner_user_id
+        CROSS JOIN LATERAL (SELECT (now() AT TIME ZONE coalesce(s.time_zone, 'UTC'))::date AS d) today
+        WHERE a.status = 'open'
+          AND (a.owner_user_id = @UserId OR (n.site_id = ANY(@SiteIds) AND a.due_on < today.d))
+        ORDER BY a.due_on NULLS LAST, a.created_at
+        """;
+
+    public async Task<IReadOnlyList<InboxItemDto>> ListNcrActionsAsync(Guid userId, IReadOnlyCollection<Guid> manageSiteIds, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return [.. await connection.QueryAsync<InboxItemDto>(new CommandDefinition(
+            NcrActions, new { UserId = userId, SiteIds = manageSiteIds.ToArray() }, cancellationToken: cancellationToken))];
+    }
+
     public async Task<IReadOnlyList<(Guid Id, string Code)>> ListSitesAsync(CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

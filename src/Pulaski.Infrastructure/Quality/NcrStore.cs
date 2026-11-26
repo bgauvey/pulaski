@@ -41,6 +41,12 @@ internal sealed class NcrRepository(DbSession session) : INcrRepository
                 LEFT JOIN ts.quality_sample q ON q.id = a.last_sample_id AND q.occurred_at = a.last_sample_at
                 WHERE a.id = @Id
                 """,
+            NcrSources.Run => """
+                SELECT j.site_id,
+                       COALESCE((SELECT array_agg(DISTINCT e.lot_id) FROM ts.lot_event e WHERE e.run_id = r.id AND e.event_kind = 'produced'), '{}') AS lots,
+                       ARRAY[r.id] AS runs
+                FROM core.job_run r JOIN core.job j ON j.id = r.job_id WHERE r.id = @Id
+                """,
             NcrSources.Checklist => """
                 SELECT r.site_id, '{}'::uuid[] AS lots, CASE WHEN r.run_id IS NULL THEN '{}'::uuid[] ELSE ARRAY[r.run_id] END AS runs
                 FROM core.checklist_response r WHERE r.id = @Id
@@ -59,6 +65,10 @@ internal sealed class NcrRepository(DbSession session) : INcrRepository
     public async Task<IReadOnlyList<Guid>> LotsAtAsync(Guid siteId, IReadOnlyCollection<Guid> lotIds, CancellationToken cancellationToken) =>
         lotIds.Count == 0 ? [] : [.. await session.QueryAsync<Guid>(
             "SELECT id FROM core.lot WHERE id = ANY(@Ids) AND site_id = @SiteId", new { Ids = lotIds.ToArray(), SiteId = siteId }, cancellationToken)];
+
+    public async Task<IReadOnlyList<Guid>> FindLotsAsync(Guid siteId, string lotNumber, CancellationToken cancellationToken) =>
+        [.. await session.QueryAsync<Guid>(
+            "SELECT id FROM core.lot WHERE site_id = @SiteId AND lot_number = @Number ORDER BY id", new { SiteId = siteId, Number = lotNumber }, cancellationToken)];
 
     public Task<bool> IsSiteUserAsync(Guid userId, Guid siteId, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<bool>(
@@ -235,8 +245,10 @@ internal sealed class NcrQueries(NpgsqlDataSource dataSource) : INcrReadStore
 
         var lots = await connection.QueryAsync<NcrLotDto>(new CommandDefinition(
             """
-            SELECT l.id AS lot_id, COALESCE(l.lot_number, '@' || COALESCE(e.code, '?')) AS label, m.code AS material_code, l.status
+            SELECT l.id AS lot_id, COALESCE(l.lot_number, '@' || COALESCE(e.code, '?')) AS label, m.code AS material_code, l.status,
+                   l.quantity, u.code AS uom_code, l.xmin::text::bigint AS version
             FROM core.nonconformance_lot nl JOIN core.lot l ON l.id = nl.lot_id JOIN core.material m ON m.id = l.material_id
+            JOIN core.uom u ON u.id = l.uom_id
             LEFT JOIN core.equipment e ON e.id = l.location_equipment_id
             WHERE nl.ncr_id = @Id ORDER BY label
             """, new { Id = id }, cancellationToken: cancellationToken));

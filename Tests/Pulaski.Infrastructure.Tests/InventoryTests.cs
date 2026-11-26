@@ -1866,6 +1866,76 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task An_ncr_raised_from_a_run_takes_its_lots_links_more_by_number_and_its_actions_reach_the_inbox_and_e_mail()
+    {
+        var plant = await CreatePlantAsync();
+        var s = _suffix.ToUpperInvariant();
+        var username = "qb." + _suffix;
+        var email = $"qb-{_suffix}@example.com";
+        CreatedResponse owner = await db.SendAsync(new Application.Security.CreateUserCommand(
+            username, "Quill " + s, email, "Temporary-pass-1", Domain.Security.Roles.Quality, plant.Site));
+        var first = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        Guid runId;
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            runId = await connection.ExecuteScalarAsync<Guid>("SELECT id FROM core.job_run WHERE job_id = @Job ORDER BY started_at LIMIT 1", new { plant.Job });
+        }
+
+        // From the run: the job's site, the run, and the lot it made.
+        var raised = await db.SendAsync(new Application.Quality.RaiseNcrCommand(null, "Scratches", "", "minor", "run", runId, null, null, [], null));
+        var ncr = await QueryAsync<Application.Quality.GetNcrQuery, Contracts.Quality.NcrDto>(new Application.Quality.GetNcrQuery(raised.Id));
+        Assert.Equal(runId, Assert.Single(ncr.Runs).RunId);
+        var lot = Assert.Single(ncr.Lots);
+        Assert.Equal((first.Lots.Single().LotId, 100m), (lot.LotId, lot.Quantity));
+
+        // A lot found later, linked by its number; an unknown number is refused.
+        await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "NCR-LOT-" + s, 25m, plant.Kg));
+        await db.SendAsync(new Application.Quality.LinkNcrLotCommand(raised.Id, " NCR-LOT-" + s + " "));
+        await Assert.ThrowsAsync<NotFoundException>(() => db.SendAsync(new Application.Quality.LinkNcrLotCommand(raised.Id, "NO-SUCH-" + s)));
+        ncr = await QueryAsync<Application.Quality.GetNcrQuery, Contracts.Quality.NcrDto>(new Application.Quality.GetNcrQuery(raised.Id));
+        Assert.Equal(2, ncr.Lots.Count);
+
+        // The owner's action is in their inbox; an alert for overdue actions goes once its due day has ended.
+        CreatedResponse action = await db.SendAsync(new Application.Quality.AddNcrActionCommand(raised.Id, "corrective", "Polish the rollers " + s, owner.Id, null));
+        Domain.Security.UserAccess quill;
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            quill = (await scope.ServiceProvider.GetRequiredService<Application.Security.ISecurityReadStore>()
+                .GetAccessAsync("pulaski-local", username, DateTimeOffset.UtcNow, CancellationToken.None))!;
+        }
+
+        var inbox = await QueryAsync<Application.Inbox.GetInboxQuery, Contracts.Inbox.InboxDto>(new Application.Inbox.GetInboxQuery(quill));
+        var item = Assert.Single(inbox.Items, i => i.Key == $"ncr_action:{action.Id}");
+        Assert.Equal($"quality/ncrs/{raised.Id}", item.Link);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(
+            new Application.Alerts.CreateAlertSubscriptionCommand(quill, plant.Site, plant.Line, Domain.Alerts.AlertKind.NcrActionOverdue, null)));
+        await db.SendAsync(new Application.Alerts.CreateAlertSubscriptionCommand(quill, plant.Site, null, Domain.Alerts.AlertKind.NcrActionOverdue, null));
+        await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await connection.ExecuteAsync(
+                """
+                UPDATE core.alert_subscription SET created_at = now() - interval '3 days' WHERE user_id = @UserId;
+                UPDATE core.nonconformance_action a SET due_on = (now() AT TIME ZONE coalesce(e.time_zone, 'UTC'))::date - 1
+                FROM core.nonconformance n JOIN core.equipment e ON e.id = n.site_id WHERE n.id = a.ncr_id AND a.id = @Action;
+                """, new { UserId = owner.Id, Action = action.Id });
+        }
+
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            var before = db.Mail.Sent.Count;
+            await scope.ServiceProvider.GetRequiredService<Application.Alerts.AlertSender>().SendDueAsync(CancellationToken.None, withShortages: false);
+            var sent = Assert.Single(db.Mail.Sent.Skip(before), m => m.Recipient == email);
+            Assert.Contains("Polish the rollers " + s, sent.Subject, StringComparison.Ordinal);
+            Assert.Contains(raised.Number, sent.Body, StringComparison.Ordinal);
+            await scope.ServiceProvider.GetRequiredService<Application.Alerts.AlertSender>().SendDueAsync(CancellationToken.None, withShortages: false);
+            Assert.Single(db.Mail.Sent.Skip(before), m => m.Recipient == email);
+        }
+
+        inbox = await QueryAsync<Application.Inbox.GetInboxQuery, Contracts.Inbox.InboxDto>(new Application.Inbox.GetInboxQuery(quill));
+        Assert.StartsWith("Overdue", Assert.Single(inbox.Items, i => i.Key == $"ncr_action:{action.Id}").Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Results_are_checked_against_the_released_specification_hold_lots_and_rejected_lots_move_good_to_scrap()
     {
         var plant = await CreatePlantAsync();

@@ -10,7 +10,7 @@ public static class InboxView
     /// <summary>The permissions that decide what the inbox gathers; without any of them there is no inbox.</summary>
     public static IReadOnlyList<string> Deciding { get; } =
         [PermissionCodes.PartialBatchDecide, PermissionCodes.QualityRecord, PermissionCodes.LaborApprove, PermissionCodes.WorkOrderManage, PermissionCodes.RateModify,
-         PermissionCodes.MaintenanceWork];
+         PermissionCodes.MaintenanceWork, PermissionCodes.ChecklistSignOff, PermissionCodes.ReleaseApprove, PermissionCodes.NcrRaise, PermissionCodes.NcrManage];
 
     /// <summary>How often the menu recounts by itself, and the least time between recounts when the user moves around.</summary>
     public static readonly TimeSpan Refresh = TimeSpan.FromSeconds(60);
@@ -32,6 +32,7 @@ public static class InboxView
         "maintenance" => Term.Mark("Maintenance requests waiting"),
         "checklist" => Term.Mark("Checklists to sign off"),
         "release" => Term.Mark("Releases to approve"),
+        "ncr_action" => Term.Mark("NCR actions to do"),
         _ => kind,
     };
 

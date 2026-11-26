@@ -15,6 +15,9 @@ public sealed record AlertKind(string Code, string Name, string? MinutesMeans, i
     public const string LotHold = "lot_hold";
     public const string Shortage = "shortage";
 
+    /// <summary>A corrective or preventive action of an NCR still open after its due day (#133b).</summary>
+    public const string NcrActionOverdue = "ncr_action_overdue";
+
     /// <summary>Every kind, in the order offered; one not offered (<see cref="IsBuilt"/> false) keeps its rows valid but takes no new ones.</summary>
     public static readonly IReadOnlyList<AlertKind> All =
     [
@@ -24,6 +27,7 @@ public sealed record AlertKind(string Code, string Name, string? MinutesMeans, i
         new(SpcAlert, Term.Mark("A control chart signalled (SPC alert)"), null, null, Permissions.QualityView, true),
         new(LotHold, Term.Mark("A lot put on hold"), null, null, Permissions.InventoryView, true),
         new(Shortage, Term.Mark("A job will be short of a component"), Term.Mark("minutes before it is needed"), 480, Permissions.InventoryView, true),
+        new(NcrActionOverdue, Term.Mark("An NCR action is overdue"), null, null, Permissions.QualityView, true),
     ];
 
     public static AlertKind? Find(string? code) => All.FirstOrDefault(k => k.Code == code);
@@ -38,6 +42,11 @@ public sealed record AlertSubscription(Guid Id, Guid UserId, Guid SiteId, Guid? 
     public static AlertSubscription Create(Guid id, Guid userId, Guid siteId, Guid? equipmentId, string kind, int? minutes)
     {
         var known = AlertKind.Find(kind) is { IsBuilt: true } k ? k : throw new DomainRuleException("Choose one of the alerts offered.");
+        if (known.Code == AlertKind.NcrActionOverdue && equipmentId is not null)
+        {
+            throw new DomainRuleException("NCR actions belong to the site: choose the whole site.");
+        }
+
         return new AlertSubscription(id, userId, siteId, equipmentId, known.Code, null, true).Edit(minutes, true);
     }
 

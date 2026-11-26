@@ -348,7 +348,9 @@ Add a line
 Add a line or department
 Add a line or department…
 Add a line that can run {0}
+Add a lot
 Add a lot attribute
+Add a lot by its number
 Add a material
 Add a material class
 Add a note
@@ -471,6 +473,7 @@ Alternate
 Alternate for {0} ({1:0.######} {2} per {3}): {4}
 Alternate material
 An MQTT broker
+An NCR action is overdue
 An X-bar and R chart takes subgroups of 2 to {0}.
 An X-bar and S chart takes subgroups of 2 to {0}.
 An action is corrective or preventive.
@@ -784,6 +787,7 @@ Capability {0} not found.
 Capable
 Capable at 1.33 or more, marginal from 1.00. Cp and Pp need both limits.
 Carried from
+Carry out the disposition
 Categorized
 Category
 Category of {0}
@@ -1571,6 +1575,7 @@ Give the instruction a title of at most {0} characters.
 Give the language a name of at most 100 characters, as its speakers write it, such as Español.
 Give the language a name of at most 100 characters.
 Give the language's code and name.
+Give the lot number.
 Give the reason
 Give the receiver's address before switching the feed on.
 Give the server's endpoint, such as opc.tcp://plc1:4840.
@@ -1622,6 +1627,7 @@ Held at every site
 Held at {0}
 Held internal
 Held stock isn't counted until it is released. Incoming deliveries aren't stock: they count only for jobs that need the material after they are due, and a late one counts as arriving now.
+Held: rework or return it, then release, write off or ship it as usual.
 Hello, {0}
 Hide
 Hide history
@@ -1636,6 +1642,8 @@ History partitions
 Hold
 Hold it
 Hold or quarantine
+Hold reason
+Hold reason…
 Hold until
 Hold your badge to the reader, or type its number and press Enter.
 Hold {0} until
@@ -2289,6 +2297,8 @@ Must be in the past; the lot's page shows it now.
 Must be in the past; today's stock is on the Stock tab.
 My alerts
 NCR
+NCR actions belong to the site: choose the whole site.
+NCR actions to do
 Name
 Name at least one lot attribute in the header.
 Name at least one part that finds a lot or a material: (?<lot>…), (?<supplier_lot>…), (?<material>…) or (?<gtin>…).
@@ -2305,6 +2315,7 @@ Name, e.g. Packaging hall gateway
 Name, e.g. Red crew
 Named in the file
 Names operation {0}, which {1} no longer has
+Ncr action overdue
 Near
 Near batches; partials accepted
 Need attention
@@ -2321,6 +2332,7 @@ Needs attention
 Needs machine data
 Needs machine data: no line reports its state
 Needs permission to see labor
+Needs someone who may hold, release or reject lots.
 Never
 New BOM
 New code category
@@ -2645,6 +2657,7 @@ Nothing is saved until every material is valid.
 Nothing is saved until every person is valid.
 Nothing is short.
 Nothing is waiting. Lines call for help from their operator stations.
+Nothing left to do: it has no stock.
 Nothing made from it yet.
 Nothing matches in these dates. Widen the dates or clear a filter.
 Nothing matches {0}.
@@ -2672,6 +2685,7 @@ Nothing to chart.
 Nothing to check here.
 Nothing to code: every stop in this period has its reason.
 Nothing to correct: the details are the same.
+Nothing to do.
 Nothing to record.
 Nothing to see here yet
 Nothing to show.
@@ -3242,6 +3256,7 @@ Reject…
 Rejoin failed... trying again in {0} seconds.
 Rejoining the server...
 Release
+Release it
 Release note
 Release note: {0}
 Release request {0} not found.
@@ -4137,6 +4152,7 @@ The lot has been shipped.
 The lot has expired; correct its expiry first if quality extended it.
 The lot has only {0} {1} left for this job, not the {2} {3} allocated.
 The lot is in quarantine; release it first.
+The lot is linked.
 The lot is no longer on hand.
 The lot is on hold; release it first.
 The lot is used up.
@@ -4312,6 +4328,7 @@ There is no line {0} here.
 There is no line {0} in this terminal's area.
 There is no line {0}.
 There is no location {0} at this site.
+There is no lot {0} at the NCR's site.
 There is no lot {0} at this site.
 There is no lot {0} of {1} at this site.
 There is no maintenance request {0}.
@@ -4417,6 +4434,7 @@ Title
 To
 To back-date it, up to 31 days, to when it was really done; it is recorded now as well. A comment saying why is required.
 To change one shift on one day instead, use
+To do
 To do before the first report on this line.
 To do before the job starts on this line.
 To location
@@ -4771,6 +4789,7 @@ Worst of its machines
 Worst of its machines (series)
 Would
 Would change: {0}. Unchanged: {1}.
+Write it off
 Write off
 Write shift handover notes and open items for lines, and close open items
 Write the instruction, attach a file or add a checklist before releasing it.
@@ -5596,6 +5615,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} now counts as scrap of {1}'s run {2}, so it is taken off its good output and OEE quality.
 {0} now holds {1}.
 {0} now uses {1}'s own batch size and tolerance.
+{0} of job {1} not passed
 {0} of {1}
 {0} of {1} components short.
 {0} of {1} consumed by {2}
