@@ -92,6 +92,7 @@ term,translation
 ", at least {0} min",", al menos {0} min"
 ", each optionally",", cada uno opcionalmente"
 ", empty at ≤ {0}",", vacío en ≤ {0}"
+", from its job",", de su trabajo"
 ", from {0}",", desde {0}"
 ", ideal {0}",", ideal {0}"
 ", level ± {0}",", nivel ± {0}"
@@ -133,6 +134,7 @@ term,translation
 1 overlap: a line can't run these at the same time,1 traslape: una línea no puede ejecutar estos al mismo tiempo
 1 production day isn't rolled up yet ({0:yyyy-MM-dd}); long OEE reports work it out from the history.,1 día de producción aún no está consolidado ({0:yyyy-MM-dd}); los reportes OEE largos lo calculan del historial.
 1 request not closed,1 solicitud sin cerrar
+1 result,1 resultado
 1 sample due,1 muestra pendiente
 1 sample overdue,1 muestra vencida
 1 session,1 sesión
@@ -417,6 +419,7 @@ After the start.,Después del inicio.
 After {0} ends,Después de que termina {0}
 After {0} starts,Después de que empieza {0}
 Against expected receipt,Contra recepción esperada
+"Against specification version {0} of {1}. One line per item, from the lot's results, or its job's where the lot has none.","Contra la versión {0} de la especificación de {1}. Una línea por punto, de los resultados del lote, o de su trabajo cuando el lote no tiene."
 Against the jobs' runs,Contra las corridas de los trabajos
 "Against {0}. {1} subgroups; mean {2}, sigma {3} within subgroups and {4} overall.","Contra {0}. {1} subgrupos; media {2}, sigma {3} dentro de los subgrupos y {4} en general."
 Aging,Antigüedad
@@ -778,6 +781,7 @@ Cause,Causa
 Centre,Centro
 Centre line,Línea central
 Certificate files,Archivos de certificados
+Certificate of analysis,Certificado de análisis
 Certificates and documents,Certificados y documentos
 Certificates and lot documents,Certificados y documentos de lote
 Change,Cambiar
@@ -1126,6 +1130,7 @@ Current,Actual
 Current password,Contraseña actual
 Current-shift OEE from reported machine data · refreshes every 30 seconds,OEE del turno actual con los datos de máquina reportados · se actualiza cada 30 segundos
 "Current-shift OEE {0}; availability {1}, performance {2}, quality {3}","OEE del turno actual {0}; disponibilidad {1}, rendimiento {2}, calidad {3}"
+Customer order or shipment (optional),Pedido del cliente o envío (opcional)
 Cycle starts on,El ciclo empieza el
 Daily at set times,Diario a horas fijas
 Daily at {0} UTC,Diario a las {0} UTC
@@ -1198,6 +1203,7 @@ Done,Listo
 Down,Parada
 Down h,h parada
 "Down time by reason across the top equipment shown (a line's time already includes its machines'), classified as in By equipment.","Tiempo parado por motivo en el equipo principal mostrado (el tiempo de una línea ya incluye el de sus máquinas), clasificado como en Por equipo."
+Download a preview,Descargar una vista previa
 Download a template,Descargar una plantilla
 Download the job's totals as a B2MML production performance for the ERP,Descargar los totales del trabajo como desempeño de producción B2MML para el ERP
 Downtime,Tiempo parado
@@ -1409,6 +1415,7 @@ External system,Sistema externo
 Extra shift {0},Turno extra {0}
 Extra wait after the start or end before the next operation begins.,Espera adicional después del inicio o del fin antes de que empiece la siguiente operación.
 Extrude and Pack,Extruir y empacar
+Fail,No cumple
 Failed,Fallido
 Failed on item {0} ({1}): put it right and answer it again.,Falló en el punto {0} ({1}): corríjalo y responda de nuevo.
 Failed on items {0} ({1}): put them right and answer it again.,Falló en los puntos {0} ({1}): corríjalos y responda de nuevo.
@@ -1733,6 +1740,8 @@ Inventory adjustment,Ajuste de inventario
 Inventory movements,Movimientos de inventario
 Inventory reports,Reportes de inventario
 Issue,Salida
+Issue and attach,Emitir y adjuntar
+Issue its certificate of analysis,Emitir su certificado de análisis
 Issued,Emitido
 Issued by,Emitido por
 Issued on,Emitido el
@@ -1787,6 +1796,9 @@ Items at,Elementos en
 Items inspected a sample,Piezas inspeccionadas por muestra
 Its BOMs,Sus listas de materiales
 "Its GS1 trade item number (8, 12, 13 or 14 digits). Lots of it get GS1 labels when the site prints them, and a scanned GS1 or supplier barcode with it finds this material.","Su número de artículo comercial GS1 (8, 12, 13 o 14 dígitos). Sus lotes reciben etiquetas GS1 cuando el sitio las imprime, y un código de barras GS1 o del proveedor escaneado con él encuentra este material."
+Its certificate couldn't be issued: {0},No se pudo emitir su certificado: {0}
+"Its certificate of analysis is attached, noting: {0}","Su certificado de análisis está adjunto, con estas notas: {0}"
+Its certificate of analysis is attached.,Su certificado de análisis está adjunto.
 Its constraint machine,Su máquina restricción
 Its consumed counter takes what it counts out of the lot loaded then,Su contador de consumo saca lo que cuenta del lote cargado en ese momento
 Its control limits were worked out for this chart; end them to change it.,Sus límites de control se calcularon para este gráfico; termínelos para cambiarlo.
@@ -2453,6 +2465,7 @@ No released or draft BOM lists {0} as a component.,Ninguna lista de materiales l
 No released process at this site makes this material,Ningún proceso liberado en este sitio hace este material
 "No released process at {0} makes {1}; release one, or send the process code.",Ningún proceso liberado en {0} hace {1}; libere uno o envíe el código de proceso.
 "No request is waiting. Raise one here, or from a stop.",No hay solicitudes en espera. Cree una aquí o desde un paro.
+No result,Sin resultado
 No results recorded for this lot.,No hay resultados registrados para este lote.
 No results yet.,Aún no hay resultados.
 No results.,Sin resultados.
@@ -2531,6 +2544,7 @@ Not found,No encontrado
 Not heard from for {0} hours.,Sin noticias desde hace {0} horas.
 Not imported (errors),No importado (errores)
 Not in production mode,No está en modo de producción
+Not judged,Sin evaluar
 Not made from other lots.,No se hizo de otros lotes.
 Not me / cancel,No soy yo / cancelar
 Not needed: the lots before it cover the need.,No se necesita: los lotes anteriores cubren la necesidad.
@@ -2844,6 +2858,7 @@ Partial batches to approve or reject,Tandas parciales por aprobar o rechazar
 Partial batches waiting for approval: {0}.,Tandas parciales en espera de aprobación: {0}.
 Partition upkeep,Mantenimiento de particiones
 Partly received,Recibida en parte
+Pass,Cumple
 Passed,Aprobado
 "Passed {0} by {1}, signed off by {2}.","Aprobada el {0} por {1}, firmada por {2}."
 Passed {0} by {1}.,Aprobada el {0} por {1}.
@@ -2940,6 +2955,7 @@ Preferences,Preferencias
 Preferences…,Preferencias…
 Preferred line for {0},Línea preferida para {0}
 Prefilled on {0}'s reports; the lot being filled's location comes first.,Se prellena en los reportes de {0}; la ubicación del lote que se está llenando va primero.
+Prepare,Preparar
 Preparing PDF…,Preparando PDF…
 Preventive,Preventivo
 Preventive maintenance,Mantenimiento preventivo
@@ -3246,6 +3262,7 @@ Required with a quantity.,Obligatorio con una cantidad.
 Required.,Obligatorio.
 Required: a balance moves by quantity.,Obligatorio: un saldo se mueve por cantidad.
 Required: {0} is lot-tracked.,Obligatorio: {0} se rastrea por lote.
+Requirement,Requisito
 Reset password,Restablecer contraseña
 Resetting a password by e-mail isn't switched on here; ask an administrator to reset it.,Restablecer una contraseña por correo no está activado aquí; pida a un administrador que la restablezca.
 Resolve,Resolver
@@ -3940,6 +3957,8 @@ The calculated planning rate on {0} follows the ideal rate again.,La tasa de pla
 The calendar exception was changed by someone else. Reload and try again.,Alguien más cambió la excepción de calendario. Recargue e intente de nuevo.
 The capability from {0:yyyy-MM-dd} now ends where this one starts.,La capacidad desde {0:yyyy-MM-dd} ahora termina donde empieza esta.
 The capability on {0} was changed by someone else. Reload and try again.,Alguien más cambió la capacidad en {0}. Recargue e intente de nuevo.
+"The certificate is attached to the lot's documents, with its notes.","El certificado está adjunto a los documentos del lote, con sus notas."
+The certificate is attached to the lot's documents.,El certificado está adjunto a los documentos del lote.
 The change breaks the rule '{0}'.,El cambio rompe la regla '{0}'.
 The changeover rule was changed by someone else. Reload and try again.,Alguien más cambió la regla de cambio. Recargue e intente de nuevo.
 The characteristic is already sampled on that line; switch that off first.,La característica ya se muestrea en esa línea; desactive eso primero.
@@ -4039,6 +4058,7 @@ The lot is in quarantine; release it first.,El lote está en cuarentena; libére
 The lot is no longer on hand.,El lote ya no está en existencia.
 The lot is on hold; release it first.,El lote está retenido; libérelo primero.
 The lot is used up.,El lote se agotó.
+The lot is {0}.,El lote está {0}.
 The lot isn't in stock.,El lote no está en existencia.
 The lot isn't made yet.,El lote aún no se ha hecho.
 The lot number is blank.,El número de lote está en blanco.
@@ -4905,6 +4925,7 @@ manual or lab.,manual o lab.
 mapped,asignado
 material {0},material {0}
 material's,del material
+"mean {0} ({1} to {2}), {3}{4}","media {0} ({1} a {2}), {3}{4}"
 min,min
 minutes,minutos
 minutes after it ended,minutos después de que terminó
@@ -5158,6 +5179,7 @@ yes,sí
 {0} created on {1} for {2}.,{0} creado en {1} por {2}.
 {0} days,{0} días
 {0} days aren't included because their rollups are being worked out again: {1}. Try again shortly.,No se incluyen {0} días porque sus acumulados se están recalculando: {1}. Intente de nuevo en un momento.
+"{0} defects in {1} inspected, {2}{3}","{0} defectos en {1} inspeccionados, {2}{3}"
 {0} deliveries failed; they hold back later ones for the same subjects.,{0} entregas fallaron; retienen las siguientes de los mismos sujetos.
 {0} deliveries go again on the next round.,{0} entregas se reenvían en la siguiente ronda.
 "{0} doesn't convert to the job's unit, so the run's good output wasn't changed.","{0} no se convierte a la unidad del trabajo, así que la producción buena de la corrida no cambió."
@@ -5226,8 +5248,10 @@ yes,sí
 {0} has no override for shift {1} on {2:yyyy-MM-dd}.,{0} no tiene sustitución para el turno {1} del {2:yyyy-MM-dd}.
 {0} has no planned component of {1}; it was recorded as a substitution.,{0} no tiene un componente planeado de {1}; se registró como sustitución.
 "{0} has no released specification, so results aren't checked.","{0} no tiene especificación liberada, así que los resultados no se revisan."
+"{0} has no released specification, so there is nothing to certify against.","{0} no tiene especificación liberada, así que no hay contra qué certificar."
 {0} has no released version to start a draft from.,{0} no tiene versión liberada desde la cual iniciar un borrador.
 {0} has no released version to start from.,{0} no tiene una versión liberada de la que partir.
+{0} has no result.,{0} no tiene resultado.
 {0} has no role; ask an administrator to give you one.,{0} no tiene rol; pida a un administrador que le dé uno.
 {0} has no shift {1} on {2:yyyy-MM-dd}.,{0} no tiene turno {1} el {2:yyyy-MM-dd}.
 {0} has no template set.,{0} no tiene juego de plantillas.
@@ -5330,6 +5354,7 @@ yes,sí
 {0} is not set up to run on {1}; add a capability for it first.,{0} no está configurado para ejecutarse en {1}; agregue primero una capacidad para él.
 {0} is now {1}.,{0} ahora está {1}.
 {0} is on it,{0} va en camino
+{0} is out of specification.,{0} está fuera de especificación.
 {0} is out of specification: {1} (version {2}: {3}).,{0} está fuera de especificación: {1} (versión {2}: {3}).
 "{0} is paused, so its last run has ended; report the partial batch into that run from the job's page.","{0} está en pausa, así que su última corrida terminó; reporte la tanda parcial en esa corrida desde la página del trabajo."
 {0} is paused; start it to run it again.,{0} está en pausa; inícielo para correrlo de nuevo.
@@ -5518,6 +5543,7 @@ yes,sí
 {0} refused (not imported),{0} rechazadas (no importadas)
 {0} released,{0} liberados
 {0} requests not closed,{0} solicitudes sin cerrar
+{0} results,{0} resultados
 {0} results; no control limits in force for them.,{0} resultados; sin límites de control vigentes para ellos.
 "{0} results; {1} beyond the limits, {2} breaking a run rule.","{0} resultados; {1} fuera de los límites, {2} rompen una regla de corrida."
 {0} results; {1} beyond the limits.,{0} resultados; {1} fuera de los límites.
@@ -5624,6 +5650,7 @@ yes,sí
 {0}'s control chart signalled (rule {1}): an SPC alert was raised.,La gráfica de control de {0} dio una señal (regla {1}): se generó una alerta SPC.
 {0}'s details have been corrected again since; reverse that correction first.,Los detalles de {0} se corrigieron de nuevo desde entonces; revierta primero esa corrección.
 "{0}'s drop folder '{1}' isn't configured in Labels:DropFolders, or doesn't exist.","La carpeta de depósito '{1}' de {0} no está configurada en Labels:DropFolders, o no existe."
+{0}'s results weren't judged against limits.,Los resultados de {0} no se evaluaron contra límites.
 {0}'s status has changed since ({1}); reverse that first.,El estado de {0} cambió desde entonces ({1}); revierta eso primero.
 {0}'s stop is coded as {1}.,El paro de {0} se codificó como {1}.
 {0}'s stop is coded.,El paro de {0} está codificado.

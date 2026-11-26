@@ -21,6 +21,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// <summary>The e-mails the commands would send (D-093); password reset by e-mail is on in these tests.</summary>
     public Testing.FakeMailOutbox Mail { get; } = new();
 
+    public Testing.FakeCertificateRenderer Certificates { get; } = new();
+
     private const string DefaultAdminConnection = "Host=localhost;Database=postgres";
 
     private readonly string _adminConnection =
@@ -99,6 +101,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         services.AddSingleton<Application.Labor.IBadgeHasher>(new ReversingBadgeHasher());
         services.AddSingleton<Application.Security.IPasswordResetSettings>(new Testing.FakePasswordResetSettings());
         services.AddSingleton<Application.Security.IMailOutbox>(Mail);
+        services.AddSingleton<Application.Quality.ICertificateRenderer>(Certificates);
         Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 

@@ -361,6 +361,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
   `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
+- Certificates of analysis (D-123, proposed, #137): `GetCertificateQuery` (released spec items × the lot's results, else its job's lot-less ones;
+  `Certificates.Summarize`; warnings, never refused but without a spec) → `IssueCertificateCommand` (`ICertificateRenderer` =
+  `CertificatePdfRenderer` in the API, then `AttachLotDocumentCommand` kind `coa`); `/api/lots/{id}/certificate[.pdf]`; lot page panel, ship tick box.
 - Sampling plans (D-121, proposed, in pieces, #136): `SpecItem.Sampling` (`SamplingPlan`: at start and/or every N h or N units, grace) in the
   spec definition jsonb; `SamplingSchedule.Evaluate` (pure) over open runs, processed output and the run's results → `GetDueSamplesQuery`
   (`/api/quality/samples-due?siteId=`, `/api/jobs/{id}/samples-due`); job page **Samples**, Floor card flags. (b) `StationDto.Samples` +

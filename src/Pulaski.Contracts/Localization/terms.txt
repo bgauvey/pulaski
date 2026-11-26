@@ -91,6 +91,7 @@
 , at least {0} min
 , each optionally
 , empty at ≤ {0}
+, from its job
 , from {0}
 , ideal {0}
 , level ± {0}
@@ -132,6 +133,7 @@
 1 overlap: a line can't run these at the same time
 1 production day isn't rolled up yet ({0:yyyy-MM-dd}); long OEE reports work it out from the history.
 1 request not closed
+1 result
 1 sample due
 1 sample overdue
 1 session
@@ -416,6 +418,7 @@ After the start.
 After {0} ends
 After {0} starts
 Against expected receipt
+Against specification version {0} of {1}. One line per item, from the lot's results, or its job's where the lot has none.
 Against the jobs' runs
 Against {0}. {1} subgroups; mean {2}, sigma {3} within subgroups and {4} overall.
 Aging
@@ -777,6 +780,7 @@ Cause
 Centre
 Centre line
 Certificate files
+Certificate of analysis
 Certificates and documents
 Certificates and lot documents
 Change
@@ -1125,6 +1129,7 @@ Current
 Current password
 Current-shift OEE from reported machine data · refreshes every 30 seconds
 Current-shift OEE {0}; availability {1}, performance {2}, quality {3}
+Customer order or shipment (optional)
 Cycle starts on
 Daily at set times
 Daily at {0} UTC
@@ -1197,6 +1202,7 @@ Done
 Down
 Down h
 Down time by reason across the top equipment shown (a line's time already includes its machines'), classified as in By equipment.
+Download a preview
 Download a template
 Download the job's totals as a B2MML production performance for the ERP
 Downtime
@@ -1408,6 +1414,7 @@ External system
 Extra shift {0}
 Extra wait after the start or end before the next operation begins.
 Extrude and Pack
+Fail
 Failed
 Failed on item {0} ({1}): put it right and answer it again.
 Failed on items {0} ({1}): put them right and answer it again.
@@ -1732,6 +1739,8 @@ Inventory adjustment
 Inventory movements
 Inventory reports
 Issue
+Issue and attach
+Issue its certificate of analysis
 Issued
 Issued by
 Issued on
@@ -1786,6 +1795,9 @@ Items at
 Items inspected a sample
 Its BOMs
 Its GS1 trade item number (8, 12, 13 or 14 digits). Lots of it get GS1 labels when the site prints them, and a scanned GS1 or supplier barcode with it finds this material.
+Its certificate couldn't be issued: {0}
+Its certificate of analysis is attached, noting: {0}
+Its certificate of analysis is attached.
 Its constraint machine
 Its consumed counter takes what it counts out of the lot loaded then
 Its control limits were worked out for this chart; end them to change it.
@@ -2452,6 +2464,7 @@ No released or draft BOM lists {0} as a component.
 No released process at this site makes this material
 No released process at {0} makes {1}; release one, or send the process code.
 No request is waiting. Raise one here, or from a stop.
+No result
 No results recorded for this lot.
 No results yet.
 No results.
@@ -2530,6 +2543,7 @@ Not found
 Not heard from for {0} hours.
 Not imported (errors)
 Not in production mode
+Not judged
 Not made from other lots.
 Not me / cancel
 Not needed: the lots before it cover the need.
@@ -2843,6 +2857,7 @@ Partial batches to approve or reject
 Partial batches waiting for approval: {0}.
 Partition upkeep
 Partly received
+Pass
 Passed
 Passed {0} by {1}, signed off by {2}.
 Passed {0} by {1}.
@@ -2939,6 +2954,7 @@ Preferences, in order
 Preferences…
 Preferred line for {0}
 Prefilled on {0}'s reports; the lot being filled's location comes first.
+Prepare
 Preparing PDF…
 Preventive
 Preventive maintenance
@@ -3245,6 +3261,7 @@ Required, unless the row ends the capability (active = no).
 Required.
 Required: a balance moves by quantity.
 Required: {0} is lot-tracked.
+Requirement
 Reset password
 Resetting a password by e-mail isn't switched on here; ask an administrator to reset it.
 Resolve
@@ -3939,6 +3956,8 @@ The calculated planning rate on {0} is now {1} {2}/h, {3}.
 The calendar exception was changed by someone else. Reload and try again.
 The capability from {0:yyyy-MM-dd} now ends where this one starts.
 The capability on {0} was changed by someone else. Reload and try again.
+The certificate is attached to the lot's documents, with its notes.
+The certificate is attached to the lot's documents.
 The change breaks the rule '{0}'.
 The changeover rule was changed by someone else. Reload and try again.
 The characteristic is already sampled on that line; switch that off first.
@@ -4038,6 +4057,7 @@ The lot is in quarantine; release it first.
 The lot is no longer on hand.
 The lot is on hold; release it first.
 The lot is used up.
+The lot is {0}.
 The lot isn't in stock.
 The lot isn't made yet.
 The lot number is blank.
@@ -4904,6 +4924,7 @@ manual or lab.
 mapped
 material {0}
 material's
+mean {0} ({1} to {2}), {3}{4}
 min
 minutes
 minutes after it ended
@@ -5157,6 +5178,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} created on {1} for {2}.
 {0} days
 {0} days aren't included because their rollups are being worked out again: {1}. Try again shortly.
+{0} defects in {1} inspected, {2}{3}
 {0} deliveries failed; they hold back later ones for the same subjects.
 {0} deliveries go again on the next round.
 {0} doesn't convert to the job's unit, so the run's good output wasn't changed.
@@ -5225,8 +5247,10 @@ you measure or inspect first, then a specification for a material with their lim
 {0} has no override for shift {1} on {2:yyyy-MM-dd}.
 {0} has no planned component of {1}; it was recorded as a substitution.
 {0} has no released specification, so results aren't checked.
+{0} has no released specification, so there is nothing to certify against.
 {0} has no released version to start a draft from.
 {0} has no released version to start from.
+{0} has no result.
 {0} has no role; ask an administrator to give you one.
 {0} has no shift {1} on {2:yyyy-MM-dd}.
 {0} has no template set.
@@ -5329,6 +5353,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is not set up to run on {1}; add a capability for it first.
 {0} is now {1}.
 {0} is on it
+{0} is out of specification.
 {0} is out of specification: {1} (version {2}: {3}).
 {0} is paused, so its last run has ended; report the partial batch into that run from the job's page.
 {0} is paused; start it to run it again.
@@ -5517,6 +5542,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} refused (not imported)
 {0} released
 {0} requests not closed
+{0} results
 {0} results; no control limits in force for them.
 {0} results; {1} beyond the limits, {2} breaking a run rule.
 {0} results; {1} beyond the limits.
@@ -5623,6 +5649,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0}'s control chart signalled (rule {1}): an SPC alert was raised.
 {0}'s details have been corrected again since; reverse that correction first.
 {0}'s drop folder '{1}' isn't configured in Labels:DropFolders, or doesn't exist.
+{0}'s results weren't judged against limits.
 {0}'s status has changed since ({1}); reverse that first.
 {0}'s stop is coded as {1}.
 {0}'s stop is coded.

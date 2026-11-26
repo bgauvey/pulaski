@@ -1769,6 +1769,54 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_lots_certificate_summarises_its_results_against_the_released_specification_and_is_attached_as_a_coa()
+    {
+        var plant = await CreatePlantAsync();
+        var s = _suffix.ToUpperInvariant();
+        CreatedResponse wall = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("CW-" + s, "Wall thickness", null, "variable", plant.Kg, 2));
+        CreatedResponse surface = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("CS-" + s, "Surface defects", null, "attribute", null, 0));
+        CreatedResponse colour = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("CC-" + s, "Colour", null, "variable", null, 1));
+        CreatedResponse spec = await db.SendAsync(new Application.Quality.CreateSpecCommand(plant.Profile));
+        var header = await QueryAsync<Application.Quality.GetSpecQuery, Contracts.Quality.SpecDto>(new Application.Quality.GetSpecQuery(spec.Id));
+        var draft = await QueryAsync<Application.Quality.GetSpecVersionQuery, Contracts.Quality.SpecVersionDto>(
+            new Application.Quality.GetSpecVersionQuery(spec.Id, header.Versions[0].Id));
+        var saved = await db.SendAsync(new Application.Quality.SaveSpecDraftCommand(spec.Id, draft.Id, draft.Version, new Contracts.Quality.SpecDefinitionDto
+        {
+            Items =
+            [
+                new() { Id = Guid.CreateVersion7(), CharacteristicId = wall.Id, Lsl = 3.2m, Usl = 3.4m, SortOrder = 10 },
+                new() { Id = Guid.CreateVersion7(), CharacteristicId = surface.Id, MaxDefects = 1, SortOrder = 20 },
+                new() { Id = Guid.CreateVersion7(), CharacteristicId = colour.Id, Lsl = 1m, Usl = 5m, SortOrder = 30 },
+            ],
+        }));
+        await db.SendAsync(new Application.Quality.ReleaseSpecVersionCommand(spec.Id, draft.Id, saved.Version, null));
+
+        // A lot made in the job: wall thickness measured on the lot; surface inspected on the job (no lot named); colour never.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        var lotId = report.Lots.Single().LotId;
+        await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, wall.Id, lotId, plant.Job, null, [3.30m, 3.34m], null, null, "manual", null));
+        await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, wall.Id, lotId, plant.Job, null, [3.28m], null, null, "lab", null));
+        await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, surface.Id, null, plant.Job, null, null, 50, 0, "manual", null));
+
+        var certificate = await QueryAsync<Application.Quality.GetCertificateQuery, Contracts.Quality.CertificateDto>(new Application.Quality.GetCertificateQuery(lotId, " PO-77 "));
+        Assert.Equal(("PO-77", 1, false), (certificate.Reference, certificate.SpecVersion, certificate.Conforms));
+        Assert.Equal([("CW-" + s, "pass", "lot", 2), ("CS-" + s, "pass", "job", 1), ("CC-" + s, "no_result", "lot", 0)],
+            certificate.Lines.Select(l => (l.CharacteristicCode, l.Outcome, l.Source, l.Results)));
+        Assert.Equal((3.28m, 3.34m), (certificate.Lines[0].Min!.Value, certificate.Lines[0].Max!.Value));
+        Assert.Equal((50, 0), (certificate.Lines[1].Inspected!.Value, certificate.Lines[1].Defects!.Value));
+        Assert.Contains(certificate.Warnings, w => w.Text.Contains("CC-" + s, StringComparison.Ordinal));
+
+        // Issued in one step: drawn, and attached to the lot as a certificate of analysis.
+        var issued = await db.SendAsync(new Application.Quality.IssueCertificateCommand(lotId, "PO-77"));
+        Assert.Single(issued.Warnings);
+        Assert.Equal("PO-77", db.Certificates.Last!.Reference);
+        var documents = await QueryAsync<GetLotRecordsQuery, LotRecordsDto>(new GetLotRecordsQuery(lotId));
+        var coa = Assert.Single(documents.Documents, d => d.Id == issued.DocumentId);
+        Assert.Equal(("coa", "application/pdf"), (coa.Kind, coa.ContentType));
+        Assert.StartsWith("COA-", coa.DocumentNumber, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Results_are_checked_against_the_released_specification_hold_lots_and_rejected_lots_move_good_to_scrap()
     {
         var plant = await CreatePlantAsync();

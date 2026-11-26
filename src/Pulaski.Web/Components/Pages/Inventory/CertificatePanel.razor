@@ -1,0 +1,144 @@
+@using Pulaski.Web.Services.Quality
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject Downloads Downloads
+
+@* A lot's certificate of analysis (#137, D-123): what it would say now, against the material's released specification, with anything the
+   issuer should know first; previewed as a PDF, and issued in one step as a lot document (coa), sent like any certificate. *@
+<section class="inv-section" aria-labelledby="coa-title">
+    <div class="d-flex align-items-center gap-2">
+        <h2 id="coa-title" class="mb-0">@L["Certificate of analysis"]</h2>
+        @if (_certificate is null && _problem is null)
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" disabled="@_busy" @onclick="LoadAsync">@L["Prepare"]</button>
+        }
+    </div>
+    <ProblemAlert Error="_error" />
+    @if (_problem is { } problem)
+    {
+        <p class="small text-muted mt-2 mb-0">@problem</p>
+    }
+    @if (_message is { } message)
+    {
+        <div class="alert alert-success small mt-2" role="status">@message</div>
+    }
+    @if (_certificate is { } c)
+    {
+        <p class="small text-muted mt-2">@L["Against specification version {0} of {1}. One line per item, from the lot's results, or its job's where the lot has none.", c.SpecVersion, c.MaterialCode]</p>
+        @if (c.Warnings.Count > 0)
+        {
+            <div class="drawer-alert is-warning mb-2" role="status">
+                <ul class="mb-0">
+                    @foreach (var warning in L.Notes(c.Warnings))
+                    {
+                        <li>@warning</li>
+                    }
+                </ul>
+            </div>
+        }
+        <div class="table-panel mb-2">
+            <table class="table table-sm align-middle small mb-0">
+                <thead><tr><th>@L["Characteristic"]</th><th>@L["Requirement"]</th><th>@L["Results"]</th><th>@L["Outcome"]</th></tr></thead>
+                <tbody>
+                    @foreach (var line in c.Lines)
+                    {
+                        <tr @key="line.CharacteristicCode">
+                            <td>@line.CharacteristicCode · @line.CharacteristicName</td>
+                            <td>@line.Requirement@(line.Measured && line.UomCode is { } u ? $" {u}" : "")</td>
+                            <td>@CertificateView.Results(L, line)</td>
+                            <td><span class="@CertificateView.Chip(line.Outcome)">@CertificateView.Outcome(L, line.Outcome)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label small" for="coa-reference">@L["Customer order or shipment (optional)"]</label>
+                <input id="coa-reference" class="form-control form-control-sm" maxlength="100" @bind="_reference" />
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="PreviewAsync">@L["Download a preview"]</button>
+            @if (User.Can(PermissionCodes.LotRecords, SiteId))
+            {
+                <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" OnClick="IssueAsync">@L["Issue and attach"]</ActionButton>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Guid LotId { get; set; }
+
+    [Parameter] public Guid SiteId { get; set; }
+
+    /// <summary>A certificate was attached: the lot's documents changed.</summary>
+    [Parameter] public EventCallback Issued { get; set; }
+
+    private CertificateDto? _certificate;
+    private string? _reference;
+    private string? _problem;
+    private string? _message;
+    private bool _busy;
+    private ApiException? _error;
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _certificate = await Api.GetCertificateAsync(LotId, _reference);
+        }
+        catch (ApiException ex) when (ex.Status is 400 or 422)
+        {
+            // No released specification: nothing to certify against.
+            _problem = L.Problem(ex);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task PreviewAsync()
+    {
+        _busy = true;
+        try
+        {
+            var (content, type, name) = await Api.GetCertificatePreviewAsync(LotId, _reference);
+            await Downloads.FileAsync(name, content, type);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task IssueAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var issued = await Api.IssueCertificateAsync(LotId, new IssueCertificateRequest { Reference = _reference });
+            _message = issued.Warnings.Count == 0 ? L["The certificate is attached to the lot's documents."] : L["The certificate is attached to the lot's documents, with its notes."];
+            await Issued.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

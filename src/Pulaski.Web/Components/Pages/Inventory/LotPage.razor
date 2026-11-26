@@ -199,7 +199,12 @@
         </section>
     </div>
 
-    <LotRecordsPanel @key="l.Id" LotId="l.Id" SiteId="l.SiteId" TimeZone="@tz" />
+    <LotRecordsPanel @key="@($"{l.Id}-{_documentsShown}")" LotId="l.Id" SiteId="l.SiteId" TimeZone="@tz" />
+
+    @if (User.Can(PermissionCodes.QualityView, l.SiteId) || User.Can(PermissionCodes.LotRecords, l.SiteId))
+    {
+        <CertificatePanel @key="l.Id" LotId="l.Id" SiteId="l.SiteId" Issued="() => _documentsShown++" />
+    }
 
     @if (User.Can(PermissionCodes.QualityView, l.SiteId))
     {
@@ -344,6 +349,9 @@ else if (_error is null)
 <LotActionDrawer Action="_action" Lot="_lot?.Lot" Movement="_movement" OnDone="OnDoneAsync" OnClose="() => _action = null" />
 
 @code {
+    // Bumped when a certificate is issued (#137), so the documents list reads again.
+    private int _documentsShown;
+
     [Parameter]
     public Guid LotId { get; set; }
 

@@ -20,6 +20,8 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton<ShopOrderPdfRenderer>();
 builder.Services.AddSingleton<PickingListPdfRenderer>();
+// Certificates of analysis (#137): the application issues them, drawn here.
+builder.Services.AddSingleton<Pulaski.Application.Quality.ICertificateRenderer, CertificatePdfRenderer>();
 builder.Services.AddSingleton<LabelPdfRenderer>();
 builder.Services.Configure<LabelPrintingOptions>(builder.Configuration.GetSection("Labels"));
 builder.Services.AddSingleton<LabelTemplates>();

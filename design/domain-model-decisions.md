@@ -3354,6 +3354,20 @@ table of the data plotted (open, newest first). Computed on read; no schema chan
 - **Pieces:** (a) settings, permission, requests, processes (editor: Submit, waiting, Approve and release / Send back, history); (b) BOMs
   and specifications.
 
+### D-123 · Certificates of analysis (#137) · *Proposed*
+
+**Context.** Certificates could be attached to lots, but none was produced from the results Pulaski records.
+
+**Decision.** `GetCertificateQuery` works a lot's certificate out now, against its material's released specification: one line per spec
+item (`Certificates.Summarize`, pure) from the lot's results not excluded, else (per item) its making job's results recorded with no lot,
+summarised as count, mean, lowest and highest value (measured) or units inspected and defects (inspected), outcome `pass` / `fail` /
+`no_result` / `not_judged`. User's choices: one summary line per item; on request and optionally at shipping; **warn, never block** (a held or
+quarantined lot, a failed, missing or unjudged item are warnings, printed on the certificate). Refused only without a released
+specification. `IssueCertificateCommand` renders it (`ICertificateRenderer`, the API's `CertificatePdfRenderer`, PdfSharp, English) and
+attaches it through `AttachLotDocumentCommand` (kind `coa`, number `COA-{lot}-{yyyyMMddHHmmss}`, issuer the site), so the documents feed sends
+it. `GET /api/lots/{id}/certificate[.pdf]` (inventory or quality view), `POST` (`lot_records.manage`); the lot page's **Certificate of
+analysis**; the ship form's tick box issues one with the shipment number after shipping. No schema change.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
