@@ -3456,8 +3456,12 @@ zone, which change only by adding columns (a breaking change is a new view name)
 in the repo). Figures match the app: OEE from the rollups with the app's formulas (planned = scheduled − non-production − planned stops;
 A = run ÷ planned; P = earned ÷ run with a rate; Q = earned good ÷ earned), never averaged; production as every counted change (reports,
 reversals, rejections on quality), which adds up to each run. `ReportViewTests` checks every view against the schema and the role's reach.
-`design/reporting.md` is the analyst's guide. (a) dimensions, production and OEE, orders and jobs; (b) inventory and genealogy, labor and
-quality, Power BI and getting the data into a warehouse (replication of the views first, the event feeds for near real time: the user's choice).
+`design/reporting.md` is the analyst's guide. (a) dimensions, production and OEE, orders and jobs; (b) inventory and genealogy (lots, stock,
+movements with effective times and reversals, stored genealogy links), labor (sessions as corrected, worked hours net of breaks × share,
+approval), quality (results with the limits applied, SPC alerts, NCRs), Power BI (Import, the model, OEE measures) and getting the data into
+a warehouse: the views copied on a schedule first, per view full, incremental on `recorded_at` or the last 31 days again (tools replicating
+by change data capture copy tables, not views), and the event feeds for near real time (the user's choice). Not in the views: production by
+shift, today's OEE, per-lot pairing by time and labor shared out to runs, which the app works out on read.
 
 ## Application architecture
 

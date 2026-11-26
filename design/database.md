@@ -2373,8 +2373,9 @@ Drops the monthly `ts.process_value` partitions whose end is more than `keep_day
 
 ### report — reporting views (#132, D-129)
 
-A stable, read-only layer for BI tools, separate from the tables above: `report.site`, `equipment`, `uom`, `material`, `reason`
-(dimensions); `production`, `production_report`, `run`, `stop`, `oee_shift`, `oee_day`, `work_order`, `job` (facts). They change only by
+A stable, read-only layer for BI tools, separate from the tables above: `report.site`, `equipment`, `uom`, `material`, `reason`, `person`,
+`characteristic` (dimensions); `production`, `production_report`, `run`, `stop`, `oee_shift`, `oee_day`, `work_order`, `job`, `lot`, `stock`,
+`lot_movement`, `lot_genealogy`, `labor_session`, `quality_result`, `spc_alert`, `nonconformance`, `nonconformance_lot` (facts). They change only by
 adding columns. The group role `pulaski_report` (`db/report-role.sql`) may select from them and nothing else; the views read the tables with
 their owner's rights. Every column, grain and figure is described in `design/reporting.md`; keep it in step when a view changes.
 

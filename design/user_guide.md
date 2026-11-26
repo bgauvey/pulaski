@@ -3685,7 +3685,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 
 - **Your own reports and dashboards** aren't built in Pulaski: analysts build them in Power BI, Excel or a warehouse from the read-only
   reporting views (see [Reports and dashboards in other tools](#reports-and-dashboards-in-other-tools)). The views cover sites, equipment,
-  materials, reasons, production, runs, stops, OEE by shift and day, work orders and jobs; inventory, labor and quality views come next.
+  materials, reasons, production, runs, stops, OEE by shift and day, work orders and jobs, lots, stock and movements, genealogy, labor,
+  quality results, SPC alerts and NCRs. Production by shift and today's OEE aren't in them; the screens have those.
 - **Accessibility:** the main flows (signing in, the Overview and menu, the Floor and job pages, Inventory and Scan, the station and line boards)
   pass automated WCAG 2.2 AA checks, but haven't yet been tested with a screen reader by a person, and the other screens have only the checks
   every build runs on all markup. Text-only zoom to 200% isn't checked. See `design/accessibility.md`.

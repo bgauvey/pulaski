@@ -363,7 +363,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
 - Reporting (D-129, proposed, in pieces, #132): no in-app builder; the `report` schema (views over core/ts, change only by adding columns) read
   by `pulaski_report` (`db/report-role.sql`, run by `deploy/images/db/init.sh` and the test fixture); `design/reporting.md` is the analyst's
-  guide (keep it in step); `ReportViewTests` lists every view. Figures follow the app's (OEE from rollups, production nets to runs).
+  guide (keep it in step, with Power BI and warehouse loading); `ReportViewTests` lists every view. Figures follow the app's (OEE from
+  rollups, production nets to runs, lot movements to lots, labor net of breaks). Views go at the end of `schema-draft.sql`.
 - Audit trail (D-128, proposed, #129): `SearchAuditQuery` over `evt.event` (`/api/audit`; subject = all time, else ≤ 92-day window; cursor
   `AuditCursor`), `AuditChanges` (pure: before/after diff by value, fields, label, action); `audit.view` held everywhere (`CanEverywhere`);
   `/audit` page, `HistoryLink` on record pages; `AuditAreas.All` (Contracts) checked against `events.Create` subject types by a test.

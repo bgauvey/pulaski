@@ -65,8 +65,13 @@ erDiagram
     uom ||--o{ production : "uom_id"
 ```
 
-Dimensions: `site`, `equipment`, `material`, `uom`, `reason`. Facts: `work_order`, `job`, `run`, `production`, `production_report`, `stop`,
-`oee_shift`, `oee_day`.
+Dimensions: `site`, `equipment`, `material`, `uom`, `reason`, `person`, `characteristic`. Facts: `work_order`, `job`, `run`, `production`,
+`production_report`, `stop`, `oee_shift`, `oee_day`, `lot`, `stock`, `lot_movement`, `lot_genealogy`, `labor_session`, `quality_result`,
+`spc_alert`, `nonconformance`, `nonconformance_lot`.
+
+Inventory, labor and quality join the same way: `lot` and `lot_movement` to `material`, `equipment` (location) and `job`; `lot_genealogy` to
+`lot` twice (parent, child); `labor_session` to `person`, `equipment` and `job`; `quality_result` to `characteristic`, `material`, `lot`,
+`job` and `run`; `nonconformance_lot` between `nonconformance` and `lot`.
 
 ## Dimensions
 
@@ -189,11 +194,161 @@ FROM report.work_order w JOIN report.material m USING (material_id) JOIN report.
 WHERE w.status <> 'cancelled';
 ```
 
-## Inventory, genealogy, labor and quality
+## Inventory and genealogy
 
-The views for lots and their movements, genealogy, labor, quality results, SPC alerts and nonconformances come next (#132, piece b), with
-connecting Power BI and getting the data into a warehouse.
+### report.lot
 
+**Grain:** one lot as it is now. `lot_id`, `site_id`, `lot_number` (null for a balance), `label` (the lot number, or `@LOCATION` for a balance
+that has none), `material_id`, `status` (`planned`, `in_production`, `available`, `on_hold`, `quarantine`, `consumed`, `scrapped`,
+`shipped`, `cancelled`), `quantity` (in the material's base unit), `uom_id`, `location_id`, `container_id`, `is_bulk` (a balance where lots
+mix: one per material and location), `origin` (`produced`, `received`, `erp`, `split`, `merge`), `supplier_lot`, `expires_at`,
+`produced_by_job_id`, `produced_by_run_id`, `created_at`, `updated_at`, `is_on_hand` (available, on hold or in quarantine).
+
+### report.stock
+
+**Grain:** site × material × location × status, on hand now. `site_id`, `material_id`, `location_id`, `status`, `uom_id`, `lot_count`,
+`quantity`, `first_expires_at`.
+
+### report.lot_movement
+
+**Grain:** one movement of one lot. `movement_id`, `recorded_at` (when it was entered), `effective_at` (when it counts in stock: earlier
+when back-dated, at most 31 days), `site_local_date` (of `effective_at`), `lot_id`, `site_id`, `material_id`, `kind` (`received`, `moved`,
+`loaded`, `consumed`, `produced`, `split`, `merged`, `status_changed`, `adjusted`, `scrapped`, `shipped`, `corrected`, `reversed`, `packed`,
+`unpacked`, `created`), `qty_delta` (+ in, − out; null when the quantity didn't change), `qty_after`, `uom_id`, `from_location_id`,
+`to_location_id`, `related_lot_id` (the other lot of a split, merge or transfer), `container_id`, `job_id` and `run_id` (consumption into
+or production from a job), `from_status` / `to_status`, `reason_id`, `reference` (a shipment or count number), `reverses_movement_id` (this
+undoes that movement), `is_reversed` (a later movement undid this one), `report_id` (the production report that made it), `auto_source`
+(`backflush`, `time_window`, `counter`: consumed by Pulaski itself), `actor_id`, `comment`.
+
+**Stock at a time** is the sum of `qty_delta` with `effective_at` up to that time, never `qty_after`:
+
+```sql
+SELECT m.code, sum(v.qty_delta) AS quantity_at_month_end
+FROM report.lot_movement v JOIN report.material m USING (material_id)
+WHERE v.effective_at < date '2026-12-01' AND v.site_id = :site
+GROUP BY m.code;
+```
+
+A reversal is a movement of its own that offsets the one it undoes: sum every row (they cancel), or leave out both
+(`reverses_movement_id IS NULL AND NOT is_reversed`), never only one.
+
+### report.lot_genealogy
+
+**Grain:** one link from a lot used (`parent_lot_id`) to a lot made from it (`child_lot_id`). `link_id`, `link_basis` (`declared`: both
+declared on the same job; `made_from`: picked for that lot; `split`, `merge`, `rework`, `time_window`), `quantity`, `uom_id`, `job_id`,
+`run_id`, `effective_at`, `derived_at`. Links later replaced are left out. These are the stored links: the app also pairs each used lot with
+the lots made while it was in use (by time) when it shows a trace, and that pairing isn't stored, so a trace here is at job level.
+
+Every lot made from a raw lot, through any number of steps:
+
+```sql
+WITH RECURSIVE down AS (
+    SELECT child_lot_id, 1 AS depth FROM report.lot_genealogy WHERE parent_lot_id = :raw_lot
+    UNION
+    SELECT g.child_lot_id, d.depth + 1 FROM report.lot_genealogy g JOIN down d ON g.parent_lot_id = d.child_lot_id WHERE d.depth < 20
+)
+SELECT l.label, m.code, l.status, l.quantity, d.depth
+FROM down d JOIN report.lot l ON l.lot_id = d.child_lot_id JOIN report.material m USING (material_id);
+```
+
+## Labor
+
+### report.person
+
+`person_id`, `site_id`, `employee_number`, `display_name`, `crew_id` / `crew_code` / `crew_name`, `origin` (`local`, `hr`, `erp`),
+`external_system` / `external_key` (the HR or ERP key), `is_active`.
+
+### report.labor_session
+
+**Grain:** one stretch of a person's time as it stands now: a correction replaces the session it corrects, and a void correction removes
+it. `session_id`, `site_id`, `person_id`, `equipment_id` (the line), `job_id`, `labor_type` (`direct`, `setup`, `indirect`, `training`),
+`reason_id` (indirect time's reason), `started_at`, `ended_at` (null while on), `allocation_pct` (the share of their time on this line),
+`production_date` and `shift_code` (the shift it belongs to), `source` (`self`, `supervisor`, `crew`, `terminal`, `correction`), `elapsed_hours`,
+`break_hours` (the person's breaks inside it, paid or not), `worked_hours` = (elapsed − breaks) × share, `is_open`, `is_approved` (its
+shift's labor is approved, so it won't change).
+
+Direct hours per job, as the app shares them out to runs, aren't here when a session names no job (the app shares them by overlap with
+what ran); sum `worked_hours` by `equipment_id` and day for line totals.
+
+## Quality
+
+### report.characteristic
+
+`characteristic_id`, `code`, `name`, `data_kind` (`variable`: measured; `attribute`: inspected for defects), `chart_type`, `subgroup_size`,
+`uom_id`, `decimals`, `is_active`.
+
+### report.quality_result
+
+**Grain:** one result: a subgroup measured or a sample inspected. `result_id`, `sampled_at`, `site_local_date`, `recorded_at`, `site_id`,
+`characteristic_id`, `material_id`, `equipment_id`, `job_id`, `run_id`, `lot_id`; measured: `subgroup_size`, `mean`, `range`, `std_dev`,
+`measured_values` (an array); inspected: `inspected_count`, `defect_count`; the limits it was checked against: `lsl`, `target`, `usl`,
+`max_defects`; `conforms` (null: no limits applied), `source` (`manual`, `lab`, `auto`, `lot_attribute`), `recorded_by`, `is_excluded` and
+`exclusion_reason_id` (left out of charts and certificates, kept on record). Leave out `is_excluded` rows for any figure.
+
+### report.spc_alert
+
+**Grain:** one SPC alert: a control chart that signalled, open until closed. `alert_id`, `site_id`, `characteristic_id`, `material_id`,
+`equipment_id`, `status` (`open`, `closed`), `rules` (the Nelson rules broken), `breaks` (how many results broke them), `raised_at`,
+`closed_at`, `closed_by`, `cause_reason_id`, `action`, `open_hours`.
+
+### report.nonconformance and report.nonconformance_lot
+
+**Grain:** one NCR. `ncr_id`, `site_id`, `number`, `title`, `severity` (`minor`, `major`, `critical`), `status` (`open`, `investigating`,
+`acting`, `closed`), `source_kind`, `raised_at`, `raised_by`, `root_cause`, `disposition`, `closed_at`, `closed_by`, `open_days`,
+`action_count`, `open_actions`, `overdue_actions`. `report.nonconformance_lot` (`ncr_id`, `lot_id`) gives the lots each one concerns.
+
+## Power BI
+
+1. In Power BI Desktop: **Get data → PostgreSQL database**. Server `host:5432` (the database server, or a read replica), database
+   `pulaski`. Choose **Import** (recommended: fast, and the views are small enough) or **DirectQuery** (always current, but every visual is a
+   query on the database).
+2. Sign in with the reporting login (**Database** credentials). Use an encrypted connection outside the plant network.
+3. In the navigator, pick the views you need from the `report` schema; nothing else is offered to that login.
+4. In **Model**, relate them as in the diagram above: `*_id` to the dimension's `*_id`, single direction from dimension to fact. Give the
+   equipment view two roles when you need both the line and the machine (`line_id` and `equipment_id`).
+5. To refresh in the Power BI service, publish the report and set up a data gateway that can reach the database, with the same login.
+
+OEE measures, adding hours first:
+
+```
+Planned hours   = SUM ( oee_day[planned_hours] )
+Availability    = DIVIDE ( SUM ( oee_day[run_hours] ), [Planned hours] )
+Performance     = DIVIDE ( SUM ( oee_day[earned_hours] ), SUM ( oee_day[run_with_rate_hours] ) )
+Quality         = DIVIDE ( SUM ( oee_day[earned_good_hours] ), SUM ( oee_day[earned_hours] ) )
+OEE             = [Availability] * [Performance] * [Quality]
+```
+
+Times arrive in UTC: add a column in the site's time zone when you show them, or use `site_local_date` and `production_date`.
+
+## Getting the data into a warehouse (Snowflake and others)
+
+**Main route: copy the views on a schedule.** Use a replication or ELT tool that can read **views** or run a query on PostgreSQL, with the
+reporting login. Tools that replicate by change data capture (logical replication) copy tables, not views; use their query or standard
+(non-CDC) mode for the `report` schema. How to copy each view:
+
+| Views | How | Why |
+| --- | --- | --- |
+| `site`, `equipment`, `uom`, `material`, `reason`, `person`, `characteristic` | Full copy each time | Small; things are edited in place |
+| `lot`, `stock`, `work_order`, `job`, `run`, `spc_alert`, `nonconformance`, `nonconformance_lot` | Full copy, or by `updated_at` where the view has it | Current state, which changes |
+| `production`, `lot_movement`, `quality_result` | Incremental on `recorded_at`, with an hour's overlap; merge on the id | Append-only: a correction or reversal is a new row (a quality result's exclusion changes the row: copy the last 31 days again) |
+| `production_report` | The last 31 days again, merged on `report_id` | A reversal changes `is_reversed` and the net quantities |
+| `stop` | The last 31 days again, merged on `stop_id` | Stops are coded, split, merged or retimed up to 31 days back |
+| `labor_session` | The last 31 days again, merged on `session_id` | Corrections replace sessions until the shift is approved |
+| `oee_shift`, `oee_day` | Incremental on `rolled_at` (re-rolled days come again), merged on equipment + day + shift | A changed day is rolled again |
+| `lot_genealogy` | Full copy | Links are replaced as well as added |
+
+Without such a tool, a scheduled job can extract and load directly, for example:
+
+```bash
+psql "$PULASKI_REPORT_URL" -c "\copy (SELECT * FROM report.lot_movement WHERE recorded_at > '$SINCE') TO 'lot_movement.csv' CSV HEADER"
+# then in Snowflake: PUT the file to a stage and COPY INTO the table, merging on movement_id
+```
+
+**Near real time: the event feeds.** Pulaski already sends what happens as it happens, as CloudEvents JSON, to a webhook or an MQTT broker
+(Configure → Integrations, D-061, D-088): inventory movements, production reports, work orders and jobs, labor, stops, quality results. A
+pipeline that receives them (an HTTPS endpoint or an MQTT bridge into a stream your warehouse ingests) gives minute-fresh data. Each event's
+`id` is unique: dedupe on it, since delivery is at least once. Keep the scheduled copy of the views as the source of truth, and use the feed
+for live dashboards.
 ## What the views don't have (yet)
 
 - **Production by shift.** A report belongs to the shift running at its time, which Pulaski works out from the shift schedule when it reads;
@@ -201,3 +356,6 @@ connecting Power BI and getting the data into a warehouse.
   (`occurred_at >= window_start AND occurred_at < window_end`) on the same line.
 - **Today's OEE.** The rollups are written for days that are final (up to two days ago).
 - **Machine counts** (raw counters and process values) aren't in the views; they are telemetry, not records.
+- **Per-lot genealogy by time** (which lot was in use when each lot was made) is worked out by the app when it shows a trace; the views have
+  the stored, job-level links.
+- **Direct labor shared out to runs** by overlap is the app's; the views give each session's worked hours.

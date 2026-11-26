@@ -2074,6 +2074,13 @@ public sealed class InventoryTests(DatabaseFixture db)
                 FROM report.production p JOIN report.run r USING (run_id) WHERE p.job_id = @Job
                 """, new { Job = plant.Job });
             Assert.Equal((runGood, runScrap, 1L), (good, scrap, rejections));
+
+            // Every lot's movements add up to its quantity, the rejected lot's write-off included.
+            Assert.Equal(0L, await admin.ExecuteScalarAsync<long>(
+                """
+                SELECT count(*) FROM report.lot l LEFT JOIN (SELECT lot_id, sum(qty_delta) q FROM report.lot_movement GROUP BY lot_id) m USING (lot_id)
+                WHERE l.site_id = @Site AND abs(coalesce(m.q, 0) - l.quantity) > 0.000001
+                """, new { plant.Site }));
         }
 
         // A number lot attribute standing for the characteristic records a result when it is set, and holds the lot when it fails.

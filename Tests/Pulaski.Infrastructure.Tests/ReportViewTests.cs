@@ -10,6 +10,8 @@ public sealed class ReportViewTests(DatabaseFixture db)
     public static readonly string[] Views =
     [
         "site", "equipment", "uom", "material", "reason", "production_report", "production", "run", "stop", "oee_shift", "oee_day", "work_order", "job",
+        "lot", "stock", "lot_movement", "lot_genealogy", "person", "labor_session", "characteristic", "quality_result", "spc_alert", "nonconformance",
+        "nonconformance_lot",
     ];
 
     [Fact]
