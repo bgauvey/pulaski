@@ -49,6 +49,8 @@ fi
 
 psql_on "$db" --single-transaction -f "$here/seed-units.sql"
 psql_on "$db" --single-transaction -f "$here/seed-reasons.sql"
+# The reporting role (D-129): reads the report views only; logins for BI tools are the DBA's (db/report-role.sql).
+psql_on "$db" -f "$here/report-role.sql"
 
 # The API's login: created once, its password set on every run, a member of pulaski_app only (D-012).
 psql_on "$db" -v login="$login" -v password="$PULASKI_APP_PASSWORD" -v db="$db" <<'SQL'

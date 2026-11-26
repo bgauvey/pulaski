@@ -45,6 +45,8 @@ Orders & scheduling                       Execution & inventory
  alert_subscription ─ alert_sent, handover_entry, language ─ translation,
  changeover_rule                              ts.quality_sample, ts.spc_violation
 
+Reporting (D-129): report.* views over all of the above, read by pulaski_report (design/reporting.md)
+
 People & access                            History & events
  sec.app_user, role, permission,           ts.* (state, downtime, alarms, counts,
  role_assignment, terminal, badge            process values, job status, lots, quality, OEE)
@@ -2368,6 +2370,14 @@ Creates the current month and the next `months` − 1 for every range-partitione
 ### ts.drop_old_process_values(keep_days) — function (D-071)
 
 Drops the monthly `ts.process_value` partitions whose end is more than `keep_days` (at least 7) days ago, and returns how many. Only that table. `SECURITY DEFINER` with a fixed `search_path`, like `ts.ensure_partitions`: dropping a partition needs ownership. Only `pulaski_app` may execute it; the API calls it with `Retention:ProcessValueDays` every 12 hours.
+
+### report — reporting views (#132, D-129)
+
+A stable, read-only layer for BI tools, separate from the tables above: `report.site`, `equipment`, `uom`, `material`, `reason`, `person`,
+`characteristic` (dimensions); `production`, `production_report`, `run`, `stop`, `oee_shift`, `oee_day`, `work_order`, `job`, `lot`, `stock`,
+`lot_movement`, `lot_genealogy`, `labor_session`, `quality_result`, `spc_alert`, `nonconformance`, `nonconformance_lot` (facts). They change only by
+adding columns. The group role `pulaski_report` (`db/report-role.sql`) may select from them and nothing else; the views read the tables with
+their owner's rights. Every column, grain and figure is described in `design/reporting.md`; keep it in step when a view changes.
 
 ## 16. Schema version
 

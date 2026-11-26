@@ -2938,6 +2938,319 @@ REVOKE ALL ON FUNCTION evt.purge_delivered(integer) FROM PUBLIC;
 --     what it applies; the API refuses to start without the newest.
 -- =====================================================================
 
+-- Reporting views (#132, D-129): a stable, documented layer for BI tools, read through pulaski_report (db/report-role.sql).
+CREATE SCHEMA report;
+
+-- ---- Dimensions ----
+
+CREATE OR REPLACE VIEW report.site AS
+SELECT e.id AS site_id, e.code, e.name, e.time_zone, e.is_active
+FROM core.equipment e
+WHERE e.level = 'site';
+
+-- Every piece of equipment with its site, and the area and line above it (a line is the nearest one, itself included, that runs jobs).
+CREATE OR REPLACE VIEW report.equipment AS
+SELECT e.id AS equipment_id, e.site_id, e.code, e.name, e.level, e.equipment_role AS role, e.parent_id,
+       p.code AS parent_code,
+       area.id AS area_id, area.code AS area_code,
+       line.id AS line_id, line.code AS line_code,
+       e.can_run_job, e.is_schedulable, e.holds_inventory, e.tracks_state, e.is_active
+FROM core.equipment e
+LEFT JOIN core.equipment p ON p.id = e.parent_id
+LEFT JOIN LATERAL (
+    SELECT a.id, a.code FROM core.equipment_closure c JOIN core.equipment a ON a.id = c.ancestor_id
+    WHERE c.descendant_id = e.id AND a.level = 'area' ORDER BY c.depth LIMIT 1) area ON true
+LEFT JOIN LATERAL (
+    SELECT l.id, l.code FROM core.equipment_closure c JOIN core.equipment l ON l.id = c.ancestor_id
+    WHERE c.descendant_id = e.id AND l.can_run_job ORDER BY c.depth LIMIT 1) line ON true
+WHERE e.level <> 'enterprise';
+
+CREATE OR REPLACE VIEW report.uom AS
+SELECT u.id AS uom_id, u.code, u.name, u.dimension
+FROM core.uom u;
+
+CREATE OR REPLACE VIEW report.material AS
+SELECT m.id AS material_id, m.code, m.name, m.material_type, c.code AS class_code, c.name AS class_name,
+       m.base_uom_id, u.code AS base_uom_code, m.is_lot_tracked, m.shelf_life_days, m.origin, m.external_system, m.external_key, m.is_active
+FROM core.material m
+JOIN core.uom u ON u.id = m.base_uom_id
+LEFT JOIN core.material_class c ON c.id = m.material_class_id;
+
+-- Reasons of every kind, with the groups above them (D-062) as a path: "Mechanical › Die".
+CREATE OR REPLACE VIEW report.reason AS
+WITH RECURSIVE tree (id, depth, group_path) AS (
+    SELECT r.id, 0, NULL::text FROM core.reason_code r WHERE r.parent_id IS NULL
+    UNION ALL
+    SELECT c.id, t.depth + 1, coalesce(t.group_path || ' › ', '') || p.name
+    FROM tree t JOIN core.reason_code p ON p.id = t.id JOIN core.reason_code c ON c.parent_id = p.id
+) CYCLE id SET is_cycle USING visited
+SELECT r.id AS reason_id, r.site_id, r.reason_kind AS kind, r.code, r.name, r.utilization_class, r.oee_impact, t.group_path, t.depth,
+       NOT r.is_selectable AS is_group, r.is_active
+FROM core.reason_code r
+LEFT JOIN tree t ON t.id = r.id AND NOT t.is_cycle;
+
+-- ---- Production and OEE ----
+
+-- One row per production report (D-063), net of any reversal: a reversed report nets to zero (is_reversed), and its correction is a new
+-- report. Good = processed - defective. Machine counts aren't reports and aren't here.
+CREATE OR REPLACE VIEW report.production_report AS
+SELECT c.report_id, max(c.job_id::text)::uuid AS job_id, max(c.run_id::text)::uuid AS run_id, max(c.equipment_id::text)::uuid AS equipment_id,
+       min(c.occurred_at) FILTER (WHERE c.source = 'operator') AS occurred_at,
+       (min(c.occurred_at) FILTER (WHERE c.source = 'operator') AT TIME ZONE max(s.time_zone))::date AS site_local_date,
+       min(c.recorded_at) FILTER (WHERE c.source = 'operator') AS recorded_at,
+       coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'processed'), 0)
+         - coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'defective'), 0) AS good_qty,
+       coalesce(sum(c.delta_qty) FILTER (WHERE c.count_kind = 'defective'), 0) AS scrap_qty,
+       coalesce(max(c.uom_id::text)::uuid, max(j.uom_id::text)::uuid) AS uom_id,
+       max(c.scrap_reason_code_id::text) FILTER (WHERE c.source = 'operator')::uuid AS scrap_reason_id,
+       bool_or(c.source = 'correction') AS is_reversed,
+       max(c.machine_through) AS machine_through,
+       max(c.actor_id) FILTER (WHERE c.source = 'operator') AS reported_by
+FROM ts.production_count c
+LEFT JOIN core.job j ON j.id = c.job_id
+LEFT JOIN core.equipment e ON e.id = c.equipment_id
+LEFT JOIN core.equipment s ON s.id = e.site_id
+WHERE c.source IN ('operator', 'correction') AND c.report_id IS NOT NULL
+GROUP BY c.report_id;
+
+-- Every counted change to good and scrap, in the run it belongs to: reports, their reversals, and lots rejected on quality (D-085), which
+-- move their quantity from good to scrap without a report. Adds up to the run's good and scrap; use it for totals. Machine counts excluded.
+CREATE OR REPLACE VIEW report.production AS
+SELECT c.id AS production_id, c.occurred_at, (c.occurred_at AT TIME ZONE s.time_zone)::date AS site_local_date, c.recorded_at,
+       c.equipment_id, c.run_id, c.job_id, c.report_id,
+       CASE WHEN c.source = 'correction' THEN 'reversal' WHEN c.report_id IS NULL THEN 'rejection' ELSE 'report' END AS change_kind,
+       CASE c.count_kind WHEN 'processed' THEN c.delta_qty WHEN 'defective' THEN -c.delta_qty ELSE 0 END AS good_qty,
+       CASE c.count_kind WHEN 'defective' THEN c.delta_qty ELSE 0 END AS scrap_qty,
+       coalesce(c.uom_id, j.uom_id) AS uom_id, c.scrap_reason_code_id AS scrap_reason_id, c.actor_id
+FROM ts.production_count c
+LEFT JOIN core.job j ON j.id = c.job_id
+LEFT JOIN core.equipment e ON e.id = c.equipment_id
+LEFT JOIN core.equipment s ON s.id = e.site_id
+WHERE c.source IN ('operator', 'correction') AND c.count_kind IN ('processed', 'defective');
+
+-- One row per run of a job on a line (D-035), with what was reported into it.
+CREATE OR REPLACE VIEW report.run AS
+SELECT r.id AS run_id, r.job_id, r.equipment_id, r.run_no, r.started_at, r.ended_at, r.status,
+       r.end_reason_code_id AS end_reason_id, r.good_qty, r.scrap_qty, r.uom_id,
+       extract(epoch FROM (coalesce(r.ended_at, now()) - r.started_at)) / 3600 AS hours
+FROM core.job_run r;
+
+-- Stops as they stand now (D-069: replaced pieces left out), with their reason, its class and the PackML state they started in.
+CREATE OR REPLACE VIEW report.stop AS
+SELECT d.id AS stop_id, d.equipment_id, d.run_id, d.started_at, d.ended_at,
+       extract(epoch FROM (coalesce(d.ended_at, now()) - d.started_at)) / 60 AS minutes,
+       (d.started_at AT TIME ZONE s.time_zone)::date AS site_local_date,
+       d.packml_state, ps.name AS packml_state_name, d.plc_stop_reason, d.effective_reason_code_id AS reason_id,
+       rc.utilization_class, d.effective_reason_code_id IS NULL AS is_uncoded, d.is_micro_stop, d.ended_at IS NULL AS is_open,
+       d.source, d.coded_by, d.comment
+FROM ts.downtime d
+JOIN core.equipment e ON e.id = d.equipment_id
+LEFT JOIN core.equipment s ON s.id = e.site_id
+LEFT JOIN core.packml_state ps ON ps.code = d.packml_state
+LEFT JOIN core.reason_code rc ON rc.id = d.effective_reason_code_id
+WHERE d.superseded_at IS NULL;
+
+-- OEE per equipment and shift (D-052, D-072), from the daily rollups: final days only (up to two days ago); today's figures are the app's.
+-- Hours from the tally; A, P and Q as the app works them out: planned = scheduled - non-production - planned stops; availability =
+-- run / planned; performance = earned / run with a rate; quality = earned good / earned; OEE = A x P x Q. Null where a part can't be worked out.
+CREATE OR REPLACE VIEW report.oee_shift AS
+WITH w AS (
+    SELECT o.site_id, o.equipment_id, o.production_date, o.rolled_at, x.win
+    FROM ts.oee_rollup o, jsonb_array_elements(o.windows) AS x(win)
+), t AS (
+    SELECT site_id, equipment_id, production_date, rolled_at,
+           win->>'shiftCode' AS shift_code, win->>'shiftName' AS shift_name, win->>'crew' AS crew,
+           (win->>'start')::timestamptz AS window_start, (win->>'end')::timestamptz AS window_end,
+           (win->'tally'->>'scheduled')::numeric / 36e9 AS scheduled_hours,
+           (win->'tally'->>'nonProduction')::numeric / 36e9 AS non_production_hours,
+           (win->'tally'->>'plannedStop')::numeric / 36e9 AS planned_stop_hours,
+           (win->'tally'->>'run')::numeric / 36e9 AS run_hours,
+           (win->'tally'->>'down')::numeric / 36e9 AS down_hours,
+           (win->'tally'->>'microStop')::numeric / 36e9 AS micro_stop_hours,
+           (win->'tally'->>'noSignal')::numeric / 36e9 AS no_signal_hours,
+           (win->'tally'->>'uncoded')::numeric / 36e9 AS uncoded_hours,
+           (win->'tally'->>'runWithRate')::numeric / 36e9 AS run_with_rate_hours,
+           (win->'tally'->>'runWithoutJob')::numeric / 36e9 AS run_without_job_hours,
+           (win->'tally'->>'stops')::int AS stops,
+           (win->'tally'->>'microStops')::int AS micro_stops,
+           (win->'tally'->>'good')::numeric AS good_qty,
+           (win->'tally'->>'scrap')::numeric AS scrap_qty,
+           (win->'tally'->>'earnedHours')::numeric AS earned_hours,
+           (win->'tally'->>'earnedGoodHours')::numeric AS earned_good_hours
+    FROM w
+)
+SELECT t.*,
+       t.scheduled_hours - t.non_production_hours - t.planned_stop_hours AS planned_hours,
+       t.run_hours / nullif(t.scheduled_hours - t.non_production_hours - t.planned_stop_hours, 0) AS availability,
+       t.earned_hours / nullif(t.run_with_rate_hours, 0) AS performance,
+       t.earned_good_hours / nullif(t.earned_hours, 0) AS quality,
+       (t.run_hours / nullif(t.scheduled_hours - t.non_production_hours - t.planned_stop_hours, 0))
+         * (t.earned_hours / nullif(t.run_with_rate_hours, 0))
+         * (t.earned_good_hours / nullif(t.earned_hours, 0)) AS oee
+FROM t;
+
+-- OEE per equipment and production day: its shifts' hours added up, then A, P and Q worked out from the sums (never an average of ratios).
+CREATE OR REPLACE VIEW report.oee_day AS
+WITH d AS (
+    SELECT site_id, equipment_id, production_date,
+           sum(scheduled_hours) AS scheduled_hours, sum(non_production_hours) AS non_production_hours, sum(planned_stop_hours) AS planned_stop_hours,
+           sum(run_hours) AS run_hours, sum(down_hours) AS down_hours, sum(micro_stop_hours) AS micro_stop_hours,
+           sum(no_signal_hours) AS no_signal_hours, sum(uncoded_hours) AS uncoded_hours, sum(run_with_rate_hours) AS run_with_rate_hours,
+           sum(stops) AS stops, sum(micro_stops) AS micro_stops, sum(good_qty) AS good_qty, sum(scrap_qty) AS scrap_qty,
+           sum(earned_hours) AS earned_hours, sum(earned_good_hours) AS earned_good_hours
+    FROM report.oee_shift
+    GROUP BY site_id, equipment_id, production_date
+)
+SELECT d.*,
+       d.scheduled_hours - d.non_production_hours - d.planned_stop_hours AS planned_hours,
+       d.run_hours / nullif(d.scheduled_hours - d.non_production_hours - d.planned_stop_hours, 0) AS availability,
+       d.earned_hours / nullif(d.run_with_rate_hours, 0) AS performance,
+       d.earned_good_hours / nullif(d.earned_hours, 0) AS quality,
+       (d.run_hours / nullif(d.scheduled_hours - d.non_production_hours - d.planned_stop_hours, 0))
+         * (d.earned_hours / nullif(d.run_with_rate_hours, 0))
+         * (d.earned_good_hours / nullif(d.earned_hours, 0)) AS oee
+FROM d;
+
+-- ---- Orders and jobs ----
+
+-- Work orders (D-003) with what their production jobs reported, in the order's unit when the jobs share it.
+CREATE OR REPLACE VIEW report.work_order AS
+SELECT w.id AS work_order_id, w.site_id, w.order_number, w.material_id, w.planned_qty, w.uom_id, w.status, w.priority,
+       w.planned_start, w.planned_end, w.due_at, w.origin, w.external_system, w.external_key, w.created_at,
+       coalesce(sum(r.good_qty) FILTER (WHERE j.uom_id = w.uom_id), 0) AS good_qty,
+       coalesce(sum(r.scrap_qty) FILTER (WHERE j.uom_id = w.uom_id), 0) AS scrap_qty,
+       min(r.started_at) AS first_started_at, max(r.ended_at) AS last_ended_at,
+       count(DISTINCT j.id) AS job_count
+FROM core.work_order w
+LEFT JOIN core.job j ON j.work_order_id = w.id AND j.job_type = 'production'
+LEFT JOIN core.job_run r ON r.job_id = j.id
+GROUP BY w.id;
+
+-- Jobs (D-003, D-018) with their line (or the group they were planned to), plan, runs and what was reported.
+CREATE OR REPLACE VIEW report.job AS
+SELECT j.id AS job_id, j.site_id, j.work_order_id, j.job_number, j.job_type, j.equipment_id, j.group_equipment_id, j.material_id,
+       o.operation_number, j.planned_qty, j.uom_id, j.status, j.planned_start, j.planned_end, j.completed_at, j.created_at,
+       coalesce(sum(r.good_qty), 0) AS good_qty, coalesce(sum(r.scrap_qty), 0) AS scrap_qty,
+       min(r.started_at) AS first_started_at, max(r.ended_at) AS last_ended_at, count(r.id) AS run_count,
+       coalesce(sum(extract(epoch FROM (coalesce(r.ended_at, now()) - r.started_at)) / 3600), 0) AS run_hours
+FROM core.job j
+LEFT JOIN core.process_operation o ON o.id = j.process_operation_id
+LEFT JOIN core.job_run r ON r.job_id = j.id
+GROUP BY j.id, o.operation_number;
+
+
+-- ---- Inventory and genealogy ----
+
+-- Lots as they are now (D-027), in the material's base unit. A balance (is_bulk, D-031) has no lot number: it is named by its location.
+CREATE OR REPLACE VIEW report.lot AS
+SELECT l.id AS lot_id, l.site_id, l.lot_number, coalesce(l.lot_number, '@' || coalesce(loc.code, '?')) AS label, l.material_id, l.status,
+       l.quantity, l.uom_id, l.location_equipment_id AS location_id, l.container_id, l.is_bulk, l.origin, l.supplier_lot, l.expires_at,
+       l.produced_by_job_id, l.produced_by_run_id, l.created_at, l.updated_at,
+       l.status IN ('available', 'on_hold', 'quarantine') AS is_on_hand
+FROM core.lot l
+LEFT JOIN core.equipment loc ON loc.id = l.location_equipment_id;
+
+-- Stock on hand now, by site, material, location and status, in the material's base unit.
+CREATE OR REPLACE VIEW report.stock AS
+SELECT l.site_id, l.material_id, l.location_equipment_id AS location_id, l.status, l.uom_id, count(*) AS lot_count, sum(l.quantity) AS quantity,
+       min(l.expires_at) AS first_expires_at
+FROM core.lot l
+WHERE l.status IN ('available', 'on_hold', 'quarantine') AND l.quantity > 0
+GROUP BY l.site_id, l.material_id, l.location_equipment_id, l.status, l.uom_id;
+
+-- Every lot movement (D-027, D-057). recorded_at is when it was entered; effective_at when it counts in stock (earlier when back-dated): stock
+-- at a time is the sum of qty_delta with effective_at up to then. A reversal (D-063) is a movement of its own (reverses_movement_id); the
+-- movement it undoes is_reversed, so sum all rows, or leave out both.
+CREATE OR REPLACE VIEW report.lot_movement AS
+SELECT e.id AS movement_id, e.occurred_at AS recorded_at, e.effective_at, (e.effective_at AT TIME ZONE s.time_zone)::date AS site_local_date,
+       e.lot_id, l.site_id, l.material_id, e.event_kind AS kind, e.qty_delta, e.qty_after, e.uom_id,
+       e.from_location_id, e.to_location_id, e.related_lot_id, e.container_id, e.job_id, e.run_id, e.from_status, e.to_status,
+       e.reason_code_id AS reason_id, e.reference, e.reverses_event_id AS reverses_movement_id,
+       EXISTS (SELECT 1 FROM ts.lot_event r WHERE r.lot_id = e.lot_id AND r.reverses_event_id = e.id) AS is_reversed,
+       e.report_id, e.auto_source, e.actor_id, e.comment
+FROM ts.lot_event e
+JOIN core.lot l ON l.id = e.lot_id
+JOIN core.equipment s ON s.id = l.site_id;
+
+-- Genealogy as it stands (D-027, D-078): which lots went into which, at job level (declared) or as picked; superseded links left out.
+-- Pairing a used lot to each made lot by time happens in the app on read and isn't here.
+CREATE OR REPLACE VIEW report.lot_genealogy AS
+SELECT g.id AS link_id, g.parent_lot_id, g.child_lot_id, g.link_basis, g.quantity, g.uom_id, g.job_id, g.run_id, g.effective_at, g.derived_at
+FROM core.lot_genealogy g
+WHERE g.superseded_at IS NULL;
+
+-- ---- Labor ----
+
+CREATE OR REPLACE VIEW report.person AS
+SELECT p.id AS person_id, p.site_id, p.employee_number, p.display_name, p.crew_id, c.code AS crew_code, c.name AS crew_name, p.origin,
+       p.external_system, p.external_key, p.is_active
+FROM core.person p
+LEFT JOIN core.crew c ON c.id = p.crew_id;
+
+-- Labor sessions as they stand (D-040): a correction replaces the session it corrects, and a void one removes it. worked_hours = the time
+-- outside the person's breaks (D-047) × its share, as the app works it out; approved once its shift's labor is approved.
+CREATE OR REPLACE VIEW report.labor_session AS
+WITH sessions AS (
+    SELECT s.* FROM core.labor_session s
+    WHERE NOT s.is_void AND NOT EXISTS (SELECT 1 FROM core.labor_session c WHERE c.corrects_session_id = s.id)
+), breaks AS (
+    SELECT b.* FROM core.labor_break b
+    WHERE NOT b.is_void AND NOT EXISTS (SELECT 1 FROM core.labor_break c WHERE c.corrects_break_id = b.id)
+)
+SELECT s.id AS session_id, s.site_id, s.person_id, s.equipment_id, s.job_id, s.labor_type, s.reason_code_id AS reason_id,
+       s.started_at, s.ended_at, s.allocation_pct, s.production_date, s.shift_code, s.source,
+       extract(epoch FROM (coalesce(s.ended_at, now()) - s.started_at)) / 3600 AS elapsed_hours,
+       coalesce(br.hours, 0) AS break_hours,
+       (extract(epoch FROM (coalesce(s.ended_at, now()) - s.started_at)) / 3600 - coalesce(br.hours, 0)) * s.allocation_pct / 100 AS worked_hours,
+       s.ended_at IS NULL AS is_open,
+       EXISTS (SELECT 1 FROM core.labor_approval a WHERE a.site_id = s.site_id AND a.production_date = s.production_date
+               AND a.shift_schedule_id IS NOT DISTINCT FROM s.shift_schedule_id AND a.shift_code IS NOT DISTINCT FROM s.shift_code) AS is_approved
+FROM sessions s
+LEFT JOIN LATERAL (
+    SELECT sum(extract(epoch FROM (least(coalesce(b.ended_at, now()), coalesce(s.ended_at, now())) - greatest(b.started_at, s.started_at))) / 3600) AS hours
+    FROM breaks b
+    WHERE b.person_id = s.person_id AND b.started_at < coalesce(s.ended_at, now()) AND coalesce(b.ended_at, now()) > s.started_at
+) br ON true;
+
+-- ---- Quality ----
+
+CREATE OR REPLACE VIEW report.characteristic AS
+SELECT q.id AS characteristic_id, q.code, q.name, q.data_kind, q.chart_type, q.subgroup_size, q.uom_id, q.decimals, q.is_active
+FROM core.quality_characteristic q;
+
+-- Quality results (D-085) with the specification limits they were checked against; excluded ones are kept, flagged.
+CREATE OR REPLACE VIEW report.quality_result AS
+SELECT r.id AS result_id, r.occurred_at AS sampled_at, (r.occurred_at AT TIME ZONE s.time_zone)::date AS site_local_date, r.recorded_at,
+       r.site_id, r.characteristic_id, r.material_id, r.equipment_id, r.job_id, r.run_id, r.lot_id,
+       r.subgroup_size, r.mean, r.range, r.std_dev, r.measured_values, r.inspected_count, r.defect_count,
+       i.lsl, i.target, i.usl, i.max_defects, r.conforms, r.source, r.recorded_by,
+       r.is_excluded, r.exclusion_reason_id
+FROM ts.quality_sample r
+JOIN core.equipment s ON s.id = r.site_id
+LEFT JOIN core.material_spec_item i ON i.id = r.spec_item_id;
+
+CREATE OR REPLACE VIEW report.spc_alert AS
+SELECT a.id AS alert_id, a.site_id, a.characteristic_id, a.material_id, a.equipment_id, a.status, a.rules, a.breaks, a.raised_at, a.closed_at,
+       a.closed_by, a.cause_reason_code_id AS cause_reason_id, a.action,
+       extract(epoch FROM (coalesce(a.closed_at, now()) - a.raised_at)) / 3600 AS open_hours
+FROM core.spc_alert a;
+
+-- Nonconformance reports (D-124), with their actions counted.
+CREATE OR REPLACE VIEW report.nonconformance AS
+SELECT n.id AS ncr_id, n.site_id, n.number, n.title, n.severity, n.status, n.source_kind, n.raised_at, n.raised_by, n.root_cause,
+       n.disposition, n.closed_at, n.closed_by,
+       extract(epoch FROM (coalesce(n.closed_at, now()) - n.raised_at)) / 86400 AS open_days,
+       count(a.id) AS action_count,
+       count(a.id) FILTER (WHERE a.status = 'open') AS open_actions,
+       count(a.id) FILTER (WHERE a.status = 'open' AND a.due_on < (now() AT TIME ZONE coalesce(s.time_zone, 'UTC'))::date) AS overdue_actions
+FROM core.nonconformance n
+JOIN core.equipment s ON s.id = n.site_id
+LEFT JOIN core.nonconformance_action a ON a.ncr_id = n.id
+GROUP BY n.id, s.time_zone;
+
+CREATE OR REPLACE VIEW report.nonconformance_lot AS
+SELECT l.ncr_id, l.lot_id FROM core.nonconformance_lot l;
+
 CREATE TABLE public.schema_migration (
     version     text PRIMARY KEY,                               -- the file name without .sql
     applied_at  timestamptz NOT NULL DEFAULT now()
@@ -3029,7 +3342,9 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0084_nonconformance'),
     ('0085_nonconformance_follow_up'),
     ('0086_setup_checklist'),
-    ('0087_audit_trail');
+    ('0087_audit_trail'),
+    ('0088_report_views'),
+    ('0089_report_views_more');
 
 -- =====================================================================
 -- 17. SEED DATA
