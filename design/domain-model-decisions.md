@@ -3427,7 +3427,9 @@ boards: the user's choice). What markup and stylesheets show is checked on every
 controls, named buttons and links, labels pointing at controls, images' alternatives, page titles, no positive tabindex, language and skip link;
 contrast of the tokens and of every rule setting both colour and background, in both themes. The running app is audited once with axe-core,
 and a screen-reader script is kept for people to run (user's choices). Findings, fixes and the script live in `design/accessibility.md`.
-(a) the build checks and their fixes; (b) the axe audit, its fixes and the script.
+(a) the build checks and their fixes; (b) the audit of the running demo (`tools/a11y-audit`: axe-core on 37 page checks in both themes, a
+keyboard walk, reflow at 320 px), its four fixes (OEE bars named as images, the user menu named by what it shows, unavailable-action tips out
+of the layout until shown, a scrolling *Next up* table) and the screen-reader script for people to run.
 
 ## Application architecture
 
