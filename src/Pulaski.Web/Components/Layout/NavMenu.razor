@@ -50,8 +50,8 @@
                                     <Icon Name="@(entry.FolderIcon ?? "categorized")" /><span class="nav-text">@L[label]</span>
                                 </button>
                             }
-                            @* The group of the open screen stays unfolded, so it has nothing to fold. *@
-                            @if (entry.Children.Count > 0 && NavTree.GroupAt(NavTree.Sections, Path) != key)
+                            @* Every group folds and unfolds, the open screen's too (#205). *@
+                            @if (entry.Children.Count > 0)
                             {
                                 <button type="button" class="nav-toggle" aria-expanded="@(open ? "true" : "false")" aria-controls="@($"nav-{key}")"
                                         aria-label="@(open ? L["Fold {0}", L[label]] : L["Unfold {0}", L[label]])" title="@(open ? L["Fold {0}", L[label]] : L["Unfold {0}", L[label]])"
@@ -90,6 +90,7 @@
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
         _ = InvokeAsync(async () =>
         {
+            _folds.At(NavTree.GroupAt(NavTree.Sections, Path));
             StateHasChanged();
             await CountInboxAsync(force: false);
         });
@@ -124,13 +125,17 @@
 
     // Grouped like screens (#199): a group unfolds while one of its screens is open; others stay as the reader left them, per browser.
     private const string OpenKey = "pulaski.nav.open";
-    private readonly HashSet<string> _open = new(StringComparer.Ordinal);
+    private readonly NavFolds _folds = new();
 
     private bool May(NavLinkItem link) => User.Can(link.Permission) || (link.OrPermission is { } other && User.Can(other));
 
     private string Path => Navigation.ToBaseRelativePath(Navigation.Uri);
 
-    private bool IsOpen(string key) => _open.Contains(key) || NavTree.GroupAt(NavTree.Sections, Path) == key;
+    private bool IsOpen(string key)
+    {
+        _folds.At(NavTree.GroupAt(NavTree.Sections, Path));
+        return _folds.IsOpen(key);
+    }
 
     private RenderFragment Item(NavLinkItem link, bool child) =>
         @<NavLink class="@(child ? "nav-item nav-child" : "nav-item")" href="@link.Href" Match="@(link.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@L[link.Title]">
@@ -141,32 +146,20 @@
     {
         if (firstRender && await JS.InvokeAsync<string?>("pulaski.ui.load", OpenKey) is { Length: > 0 } stored)
         {
-            _open.UnionWith(stored.Split(',', StringSplitOptions.RemoveEmptyEntries));
+            _folds.Restore(stored.Split(',', StringSplitOptions.RemoveEmptyEntries));
             StateHasChanged();
         }
     }
 
-    private Task ToggleAsync(string key)
-    {
-        if (!IsOpen(key))
-        {
-            _open.Add(key);
-        }
-        else
-        {
-            _open.Remove(key);
-        }
+    private Task ToggleAsync(string key) => _folds.Toggle(key) ? SaveAsync() : Task.CompletedTask;
 
-        return SaveAsync();
-    }
-
-    private Task Remember(string key) => _open.Add(key) ? SaveAsync() : Task.CompletedTask;
+    private Task Remember(string key) => _folds.Opening(key) ? SaveAsync() : Task.CompletedTask;
 
     private async Task SaveAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("pulaski.ui.save", OpenKey, string.Join(",", _open.Order(StringComparer.Ordinal)));
+            await JS.InvokeVoidAsync("pulaski.ui.save", OpenKey, string.Join(",", _folds.Opened.Order(StringComparer.Ordinal)));
         }
         catch (JSDisconnectedException)
         {

@@ -3293,8 +3293,9 @@ the screens that belong with it (Operate: Planning = Work orders + Schedule, a f
 Configure: Equipment + Machine profiles, Edge nodes, Terminals; Materials + Units, Specifications; Processes + BOMs, Work instructions,
 Changeovers, Planning rates; Site settings + Shifts, Reasons; People + Users; Integrations + System health, Languages). `NavTree.Visible`
 keeps what the user may open (D-039); a group whose main screen they can't open becomes a folder of the rest. Clicking a group's name opens
-its main screen and unfolds it; an arrow folds without navigating; the group of the current screen is always unfolded (`GroupAt`, by
-address prefix); the open groups are kept per browser (`pulaski.nav.open`). The icon rail shows every screen flat, as before. Screens,
+its main screen and unfolds it; an arrow folds or unfolds without navigating; the group of the current screen unfolds on arrival (`GroupAt`,
+by address prefix) and folds like any other (#205, `NavFolds`: folded stays folded while the reader stays in that group); the groups opened
+are kept per browser (`pulaski.nav.open`). The icon rail shows every screen flat, as before. Screens,
 addresses and permissions are unchanged.
 
 ### D-120 · Views of a control chart (#198) · *Proposed*
