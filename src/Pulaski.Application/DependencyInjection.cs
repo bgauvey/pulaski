@@ -24,6 +24,8 @@ public static class DependencyInjection
         services.AddScoped<MachineData.OeeRollups>();
         // What release approval can release (#138): one per kind of document.
         services.AddScoped<Approvals.IReleasableDocument, Processes.ProcessReleasable>();
+        services.AddScoped<Approvals.IReleasableDocument, Boms.BomReleasable>();
+        services.AddScoped<Approvals.IReleasableDocument, Quality.SpecReleasable>();
         services.AddScoped<MachineData.OeeTargetWrites>();
         services.AddScoped<Inventory.FeedCounterPoster>();
         services.AddScoped<Inventory.AllocationAutoRefresh>();

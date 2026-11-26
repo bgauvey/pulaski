@@ -97,15 +97,23 @@ internal sealed class InboxQueries(NpgsqlDataSource dataSource) : IInboxReadStor
     // why; a request at several sites shows at the first the reader sees.
     private const string Releases = """
         SELECT 'release' AS kind, 'release:' || r.id AS key,
-               COALESCE(p.code, '?') || ' · v' || COALESCE(pv.version_number, 0) AS title,
+               COALESCE(p.code, bm.code || ' · BOM', sm.code, '?') || ' · v' || COALESCE(pv.version_number, bv.version_number, sv.version_number, 0) AS title,
                COALESCE((SELECT u.display_name FROM sec.app_user u
                    WHERE (CASE WHEN u.idp_issuer = 'pulaski-local' THEN u.idp_subject ELSE u.idp_issuer || '|' || u.idp_subject END) = r.submitted_by), r.submitted_by)
                    || COALESCE(' · ' || r.note, '') AS detail,
                s.id AS site_id, s.code AS site_code, r.submitted_at AS since,
-               CASE r.kind WHEN 'process' THEN 'processes/' || r.document_id || '?version=' || r.version_id ELSE '' END AS link
+               CASE r.kind WHEN 'process' THEN 'processes/' || r.document_id || '?version=' || r.version_id
+                           WHEN 'bom' THEN 'boms/' || r.document_id || '?version=' || r.version_id
+                           ELSE 'quality/specs/' || r.document_id || '?version=' || r.version_id END AS link
         FROM core.release_request r
         LEFT JOIN core.process p ON r.kind = 'process' AND p.id = r.document_id
         LEFT JOIN core.process_version pv ON r.kind = 'process' AND pv.id = r.version_id
+        LEFT JOIN core.bom b ON r.kind = 'bom' AND b.id = r.document_id
+        LEFT JOIN core.material bm ON bm.id = b.material_id
+        LEFT JOIN core.bom_version bv ON r.kind = 'bom' AND bv.id = r.version_id
+        LEFT JOIN core.material_spec ms ON r.kind = 'spec' AND ms.id = r.document_id
+        LEFT JOIN core.material sm ON sm.id = ms.material_id
+        LEFT JOIN core.material_spec_version sv ON r.kind = 'spec' AND sv.id = r.version_id
         JOIN LATERAL (SELECT e.id, e.code FROM core.equipment e WHERE e.id = ANY(r.site_ids) AND e.id = ANY(@SiteIds) ORDER BY e.code LIMIT 1) s ON true
         WHERE r.status = 'pending'
         """;

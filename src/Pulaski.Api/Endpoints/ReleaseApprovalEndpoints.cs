@@ -43,6 +43,31 @@ internal static class ReleaseApprovalEndpoints
         .WithTags("Release approval")
         .RequireAny(Site.Of(SiteOf.Process), Permissions.ProcessesView);
 
+        // BOMs and specifications (#138b): submitted by who may release them, as their own release endpoints; read by who sees them.
+        routes.MapPost("/boms/{id:guid}/versions/{versionId:guid}/submit", async Task<Ok<CreatedResponse>> (
+            Guid id, Guid versionId, SubmitReleaseRequest request, ICommandHandler<SubmitReleaseCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SubmitReleaseCommand(ReleaseKinds.Bom, id, versionId, request.Version, request.Note), ct)))
+        .WithTags("Release approval")
+        .RequirePermission(Permissions.Processes);
+
+        routes.MapGet("/boms/{id:guid}/release-status", async Task<Ok<ReleaseStatusDto>> (
+            Guid id, HttpContext http, IQueryHandler<GetReleaseStatusQuery, ReleaseStatusDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetReleaseStatusQuery(ReleaseKinds.Bom, id, await Visible.SitesAsync(http, Permissions.ReleaseApprove)), ct)))
+        .WithTags("Release approval")
+        .RequireAny(null, Permissions.ProcessesView);
+
+        routes.MapPost("/quality/specs/{id:guid}/versions/{versionId:guid}/submit", async Task<Ok<CreatedResponse>> (
+            Guid id, Guid versionId, SubmitReleaseRequest request, ICommandHandler<SubmitReleaseCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new SubmitReleaseCommand(ReleaseKinds.Spec, id, versionId, request.Version, request.Note), ct)))
+        .WithTags("Release approval")
+        .RequirePermission(Permissions.Specs);
+
+        routes.MapGet("/quality/specs/{id:guid}/release-status", async Task<Ok<ReleaseStatusDto>> (
+            Guid id, HttpContext http, IQueryHandler<GetReleaseStatusQuery, ReleaseStatusDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetReleaseStatusQuery(ReleaseKinds.Spec, id, await Visible.SitesAsync(http, Permissions.ReleaseApprove)), ct)))
+        .WithTags("Release approval")
+        .RequireAny(null, Permissions.QualityView);
+
         routes.MapPost("/release-requests/{id:guid}/approve", async Task<Ok<ReleaseDecisionResponse>> (
             Guid id, DecideReleaseRequest request, HttpContext http, ICommandHandler<ApproveReleaseCommand, ReleaseDecisionResponse> handler, CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(new ApproveReleaseCommand(id, request.Comment, await Visible.SitesAsync(http, Permissions.ReleaseApprove)), ct)))

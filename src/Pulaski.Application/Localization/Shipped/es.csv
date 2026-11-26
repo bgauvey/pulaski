@@ -4469,6 +4469,8 @@ Version {0} is {1}; start a new draft to have it released.,La versión {0} está
 Version {0} of BOM {1} not found.,No se encontró la versión {0} de la lista de materiales {1}.
 Version {0} of process {1} not found.,No se encontró la versión {0} del proceso {1}.
 Version {0} of specification {1} not found.,No se encontró la versión {0} de la especificación {1}.
+Version {0} of the BOM for {1} isn't a draft.,La versión {0} de la lista de materiales de {1} no es un borrador.
+Version {0} of the specification for {1} isn't a draft.,La versión {0} de la especificación de {1} no es un borrador.
 Version {0} of {1} isn't a draft.,La versión {0} de {1} no es un borrador.
 Version {0} released,Versión {0} liberada
 Version {0} sent back to its editors,Versión {0} devuelta a sus editores

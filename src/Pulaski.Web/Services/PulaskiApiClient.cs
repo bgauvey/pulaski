@@ -991,6 +991,20 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<CreatedResponse> SubmitProcessReleaseAsync(Guid processId, Guid versionId, SubmitReleaseRequest request, CancellationToken ct = default) =>
         SendAsync<CreatedResponse>(HttpMethod.Post, $"api/processes/{processId}/versions/{versionId}/submit", request, ct);
 
+    /// <summary>A BOM's or specification's release status and submission (#138b): <paramref name="kind"/> <c>bom</c> or <c>spec</c>.</summary>
+    public Task<ReleaseStatusDto> GetReleaseStatusAsync(string kind, Guid documentId, CancellationToken ct = default) =>
+        GetAsync<ReleaseStatusDto>($"{ReleasePath(kind, documentId)}/release-status", ct);
+
+    public Task<CreatedResponse> SubmitReleaseAsync(string kind, Guid documentId, Guid versionId, SubmitReleaseRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"{ReleasePath(kind, documentId)}/versions/{versionId}/submit", request, ct);
+
+    private static string ReleasePath(string kind, Guid documentId) => kind switch
+    {
+        "bom" => $"api/boms/{documentId}",
+        "spec" => $"api/quality/specs/{documentId}",
+        _ => $"api/processes/{documentId}",
+    };
+
     /// <summary><paramref name="action"/>: <c>approve</c>, <c>return</c> or <c>withdraw</c>.</summary>
     public Task<ReleaseDecisionResponse> DecideReleaseAsync(Guid requestId, string action, DecideReleaseRequest request, CancellationToken ct = default) =>
         SendAsync<ReleaseDecisionResponse>(HttpMethod.Post, $"api/release-requests/{requestId}/{action}", request, ct);

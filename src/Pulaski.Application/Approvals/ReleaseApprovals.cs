@@ -57,6 +57,12 @@ public interface IReleaseApprovalRepository
 
     /// <summary>Who saved the version's draft: actors of <paramref name="eventTypes"/> on the document naming the version.</summary>
     Task<IReadOnlyList<string>> EditorsAsync(Guid documentId, Guid versionId, IReadOnlyList<string> eventTypes, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The sites that can make a material (#138b): those with a line holding a capability for it now, and <paramref name="processId"/>'s site;
+    /// with its code, to name a BOM or specification by.
+    /// </summary>
+    Task<(IReadOnlyList<Guid> Sites, string MaterialCode)> MaterialSitesAsync(Guid materialId, Guid? processId, CancellationToken cancellationToken);
 }
 
 /// <summary>Release approval's reads (#138).</summary>

@@ -3346,6 +3346,10 @@ table of the data plotted (open, newest first). Computed on read; no schema chan
   release (`IReleasableDocument`: lock document then draft, check, release, in the caller's transaction). `ReturnReleaseCommand` (comment) makes
   it a draft again; `WithdrawReleaseCommand` by its submitter. Events `pulaski.release.submitted/approved/returned/withdrawn.v1` on the
   document, `pulaski.site.release_approval_changed.v1`. Waiting requests are Inbox kind `release`. Migration 0083.
+- **BOMs and specifications (b).** `BomReleasable` / `SpecReleasable` (the releases moved into `BomReleaser` / `SpecReleaser`, shared with
+  their own commands); the deciding sites are those with a capability for the material now, and a BOM's process's site
+  (`MaterialSitesAsync`). Their editors show `ReleaseApprovalPanel` (submit, waiting with decide/withdraw, history) and hide Release where
+  approval is required. `/api/boms/{id}/…/submit`, `/release-status` and `/api/quality/specs/{id}/…` with the permissions their releases need.
 - **Pieces:** (a) settings, permission, requests, processes (editor: Submit, waiting, Approve and release / Send back, history); (b) BOMs
   and specifications.
 

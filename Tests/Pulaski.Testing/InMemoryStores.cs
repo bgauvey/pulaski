@@ -506,6 +506,9 @@ public sealed class InMemoryReleaseApprovals : Application.Approvals.IReleaseApp
     public Task<IReadOnlyList<string>> EditorsAsync(Guid documentId, Guid versionId, IReadOnlyList<string> eventTypes, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<string>>([]);
 
+    public Task<(IReadOnlyList<Guid> Sites, string MaterialCode)> MaterialSitesAsync(Guid materialId, Guid? processId, CancellationToken cancellationToken) =>
+        Task.FromResult<(IReadOnlyList<Guid>, string)>(([], "?"));
+
     public Task<Contracts.Approvals.ReleaseApprovalSettingsDto> GetSettingsAsync(Guid siteId, CancellationToken cancellationToken) =>
         Task.FromResult(new Contracts.Approvals.ReleaseApprovalSettingsDto { SiteId = siteId });
 

@@ -21,6 +21,14 @@ internal static class ReleaseApprovalSql
         WHERE subject = @DocumentId AND type = ANY(@Types) AND data->>'versionId' = @VersionId::text
         """;
 
+    // The sites that can make a material now (a line there has a capability for it), and a process's site.
+    public const string MaterialSites = """
+        SELECT DISTINCT e.site_id FROM core.equipment_capability c JOIN core.equipment e ON e.id = c.equipment_id
+        WHERE c.material_id = @MaterialId AND c.effective_from <= now() AND (c.effective_to IS NULL OR c.effective_to > now()) AND e.site_id IS NOT NULL
+        UNION
+        SELECT site_id FROM core.process WHERE id = @ProcessId
+        """;
+
     public const string Requiring = """
         SELECT site_id FROM core.release_approval_settings
         WHERE site_id = ANY(@Sites) AND CASE @Kind WHEN 'process' THEN processes WHEN 'bom' THEN boms WHEN 'spec' THEN specs ELSE false END
@@ -107,6 +115,13 @@ internal sealed class ReleaseApprovalRepository(DbSession session) : IReleaseApp
 
     public async Task<IReadOnlyList<string>> EditorsAsync(Guid documentId, Guid versionId, IReadOnlyList<string> eventTypes, CancellationToken cancellationToken) =>
         [.. await session.QueryAsync<string>(ReleaseApprovalSql.Editors, new { DocumentId = documentId, VersionId = versionId, Types = eventTypes.ToArray() }, cancellationToken)];
+
+    public async Task<(IReadOnlyList<Guid> Sites, string MaterialCode)> MaterialSitesAsync(Guid materialId, Guid? processId, CancellationToken cancellationToken)
+    {
+        var sites = await session.QueryAsync<Guid>(ReleaseApprovalSql.MaterialSites, new { MaterialId = materialId, ProcessId = processId }, cancellationToken);
+        var code = await session.QuerySingleOrDefaultAsync<string>("SELECT code FROM core.material WHERE id = @Id", new { Id = materialId }, cancellationToken);
+        return ([.. sites], code ?? "?");
+    }
 }
 
 /// <summary>Release approval's reads (#138).</summary>
@@ -129,6 +144,10 @@ internal sealed class ReleaseApprovalQueries(NpgsqlDataSource dataSource) : IRel
         {
             ReleaseKinds.Process => [.. await connection.QueryAsync<Guid>(new CommandDefinition(
                 "SELECT site_id FROM core.process WHERE id = @Id", new { Id = documentId }, cancellationToken: cancellationToken))],
+            ReleaseKinds.Bom => [.. await connection.QueryAsync<Guid>(new CommandDefinition(
+                $"WITH d AS (SELECT material_id, process_id FROM core.bom WHERE id = @Id) {MaterialSitesOf("d")}", new { Id = documentId }, cancellationToken: cancellationToken))],
+            ReleaseKinds.Spec => [.. await connection.QueryAsync<Guid>(new CommandDefinition(
+                $"WITH d AS (SELECT material_id, NULL::uuid AS process_id FROM core.material_spec WHERE id = @Id) {MaterialSitesOf("d")}", new { Id = documentId }, cancellationToken: cancellationToken))],
             _ => [],
         };
     }
@@ -147,11 +166,13 @@ internal sealed class ReleaseApprovalQueries(NpgsqlDataSource dataSource) : IRel
         var rows = await connection.QueryAsync<ListedRow>(new CommandDefinition(
             $"""
             SELECT r.id, r.kind, r.document_id, r.version_id, r.site_ids, r.status, r.submitted_by, r.submitted_at, r.note, r.decided_by, r.decided_at, r.decision_note,
-                   COALESCE(pv.version_number, 0) AS version_number,
+                   COALESCE(pv.version_number, bv.version_number, sv.version_number, 0) AS version_number,
                    {Instructions.InstructionSql.UserName("r.submitted_by")} AS submitted_by_name,
                    {Instructions.InstructionSql.UserName("r.decided_by")} AS decided_by_name
             FROM core.release_request r
             LEFT JOIN core.process_version pv ON r.kind = 'process' AND pv.id = r.version_id
+            LEFT JOIN core.bom_version bv ON r.kind = 'bom' AND bv.id = r.version_id
+            LEFT JOIN core.material_spec_version sv ON r.kind = 'spec' AND sv.id = r.version_id
             WHERE r.kind = @Kind AND r.document_id = @Id
             ORDER BY r.submitted_at DESC
             """, new { Kind = kind, Id = documentId }, cancellationToken: cancellationToken));
@@ -164,6 +185,14 @@ internal sealed class ReleaseApprovalQueries(NpgsqlDataSource dataSource) : IRel
         return [.. await connection.QueryAsync<string>(new CommandDefinition(
             ReleaseApprovalSql.Editors, new { DocumentId = documentId, VersionId = versionId, Types = eventTypes.ToArray() }, cancellationToken: cancellationToken))];
     }
+
+    // The sites making the document's material (in CTE d: material_id, process_id), as the write side works them out.
+    private static string MaterialSitesOf(string cte) => $"""
+        SELECT DISTINCT e.site_id FROM {cte} JOIN core.equipment_capability c ON c.material_id = {cte}.material_id JOIN core.equipment e ON e.id = c.equipment_id
+        WHERE c.effective_from <= now() AND (c.effective_to IS NULL OR c.effective_to > now()) AND e.site_id IS NOT NULL
+        UNION
+        SELECT p.site_id FROM {cte} JOIN core.process p ON p.id = {cte}.process_id
+        """;
 
     private sealed class ListedRow
     {

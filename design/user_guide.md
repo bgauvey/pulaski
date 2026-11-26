@@ -706,6 +706,11 @@ There can be one BOM per material and process, plus one for any process.
 
 When the draft is saved and has no problems, type an optional **Release note** and click **Release version N**. From then on, new orders for that material (with that process) plan their components from it.
 
+Where approval is required ([Approval before release](#approval-before-release): any site that can make the material, or the BOM's
+process's site, asks for it), **Release version N** gives way to **Submit version N for approval…**, as for
+[processes](#release-with-approval): the draft waits, someone else approves it (which releases it) or sends it back, and **Approvals** lists
+every request.
+
 ### Change it
 
 Open the BOM and click **New draft**. It copies the released version; edit, save, release. The old version becomes obsolete. Orders already made keep the components they were planned with.
@@ -2095,7 +2100,9 @@ from the [process values](#process-values) its tag sends, instead of by hand.
    every** so many **hours** or **units of output** (in the job's unit), and the minutes after which a due sample is **overdue** (15 to start
    with). Leave both empty for no plan.
 6. Click **Save draft**. A yellow box lists anything that stops the release, and the lines concerned are highlighted.
-7. Type an optional **Release note** and click **Release version N**.
+7. Type an optional **Release note** and click **Release version N**. Where approval is required (any site that can make the material asks
+   for it, under [Approval before release](#approval-before-release)), click **Submit version N for approval…** instead; someone else approves
+   it, which releases it, or sends it back, as for [processes](#release-with-approval).
 
 To change it later, click **New draft**: it starts as a copy of the released version.
 
@@ -3062,7 +3069,9 @@ Formats are tried in their **Order**, after GS1; the whole scan must match.
 **Approval before release** asks for a second person's approval before a draft is released, for each kind of document: **Processes**,
 **BOMs**, **Specifications**. Tick the kinds and click **Save approval settings**.
 
-- A process follows its own site's setting. A BOM or specification needs approval when any site that can make its material asks for it.
+- A process follows its own site's setting. A BOM or specification needs approval when any site that can make its material asks for it: a
+  site with a line that has a capability for the material, or (for a BOM made for a process) the process's site. An approver may decide it
+  if they may approve releases at any one of those sites.
 - Turning it on doesn't affect what is released already. A draft that waits when it is turned off still waits until it is decided or
   withdrawn; after that, drafts are released directly again.
 - Changing it needs permission to manage the site's settings.
@@ -3526,8 +3535,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
   waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
   and machine counts, not days on the calendar.
-- **Approval before release** covers processes so far; BOMs and specifications are released directly whatever the setting, until that part
-  comes. Nothing is e-mailed about a draft waiting for approval (it is in the Inbox).
+- **Approval before release:** nothing is e-mailed about a draft waiting for approval (it is in the Inbox). A BOM's or specification's need for
+  approval follows the sites that can make its material now; a capability added later doesn't affect a request already waiting. Work
+  instructions are released directly.
 - **Sampling plans** show on the job page, the Floor, operator stations and line boards; nothing is e-mailed about an overdue sample, and a
   sample recorded at a station can't be tied to a lot there (use the Quality page). A unit-based plan counts reported output, not machine counts.
 - **Work instructions** show on the job page and at the station, not on the Floor's board or line boards. At a station only the running job's

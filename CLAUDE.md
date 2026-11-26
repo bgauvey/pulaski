@@ -359,7 +359,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Release approval (D-122, proposed, in pieces, #138): `core.release_approval_settings` per site (processes/boms/specs; BOM/spec: any site making
   the material) on Site settings; `core.release_request` pending → approved/returned/withdrawn. `SubmitReleaseCommand`, `ApproveReleaseCommand`
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
-  `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. (a) processes; (b) BOMs and specs.
+  `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
+  BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
 - Sampling plans (D-121, proposed, in pieces, #136): `SpecItem.Sampling` (`SamplingPlan`: at start and/or every N h or N units, grace) in the
   spec definition jsonb; `SamplingSchedule.Evaluate` (pure) over open runs, processed output and the run's results → `GetDueSamplesQuery`
   (`/api/quality/samples-due?siteId=`, `/api/jobs/{id}/samples-due`); job page **Samples**, Floor card flags. (b) `StationDto.Samples` +

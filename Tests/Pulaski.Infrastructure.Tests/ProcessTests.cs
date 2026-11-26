@@ -614,6 +614,77 @@ public sealed class ProcessTests(DatabaseFixture db)
         await db.SendAsync(new ReleaseProcessVersionCommand(created.Id, v2.Id, v2Now.Version, null));
     }
 
+    [Fact]
+    public async Task A_bom_or_specification_needs_approval_where_a_site_that_makes_its_material_asks_for_it()
+    {
+        var plant = await CreatePlantAsync();
+        var processId = await ReleasedExtrudeAndPackAsync(plant);
+        var settings = await QueryAsync<Pulaski.Application.Approvals.GetReleaseApprovalSettingsQuery, Pulaski.Contracts.Approvals.ReleaseApprovalSettingsDto>(
+            new Pulaski.Application.Approvals.GetReleaseApprovalSettingsQuery(plant.Site));
+        await db.SendAsync(new Pulaski.Application.Approvals.SetReleaseApprovalSettingsCommand(plant.Site, settings.Version, false, true, true));
+
+        // A BOM for the site's process: refused directly, submitted, approved by someone else, released.
+        var endCap = Guid.CreateVersion7();
+        await db.ExecuteAsync(
+            $"""
+            INSERT INTO core.material (id, code, name, material_type, base_uom_id)
+            VALUES ('{endCap}', 'CAP-{endCap.ToString("N")[^8..]}', 'End cap', 'packaging', '{db.UomId}')
+            """);
+        var bom = await db.SendAsync(new CreateBomCommand(db.MaterialId, processId));
+        var bomDraft = await QueryAsync<GetBomVersionQuery, BomVersionDto>(new GetBomVersionQuery(
+            bom.Id, (await QueryAsync<GetBomQuery, BomDto>(new GetBomQuery(bom.Id))).Versions.Single().Id));
+        var savedBom = await db.SendAsync(new SaveBomDraftCommand(bom.Id, bomDraft.Id, bomDraft.Version, new BomDefinitionDto
+        {
+            BaseQty = 1000m,
+            BaseUomId = db.UomId,
+            Items = [new BomItemDto { Id = Guid.CreateVersion7(), LineNo = 10, ComponentMaterialId = endCap, QtyPer = 84m, UomId = db.UomId, ConsumptionMethod = ConsumptionMethod.Backflush }],
+        }));
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => db.SendAsync(new ReleaseBomVersionCommand(bom.Id, bomDraft.Id, savedBom.Version, null)));
+        var bomRequest = await db.SendAsync(new Pulaski.Application.Approvals.SubmitReleaseCommand("bom", bom.Id, bomDraft.Id, savedBom.Version, null));
+        await db.SendAsAsync("qa-bom", new Pulaski.Application.Approvals.ApproveReleaseCommand(bomRequest.Id, "Quantities checked", null));
+        Assert.Equal("released", (await QueryAsync<GetBomVersionQuery, BomVersionDto>(new GetBomVersionQuery(bom.Id, bomDraft.Id))).Status);
+        Assert.True((await QueryAsync<Pulaski.Application.Approvals.GetReleaseStatusQuery, Pulaski.Contracts.Approvals.ReleaseStatusDto>(
+            new Pulaski.Application.Approvals.GetReleaseStatusQuery("bom", bom.Id, null))).ApprovalRequired);
+
+        // A specification of a material the site can make (a capability on its line) needs approval; one of a material made nowhere doesn't.
+        var made = Guid.CreateVersion7();
+        var nowhere = Guid.CreateVersion7();
+        await db.ExecuteAsync(
+            $"""
+            INSERT INTO core.material (id, code, name, material_type, base_uom_id)
+            VALUES ('{made}', 'MADE-{made.ToString("N")[^8..]}', 'Profile', 'finished', '{db.UomId}'),
+                   ('{nowhere}', 'NOWH-{nowhere.ToString("N")[^8..]}', 'Elsewhere', 'finished', '{db.UomId}');
+            INSERT INTO core.equipment_capability (equipment_id, material_id, ideal_rate_per_hour, rate_uom_id, effective_from)
+            VALUES ('{plant.Ext1}', '{made}', 100, '{db.UomId}', now() - interval '1 day');
+            """);
+        var wall = await db.SendAsync(new Pulaski.Application.Quality.CreateCharacteristicCommand("APW-" + made.ToString("N")[^6..], "Wall", null, "variable", null, 2));
+
+        async Task<(Guid Spec, Guid Version, long Token)> SpecDraftAsync(Guid material)
+        {
+            var spec = await db.SendAsync(new Pulaski.Application.Quality.CreateSpecCommand(material));
+            var header = await QueryAsync<Pulaski.Application.Quality.GetSpecQuery, Pulaski.Contracts.Quality.SpecDto>(new Pulaski.Application.Quality.GetSpecQuery(spec.Id));
+            var draft = await QueryAsync<Pulaski.Application.Quality.GetSpecVersionQuery, Pulaski.Contracts.Quality.SpecVersionDto>(
+                new Pulaski.Application.Quality.GetSpecVersionQuery(spec.Id, header.Versions[0].Id));
+            var saved = await db.SendAsync(new Pulaski.Application.Quality.SaveSpecDraftCommand(spec.Id, draft.Id, draft.Version, new Pulaski.Contracts.Quality.SpecDefinitionDto
+            {
+                Items = [new() { Id = Guid.CreateVersion7(), CharacteristicId = wall.Id, Lsl = 3m, Usl = 4m }],
+            }));
+            return (spec.Id, draft.Id, saved.Version);
+        }
+
+        var strict = await SpecDraftAsync(made);
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Quality.ReleaseSpecVersionCommand(strict.Spec, strict.Version, strict.Token, null)));
+        var specRequest = await db.SendAsync(new Pulaski.Application.Approvals.SubmitReleaseCommand("spec", strict.Spec, strict.Version, strict.Token, "First issue"));
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Approvals.ApproveReleaseCommand(specRequest.Id, "Mine", null)));
+        await db.SendAsAsync("qa-spec", new Pulaski.Application.Approvals.ApproveReleaseCommand(specRequest.Id, "Limits agreed", null));
+        Assert.Equal(1, (await QueryAsync<Pulaski.Application.Quality.GetReleasedSpecQuery, Pulaski.Contracts.Quality.ReleasedSpecDto>(
+            new Pulaski.Application.Quality.GetReleasedSpecQuery(made))).VersionNumber);
+
+        var loose = await SpecDraftAsync(nowhere);
+        await Assert.ThrowsAsync<Pulaski.Domain.DomainRuleException>(() => db.SendAsync(new Pulaski.Application.Approvals.SubmitReleaseCommand("spec", loose.Spec, loose.Version, loose.Token, null)));
+        await db.SendAsync(new Pulaski.Application.Quality.ReleaseSpecVersionCommand(loose.Spec, loose.Version, loose.Token, null));
+    }
+
     /// <summary>Extrude and Pack, making every material, released as version 1.</summary>
     private async Task<Guid> ReleasedExtrudeAndPackAsync(Plant plant)
     {

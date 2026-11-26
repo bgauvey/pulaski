@@ -4468,6 +4468,8 @@ Version {0} is {1}; start a new draft to have it released.
 Version {0} of BOM {1} not found.
 Version {0} of process {1} not found.
 Version {0} of specification {1} not found.
+Version {0} of the BOM for {1} isn't a draft.
+Version {0} of the specification for {1} isn't a draft.
 Version {0} of {1} isn't a draft.
 Version {0} released
 Version {0} sent back to its editors
