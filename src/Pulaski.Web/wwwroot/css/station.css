@@ -50,9 +50,10 @@
     background: var(--surface-2);
 }
 
-    .station-status.is-down { background: var(--danger); color: #fff; }
-    .station-status.is-waiting { background: var(--warning); color: #1a1300; }
-    .station-status.is-nosignal { background: var(--state-held); color: #fff; }
+    /* The surface colour on the status colour keeps 4.5:1 in both themes (#142). */
+    .station-status.is-down { background: var(--danger); color: var(--surface); }
+    .station-status.is-waiting { background: var(--warning); color: var(--surface); }
+    .station-status.is-nosignal { background: var(--state-held); color: var(--surface); }
 
 .station-big {
     font-size: 2.5rem;

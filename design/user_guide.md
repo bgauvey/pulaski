@@ -108,7 +108,7 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
     **Handover**); **Machines**; **Inventory**; **Quality** (with **Nonconformances**); **Labor**.
   - **Configure**, the setup you do once and change now and then: **Equipment** (with **Machine profiles**, **Edge nodes**, **Terminals**);
     **Materials** (with **Units**, **Specifications**); **Processes** (with **BOMs**, **Work instructions**, **Changeovers**, **Planning
-    rates**); **Site settings** (with **Shifts**, **Reasons**); **People** (with **Users**, for administrators, with tabs for users, roles and
+    rates**); **Site settings** (with **Setup checklist**, **Shifts**, **Reasons**); **People** (with **Users**, for administrators, with tabs for users, roles and
     permissions); **Integrations** (with **System health**, **Languages**).
   - Click a group's name to open its main page; its other pages unfold below it. The arrow beside it folds or unfolds a group without
     leaving the page you're on, the group of the page you're on too. That group unfolds when you arrive in it, and the browser remembers
@@ -125,6 +125,8 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
 
   Press Esc or click elsewhere to close the menu. Theme and touch layout are kept on that device; language and region on your user.
 - **Main area.** The page you picked.
+- **With the keyboard.** The first Tab on any page shows **Skip to content**: press Enter to go straight to the page, past the header and
+  menu. Everything else is reached with Tab and Shift+Tab, and the control that has focus is outlined.
 
 ### Your language and region
 

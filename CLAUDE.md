@@ -361,6 +361,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
   `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
+- Accessibility (D-127, proposed, in pieces, #142): WCAG 2.2 AA for the main flows. Build checks in `Tests/Pulaski.Web.Tests/Accessibility`
+  (`RazorMarkup` scanner: labels, names, alt, titles, tabindex, skip link; `ContrastTests`: tokens + colour/background rules, both themes);
+  findings and the screen-reader script in `design/accessibility.md`. New markup must pass them.
 - Setup checklist (D-126, proposed, #139): `SetupSteps` (guide order, required = path to a first job) + `SetupChecklist.Evaluate` (pure) over
   `ISetupReadStore.FactsAsync` counts; optional steps marked not needed per site (`core.setup_step_skip`, `MarkSetupStepCommand`,
   `site_settings.manage`); `/api/setup`, Configure → Setup checklist (`/setup`), Overview prompt until ready.

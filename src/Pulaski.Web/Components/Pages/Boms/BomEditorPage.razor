@@ -94,10 +94,10 @@ else
                 @foreach (var item in _items)
                 {
                     <tr @key="item.Id" class="@(Flagged(item.Id) ? "table-warning" : "")">
-                        <td><input type="number" class="form-control form-control-sm" value="@item.LineNo" disabled="@ReadOnly"
+                        <td><input type="number" class="form-control form-control-sm" aria-label="@L["Line"]" value="@item.LineNo" disabled="@ReadOnly"
                                    @onchange="e => Edit(() => item.LineNo = (int)Decimal(e))" /></td>
                         <td>
-                            <select class="form-select form-select-sm" value="@item.ComponentMaterialId" disabled="@ReadOnly"
+                            <select class="form-select form-select-sm" aria-label="@L["Component"]" value="@item.ComponentMaterialId" disabled="@ReadOnly"
                                     @onchange="e => Edit(() => SetComponent(item, e))">
                                 <option value="@Guid.Empty">@L["Choose a component…"]</option>
                                 @foreach (var m in _materials.Where(m => m.Id != _bom.MaterialId))
@@ -106,10 +106,10 @@ else
                                 }
                             </select>
                         </td>
-                        <td><input type="number" class="form-control form-control-sm text-end" min="0" step="any" value="@Plain(item.QtyPer)" disabled="@ReadOnly"
+                        <td><input type="number" class="form-control form-control-sm text-end" aria-label="@L["Quantity"]" min="0" step="any" value="@Plain(item.QtyPer)" disabled="@ReadOnly"
                                    @onchange="e => Edit(() => item.QtyPer = Decimal(e))" /></td>
                         <td>
-                            <select class="form-select form-select-sm" value="@item.UomId" disabled="@ReadOnly"
+                            <select class="form-select form-select-sm" aria-label="@L["Unit"]" value="@item.UomId" disabled="@ReadOnly"
                                     @onchange="e => Edit(() => item.UomId = Guid.Parse(e.Value!.ToString()!))">
                                 @foreach (var u in ActiveUnits(item.UomId))
                                 {
@@ -117,10 +117,10 @@ else
                                 }
                             </select>
                         </td>
-                        <td><input type="number" class="form-control form-control-sm text-end" min="0" max="99" step="any" value="@Plain(item.ScrapFactor * 100m)" disabled="@ReadOnly"
+                        <td><input type="number" class="form-control form-control-sm text-end" aria-label="@L["Scrap %"]" min="0" max="99" step="any" value="@Plain(item.ScrapFactor * 100m)" disabled="@ReadOnly"
                                    @onchange="e => Edit(() => item.ScrapFactor = Decimal(e) / 100m)" /></td>
                         <td>
-                            <select class="form-select form-select-sm" value="@item.ConsumptionMethod" disabled="@ReadOnly"
+                            <select class="form-select form-select-sm" aria-label="@L["Consumed by"]" value="@item.ConsumptionMethod" disabled="@ReadOnly"
                                     @onchange="e => Edit(() => item.ConsumptionMethod = e.Value?.ToString() ?? Methods[0].Code)">
                                 @foreach (var method in Methods)
                                 {
@@ -131,7 +131,7 @@ else
                         @if (_bom.ProcessId is not null)
                         {
                             <td>
-                                <select class="form-select form-select-sm" value="@(item.OperationNumber?.ToString() ?? "")" disabled="@ReadOnly"
+                                <select class="form-select form-select-sm" aria-label="@L["Operation"]" value="@(item.OperationNumber?.ToString() ?? "")" disabled="@ReadOnly"
                                         @onchange="e => Edit(() => item.OperationNumber = int.TryParse(e.Value?.ToString(), out var n) ? n : null)">
                                     <option value="">@L["First operation"]</option>
                                     @foreach (var op in _operations)

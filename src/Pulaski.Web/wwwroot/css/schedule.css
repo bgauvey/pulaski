@@ -3,8 +3,9 @@
    state); danger is kept for overlaps and warning for lateness, so those two always stand out. */
 
 :root {
-    --sched-danger-soft: color-mix(in srgb, var(--danger) 14%, var(--surface));
-    --sched-warning-soft: color-mix(in srgb, var(--warning) 16%, var(--surface));
+    /* Light enough that danger and warning text on them keeps 4.5:1 in both themes (#142). */
+    --sched-danger-soft: color-mix(in srgb, var(--danger) 8%, var(--surface));
+    --sched-warning-soft: color-mix(in srgb, var(--warning) 10%, var(--surface));
     --sched-updated: color-mix(in srgb, var(--accent) 28%, var(--surface));
     --sched-hatch: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--text-faint) 30%, transparent) 5px 7px);
     --sched-overlap-hatch: repeating-linear-gradient(135deg, color-mix(in srgb, var(--danger) 10%, transparent) 0 6px, color-mix(in srgb, var(--danger) 26%, transparent) 6px 9px);

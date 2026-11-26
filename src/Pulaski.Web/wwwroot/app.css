@@ -59,6 +59,22 @@ h1:focus {
     outline: none;
 }
 
+/* Skip to content (#142): hidden until it has keyboard focus, then above everything at the top left. */
+.skip-link:focus {
+    position: fixed;
+    top: var(--space-2);
+    left: var(--space-2);
+    z-index: 2000;
+    padding: var(--space-2) var(--space-4);
+    background: var(--surface);
+    color: var(--accent);
+    border-radius: var(--radius-md);
+}
+
+main:focus {
+    outline: none;
+}
+
 small, .small {
     font: var(--type-caption);
 }
