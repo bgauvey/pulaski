@@ -48,6 +48,7 @@ term,translation
 "'{0}' isn't a priority; use low, normal or high.","'{0}' no es una prioridad; use baja, normal o alta."
 '{0}' isn't a protocol Pulaski Edge reads ({1}).,'{0}' no es un protocolo que lea Pulaski Edge ({1}).
 '{0}' isn't a role.,'{0}' no es un rol.
+'{0}' isn't a setup step.,'{0}' no es un paso de configuración.
 '{0}' isn't a {1} setting ({2}).,'{0}' no es un ajuste de {1} ({2}).
 '{0}' isn't an attribute type; use {1}.,'{0}' no es un tipo de atributo; use {1}.
 '{0}' isn't an import field; the fields are {1}.,'{0}' no es un campo de importación; los campos son {1}.
@@ -284,6 +285,7 @@ A receipt against it must be of more than zero.,Una recepción contra ella debe 
 A record with the same key already exists.,Ya existe un registro con la misma clave.
 A referenced record does not exist.,Un registro referenciado no existe.
 A release,Una liberación
+A released process,Un proceso liberado
 A released version never changes; start a new draft to change the BOM.,Una versión liberada nunca cambia; inicie un borrador nuevo para cambiar la lista de materiales.
 A released version never changes; start a new draft to change the specification.,Una versión liberada nunca cambia; inicie un borrador nuevo para cambiar la especificación.
 "A role is a set of permissions you give to users at a site. Change a role here, or tick permissions role by role on","Un rol es un conjunto de permisos que se da a los usuarios en un sitio. Cambie un rol aquí, o marque permisos rol por rol en"
@@ -296,6 +298,7 @@ A shift schedule,Un horario de turnos
 A shift schedule belongs to a site; choose one.,Un horario de turnos pertenece a un sitio; elija uno.
 "A short while after stock, jobs or orders change, every open job's allocations are refreshed, as Refresh on the Shortages page does.","Poco después de que cambian existencias, trabajos u órdenes, se actualizan las asignaciones de cada trabajo abierto, como lo hace Actualizar en la página de Faltantes."
 A site needs a time zone.,Un sitio necesita una zona horaria.
+"A site, with its time zone","Un sitio, con su zona horaria"
 A spreadsheet or HR report saved as CSV; the first line names the columns.,Una hoja de cálculo o reporte de RR. HH. guardado como CSV; la primera línea nombra las columnas.
 A spreadsheet saved as CSV; the first line names the columns.,Una hoja de cálculo guardada como CSV; la primera línea nombra las columnas.
 A start time as HH:mm.,Una hora de inicio como HH:mm.
@@ -313,6 +316,7 @@ A version has one {0} checklist.,Una versión tiene una sola lista de verificaci
 A warning:,Una advertencia:
 A webhook (HTTPS),Un webhook (HTTPS)
 A weekly schedule repeats every 7 days; a rotation such as four crews on 12-hour shifts repeats every 28. A shift belongs to the day it starts on.,Un horario semanal se repite cada 7 días; una rotación como cuatro cuadrillas en turnos de 12 horas se repite cada 28. Un turno pertenece al día en que empieza.
+A work order,Una orden de trabajo
 A work order cannot move from '{0}' to '{1}'.,Una orden de trabajo no puede pasar de '{0}' a '{1}'.
 A {0} file names its external system in its own columns.,Un archivo {0} nombra su sistema externo en sus propias columnas.
 "A {0} for {1}, lot {2}, not at this site yet: receive it?","Un {0} de {1}, lote {2}, que aún no está en este sitio: ¿recibirlo?"
@@ -619,6 +623,7 @@ BOM for {0},Lista de materiales de {0}
 BOM unit,Unidad de la lista de materiales
 BOM {0} not found.,Lista de materiales {0} no encontrada.
 BOMs,Listas de materiales
+BOMs for what you make,Listas de materiales de lo que fabrica
 BTXML template,Plantilla BTXML
 Back,Atrás
 Back to Pulaski,Volver a Pulaski
@@ -783,6 +788,7 @@ Cancelled in the ERP before Pulaski had it; nothing to do.,Cancelada en el ERP a
 Cancel…,Cancelar…
 Cap,Tope
 Capabilities,Capacidades
+"Capabilities: which material runs on which line, and how fast","Capacidades: qué material corre en qué línea, y a qué velocidad"
 Capability,Capacidad
 Capability indices are for measured values.,Los índices de capacidad son para valores medidos.
 Capability {0} not found.,Capacidad {0} no encontrada.
@@ -1228,6 +1234,7 @@ Doesn't run,No se trabaja
 Don't print them,No imprimirlas
 Don't use the user name in the password.,No use el nombre de usuario en la contraseña.
 Done,Listo
+Done: {0},Hecho: {0}
 Down,Parada
 Down h,h parada
 "Down time by reason across the top equipment shown (a line's time already includes its machines'), classified as in By equipment.","Tiempo parado por motivo en el equipo principal mostrado (el tiempo de una línea ya incluye el de sus máquinas), clasificado como en Por equipo."
@@ -1294,6 +1301,7 @@ Edge node code,Código del nodo de borde
 Edge node name,Nombre del nodo de borde
 Edge node {0} not found.,Nodo de borde {0} no encontrado.
 Edge nodes,Nodos de borde
+Edge nodes collecting machine data,Nodos de borde que recogen datos de máquina
 "Edge nodes, deliveries, connections, background services and the database, in one place.","Nodos de borde, entregas, conexiones, servicios en segundo plano y la base de datos, en un solo lugar."
 Edge nodes: connections and tags that collect machine data,Nodos de borde: conexiones y etiquetas que recogen datos de las máquinas
 Edge quiet,Borde inactivo
@@ -1396,6 +1404,7 @@ Every site,Todos los sitios
 Every so many hours,Cada cierto número de horas
 Every term is translated.,Todos los términos están traducidos.
 "Every user needs a role: add another first, or switch them off.","Cada usuario necesita un rol: agregue otro primero, o desactívelo."
+Every work order is made from a process.,Cada orden de trabajo se crea a partir de un proceso.
 Every {0} days from {1},Cada {0} días desde {1}
 Every {0} h,Cada {0} h
 Every {0} h {1} min,Cada {0} h {1} min
@@ -1405,6 +1414,7 @@ Every {0} min,Cada {0} min
 "Every, minutes","Cada, minutos"
 "Everyone whose time is recorded, the crews they work in and the qualifications they hold. A shift schedule names the crew on each shift, so a supervisor can check the whole crew onto a line at once. People don't need a Pulaski sign-in; link one to let them clock themselves on. People from an HR or ERP system are imported from a file; their name and whether they are active change there.","Todas las personas cuyo tiempo se registra, las cuadrillas en las que trabajan y las calificaciones que tienen. Un horario de turnos nombra la cuadrilla de cada turno, así que un supervisor puede registrar a toda la cuadrilla en una línea a la vez. Las personas no necesitan una cuenta de Pulaski; vincule una para que puedan registrarse ellas mismas. Las personas de un sistema de RH o ERP se importan desde un archivo; su nombre y si están activas cambian allá."
 Everything checked is healthy.,Todo lo revisado está sano.
+Everything else belongs to a site.,Todo lo demás pertenece a un sitio.
 Everything is covered,Todo está cubierto
 Everything it was made from,Todo aquello de lo que se hizo
 Everything made from it,Todo lo hecho con él
@@ -1657,6 +1667,7 @@ Holds,Contiene
 Holds inventory,Guarda inventario
 Holds the lot,Retiene el lote
 Holds the lot on failure,Retiene el lote si falla
+"Holds, adjustments, scrap and stops need reasons.","Las retenciones, ajustes, desperdicio y paros necesitan motivos."
 Hold…,Retener…
 Holiday,Feriado
 "Holiday, no demand, planned shutdown or other.","Día festivo, sin demanda, paro planeado u otro."
@@ -1773,6 +1784,7 @@ Interval,Intervalo
 Into,Hacia
 Inventory,Inventario
 Inventory adjustment,Ajuste de inventario
+Inventory locations,Ubicaciones de inventario
 Inventory movements,Movimientos de inventario
 Inventory reports,Reportes de inventario
 Investigating,En investigación
@@ -1899,6 +1911,7 @@ Job · lot,Trabajo · lote
 "Job, order or material","Trabajo, orden o material"
 Jobs,Trabajos
 Jobs actually run here: a line or cell. Jobs planned to a schedulable group above it can be released to it.,Los trabajos corren realmente aquí: una línea o celda. Los trabajos planeados en un grupo programable por encima pueden liberarse a ella.
+Jobs are planned on lines and departments.,Los trabajos se planean en líneas y departamentos.
 Jobs as the schedule has them now,Trabajos como los tiene ahora el programa
 Jobs at their published times,Trabajos en sus horas publicadas
 "Jobs can be planned to it. A schedulable group such as a department, without Can run jobs, takes jobs in a time window and its lines run them.","Se pueden planear trabajos en él. Un grupo programable como un departamento, sin Puede correr trabajos, toma trabajos en una ventana de tiempo y sus líneas los corren."
@@ -2045,6 +2058,7 @@ Lines and departments,Líneas y departamentos
 Lines that can run it,Líneas que pueden ejecutarlo
 Lines that could run it,Líneas que podrían ejecutarlo
 "Lines that report their state but send nothing now: no signal, or their edge node has been quiet for over 2 minutes.","Líneas que reportan su estado pero no envían nada ahora: sin señal, o su nodo de borde lleva más de 2 minutos callado."
+Lines that run jobs,Líneas que ejecutan trabajos
 Lines with no signal,Líneas sin señal
 Lines without shifts,Líneas sin turnos
 Line…,Línea…
@@ -2118,6 +2132,7 @@ Lots and runs,Lotes y corridas
 Lots are indistinguishable,Los lotes no se distinguen
 Lots being filled,Lotes en llenado
 Lots can only be indistinguishable where inventory is held; tick Holds inventory too.,Los lotes solo pueden ser indistinguibles donde se guarda inventario; marque también Guarda inventario.
+"Lots have to be somewhere: stores, staging areas, feed points.","Los lotes tienen que estar en algún lugar: almacenes, áreas de preparación, puntos de alimentación."
 "Lots here mix and can't be told apart, like a silo or tank: everything received, moved or produced here joins one balance per material, with no lot number. A numbered lot is kept for its genealogy, then merged in.","Aquí los lotes se mezclan y no se distinguen, como en un silo o tanque: todo lo recibido, movido o producido aquí se suma a un saldo por material, sin número de lote. Un lote numerado se conserva para su genealogía y luego se fusiona."
 Lots here mix into one balance per material,Los lotes aquí se mezclan en un saldo por material
 Lots it made,Lotes que hizo
@@ -2206,6 +2221,7 @@ Map {0}: every connection needs it.,Asigne {0}: toda conexión lo necesita.
 Marginal,Marginal
 Mark a work center as schedulable on the Equipment page to plan work on it.,Marque un centro de trabajo como programable en la página Equipos para planear trabajo en él.
 Mark done,Marcar como hecha
+"Marked not needed here by {0}, {1}.","Marcado como no necesario aquí por {0}, {1}."
 Mass,Masa
 Matches,Coincidencias
 Material,Material
@@ -2330,6 +2346,7 @@ Need attention,Necesitan atención
 Need help?,¿Necesita ayuda?
 Need {0} · consumed {1} · allocated {2} · still to allocate,Necesita {0} · consumido {1} · asignado {2} · por asignar
 Needed,Necesario
+Needed after all,Sí es necesario
 Needed in the next 24 hours,Necesario en las próximas 24 horas
 Needed sooner than its {0}-day lead time from now,Necesario antes que su plazo de entrega de {0} días desde ahora
 Needed sooner than the material's {0}-day lead time from now,Necesario antes que el plazo de entrega de {0} días del material desde ahora
@@ -2616,6 +2633,8 @@ Not investigated yet.,Aún sin investigar.
 Not judged,Sin evaluar
 Not made from other lots.,No se hizo de otros lotes.
 Not me / cancel,No soy yo / cancelar
+Not needed,No necesario
+Not needed here,No es necesario aquí
 Not needed: the lots before it cover the need.,No se necesita: los lotes anteriores cubren la necesidad.
 Not on a line,No está en una línea
 Not paired,Sin emparejar
@@ -2718,6 +2737,7 @@ Nothing: it ends the route,Nada: termina la ruta
 Notice days (30),Días de aviso (30)
 Now,Ahora
 Now or next,Ahora o siguiente
+Now you can plan.,Ahora puede planear.
 Now: calculated {0},Ahora: calculada {0}
 Nowhere yet.,Aún en ningún lugar.
 Np,Np
@@ -2839,6 +2859,7 @@ Open the draft,Abrir el borrador
 Open the lot,Abrir el lote
 Open the page,Abrir la página
 Open the schedule,Abrir el programa
+Open the setup checklist,Abrir la lista de configuración
 Open work orders,Órdenes de trabajo abiertas
 Open.,Abierta.
 Operate,Operar
@@ -2873,6 +2894,7 @@ Order number,Número de orden
 Order of {0},Orden de {0}
 Orders behind,Órdenes atrasadas
 Orders for {0} made with {1} are refused until a new BOM version is released.,Las órdenes de {0} hechas con {1} se rechazan hasta que se libere una nueva versión de la lista de materiales.
+"Orders, processes and BOMs need materials.","Las órdenes, procesos y listas de materiales necesitan materiales."
 Origin,Origen
 Other,Otro
 "Other jobs can still consume it, with a warning; consuming it into its job uses the allocation up.","Otros trabajos aún pueden consumirlo, con una advertencia; consumirlo en su trabajo usa la asignación."
@@ -3666,6 +3688,7 @@ Settings,Ajustes
 Setup,Preparación
 Setup ({0}),Preparación ({0})
 Setup checklist,Lista de verificación de preparación
+Setup checklist: what a site has and still needs for its first job,Lista de configuración: lo que un sitio tiene y aún necesita para su primer trabajo
 Setup time is for a job: choose it.,El tiempo de preparación es para un trabajo: elíjalo.
 Setup time is for a job; choose it.,El tiempo de preparación es para un trabajo; elíjalo.
 "Several processes make {0} ({1}); send the process code, or set the material's default process.","Varios procesos hacen {0} ({1}); envíe el código del proceso, o fije el proceso predeterminado del material."
@@ -3771,7 +3794,12 @@ Skipped,Omitido
 Skipped by {0}: {1},Omitido por {0}: {1}
 Skipped.,Omitido.
 Skip…,Omitir…
+So Pulaski hears machine state and counts.,Para que Pulaski reciba el estado y los conteos de las máquinas.
 So far,Hasta ahora
+So labor can be recorded and crews checked onto lines.,Para registrar la mano de obra y asignar cuadrillas a las líneas.
+So machines' state values and stop codes mean something.,Para que los valores de estado y los códigos de paro de las máquinas signifiquen algo.
+"So orders, BOMs and rates can use any unit that converts.","Para que órdenes, listas de materiales y tasas usen cualquier unidad que convierta."
+"So the people who plan, run and check the work can sign in.","Para que quienes planean, ejecutan y revisan el trabajo puedan iniciar sesión."
 Soap,SOAP
 SoapAction: at most 500 characters.,SoapAction: como máximo 500 caracteres.
 Some of those people don't exist.,Algunas de esas personas no existen.
@@ -4122,6 +4150,7 @@ The file is larger than {0} MB; split it.,El archivo es mayor de {0} MB; divída
 The file isn't valid JSON: {0},El archivo no es JSON válido: {0}
 The file isn't well-formed XML: {0},El archivo no es XML bien formado: {0}
 The finish-by time must be after the earliest start.,La hora límite debe ser después del inicio más temprano.
+The first job started,El primer trabajo iniciado
 "The first line names the columns: term,translation.","La primera línea nombra las columnas: term,translation."
 "The first line names the columns; code, name, type and base_unit are required. A column left out keeps what each material already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code. A class that doesn't exist is an error unless Create missing classes is ticked (class_name names it). Nothing is saved until every row is valid.","La primera línea nombra las columnas; code, name, type y base_unit son obligatorios. Una columna omitida conserva lo que ya tiene cada material. Las filas con external_system y external_key son artículos del ERP; las demás se emparejan por su código. Una clase que no existe es un error salvo que esté marcado Crear clases faltantes (class_name la nombra). No se guarda nada hasta que todas las filas sean válidas."
 "The first line names the columns; employee_number and name are required. A column left out keeps what each person already has. Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that key; the others are matched on their employee number.","La primera línea nombra las columnas; employee_number y name son obligatorias. Una columna que falte conserva lo que cada persona ya tiene. Las filas con external_key son personas del sistema externo (nombrado arriba, o en una columna external_system), emparejadas por esa clave; las demás se emparejan por su número de empleado."
@@ -4277,6 +4306,7 @@ The site has no crew {0}.,El sitio no tiene una cuadrilla {0}.
 The site has no qualification {0}.,El sitio no tiene una calificación {0}.
 The site has no qualifications yet; add them on,El sitio aún no tiene calificaciones; agréguelas en
 The site has no utilization reasons yet. Add them on Configure → Reasons.,El sitio aún no tiene motivos de utilización. Agréguelos en Configurar → Motivos.
+The site is running.,El sitio está en marcha.
 The site whose lines and departments it can use.,El sitio cuyas líneas y departamentos puede usar.
 The site whose time zone and codes this equipment uses.,El sitio cuya zona horaria y códigos usa este equipo.
 The site's allocation settings were changed by someone else. Reload and try again.,Alguien más cambió los ajustes de asignación del sitio. Recargue e intente de nuevo.
@@ -4354,6 +4384,7 @@ There is no material {0}.,No hay un material {0}.
 There is no released process {0} at {1} that makes {2}.,No hay ningún proceso liberado {0} en {1} que haga {2}.
 There is no site yet.,Aún no hay un sitio.
 There is no site yet. Add one on,Aún no hay sitio. Agregue uno en
+There is no site yet: start by adding the enterprise and a site on Equipment.,Aún no hay sitio: empiece agregando la empresa y un sitio en Equipos.
 There is no site {0}.,No hay un sitio {0}.
 There is no site.,No hay sitio.
 There is no such call type at {0}'s site.,No hay tal tipo de llamada en el sitio de {0}.
@@ -4519,6 +4550,7 @@ Undoing that takes back {0} movements; at most {1} go in one step. Undo some of 
 Unfold {0},Desplegar {0}
 Unique within the site. Fixed once created.,Único dentro del sitio. Fijo una vez creado.
 Unit,Unidad
+Unit conversions for materials,Conversiones de unidades para materiales
 Unit conversions for {0},Conversiones de unidad de {0}
 Unit mode,Modo de la unidad
 Unit {0} is inactive.,La unidad {0} está inactiva.
@@ -4581,6 +4613,7 @@ User not found.,Usuario no encontrado.
 User {0} not found.,Usuario {0} no encontrado.
 Users,Usuarios
 Users and roles,Usuarios y roles
+Users with roles at the site,Usuarios con roles en el sitio
 "Users, roles and permissions","Usuarios, roles y permisos"
 Uses the profile's reasons for every code.,Usa los motivos del perfil para todos los códigos.
 Utilization,Utilización
@@ -4683,6 +4716,7 @@ What people call it.,Cómo lo llama la gente.
 What that undo takes back has changed since it was checked. Check it again.,Lo que retira ese deshacer cambió desde que se revisó. Revíselo de nuevo.
 "What the open jobs still need of each component, against the stock available now and the deliveries expected. Jobs take stock in the order they are needed, then what is due by then, so a shortfall shows on the first job it reaches.","Lo que los trabajos abiertos aún necesitan de cada componente, contra la existencia disponible ahora y las entregas esperadas. Los trabajos toman existencia en el orden en que la necesitan, luego lo que llega para entonces, así que un faltante aparece en el primer trabajo al que llega."
 What the time is for,Para qué es el tiempo
+"What this site has and what it still needs, in the order to do it. Each step opens the screen where it is done.","Lo que este sitio tiene y lo que aún necesita, en el orden en que hacerlo. Cada paso abre la pantalla donde se hace."
 What to do,Qué hacer
 "What to fetch from the stores for open jobs' allocations, by location; the equipment chosen below narrows it","Qué traer de los almacenes para las asignaciones de los trabajos abiertos, por ubicación; el equipo elegido abajo lo acota"
 What uses it,Qué lo usa
@@ -4762,8 +4796,11 @@ Withdraw,Retirar
 Withdrawn,Retirado
 Withdrawn by {0}: {1},Retirado por {0}: {1}
 Withdraw…,Retirar…
+"Without a BOM, an order plans no components.","Sin lista de materiales, una orden no planea componentes."
 "Without a company prefix, containers get no SSCC.","Sin un prefijo de empresa, los contenedores no reciben SSCC."
 Without a reason,Sin motivo
+"Without one, a line can't take a material's job.","Sin una, una línea no puede tomar el trabajo de un material."
+"Without one, lines are taken to run around the clock.","Sin uno, se supone que las líneas trabajan las 24 horas."
 Won't fit,No cabe
 Work cell,Celda de trabajo
 Work center,Centro de trabajo
@@ -5490,6 +5527,7 @@ yes,sí
 "{0} is made to the exact rule, so every batch is exactly its size and the tolerance on {1} counts only if the rule changes to near.","{0} se hace con la regla exacta, así que cada tanda es exactamente de su tamaño y la tolerancia en {1} solo cuenta si la regla cambia a near."
 "{0} is maintained in Pulaski, not imported.","{0} se mantiene en Pulaski, no se importa."
 "{0} is measured, so it takes limits, not a number of defects.","{0} se mide, así que lleva límites, no un número de defectos."
+"{0} is needed for the first job, so it can't be skipped.","{0} es necesario para el primer trabajo, así que no se puede omitir."
 {0} is not a site; scheduling policy is set per site.,{0} no es un sitio; la política de programación se fija por sitio.
 {0} is not in the group job {1} was planned to.,{0} no está en el grupo al que se planeó el trabajo {1}.
 {0} is not schedulable; jobs cannot be placed on it.,{0} no es programable; no se pueden colocar trabajos en él.
@@ -5515,6 +5553,7 @@ yes,sí
 {0} is running on {1}; pause or complete it first.,{0} se ejecuta en {1}; páuselo o termínelo primero.
 {0} is running.,{0} está en ejecución.
 "{0} is sampled from {1} {2}, from now on.","{0} se muestrea desde {1} {2}, a partir de ahora."
+{0} is set up for production: every step its first job needs is done.,{0} está configurado para producir: cada paso que necesita su primer trabajo está hecho.
 {0} is shown there already.,{0} ya se muestra allí.
 {0} is signed off.,{0}: firmada.
 {0} is still clocked on; end their time first.,{0} aún tiene entrada registrada; termine primero su tiempo.
@@ -5652,6 +5691,7 @@ yes,sí
 {0} of {1} produced by {2},{0} de {1} producidos por {2}
 {0} of {1} received into {2},{0} de {1} recibidos en {2}
 {0} of {1} shifts below target.,{0} de {1} turnos debajo de la meta.
+{0} of {1} steps for the first job done.,{0} de {1} pasos para el primer trabajo hechos.
 {0} of {1} was changed by someone else. Reload and try again.,Alguien más cambió {0} de {1}. Recargue e intente de nuevo.
 {0} of {1} {2},{0} de {1} {2}
 {0} on,{0} presentes
@@ -5702,6 +5742,7 @@ yes,sí
 {0} samples due,{0} muestras pendientes
 {0} samples overdue,{0} muestras vencidas
 {0} scrap,{0} de desperdicio
+{0} setup: {1} of {2} steps for the first job done.,Configuración de {0}: {1} de {2} pasos para el primer trabajo hechos.
 {0} shipped on {1},{0} enviado el {1}
 {0} signs in through {1}; change the password there.,{0} inicia sesión por {1}; cambie la contraseña allí.
 {0} signs in through {1}; only a Pulaski account can be a service account.,{0} inicia sesión por {1}; solo una cuenta de Pulaski puede ser una cuenta de servicio.

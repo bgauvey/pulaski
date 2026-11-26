@@ -2539,6 +2539,17 @@ CREATE INDEX work_instruction_target_process_ix ON core.work_instruction_target 
 CREATE INDEX work_instruction_target_material_ix ON core.work_instruction_target (material_id) WHERE is_active;
 CREATE INDEX work_instruction_target_line_ix ON core.work_instruction_target (equipment_id) WHERE is_active;
 
+-- First-setup checklist (#139, D-126): optional steps marked as not needed at a site; the steps themselves are worked out.
+CREATE TABLE core.setup_step_skip (
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    step            text NOT NULL,                                  -- a SetupSteps key, such as 'shifts'
+    is_skipped      boolean NOT NULL,                               -- false once taken back; rows are kept
+    changed_by      text NOT NULL,
+    changed_at      timestamptz NOT NULL,
+    PRIMARY KEY (site_id, step)
+);
+
+
 -- Nonconformance reports (#133, D-124): raised from anything that flags, investigated, acted on and closed with a disposition.
 CREATE SEQUENCE core.nonconformance_no;
 
@@ -3016,7 +3027,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0082_system_health'),
     ('0083_release_approval'),
     ('0084_nonconformance'),
-    ('0085_nonconformance_follow_up');
+    ('0085_nonconformance_follow_up'),
+    ('0086_setup_checklist');
 
 -- =====================================================================
 -- 17. SEED DATA

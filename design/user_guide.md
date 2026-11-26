@@ -304,6 +304,21 @@ Then execution: **in progress**, **completed**, **closed**. An order can be **ca
 
 If you are starting from an empty Pulaski, work through this list in order. Each step depends on the ones before it.
 
+**The setup checklist does this with you.** Open **Configure → Site settings → Setup checklist** (the Overview links to it until the site is
+ready). It lists the steps below in order, each marked **Done** (with how many there are), **To do** or **Not needed**, and each opens the
+screen where it is done:
+
+1. Work down the list; a step is done as soon as what it asks for exists, so come back to the checklist and it has moved on.
+2. Steps marked *(optional)* aren't needed for a first job. If one doesn't apply to the site, click **Not needed here** (and **Needed after
+   all** to take it back); marking needs permission to change site settings.
+3. Once every required step is done (a site with its time zone, a line that runs jobs, a material, a capability, a released process, an
+   inventory location, a work order, and a job started), the checklist says the site is set up for production and the Overview stops prompting.
+
+In detail: the checklist is worked out each time from what the site has, so nothing has to be ticked off by hand. Materials, unit conversions
+and BOMs count across the enterprise; everything else is the site's own (users count when they hold a role at the site). A step that is done
+shows as done even if it was marked not needed. Anyone who can see site settings sees the checklist; a step's link opens only for those who
+may see that screen.
+
 | # | What | Where | Why |
 | --- | --- | --- | --- |
 | 1 | The enterprise and at least one site, with its time zone | [Equipment](#4-equipment) | Everything else belongs to a site. |
@@ -319,6 +334,7 @@ If you are starting from an empty Pulaski, work through this list in order. Each
 | 9 | Inventory locations: stores, staging areas and feed points, with **Holds inventory** ticked | [Equipment](#4-equipment) | Lots have to be somewhere. |
 | 10 | Reason codes for write-ups, write-offs and holds, and utilization reasons for machine time | [Reasons](#reason-codes) (a starter set comes with `db/seed-reasons.sql`) | Every adjustment and hold needs a reason; machine profiles map stop codes to utilization reasons. |
 | 11 | Machine profiles, and which one each machine uses | [Machine profiles](#19-machine-profiles), then [Equipment](#4-equipment) | So the machine's state values and stop codes mean something in Pulaski. |
+| 11a | Users with a role at the site (optional) | [Users](#15-users-roles-and-signing-in) | So the people who plan, run and check the work can sign in. |
 | 12 | Edge nodes, their connections, and tags binding machine signals to equipment (optional) | [Edge nodes](#20-edge-nodes-collecting-machine-data) | So Pulaski hears machine state and counts. |
 
 The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plant PLT1 with EXT-01, EXT-02 and PACK1, the stores RM-STORE and staging FG-STAGE, 200 materials, and the standard units with conversions for the demo materials), so you can start at step 6.

@@ -1,0 +1,133 @@
+@page "/setup"
+@attribute [RequiresView(PermissionCodes.SiteSettingsView)]
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+<PageTitle>@L["Setup checklist"] · Pulaski</PageTitle>
+
+@* The first-setup checklist (#139, D-126): the guide's setup order, each step worked out from what the site has, linking to where it is done.
+   Required steps take the site to its first job; optional ones can be marked not needed here. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">@L["Setup checklist"]</h1>
+        <p class="text-muted mb-0">@L["What this site has and what it still needs, in the order to do it. Each step opens the screen where it is done."]</p>
+    </div>
+    @if (Sites.Sites.Count > 1)
+    {
+        <div class="inv-head-tools">
+            <select class="form-select w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+<ProblemAlert Error="_error" />
+
+@if (_checklist is { } c)
+{
+    <div class="drawer-alert @(c.Ready ? "" : "is-warning") mb-3" role="status">
+        <Icon Name="@(c.Ready ? "info" : "alert")" Size="18" />
+        <span>@(c.Ready ? L["{0} is set up for production: every step its first job needs is done.", c.SiteCode ?? ""]
+                   : c.SiteId is null ? L["There is no site yet: start by adding the enterprise and a site on Equipment."]
+                   : L["{0} of {1} steps for the first job done.", c.RequiredDone, c.RequiredTotal])</span>
+    </div>
+
+    <ol class="list-group list-group-numbered mb-3">
+        @foreach (var step in c.Steps)
+        {
+            <li class="list-group-item d-flex gap-3 align-items-start" @key="step.Key">
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">
+                        <ScreenLink Href="@step.Href" Permission="@step.Permission">@L[step.Title]</ScreenLink>
+                        @if (!step.Required)
+                        {
+                            <span class="small text-muted ms-1">@L["(optional)"]</span>
+                        }
+                    </div>
+                    <div class="small text-muted">@L[step.Why]</div>
+                    @if (step.Status == "not_needed")
+                    {
+                        <div class="small text-muted">@L["Marked not needed here by {0}, {1}.", step.MarkedBy ?? "—", Display.SiteTime(step.MarkedAt, Sites.Site?.TimeZone)]</div>
+                    }
+                </div>
+                <div class="text-end text-nowrap">
+                    <span class="@SetupView.Chip(step.Status)">@SetupView.Status(L, step)</span>
+                    @if (!step.Required && step.Status != "done" && c.SiteId is { } site && User.Can(PermissionCodes.SiteSettings, site))
+                    {
+                        <div>
+                            <button type="button" class="btn btn-sm btn-link p-0" disabled="@_busy" @onclick="() => MarkAsync(step.Key, step.Status == SetupView.ToDo)">
+                                @(step.Status == SetupView.ToDo ? L["Not needed here"] : L["Needed after all"])
+                            </button>
+                        </div>
+                    }
+                </div>
+            </li>
+        }
+    </ol>
+}
+else if (_error is null)
+{
+    <p class="text-muted">@L["Loading…"]</p>
+}
+
+@code {
+    private SetupChecklistDto? _checklist;
+    private bool _busy;
+    private ApiException? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _checklist = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _checklist = await Api.GetSetupChecklistAsync(Sites.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task MarkAsync(string step, bool notNeeded)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _checklist = await Api.MarkSetupStepAsync(Sites.SiteId!.Value, step, new MarkSetupStepRequest { NotNeeded = notNeeded });
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1977,6 +1977,31 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task The_setup_checklist_counts_what_a_site_has_and_keeps_optional_steps_marked_not_needed()
+    {
+        var plant = await CreatePlantAsync();
+        var checklist = await QueryAsync<Application.Setup.GetSetupChecklistQuery, Contracts.Setup.SetupChecklistDto>(new Application.Setup.GetSetupChecklistQuery(plant.Site));
+        string Status(Contracts.Setup.SetupChecklistDto c, string key) => c.Steps.Single(s => s.Key == key).Status;
+
+        // The plant has its site, a line, two stores, materials, a work order and a running job; no capability or released process.
+        Assert.Equal("SITE-" + _suffix, checklist.SiteCode);
+        Assert.Equal(("done", 1, "done", 2), (Status(checklist, "site"), checklist.Steps.Single(s => s.Key == "lines").Count, Status(checklist, "locations"),
+            checklist.Steps.Single(s => s.Key == "locations").Count));
+        Assert.Equal(("done", "done", "to_do", "to_do"), (Status(checklist, "work_orders"), Status(checklist, "first_job"), Status(checklist, "capabilities"), Status(checklist, "processes")));
+        Assert.False(checklist.Ready);
+        Assert.Equal(8, checklist.RequiredTotal);
+
+        // An optional step marked not needed, and back; a required one can't be.
+        var marked = await db.SendAsync(new Application.Setup.MarkSetupStepCommand(plant.Site, "edge_nodes", true));
+        Assert.Equal("not_needed", Status(marked, "edge_nodes"));
+        Assert.Equal("test-user", marked.Steps.Single(s => s.Key == "edge_nodes").MarkedBy);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Setup.MarkSetupStepCommand(plant.Site, "lines", true)));
+        var back = await db.SendAsync(new Application.Setup.MarkSetupStepCommand(plant.Site, "edge_nodes", false));
+        Assert.Equal("to_do", Status(back, "edge_nodes"));
+        await Assert.ThrowsAsync<NotFoundException>(() => db.SendAsync(new Application.Setup.MarkSetupStepCommand(plant.Line, "shifts", true)));
+    }
+
+    [Fact]
     public async Task Results_are_checked_against_the_released_specification_hold_lots_and_rejected_lots_move_good_to_scrap()
     {
         var plant = await CreatePlantAsync();

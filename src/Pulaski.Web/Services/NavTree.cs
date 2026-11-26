@@ -62,6 +62,7 @@ public static class NavTree
                 new("rate-proposals", "gauge", Term.Mark("Planning rates"), Term.Mark("Planning rates from run history proposed for review"), PermissionCodes.MaterialsView, PermissionCodes.ScheduleView),
                 ]),
             Group("site", new("site-settings", "calendar", Term.Mark("Site settings"), Term.Mark("Changeover mode, reporting tolerances, OEE targets, planning rates, holidays and shutdowns"), PermissionCodes.SiteSettingsView), [
+                new("setup", "categorized", Term.Mark("Setup checklist"), Term.Mark("Setup checklist: what a site has and still needs for its first job"), PermissionCodes.SiteSettingsView),
                 new("shifts", "clock", Term.Mark("Shifts"), Term.Mark("Shift schedules"), PermissionCodes.ShiftsView),
                 new("reasons", "info", Term.Mark("Reasons"), Term.Mark("Reason codes"), PermissionCodes.ReasonsView),
                 ]),

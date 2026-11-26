@@ -3406,6 +3406,18 @@ move here / start (no receive). (a) the query and the Scan page's **Working at**
 take; `POST /api/terminal/station/scan/act` posts only code, kind, target and quantity, works the actions out again and runs the matching one
 (`ScanActionChoice.Find`) as that user with its own permission (`StationActing`), so a stale form is refused rather than trusted.
 
+### D-126 · First-setup checklist (#139) · *Proposed*
+
+**Context.** A new site starts from an empty database and many screens; the setup order lived only in the user guide.
+
+**Decision.** `SetupSteps` lists the guide's steps in its order, each with its screen and the view that opens it; `SetupChecklist.Evaluate`
+(pure) marks each done from counts of what the site has (`ISetupReadStore.FactsAsync`, one query; materials, conversions and BOMs counted
+enterprise-wide), so nothing is stored but marks. User's choices: required = the path to a first job (site with time zone, a line that runs
+jobs, a material, a capability in force, a released process, an inventory location, a work order, a job started); the rest (unit conversions,
+shifts, people, BOMs, reasons, machine profiles, edge nodes, users with roles at the site) optional, and an optional step can be marked not
+needed per site (`core.setup_step_skip`, `MarkSetupStepCommand`, `site_settings.manage`, event `setup.step_marked`; a done step stays done);
+shown on Configure → Setup checklist (`site_settings.view`, `/api/setup?siteId=`) and as a prompt on the Overview until ready.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

@@ -287,6 +287,9 @@ public static class EventTypes
     public const string NcrActionDone = "pulaski.ncr.action_done.v1";
     public const string NcrActionCancelled = "pulaski.ncr.action_cancelled.v1";
     public const string NcrClosed = "pulaski.ncr.closed.v1";
+
+    /// <summary>An optional setup step marked not needed at a site, or needed after all (#139).</summary>
+    public const string SetupStepMarked = "pulaski.setup.step_marked.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

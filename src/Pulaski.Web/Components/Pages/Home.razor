@@ -55,6 +55,14 @@
     </div>
 }
 
+@if (_setup is { } setup && SetupView.Prompt(L, setup) is { } prompt)
+{
+    @* Until the site is set up for its first job (#139): how far it is, and the way to the checklist. *@
+    <div class="drawer-alert is-warning mb-3" role="status">
+        <Icon Name="info" Size="18" /><span>@prompt <a href="setup">@L["Open the setup checklist"]</a></span>
+    </div>
+}
+
 @* ---- Needs attention ---- *@
 <section class="ov-attention" aria-labelledby="attention-title">
     <h2 id="attention-title" class="visually-hidden">@L["Needs attention"]</h2>
@@ -581,6 +589,7 @@
             // Only the sites whose Overview the user may see (#43).
             _sites = [.. _equipment.Where(e => e.Level == "site" && e.IsActive && User.Can(PermissionCodes.OverviewView, e.Id)).OrderBy(e => e.Code, StringComparer.Ordinal)];
             _siteId = _sites.FirstOrDefault()?.Id ?? Guid.Empty;
+            await LoadSetupAsync();
             await LoadAsync();
         }
         catch (ApiException ex)
@@ -604,7 +613,29 @@
         _labor = null;
         _overview = null;
         _live = [];
+        await LoadSetupAsync();
         await LoadAsync();
+    }
+
+    // The setup checklist's summary (#139), for whoever may see it; asked once per site, not on every refresh.
+    private SetupChecklistDto? _setup;
+
+    private async Task LoadSetupAsync()
+    {
+        _setup = null;
+        if (!User.Can(PermissionCodes.SiteSettingsView, _siteId == Guid.Empty ? null : _siteId))
+        {
+            return;
+        }
+
+        try
+        {
+            _setup = await Api.GetSetupChecklistAsync(_siteId == Guid.Empty ? null : _siteId);
+        }
+        catch (ApiException)
+        {
+            // Only a prompt: the Overview works without it.
+        }
     }
 
     private async Task RefreshAsync() => await LoadAsync();

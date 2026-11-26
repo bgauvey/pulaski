@@ -1443,6 +1443,13 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<SpcAlertDto> GetSpcAlertAsync(Guid siteId, Guid id, CancellationToken ct = default) =>
         GetAsync<SpcAlertDto>($"api/quality/alerts/{id}?siteId={siteId}", ct);
 
+    /// <summary>The setup checklist (#139): at a site, or without one before any site exists.</summary>
+    public Task<Pulaski.Contracts.Setup.SetupChecklistDto> GetSetupChecklistAsync(Guid? siteId, CancellationToken ct = default) =>
+        GetAsync<Pulaski.Contracts.Setup.SetupChecklistDto>($"api/setup{(siteId is { } s ? $"?siteId={s}" : "")}", ct);
+
+    public Task<Pulaski.Contracts.Setup.SetupChecklistDto> MarkSetupStepAsync(Guid siteId, string step, Pulaski.Contracts.Setup.MarkSetupStepRequest request, CancellationToken ct = default) =>
+        SendAsync<Pulaski.Contracts.Setup.SetupChecklistDto>(HttpMethod.Put, $"api/setup/{siteId}/steps/{step}", request, ct);
+
     /// <summary>Nonconformance reports (#133): at a site, or about a lot; <paramref name="status"/> <c>open_any</c> = not closed.</summary>
     public Task<IReadOnlyList<NcrSummaryDto>> ListNcrsAsync(Guid? siteId, string? status, Guid? lotId = null, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<NcrSummaryDto>>(
