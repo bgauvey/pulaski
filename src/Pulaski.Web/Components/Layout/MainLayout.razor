@@ -4,6 +4,9 @@
 @inject SiteSelection Sites
 @inject NavigationManager Navigation
 
+@* The first thing a keyboard reaches (#142, WCAG 2.4.1): past the header and menu, straight to the page. Focus moves by script, since a
+   fragment link would be taken as navigation to the app's root. *@
+<a class="skip-link visually-hidden-focusable" href="#main-content" onclick="pulaski.ui.focus('main-content'); return false;">@L["Skip to content"]</a>
 <div class="shell">
     <header class="app-header">
         <button type="button" class="icon-button" aria-label="@L["Toggle navigation"]" onclick="pulaski.toggleSidebar()">
@@ -35,7 +38,7 @@
         }
     </aside>
 
-    <main class="app-main">
+    <main class="app-main" id="main-content" tabindex="-1">
         <article class="content">
             @* What the user may see and do decides the pages and actions shown (D-037, D-039), so it loads first. *@
             @if (User.Me is null)

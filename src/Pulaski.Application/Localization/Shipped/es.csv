@@ -333,7 +333,6 @@ Accepted without review,Aceptada sin revisión
 Accepting sets the calculated rate. The modified rate stays in force for planning until you clear it.,Aceptar fija la tasa calculada. La tasa modificada sigue vigente para la planeación hasta que la borre.
 "Accepting works the rate out again over the same days and basis; if runs ended since and it changed, Pulaski says so and nothing changes until it is proposed again or reviewed on the material. Decided proposals stay listed for 30 days.","Aceptar calcula la tasa de nuevo sobre los mismos días y base; si terminaron corridas desde entonces y cambió, Pulaski lo dice y nada cambia hasta que se proponga de nuevo o se revise en el material. Las propuestas decididas siguen en la lista 30 días."
 Account menu,Menú de la cuenta
-Account menu for {0},Menú de la cuenta de {0}
 Acknowledged,Atendida
 Acting,En acción
 Action,Acción
@@ -3790,6 +3789,7 @@ Site {0} not found.,Sitio {0} no encontrado.
 "Site, where the file names none","Sitio, donde el archivo no nombra ninguno"
 Size,Tamaño
 Skip it,Omitirlo
+Skip to content,Saltar al contenido
 Skipped,Omitido
 Skipped by {0}: {1},Omitido por {0}: {1}
 Skipped.,Omitido.

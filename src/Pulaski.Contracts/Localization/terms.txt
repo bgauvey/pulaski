@@ -332,7 +332,6 @@ Accepted without review
 Accepting sets the calculated rate. The modified rate stays in force for planning until you clear it.
 Accepting works the rate out again over the same days and basis; if runs ended since and it changed, Pulaski says so and nothing changes until it is proposed again or reviewed on the material. Decided proposals stay listed for 30 days.
 Account menu
-Account menu for {0}
 Acknowledged
 Acting
 Action
@@ -3789,6 +3788,7 @@ Site {0} not found.
 Site, where the file names none
 Size
 Skip it
+Skip to content
 Skipped
 Skipped by {0}: {1}
 Skipped.

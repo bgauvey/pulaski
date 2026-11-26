@@ -58,7 +58,7 @@ else
                     var measured = characteristic?.DataKind != "attribute";
                     <tr @key="item.Id" class="@(Flagged(item.Id) ? "table-warning" : "")">
                         <td>
-                            <select class="form-select form-select-sm" value="@item.CharacteristicId" disabled="@ReadOnly"
+                            <select class="form-select form-select-sm" aria-label="@L["Characteristic"]" value="@item.CharacteristicId" disabled="@ReadOnly"
                                     @onchange="e => Edit(() => SetCharacteristic(item, e))">
                                 <option value="@Guid.Empty">@L["Choose a characteristic…"]</option>
                                 @foreach (var c in _characteristics.Where(c => c.IsActive || c.Id == item.CharacteristicId))

@@ -3418,6 +3418,19 @@ shifts, people, BOMs, reasons, machine profiles, edge nodes, users with roles at
 needed per site (`core.setup_step_skip`, `MarkSetupStepCommand`, `site_settings.manage`, event `setup.step_marked`; a done step stays done);
 shown on Configure → Setup checklist (`site_settings.view`, `/api/setup?siteId=`) and as a prompt on the Overview until ready.
 
+### D-127 · Accessibility: WCAG 2.2 AA for the main flows (#142) · *Proposed, in pieces*
+
+**Context.** Unavailable actions and labels were handled well (D-094), but the app had never been audited.
+
+**Decision.** Aim at WCAG 2.2 AA for the main flows (sign in, Overview and menu; Floor and the job page; Inventory and Scan; the station and
+boards: the user's choice). What markup and stylesheets show is checked on every build (`Tests/Pulaski.Web.Tests/Accessibility`): labelled
+controls, named buttons and links, labels pointing at controls, images' alternatives, page titles, no positive tabindex, language and skip link;
+contrast of the tokens and of every rule setting both colour and background, in both themes. The running app is audited once with axe-core,
+and a screen-reader script is kept for people to run (user's choices). Findings, fixes and the script live in `design/accessibility.md`.
+(a) the build checks and their fixes; (b) the audit of the running demo (`tools/a11y-audit`: axe-core on 37 page checks in both themes, a
+keyboard walk, reflow at 320 px), its four fixes (OEE bars named as images, the user menu named by what it shows, unavailable-action tips out
+of the layout until shown, a scrolling *Next up* table) and the screen-reader script for people to run.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

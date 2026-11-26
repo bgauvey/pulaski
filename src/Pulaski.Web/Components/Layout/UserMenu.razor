@@ -7,12 +7,13 @@
    per device in the browser (js/theme.js), language and region on the user. *@
 @if (Me is { } me)
 {
-    <button type="button" class="user-button" popovertarget="user-menu" aria-haspopup="menu" title="@User.RoleSummary(L)"
-            aria-label="@L["Account menu for {0}", me.DisplayName]">
+    @* Named by what it shows, then what it is (#142, WCAG 2.5.3: the visible words are in the name). *@
+    <button type="button" class="user-button" popovertarget="user-menu" aria-haspopup="menu" title="@User.RoleSummary(L)">
         <span class="user-avatar" aria-hidden="true">@UserMenuView.Initials(me.DisplayName)</span>
         <span class="user-text">
             <span class="user-name">@me.DisplayName</span>
             <span class="user-roles">@User.RoleSummary(L)</span>
+            <span class="visually-hidden">@L["Account menu"]</span>
         </span>
         <Icon Name="chevron-down" Size="16" />
     </button>

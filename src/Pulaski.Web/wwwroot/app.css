@@ -59,6 +59,22 @@ h1:focus {
     outline: none;
 }
 
+/* Skip to content (#142): hidden until it has keyboard focus, then above everything at the top left. */
+.skip-link:focus {
+    position: fixed;
+    top: var(--space-2);
+    left: var(--space-2);
+    z-index: 2000;
+    padding: var(--space-2) var(--space-4);
+    background: var(--surface);
+    color: var(--accent);
+    border-radius: var(--radius-md);
+}
+
+main:focus {
+    outline: none;
+}
+
 small, .small {
     font: var(--type-caption);
 }
@@ -221,7 +237,7 @@ fieldset:disabled .btn {
     top: calc(100% + 4px);
     left: 0;
     width: max-content;
-    max-width: 18rem;
+    max-width: min(18rem, calc(100vw - 2rem));
     padding: 0.35rem 0.55rem;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -233,22 +249,15 @@ fieldset:disabled .btn {
     text-align: left;
     white-space: normal;
     box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
-    visibility: hidden;
-    opacity: 0;
-    transition: opacity 0.12s ease;
+    /* Out of the layout until shown (#142, WCAG 1.4.10): a hidden tip near the edge would widen the page. It still describes its button,
+       since aria-describedby reads hidden text. */
+    display: none;
     pointer-events: none;
 }
 
 .action-button:hover > .action-reason,
 .action-button:focus-within > .action-reason {
-    visibility: visible;
-    opacity: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .action-reason {
-        transition: none;
-    }
+    display: block;
 }
 
 .btn-link:disabled,
@@ -620,3 +629,9 @@ fieldset.view-only-scope {
 .spc-chart .pt:hover circle.marker { r: 6; }
 .spc-legend { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .8125rem; color: var(--text-muted); }
 .spc-legend svg { vertical-align: -2px; margin-right: .25rem; }
+
+/* A data table that may be wider than a narrow screen scrolls in its own box (#142, WCAG 1.4.10). */
+.table-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+}

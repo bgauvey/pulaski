@@ -340,7 +340,7 @@
 
                     <span role="cell" class="ov-oee" title="@OeeTitle(lineOee)">
                         <span class="ov-oee-value @(lineOee?.OeePct is null ? "is-empty" : "")">@FormatPct(lineOee?.OeePct)</span>
-                        <span class="ov-oee-bars" aria-label="@OeeTitle(lineOee)">
+                        <span class="ov-oee-bars" role="img" aria-label="@OeeTitle(lineOee)">
                             <span class="@(lineOee?.AvailabilityPct is null ? "is-empty" : "")"><i style="width: @MeterWidth(lineOee?.AvailabilityPct)"></i></span>
                             <span class="@(lineOee?.PerformancePct is null ? "is-empty" : "")"><i style="width: @MeterWidth(lineOee?.PerformancePct)"></i></span>
                             <span class="@(lineOee?.QualityPct is null ? "is-empty" : "")"><i style="width: @MeterWidth(lineOee?.QualityPct)"></i></span>
@@ -406,6 +406,8 @@
         }
         else
         {
+            @* A data table may scroll in its own box on a narrow screen (#142, WCAG 1.4.10); the page doesn't. *@
+            <div class="table-scroll">
             <table class="ov-next">
                 <tbody>
                     @foreach (var (line, segment) in StartingNext)
@@ -429,6 +431,7 @@
                     }
                 </tbody>
             </table>
+            </div>
         }
     </section>
 </div>

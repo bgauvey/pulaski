@@ -1,0 +1,14 @@
+{
+  "name": "pulaski-a11y-audit",
+  "private": true,
+  "description": "axe-core, keyboard and reflow audit of the running demo (#142, D-127). See design/accessibility.md.",
+  "type": "module",
+  "scripts": {
+    "audit": "node audit.mjs",
+    "reflow": "node reflow.mjs"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "^4",
+    "playwright": "^1"
+  }
+}
