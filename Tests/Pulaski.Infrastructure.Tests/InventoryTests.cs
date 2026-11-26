@@ -2066,6 +2066,14 @@ public sealed class InventoryTests(DatabaseFixture db)
             var defective = await admin.ExecuteScalarAsync<decimal>(
                 "SELECT sum(delta_qty) FROM ts.production_count WHERE job_id = @Job AND count_kind = 'defective'", new { Job = plant.Job });
             Assert.Equal(100m, defective);
+
+            // The reporting views (D-129): every counted change, the rejection included, adds up to the run; the report alone doesn't.
+            var (good, scrap, runGood, runScrap, rejections) = await admin.QuerySingleAsync<(decimal, decimal, decimal, decimal, long)>(
+                """
+                SELECT sum(p.good_qty), sum(p.scrap_qty), max(r.good_qty), max(r.scrap_qty), count(*) FILTER (WHERE p.change_kind = 'rejection')
+                FROM report.production p JOIN report.run r USING (run_id) WHERE p.job_id = @Job
+                """, new { Job = plant.Job });
+            Assert.Equal((runGood, runScrap, 1L), (good, scrap, rejections));
         }
 
         // A number lot attribute standing for the characteristic records a result when it is set, and holds the lot when it fails.

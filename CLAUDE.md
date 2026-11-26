@@ -361,6 +361,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
   `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
+- Reporting (D-129, proposed, in pieces, #132): no in-app builder; the `report` schema (views over core/ts, change only by adding columns) read
+  by `pulaski_report` (`db/report-role.sql`, run by `deploy/images/db/init.sh` and the test fixture); `design/reporting.md` is the analyst's
+  guide (keep it in step); `ReportViewTests` lists every view. Figures follow the app's (OEE from rollups, production nets to runs).
 - Audit trail (D-128, proposed, #129): `SearchAuditQuery` over `evt.event` (`/api/audit`; subject = all time, else ≤ 92-day window; cursor
   `AuditCursor`), `AuditChanges` (pure: before/after diff by value, fields, label, action); `audit.view` held everywhere (`CanEverywhere`);
   `/audit` page, `HistoryLink` on record pages; `AuditAreas.All` (Contracts) checked against `events.Create` subject types by a test.
@@ -549,7 +552,7 @@ Treat these as working assumptions; confirm with Bill before building anything t
 - PostgreSQL 18 via Homebrew (`postgresql@18`); database `pulaski`.
 - Existing database after pulling schema changes: `db/migrate.sh pulaski` (the API won't start until it's current).
 - Load schema: `psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql`, then
-  `db/app-role.sql` (re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
+  `db/app-role.sql` and `db/report-role.sql` (both re-runnable), then `db/seed-demo.sql` (empty database only), then optionally
   `db/seed-materials.sql` (200 demo materials in 11 classes; re-runnable), then `db/seed-units.sql` (standard units
   and demo material conversions, D-026; re-runnable), then `db/seed-reasons.sql` (starter adjustment, hold and
   utilization reasons, D-027, D-050; re-runnable).

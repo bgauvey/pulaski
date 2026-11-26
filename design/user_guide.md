@@ -2897,6 +2897,23 @@ In detail:
 - Numbers compare by value, so a rate saved as `500.000` and shown as `500` isn't reported as changed. Field names are as recorded, in English.
 - Nothing here changes anything: the record is append-only, and a correction is a new change.
 
+### Reports and dashboards in other tools
+
+Pulaski's screens have their fixed reports (OEE, production by shift, labor, inventory). For your own dashboards and reports, use a business
+intelligence tool such as Power BI, Excel or Tableau, or copy the data into a warehouse such as Snowflake. Pulaski gives them a **read-only
+reporting layer**: views in the database's `report` schema that keep their meaning as Pulaski changes, with figures worked out the way the
+screens work them out (OEE, good and scrap).
+
+1. Ask whoever runs Pulaski's database for a reporting login. They create it as a member of the `pulaski_report` role, which can read the
+   reporting views and nothing else.
+2. In your tool, connect to the PostgreSQL database `pulaski` with that login, and pick tables from the `report` schema.
+3. Follow the analysts' guide, `design/reporting.md`: what each view holds, how they join, how OEE adds up (add the hours, never average
+   the percentages), and sample queries.
+
+In detail: the login can't see users, passwords or the event log, and can't change anything. OEE by shift and day is there for days that are
+final (up to two days ago); today's figures are on **Machines → Utilization and OEE**. A report's times are sent in UTC; each site's time zone
+is in `report.site`.
+
 ## 16. Shift schedules
 
 **Configure → Shifts.** When each site works. Planning places jobs only inside shifts, so a job that would run into a weekend waits for Monday's first shift. A site can have several schedules: two shifts on weekdays for packing, around the clock for extrusion.
@@ -3666,6 +3683,9 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
+- **Your own reports and dashboards** aren't built in Pulaski: analysts build them in Power BI, Excel or a warehouse from the read-only
+  reporting views (see [Reports and dashboards in other tools](#reports-and-dashboards-in-other-tools)). The views cover sites, equipment,
+  materials, reasons, production, runs, stops, OEE by shift and day, work orders and jobs; inventory, labor and quality views come next.
 - **Accessibility:** the main flows (signing in, the Overview and menu, the Floor and job pages, Inventory and Scan, the station and line boards)
   pass automated WCAG 2.2 AA checks, but haven't yet been tested with a screen reader by a person, and the other screens have only the checks
   every build runs on all markup. Text-only zoom to 200% isn't checked. See `design/accessibility.md`.

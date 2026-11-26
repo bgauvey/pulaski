@@ -3444,6 +3444,21 @@ default); Configure → Integrations → Audit trail (`/audit`) plus **History**
 lot, work order and user pages; field-by-field before and after, the recorded data a click away. No schema change but the permission
 (migration 0087).
 
+### D-129 · Reporting through BI tools, not an in-app builder (#132) · *Proposed, in pieces*
+
+**Context.** Reports in the app are fixed (OEE, production by shift, labor, inventory); people want their own dashboards and ad-hoc reports.
+The issue asked first whether to build a report builder or document a BI connection.
+
+**Decision.** No in-app dashboard or report builder (the user's decision): tools like Power BI and warehouses like Snowflake do it better, so
+Pulaski gives analysts a **stable, documented, read-only layer**. The `report` schema holds views with a stated grain, keys, units and time
+zone, which change only by adding columns (a breaking change is a new view name); internal tables stay free to change. `pulaski_report`
+(`db/report-role.sql`, run by the database setup) may select from them only; the DBA creates each tool's login (the user's choice: no password
+in the repo). Figures match the app: OEE from the rollups with the app's formulas (planned = scheduled − non-production − planned stops;
+A = run ÷ planned; P = earned ÷ run with a rate; Q = earned good ÷ earned), never averaged; production as every counted change (reports,
+reversals, rejections on quality), which adds up to each run. `ReportViewTests` checks every view against the schema and the role's reach.
+`design/reporting.md` is the analyst's guide. (a) dimensions, production and OEE, orders and jobs; (b) inventory and genealogy, labor and
+quality, Power BI and getting the data into a warehouse (replication of the views first, the event feeds for near real time: the user's choice).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).
