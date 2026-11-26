@@ -3463,6 +3463,17 @@ a warehouse: the views copied on a schedule first, per view full, incremental on
 by change data capture copy tables, not views), and the event feeds for near real time (the user's choice). Not in the views: production by
 shift, today's OEE, per-lot pairing by time and labor shared out to runs, which the app works out on read.
 
+### D-130 · Help from every screen (#130) · *Proposed*
+
+**Context.** The user guide was complete but outside the app.
+
+**Decision.** The web app ships `design/user_guide.md` (copied into its output, and into the web image) and renders it once with Markdig
+(`UserGuide`, raw HTML disabled), giving headings GitHub's anchors so the guide's own links work, and splitting it into sections by heading.
+`HelpTopics` maps every page's route to its section; tests check every `@page` has one, every anchor is in the guide, and every link inside
+the guide lands on a heading (one broken link was found and fixed). User's choices: Markdig (BSD-2) rather than a pre-rendered file; help in a
+**side panel** (`HelpPanel`, the header's ?), showing the screen's section and following navigation, with the whole guide at `/help` (static,
+open to anyone: it holds only the guide). Static pages without the panel (sign-in, terminal, station) carry a `HelpLink`. English only.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

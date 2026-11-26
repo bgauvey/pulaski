@@ -23,6 +23,7 @@
         </a>
         <span class="chip">@L["Pre-alpha"]</span>
         <div class="header-end">
+            <Pulaski.Web.Components.Help.HelpPanel />
             @if (User.Me is { } me)
             {
                 @* Given the user, so it renders again once the layout has loaded them: a child without parameters isn't re-rendered. *@

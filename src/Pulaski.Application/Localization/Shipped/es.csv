@@ -996,6 +996,7 @@ Close,Cerrar
 Close NCR,Cerrar NC
 Close alert,Cerrar alerta
 Close as complete,Cerrar como completa
+Close help,Cerrar la ayuda
 Close it,Cerrarlo
 "Close it with a note of what was done, at most {0} characters.","Ciérrela con una nota de lo que se hizo, de {0} caracteres como máximo."
 "Close the lot being filled, so the next report starts a new one","Cerrar el lote en llenado, para que el siguiente reporte inicie uno nuevo"
@@ -1652,6 +1653,8 @@ Held internal,Retenido interno
 "Held stock isn't counted until it is released. Incoming deliveries aren't stock: they count only for jobs that need the material after they are due, and a late one counts as arriving now.","La existencia retenida no se cuenta hasta que se libera. Las entregas esperadas no son existencia: cuentan solo para trabajos que necesitan el material después de su fecha, y una atrasada cuenta como si llegara ahora."
 "Held: rework or return it, then release, write off or ship it as usual.","Retenido: reprocéselo o devuélvalo, y luego libérelo, dé de baja o envíelo como de costumbre."
 "Hello, {0}","Hola, {0}"
+Help,Ayuda
+Help for this screen,Ayuda para esta pantalla
 Hide,Ocultar
 Hide history,Ocultar historial
 Hide lines and departments,Ocultar líneas y departamentos
@@ -2872,6 +2875,7 @@ Open the lot,Abrir el lote
 Open the page,Abrir la página
 Open the schedule,Abrir el programa
 Open the setup checklist,Abrir la lista de configuración
+Open the whole guide,Abrir la guía completa
 Open work orders,Órdenes de trabajo abiertas
 Open.,Abierta.
 Operate,Operar
@@ -4176,6 +4180,7 @@ The first job started,El primer trabajo iniciado
 "The first line names the columns; employee_number and name are required. A column left out keeps what each person already has. Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that key; the others are matched on their employee number.","La primera línea nombra las columnas; employee_number y name son obligatorias. Una columna que falte conserva lo que cada persona ya tiene. Las filas con external_key son personas del sistema externo (nombrado arriba, o en una columna external_system), emparejadas por esa clave; las demás se emparejan por su número de empleado."
 "The first time it's switched on, start from now (not the whole history)","La primera vez que se active, empezar desde ahora (no todo el historial)"
 "The group id has no '/', '+', '#' or ':'.","El group id no tiene '/', '+', '#' ni ':'."
+The guide is in English.,La guía está en inglés.
 "The history of one thing ({0}), all time.","La historia de una cosa ({0}), de siempre."
 "The ideal rate is in {0}, which doesn't convert to {1}; the rate wasn't checked.","La tasa ideal está en {0}, que no se convierte a {1}; la tasa no se revisó."
 The ideal rate must be greater than zero.,La tasa ideal debe ser mayor que cero.
@@ -4460,6 +4465,7 @@ This reason needs a comment.,Este motivo necesita un comentario.
 This run standard has no modified rate to clear.,Este estándar de corrida no tiene tasa modificada que borrar.
 "This run stopped with a reason, so the batch it was making can be added.","Esta corrida se detuvo con un motivo, así que puede agregarse la tanda que estaba haciendo."
 This run: {0} {1},Esta corrida: {0} {1}
+This screen has no section in the user guide yet.,Esta pantalla aún no tiene sección en la guía del usuario.
 This screen isn't enrolled,Esta pantalla no está inscrita
 This shift,Este turno
 This shift:,Este turno:
@@ -4627,6 +4633,7 @@ Used,Usado
 Used in,Usado en
 Used-up lots,Lotes agotados
 User,Usuario
+User guide,Guía del usuario
 User name,Nombre de usuario
 User name (optional),Nombre de usuario (opcional)
 User name of {0},Nombre de usuario de {0}
@@ -5257,6 +5264,7 @@ the service sent more than {0} items; one import takes at most that.,el servicio
 the service sent more than {0} pages.,el servicio envió más de {0} páginas.
 the shift changes,cambia el turno
 the site,el sitio
+this screen,esta pantalla
 this site,este sitio
 to,a
 to cancel,por cancelar

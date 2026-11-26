@@ -1,0 +1,80 @@
+@using Pulaski.Web.Services.Help
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject UserGuide Guide
+@inject IJSRuntime JS
+
+@* Help for the screen (#130, D-130): its section of the user guide beside the page, following the reader as they move; the whole guide one
+   link away. Esc or the close button folds it and gives focus back to the help button. *@
+<button type="button" id="help-button" class="icon-button" aria-label="@L["Help for this screen"]" title="@L["Help for this screen"]"
+        aria-expanded="@(_open ? "true" : "false")" aria-controls="help-panel" @onclick="ToggleAsync">
+    <span class="help-mark" aria-hidden="true">?</span>
+</button>
+
+@if (_open)
+{
+    var section = Guide.Section(Anchor);
+    <aside id="help-panel" class="help-panel" aria-labelledby="help-title" tabindex="-1" @onkeydown="OnKeyDownAsync">
+        <div class="help-panel-head">
+            <h2 id="help-title" class="h6 mb-0">@L["Help"]: @(section?.Title ?? L["this screen"])</h2>
+            <button type="button" class="btn-close" aria-label="@L["Close help"]" @onclick="CloseAsync"></button>
+        </div>
+        <div class="help-panel-body guide">
+            @if (section is not null)
+            {
+                @((MarkupString)section.Html)
+            }
+            else
+            {
+                <p class="text-muted">@L["This screen has no section in the user guide yet."]</p>
+            }
+        </div>
+        <div class="help-panel-foot">
+            <a href="@($"help#{section?.Id ?? "contents"}")" target="_blank" rel="noopener">@L["Open the whole guide"]</a>
+            <span class="small text-muted">@L["The guide is in English."]</span>
+        </div>
+    </aside>
+}
+
+@code {
+    private bool _open;
+
+    private string? Anchor => HelpTopics.For(Navigation.ToBaseRelativePath(Navigation.Uri));
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    // Moving to another screen shows its section, if the panel is open.
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    private async Task ToggleAsync()
+    {
+        _open = !_open;
+        if (_open)
+        {
+            StateHasChanged();
+            await FocusAsync("help-panel");
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        _open = false;
+        StateHasChanged();
+        await FocusAsync("help-button");
+    }
+
+    private Task OnKeyDownAsync(KeyboardEventArgs e) => e.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
+    private async Task FocusAsync(string id)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("pulaski.ui.focus", id);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

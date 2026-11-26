@@ -995,6 +995,7 @@ Close
 Close NCR
 Close alert
 Close as complete
+Close help
 Close it
 Close it with a note of what was done, at most {0} characters.
 Close the lot being filled, so the next report starts a new one
@@ -1651,6 +1652,8 @@ Held internal
 Held stock isn't counted until it is released. Incoming deliveries aren't stock: they count only for jobs that need the material after they are due, and a late one counts as arriving now.
 Held: rework or return it, then release, write off or ship it as usual.
 Hello, {0}
+Help
+Help for this screen
 Hide
 Hide history
 Hide lines and departments
@@ -2871,6 +2874,7 @@ Open the lot
 Open the page
 Open the schedule
 Open the setup checklist
+Open the whole guide
 Open work orders
 Open.
 Operate
@@ -4175,6 +4179,7 @@ The first line names the columns; code, name, type and base_unit are required. A
 The first line names the columns; employee_number and name are required. A column left out keeps what each person already has. Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that key; the others are matched on their employee number.
 The first time it's switched on, start from now (not the whole history)
 The group id has no '/', '+', '#' or ':'.
+The guide is in English.
 The history of one thing ({0}), all time.
 The ideal rate is in {0}, which doesn't convert to {1}; the rate wasn't checked.
 The ideal rate must be greater than zero.
@@ -4459,6 +4464,7 @@ This reason needs a comment.
 This run standard has no modified rate to clear.
 This run stopped with a reason, so the batch it was making can be added.
 This run: {0} {1}
+This screen has no section in the user guide yet.
 This screen isn't enrolled
 This shift
 This shift:
@@ -4626,6 +4632,7 @@ Used
 Used in
 Used-up lots
 User
+User guide
 User name
 User name (optional)
 User name of {0}
@@ -5256,6 +5263,7 @@ the service sent more than {0} items; one import takes at most that.
 the service sent more than {0} pages.
 the shift changes
 the site
+this screen
 this site
 to
 to cancel

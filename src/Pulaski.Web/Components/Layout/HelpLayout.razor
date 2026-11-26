@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+
+@* The user guide (#130): the page to read, nothing else. *@
+<div class="help-shell">
+    <header class="help-shell-head">
+        <a class="brand" href="">
+            <svg class="brand-mark" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="12" />
+                <path d="M6.5 12H17M12.5 7.5L17 12l-4.5 4.5" transform="rotate(-30 12 12)" />
+            </svg>
+            <span>Pulaski</span>
+        </a>
+        <span class="text-muted">@L["User guide"]</span>
+    </header>
+    <main class="help-shell-main" id="main-content" tabindex="-1">
+        @Body
+    </main>
+</div>
+
+@code {
+    protected override Task OnInitializedAsync() => L.EnsureAsync();
+}

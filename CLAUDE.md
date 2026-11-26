@@ -361,6 +361,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
   `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
+- Help (D-130, proposed, #130): `design/user_guide.md` ships with the web app (csproj link, web image) and is rendered by `UserGuide` (Markdig,
+  GitHub anchors); `HelpTopics` maps each route to its section (a new page needs an entry; `HelpTests` checks routes, anchors and the guide's
+  links); `HelpPanel` (header ?) and `/help`; `HelpLink` on sign-in, terminal and station layouts.
 - Reporting (D-129, proposed, in pieces, #132): no in-app builder; the `report` schema (views over core/ts, change only by adding columns) read
   by `pulaski_report` (`db/report-role.sql`, run by `deploy/images/db/init.sh` and the test fixture); `design/reporting.md` is the analyst's
   guide (keep it in step, with Power BI and warehouse loading); `ReportViewTests` lists every view. Figures follow the app's (OEE from
