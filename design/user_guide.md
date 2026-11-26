@@ -118,6 +118,9 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
     folds and unfolds them.
   - The ☰ button at the top left collapses the menu to icons, to make room on small screens; then every page you may open shows as an
     icon, without groups.
+- **Help (?, top right).** Opens this guide's section for the screen you're on, beside it; it follows you as you move to another screen.
+  **Open the whole guide** opens all of it in a new tab, at that section. Esc or ✕ closes it. The sign-in page, terminals and operator
+  stations have a **Help** link instead, which opens the guide in a new tab. The guide is in English.
 - **You (top right).** Your initials, name and roles. Click them for your menu:
   - **Preferences…** opens a dialog with your [language and region](#your-language-and-region), the **colour theme** (*Like the device*,
     *Light* or *Dark*) and the [touch layout](#use-a-touch-screen) (*Automatic*, *On* or *Off*).
@@ -1996,7 +1999,7 @@ Whoever runs Pulaski puts the feed's secret (and a broker's username and passwor
 - **Substitutions.** Consuming a material the job has no planned component of is allowed, and recorded as a **substitution** (amber on the job page and in the confirmation). When the material is an approved alternate on the BOM line, the note says so instead (*used in place of …, as the BOM allows*).
 - **Genealogy per lot.** Every lot consumed into a job is recorded as a parent of every lot the job made. Traces then narrow that to the lots that pair by time, or to the lots someone picked (see [Trace a lot](#trace-a-lot)). Pairing goes by when movements were declared, not by machine data, so declaring consumption when a lot is loaded gives the best pairs.
 - **Times** are the moment you click, unless the movement is [back-dated](#back-date-a-movement). A movement recorded into a run that has ended keeps the time you entered it and names the run it belongs to.
-- **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), sent to the ERP's webhook when that is switched on (see [Send movements to the ERP](#send-movements-to-the-erp)).
+- **What the ERP sees.** Each movement is an event in Pulaski's event log (`pulaski.lot.received.v1`, `…consumed.v1` and so on), sent to the ERP's webhook when that is switched on (see [Send movements to the ERP](#send-movements-to-the-erp-and-certificates-to-a-document-system)).
 
 ---
 
@@ -3683,6 +3686,7 @@ Between two production jobs on different materials, a line needs a changeover. P
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
 
+- **Help** is the guide in English, whatever your language; line boards (TV screens) have no help link.
 - **Your own reports and dashboards** aren't built in Pulaski: analysts build them in Power BI, Excel or a warehouse from the read-only
   reporting views (see [Reports and dashboards in other tools](#reports-and-dashboards-in-other-tools)). The views cover sites, equipment,
   materials, reasons, production, runs, stops, OEE by shift and day, work orders and jobs, lots, stock and movements, genealogy, labor,

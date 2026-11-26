@@ -8,4 +8,13 @@
     <ProjectReference Include="..\Pulaski.Contracts\Pulaski.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Markdig" />
+  </ItemGroup>
+
+  <!-- The user guide (#130), shipped with the app that it describes: rendered for in-app help. -->
+  <ItemGroup>
+    <None Include="..\..\design\user_guide.md" Link="Help\user_guide.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

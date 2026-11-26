@@ -1,0 +1,14 @@
+@page "/help"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout HelpLayout
+@using Pulaski.Web.Services.Help
+@inject UserGuide Guide
+
+<PageTitle>@L["User guide"] · Pulaski</PageTitle>
+
+@* The whole user guide (#130), served by the app it describes; open to anyone, since it holds nothing but the guide. Each screen's help links
+   to its section here. *@
+<article class="guide">
+    @((MarkupString)Guide.Html)
+</article>

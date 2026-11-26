@@ -5,7 +5,8 @@
 .vscode/
 .idea/
 docs/
-design/
+design/*
+!design/user_guide.md
 Tests/
 tools/*
 !tools/Pulaski.DemoSetup/

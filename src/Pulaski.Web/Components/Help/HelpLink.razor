@@ -1,0 +1,9 @@
+@using Pulaski.Web.Services.Help
+@inject NavigationManager Navigation
+
+@* A link to this screen's section of the user guide (#130), for pages without the main layout's help panel (sign-in, terminals). *@
+<a class="help-link @Class" href="@($"help#{HelpTopics.For(Navigation.ToBaseRelativePath(Navigation.Uri)) ?? "contents"}")" target="_blank" rel="noopener">@L["Help"]</a>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+}

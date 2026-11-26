@@ -5,6 +5,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.404 AS build
 WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props nuget.config .editorconfig ./
 COPY src/ src/
+# The user guide, which the UI serves as its help (#130).
+COPY design/user_guide.md design/user_guide.md
 # Each image keeps its own package cache: docker compose builds them in parallel, and two restores unpacking the same package into a
 # shared cache race (NuGet's temporary file vanishes under the other).
 RUN --mount=type=cache,id=nuget-web,target=/root/.nuget/packages \

@@ -26,6 +26,8 @@ builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddSingleton(TimeProvider.System);
+// The user guide (#130), rendered once from the copy shipped beside the app.
+builder.Services.AddSingleton(_ => Pulaski.Web.Services.Help.UserGuide.Load(AppContext.BaseDirectory));
 builder.Services.AddScoped<EquipmentSelection>();
 builder.Services.AddScoped<SiteSelection>();
 builder.Services.AddScoped<Downloads>();

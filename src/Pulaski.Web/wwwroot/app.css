@@ -635,3 +635,103 @@ fieldset.view-only-scope {
     overflow-x: auto;
     max-width: 100%;
 }
+
+/* ---- Help (#130): the screen's section of the user guide beside the page, and the guide itself ---- */
+
+.help-mark {
+    font-weight: 700;
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.help-panel {
+    position: fixed;
+    top: var(--header-height);
+    right: 0;
+    bottom: 0;
+    z-index: 1040;
+    display: flex;
+    flex-direction: column;
+    width: min(30rem, 100vw);
+    background: var(--surface);
+    color: var(--text);
+    border-left: 1px solid var(--border-strong);
+    box-shadow: -4px 0 16px rgb(0 0 0 / 12%);
+}
+
+.help-panel:focus {
+    outline: none;
+}
+
+.help-panel-head,
+.help-panel-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border);
+}
+
+.help-panel-foot {
+    border-top: 1px solid var(--border);
+    border-bottom: 0;
+}
+
+.help-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-3) var(--space-4);
+}
+
+.guide h1, .guide h2, .guide h3, .guide h4 {
+    margin-top: var(--space-5);
+}
+
+.guide > :first-child {
+    margin-top: 0;
+}
+
+.guide table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin-bottom: var(--space-4);
+}
+
+.guide th, .guide td {
+    border: 1px solid var(--border);
+    padding: var(--space-1) var(--space-2);
+    vertical-align: top;
+}
+
+.guide pre {
+    background: var(--surface-2);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+}
+
+.guide code {
+    color: var(--text);
+}
+
+.help-shell {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: var(--space-4);
+}
+
+.help-shell-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding-bottom: var(--space-3);
+    margin-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border);
+}
+
+.help-shell-main:focus {
+    outline: none;
+}
