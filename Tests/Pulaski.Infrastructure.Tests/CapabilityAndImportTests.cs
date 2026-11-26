@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Dapper;
 using Pulaski.Application.EquipmentModel;
 using Pulaski.Application.Errors;
@@ -31,6 +32,43 @@ public sealed class CapabilityAndImportTests(DatabaseFixture db)
 
     private Task<long> CapabilityVersionAsync(Guid id) =>
         ScalarAsync<long>("SELECT xmin::text::bigint FROM core.equipment_capability WHERE id = @Id", new { Id = id });
+
+    [Fact]
+    public async Task The_audit_trail_says_who_changed_a_capability_and_what_changed()
+    {
+        var (line, _) = await PlantAsync();
+        CreatedResponse material = await db.SendAsync(new CreateMaterialCommand("AUD-" + _s, "Profile", null, "finished", null, db.UomId, true, null));
+        var added = await db.SendAsync(new AddCapabilityCommand(material.Id, line, 500m, db.UomId, 30, 2m, true, null, null));
+        var from = await ScalarAsync<DateTimeOffset>("SELECT effective_from FROM core.equipment_capability WHERE id = @Id", new { Id = added.Id });
+        await db.SendAsAsync("pat." + _s, new UpdateCapabilityCommand(added.Id, added.Version, 550m, db.UomId, 30, 2m, true, from, null));
+
+        async Task<Contracts.Audit.AuditPageDto> SearchAsync(Application.Audit.AuditFilter filter)
+        {
+            await using var scope = db.Services.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<Application.Abstractions.IQueryHandler<Application.Audit.SearchAuditQuery, Contracts.Audit.AuditPageDto>>()
+                .HandleAsync(new Application.Audit.SearchAuditQuery(filter), CancellationToken.None);
+        }
+
+        // The capability's history, newest first: changed by pat (the rate, 500 → 550), added by the test user.
+        var history = await SearchAsync(new Application.Audit.AuditFilter(SubjectId: added.Id));
+        Assert.Equal(["capability changed", "capability added"], history.Events.Select(e => e.Action));
+        var change = history.Events[0];
+        Assert.Equal(("pat." + _s, "equipment_capability"), (change.ActorId, change.SubjectType));
+        Assert.Equal([("idealRatePerHour", "500", "550")], change.Changes.Select(c => (c.Field, c.Before, c.After)));
+        Assert.DoesNotContain(change.Changes, c => c.Field == "materialId");
+        Assert.NotEmpty(history.Events[1].Fields);
+
+        // Found by who and by the material's id in the change, a page at a time.
+        var byPat = await SearchAsync(new Application.Audit.AuditFilter(Actor: "PAT." + _s));
+        // Pat's change also recalculated the run standard: both are theirs, nothing else is.
+        Assert.Equal(["equipment_capability", "run_standard"], byPat.Events.Select(e => e.SubjectType).Order());
+        var first = await SearchAsync(new Application.Audit.AuditFilter(Area: "equipment_capability", Text: material.Id.ToString(), Limit: 1));
+        Assert.Equal(change.Id, Assert.Single(first.Events).Id);
+        var cursor = Application.Audit.AuditCursor.Parse(first.NextBefore)!.Value;
+        var second = await SearchAsync(new Application.Audit.AuditFilter(Area: "equipment_capability", Text: material.Id.ToString(), BeforeRecordedAt: cursor.RecordedAt, BeforeId: cursor.Id, Limit: 1));
+        Assert.Equal(("capability added", (string?)null), (Assert.Single(second.Events).Action, second.NextBefore));
+        await Assert.ThrowsAsync<ValidationException>(() => SearchAsync(new Application.Audit.AuditFilter(From: DateTimeOffset.UtcNow.AddDays(-100))));
+    }
 
     [Fact]
     public async Task A_capability_seeds_the_run_standard_follows_its_ideal_rate_and_ends_without_being_deleted()

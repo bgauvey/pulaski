@@ -70,6 +70,10 @@ else
                           Disabled="_saving" Revision="_revision" OnChange="OnPropertyChangeAsync"
                           Banner="@(_propError is null ? null : ErrorBanner)"
                           Footer="@(_draft is not null && _selectedId == EquipmentTreeGrid.DraftId ? DraftFooter : null)" />
+            @if (SelectedExisting is { } shown)
+            {
+                <p class="mt-2 mb-0"><HistoryLink Subject="shown.Id" Class="btn btn-sm btn-outline-secondary" /></p>
+            }
             @if (SelectedExisting is { SiteId: not null } selected)
             {
                 <EquipmentQualifications @key="selected.Id" Equipment="selected" />

@@ -3028,7 +3028,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0083_release_approval'),
     ('0084_nonconformance'),
     ('0085_nonconformance_follow_up'),
-    ('0086_setup_checklist');
+    ('0086_setup_checklist'),
+    ('0087_audit_trail');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -3105,7 +3106,8 @@ INSERT INTO sec.permission (code, description) VALUES
     ('system.view', 'See system health: edge nodes, deliveries, connections, background services and the database'),
     ('releases.approve', 'Approve or send back processes, BOMs and specifications submitted for release'),
     ('ncr.raise', 'Raise nonconformance reports'),
-    ('ncr.manage', 'Work nonconformance reports: investigate, add actions and close them')
+    ('ncr.manage', 'Work nonconformance reports: investigate, add actions and close them'),
+    ('audit.view', 'Browse the audit trail: who changed what, and when, everywhere')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.

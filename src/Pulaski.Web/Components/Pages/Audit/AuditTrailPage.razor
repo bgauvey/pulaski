@@ -1,0 +1,223 @@
+@page "/audit"
+@attribute [RequiresView(PermissionCodes.AuditView)]
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+@inject SiteSelection Sites
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Audit trail"] · Pulaski</PageTitle>
+
+@* The audit trail (#129, D-128): every recorded change, newest first; one thing's history from its page's History link, or searched by area,
+   who, text in the change and when. A change carrying before and after shows only what differs. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">@L["Audit trail"]</h1>
+        <p class="text-muted mb-0">@L["Every change Pulaski recorded: what, by whom and when. Open one to see what changed."]</p>
+    </div>
+</div>
+
+@if (!User.CanEverywhere(PermissionCodes.AuditView))
+{
+    <div class="alert alert-warning" role="alert">@L["The audit trail covers every site, so it needs permission to browse it everywhere. Ask an administrator."]</div>
+    return;
+}
+
+<ProblemAlert Error="_error" />
+
+@if (Subject is { } subject)
+{
+    <div class="drawer-alert mb-3" role="status">
+        <Icon Name="info" Size="18" />
+        <span>@L["The history of one thing ({0}), all time.", _events.FirstOrDefault()?.SubjectLabel ?? AuditView.ShortId(subject)] <a href="audit">@L["Search everything instead"]</a></span>
+    </div>
+}
+else
+{
+    <form class="row g-2 align-items-end mb-3" @onsubmit="SearchAsync" @onsubmit:preventDefault aria-label="@L["Search the audit trail"]">
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold" for="audit-area">@L["Area"]</label>
+            <select id="audit-area" class="form-select form-select-sm" @bind="_area">
+                <option value="">@L["All areas"]</option>
+                @foreach (var area in AuditAreas.All.OrderBy(a => L.Label(a), StringComparer.CurrentCulture))
+                {
+                    <option value="@area">@L.Label(area)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold" for="audit-actor">@L["Who"]</label>
+            <input id="audit-actor" class="form-control form-control-sm" maxlength="100" @bind="_actor" placeholder="@L["Name or user name"]" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold" for="audit-text">@L["Text in the change"]</label>
+            <input id="audit-text" class="form-control form-control-sm" maxlength="100" @bind="_text" placeholder="@L["A code, number or name"]" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold" for="audit-from">@L["From"]</label>
+            <input id="audit-from" type="date" class="form-control form-control-sm" @bind="_from" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold" for="audit-to">@L["To"]</label>
+            <input id="audit-to" type="date" class="form-control form-control-sm" @bind="_to" />
+        </div>
+        <div class="col-12 form-actions">
+            <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy">@L["Search"]</ActionButton>
+            <span class="small text-muted">@L["Up to 92 days at a time; without dates, the last 30."]</span>
+        </div>
+    </form>
+}
+
+@if (_loaded)
+{
+    <div class="table-panel table-scroll mb-2">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>@L["When"]</th><th>@L["What"]</th><th>@L["Of"]</th><th>@L["Who"]</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var e in _events)
+                {
+                    <tr @key="e.Id">
+                        <td class="small text-nowrap">@Display.SiteTime(e.OccurredAt, Sites.Site?.TimeZone)</td>
+                        <td>@e.Action</td>
+                        <td>
+                            <span class="small text-muted">@L.Label(e.SubjectType)</span>
+                            @(e.SubjectLabel is { } label ? $" {label}" : "")
+                        </td>
+                        <td class="small">@AuditView.Who(e)</td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-link p-0" aria-expanded="@(_open.Contains(e.Id) ? "true" : "false")"
+                                    @onclick="() => Toggle(e.Id)">@(_open.Contains(e.Id) ? L["Hide"] : L["Details"])</button>
+                            @if (Subject is null)
+                            {
+                                <a class="btn btn-sm btn-link p-0 ms-2" href="@($"audit?subject={e.Subject}")">@L["History"]</a>
+                            }
+                        </td>
+                    </tr>
+                    @if (_open.Contains(e.Id))
+                    {
+                        <tr @key="@($"{e.Id}-details")">
+                            <td colspan="5">
+                                @if (e.Reason is { } reason)
+                                {
+                                    <p class="small mb-1">@L["Reason: {0}", reason]</p>
+                                }
+                                @if (e.Changes.Count > 0)
+                                {
+                                    <table class="table table-sm small mb-2">
+                                        <thead><tr><th>@L["Field"]</th><th>@L["Before"]</th><th>@L["After"]</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var c in e.Changes)
+                                            {
+                                                <tr><td><code>@c.Field</code></td><td>@(c.Before ?? "—")</td><td>@(c.After ?? "—")</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                else if (e.Fields.Count > 0)
+                                {
+                                    <table class="table table-sm small mb-2">
+                                        <thead><tr><th>@L["Field"]</th><th>@L["Value"]</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var f in e.Fields)
+                                            {
+                                                <tr><td><code>@f.Field</code></td><td>@(f.Value ?? "—")</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                <p class="small text-muted mb-1">@L["Recorded {0} from {1}; event {2} ({3}).", Display.SiteTime(e.RecordedAt, Sites.Site?.TimeZone), e.Source, e.Id, e.Type]</p>
+                                <details class="small">
+                                    <summary>@L["As recorded"]</summary>
+                                    <pre class="mb-0">@e.DataJson</pre>
+                                </details>
+                            </td>
+                        </tr>
+                    }
+                }
+                @if (_events.Count == 0)
+                {
+                    <tr><td colspan="5" class="text-muted small">@L["Nothing recorded matches."]</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (_next is not null)
+    {
+        <ActionButton Class="btn btn-sm btn-outline-secondary" Busy="_busy" OnClick="MoreAsync">@L["Older changes"]</ActionButton>
+    }
+}
+else if (_error is null)
+{
+    <p class="text-muted">@L["Loading…"]</p>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "subject")] private Guid? Subject { get; set; }
+
+    private List<AuditEventDto> _events = [];
+    private readonly HashSet<Guid> _open = [];
+    private string? _next;
+    private string? _area;
+    private string? _actor;
+    private string? _text;
+    private DateOnly? _from;
+    private DateOnly? _to;
+    private bool _loaded;
+    private bool _busy;
+    private ApiException? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException)
+        {
+        }
+
+        if (User.CanEverywhere(PermissionCodes.AuditView))
+        {
+            (_events, _next, _loaded) = ([], null, false);
+            await LoadAsync(null);
+        }
+    }
+
+    private Task SearchAsync()
+    {
+        (_events, _next) = ([], null);
+        _open.Clear();
+        return LoadAsync(null);
+    }
+
+    private Task MoreAsync() => LoadAsync(_next);
+
+    private async Task LoadAsync(string? before)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var page = await Api.SearchAuditAsync(Subject, Subject is null ? _area : null, Subject is null ? _actor : null, Subject is null ? _text : null,
+                Subject is null ? AuditView.Start(_from) : null, Subject is null ? AuditView.End(_to) : null, before);
+            _events.AddRange(page.Events);
+            _next = page.NextBefore;
+            _loaded = true;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Toggle(Guid id)
+    {
+        if (!_open.Remove(id))
+        {
+            _open.Add(id);
+        }
+    }
+}

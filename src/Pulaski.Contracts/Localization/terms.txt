@@ -203,6 +203,7 @@ A chart covers at most 366 days.
 A checklist has at most {0} items.
 A choice
 A choice attribute needs at least one choice.
+A code, number or name
 A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's configuration, never here.
 A connection's code is fixed once made: it names its credentials in the configuration ({0}).
 A connection's kind is fixed once made ({0}); add another connection instead.
@@ -442,6 +443,7 @@ Alert
 Alert {0} not found.
 Alerts go to
 All
+All areas
 All calls
 All changes saved
 All classes
@@ -552,6 +554,7 @@ Around the clock, from {0}
 Around the clock: no shift schedule is set here or above
 Arrange
 As it was
+As recorded
 Ask a supervisor to enrol it.
 Ask for a new one.
 Ask on each report
@@ -601,6 +604,8 @@ Attempts must be 1 to 50.
 Attribute
 Attributes
 Attributes and certificates
+Audit trail
+Audit trail: who changed what, and when
 Auto
 Auto accepted
 Automated consumption (backflush, time window, a counter) takes from it while it is loaded.
@@ -682,6 +687,7 @@ Batch size on this line, {0}
 Batch tolerance
 Batch tolerance on this line, %
 Batches
+Before
 Before a run, on {0}
 Before it can be released:
 Before this version can be released:
@@ -730,6 +736,7 @@ Broker host
 Broker's address
 Browse depth
 Browse from
+Browse the audit trail: who changed what, and when, everywhere
 Business key, unique within the site. Fixed once the equipment is created.
 By
 By day
@@ -1385,6 +1392,7 @@ Every 1 to 168 hours.
 Every 1 to {0:0} counts.
 Every 1 to {0:0} run hours.
 Every action has to be done or cancelled first.
+Every change Pulaski recorded: what, by whom and when. Open one to see what changed.
 Every characteristic
 Every class and material as B2MML, which the B2MML import reads back
 Every day from {0}
@@ -1464,6 +1472,7 @@ Feed
 Feed point
 Feed points
 Feed points · Inventory
+Field
 Fields: Pulaski's field ← the item's property (use / for a property of a property, such as Unit/Code)
 Fields: Pulaski's field ← the query's column
 Fifo
@@ -2090,6 +2099,7 @@ Locked: it keeps its place when others move
 Long stop
 Longest
 Longest waits
+Look back at most 92 days, or choose one thing to see all its history.
 Look back {0} to {1} days.
 Loose
 Lot
@@ -2327,6 +2337,7 @@ Name at least one part that finds a lot or a material: (?<lot>…), (?<supplier_
 Name of state {0}
 Name of {0}
 Name on the controller
+Name or user name
 Name the ERP the orders come from first.
 Name, e.g. Case packer, vendor A
 Name, e.g. Damaged in handling
@@ -2698,6 +2709,7 @@ Nothing planned here.
 Nothing planned on {0}.
 Nothing planned until {0}
 Nothing received yet.
+Nothing recorded matches.
 Nothing reported or planned this shift
 Nothing reported this shift
 Nothing reported yet.
@@ -2757,6 +2769,7 @@ Offer {0}
 Offered
 Offers
 Offers the lines of
+Older changes
 Oldest
 On
 On a break {0}.
@@ -3234,6 +3247,7 @@ Reason {0} can't be chosen.
 Reason {0} needs a comment.
 Reason {0} not found.
 Reason {0} was changed by someone else. Reload and try again.
+Reason: {0}
 Reasons
 Reasons offered
 Reason…
@@ -3261,6 +3275,7 @@ Record the sample
 Recorded
 Recorded as {0}.
 Recorded late, into a run that has ended.
+Recorded {0} from {1}; event {2} ({3}).
 Recorded.
 Recorded: in specification.
 Recorded: out of specification. Tell quality.
@@ -3620,8 +3635,10 @@ Scrap, {0}
 Scrapped
 Sds
 Search
+Search everything instead
 Search properties
 Search terms
+Search the audit trail
 Second sign-off
 Security
 See a site's settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions
@@ -3965,6 +3982,7 @@ Terminal {0} not found.
 Terminals
 Test report
 Text
+Text in the change
 That action is {0} already.
 That address is already bound to an active tag on this connection.
 That alert was closed already.
@@ -4079,6 +4097,8 @@ The action is added.
 The action is cancelled.
 The action is done.
 The address must be a full https:// URL.
+The audit trail covers every site, so it needs permission to browse it everywhere.
+The audit trail covers every site, so it needs permission to browse it everywhere. Ask an administrator.
 The balance at {0} is {1} and this one is {2}; stock moves between balances in the same status.
 The balance of {0} at {1}:
 The base quantity must be greater than zero.
@@ -4155,6 +4175,7 @@ The first line names the columns; code, name, type and base_unit are required. A
 The first line names the columns; employee_number and name are required. A column left out keeps what each person already has. Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that key; the others are matched on their employee number.
 The first time it's switched on, start from now (not the whole history)
 The group id has no '/', '+', '#' or ':'.
+The history of one thing ({0}), all time.
 The ideal rate is in {0}, which doesn't convert to {1}; the rate wasn't checked.
 The ideal rate must be greater than zero.
 The investigation is saved.
@@ -4578,6 +4599,7 @@ Untranslated
 Unusually fast: over {0} an hour
 Unusually slow: under {0} an hour
 Up to 30 days
+Up to 92 days at a time; without dates, the last 30.
 Up to {0} MB.
 Up to {0} {1} more fits this run at the line's rate.
 Up to, %
@@ -4747,6 +4769,7 @@ Where what was taken came from
 Which signal means what on which equipment. A Sparkplug B address is
 Who
 Who can sign in, and which roles they hold. Everyone who signs in can view every screen; roles decide the changes. Every user needs a role, and every role but Administrator is held at a site.
+Who changed this, and when
 Who holds what
 Who is on each line, the labor of each shift to review and approve, and hours against the standard crew.
 Who places changeovers

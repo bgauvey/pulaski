@@ -73,6 +73,7 @@ public static class PermissionCodes
     public const string Instructions = "instructions.manage";
     public const string ChecklistSignOff = "checklists.sign_off";
     public const string SystemView = "system.view";
+    public const string AuditView = "audit.view";
     public const string ReleaseApprove = "releases.approve";
     public const string NcrRaise = "ncr.raise";
     public const string NcrManage = "ncr.manage";

@@ -109,7 +109,7 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
   - **Configure**, the setup you do once and change now and then: **Equipment** (with **Machine profiles**, **Edge nodes**, **Terminals**);
     **Materials** (with **Units**, **Specifications**); **Processes** (with **BOMs**, **Work instructions**, **Changeovers**, **Planning
     rates**); **Site settings** (with **Setup checklist**, **Shifts**, **Reasons**); **People** (with **Users**, for administrators, with tabs for users, roles and
-    permissions); **Integrations** (with **System health**, **Languages**).
+    permissions); **Integrations** (with **System health**, **Audit trail**, **Languages**).
   - Click a group's name to open its main page; its other pages unfold below it. The arrow beside it folds or unfolds a group without
     leaving the page you're on, the group of the page you're on too. That group unfolds when you arrive in it, and the browser remembers
     which others you left open.
@@ -2873,6 +2873,29 @@ In detail:
   given on the Roles tab.
 
 ---
+
+### Audit trail: who changed what (administrators)
+
+Every change in Pulaski is recorded, with who made it and when. **Configure → Integrations → Audit trail** shows them.
+
+1. **One thing's history:** on its page, click **History**. It's on a material (and on each of its capabilities), a piece of equipment
+   (below its properties), a process, a lot, a work order (in the actions of one selected order) and a user. The audit trail opens with
+   every recorded change to it, newest first, all time.
+2. **Search:** choose an **Area** (such as *Equipment capability*), type **Who** (a name or user name) or **Text in the change** (a code, number
+   or name, such as `EXT-01` or a lot number), choose **From** and **To** days, and click **Search**. **Older changes** shows the next page.
+3. Click **Details** on a change. A change to something that already existed shows only the fields that changed, **Before** and **After**;
+   something added shows its fields. **As recorded** shows the change exactly as it was recorded.
+
+In detail:
+
+- **Who** is the user's name with their user name, or what made the change when no person did: a terminal (`terminal:…`), the edge's user,
+  or a background job (`system`).
+- **Times** are when it happened, in the site's time; the details also give when it was recorded.
+- A search looks back 30 days unless you choose dates, and at most 92 days at a time; a thing's history has no limit.
+- **Who may see it:** permission to browse the audit trail, held at every site, since a change isn't recorded against one site (the
+  Administrator role has it; it can be given to another role held everywhere). Others don't see the **History** links or the menu entry.
+- Numbers compare by value, so a rate saved as `500.000` and shown as `500` isn't reported as changed. Field names are as recorded, in English.
+- Nothing here changes anything: the record is append-only, and a correction is a new change.
 
 ## 16. Shift schedules
 

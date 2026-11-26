@@ -27,6 +27,7 @@
             var expired = lot.ExpiresAt is { } ends && ends <= Time.GetUtcNow();
             string? Why(LotAction action) => L.Of(LotActionAvailability.Why(action, lot.Status, lot.Quantity, expired));
             <div class="inv-actions">
+                <HistoryLink Subject="lot.Id" Class="btn btn-outline-secondary" />
                 @if (May(LotAction.Consume))
                 {
                     <ActionButton Class="btn btn-primary" Reason="@Why(LotAction.Consume)" OnClick="() => _action = LotAction.Consume">@L["Consume"]</ActionButton>

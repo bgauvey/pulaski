@@ -71,6 +71,7 @@ public static class NavTree
                 ]),
             Group("integrations", new("integrations", "signal", Term.Mark("Integrations"), Term.Mark("Integrations: events sent to the ERP and failed deliveries"), PermissionCodes.IntegrationsView), [
                 new("system-health", "gauge", Term.Mark("System health"), Term.Mark("System health: what is unhealthy and where to put it right"), PermissionCodes.SystemView),
+                new("audit", "info", Term.Mark("Audit trail"), Term.Mark("Audit trail: who changed what, and when"), PermissionCodes.AuditView),
                 new("languages", "categorized", Term.Mark("Languages"), Term.Mark("Languages and their translations"), PermissionCodes.Languages),
                 ]),
         ]),
