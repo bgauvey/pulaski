@@ -651,3 +651,67 @@ public sealed record DueSampleDto
     public int SubgroupSize { get; init; } = 1;
     public string? CharacteristicUomCode { get; init; }
 }
+
+/// <summary>
+/// A lot's certificate of analysis (#137, D-123): the lot, its released specification, one line per spec item summarising the lot's results
+/// (or, when the lot has none for an item, its making job's), and what the issuer should know first. Worked out now; issuing stores it.
+/// </summary>
+public sealed record CertificateDto
+{
+    public required Guid LotId { get; init; }
+    public string? LotNumber { get; init; }
+    public required string MaterialCode { get; init; }
+    public required string MaterialName { get; init; }
+    public decimal Quantity { get; init; }
+    public required string UomCode { get; init; }
+    public required string LotStatus { get; init; }
+    public string? SupplierLot { get; init; }
+    public DateTimeOffset? ExpiresAt { get; init; }
+    public string? ProducedByJobNumber { get; init; }
+    public required string SiteCode { get; init; }
+    public required string SiteName { get; init; }
+    public string? SiteTimeZone { get; init; }
+    public int SpecVersion { get; init; }
+    public DateTimeOffset? SpecReleasedAt { get; init; }
+    public required DateTimeOffset IssuedAt { get; init; }
+
+    /// <summary>The customer's order or the shipment it goes with, printed on it when given.</summary>
+    public string? Reference { get; init; }
+    public IReadOnlyList<CertificateLineDto> Lines { get; init; } = [];
+
+    /// <summary>Every line passed and the lot isn't on hold or rejected.</summary>
+    public bool Conforms { get; init; }
+
+    /// <summary>A failed or missing item, a lot on hold: said before issuing, and on the certificate.</summary>
+    public IReadOnlyList<MessageDto> Warnings { get; init; } = [];
+}
+
+public sealed record CertificateLineDto
+{
+    public required string CharacteristicCode { get; init; }
+    public required string CharacteristicName { get; init; }
+    public string? UomCode { get; init; }
+    public required string Requirement { get; init; }
+    public bool Measured { get; init; }
+    public int Results { get; init; }
+    public decimal? Mean { get; init; }
+    public decimal? Min { get; init; }
+    public decimal? Max { get; init; }
+    public int? Inspected { get; init; }
+    public int? Defects { get; init; }
+    public int Decimals { get; init; }
+
+    /// <summary><c>pass</c>, <c>fail</c>, <c>no_result</c> or <c>not_judged</c>.</summary>
+    public required string Outcome { get; init; }
+
+    /// <summary>Whose results: <c>lot</c>, or <c>job</c> (the job that made it, when the lot had none for this item).</summary>
+    public string Source { get; init; } = "lot";
+}
+
+public sealed record IssueCertificateRequest
+{
+    public string? Reference { get; init; }
+}
+
+/// <summary>The certificate stored as a lot document (kind <c>coa</c>), and what it warned of.</summary>
+public sealed record IssuedCertificateResponse(Guid DocumentId, IReadOnlyList<MessageDto> Warnings);

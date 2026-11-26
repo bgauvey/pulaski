@@ -252,6 +252,14 @@
                             <label class="form-label" for="lot-reference">@L["Delivery or shipment number"]</label>
                             <input id="lot-reference" class="form-control" maxlength="100" @bind="_reference" @bind:event="oninput" />
                         </div>
+                        @if (User.Can(PermissionCodes.LotRecords, Lot.SiteId))
+                        {
+                            @* A certificate of analysis with the shipment (#137): issued after it ships, with the shipment's number on it. *@
+                            <div class="form-check mb-3">
+                                <input id="lot-coa" type="checkbox" class="form-check-input" @bind="_withCertificate" />
+                                <label class="form-check-label" for="lot-coa">@L["Issue its certificate of analysis"]</label>
+                            </div>
+                        }
                         break;
 
                     case LotAction.Correct:
@@ -614,6 +622,7 @@
         _holdStatus = "on_hold";
         _producedTracked = true;
         _reference = null;
+        _withCertificate = false;
         _mergeIds.Clear();
     }
 
@@ -756,17 +765,7 @@
                 LotAction.Merge => Done(
                     await Api.MergeLotsAsync(Lot!.Id, new MergeLotsRequest { Version = Lot.Version, SourceLotIds = [.. _mergeIds], Comment = comment, EffectiveAt = EffectiveAt }),
                     (_mergeIds.Count == 1 ? L["took in 1 lot"] : L["took in lots: {0}", _mergeIds.Count])),
-                LotAction.Ship => Done(
-                    await Api.ShipLotAsync(Lot!.Id, new ShipLotRequest
-                    {
-                        Version = Lot.Version,
-                        Quantity = _quantity,
-                        UomId = _quantity is null ? null : _uomId,
-                        Reference = _reference!.Trim(),
-                        Comment = comment,
-                        EffectiveAt = EffectiveAt,
-                    }),
-                    (_quantity is null ? L["shipped on {0}", _reference!.Trim()] : L["{0} shipped on {1}", QtyText, _reference!.Trim()])),
+                LotAction.Ship => await ShipAsync(comment),
                 LotAction.Correct => Done(
                     await Api.CorrectLotAsync(Lot!.Id, new CorrectLotRequest
                     {
@@ -860,6 +859,40 @@
         _chainCheck = null;
         return (new LotTransactionResponse { LotId = Lot.Id, LotNumber = Lot.LotNumber, Quantity = Lot.Quantity, Status = Lot.Status, Version = Lot.Version },
             (done.Steps.Count == 1 ? L["had 1 movement reversed"] : L["had movements reversed, latest first: {0}", done.Steps.Count]));
+    }
+
+    private bool _withCertificate;
+
+    // Ships, then (when asked, #137) issues the certificate with the shipment's number; a certificate that can't be issued is said, the shipment stands.
+    private async Task<(LotTransactionResponse, string)> ShipAsync(string? comment)
+    {
+        var reference = _reference!.Trim();
+        var shipped = Done(
+            await Api.ShipLotAsync(Lot!.Id, new ShipLotRequest
+            {
+                Version = Lot.Version,
+                Quantity = _quantity,
+                UomId = _quantity is null ? null : _uomId,
+                Reference = reference,
+                Comment = comment,
+                EffectiveAt = EffectiveAt,
+            }),
+            _quantity is null ? L["shipped on {0}", reference] : L["{0} shipped on {1}", QtyText, reference]);
+        if (!_withCertificate)
+        {
+            return shipped;
+        }
+
+        try
+        {
+            var issued = await Api.IssueCertificateAsync(Lot.Id, new IssueCertificateRequest { Reference = reference });
+            var said = issued.Warnings.Count == 0 ? L["Its certificate of analysis is attached."] : L["Its certificate of analysis is attached, noting: {0}", string.Join(" ", L.Notes(issued.Warnings))];
+            return (shipped.Item1, $"{shipped.Item2} {said}");
+        }
+        catch (ApiException ex)
+        {
+            return (shipped.Item1, $"{shipped.Item2} {L["Its certificate couldn't be issued: {0}", L.Problem(ex)]}");
+        }
     }
 
     private async Task<(LotTransactionResponse, string)> SplitAsync(string? comment)

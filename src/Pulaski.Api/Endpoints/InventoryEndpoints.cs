@@ -586,6 +586,27 @@ internal static class InventoryEndpoints
         .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(LotDocumentFormat.MaxBytes + (1024 * 1024)))
         .Accepts<IFormFile>("multipart/form-data");
 
+        // Certificates of analysis (#137, D-123): worked out to look at (and as a PDF to preview), and issued as a lot document of kind coa.
+        lots.MapGet("/{id:guid}/certificate", async Task<Ok<Contracts.Quality.CertificateDto>> (
+            Guid id, string? reference, IQueryHandler<Application.Quality.GetCertificateQuery, Contracts.Quality.CertificateDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new Application.Quality.GetCertificateQuery(id, reference), ct)))
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView, Permissions.QualityView);
+
+        lots.MapGet("/{id:guid}/certificate.pdf", async (
+            Guid id, string? reference, IQueryHandler<Application.Quality.GetCertificateQuery, Contracts.Quality.CertificateDto> handler,
+            Application.Quality.ICertificateRenderer renderer, CancellationToken ct) =>
+        {
+            var certificate = await handler.HandleAsync(new Application.Quality.GetCertificateQuery(id, reference), ct);
+            return TypedResults.File(renderer.Render(certificate), "application/pdf", $"COA-{certificate.LotNumber ?? certificate.MaterialCode}-preview.pdf");
+        })
+        .RequireAny(Site.Of(SiteOf.Lot), Permissions.InventoryView, Permissions.QualityView);
+
+        lots.MapPost("/{id:guid}/certificate", async Task<Ok<Contracts.Quality.IssuedCertificateResponse>> (
+            Guid id, Contracts.Quality.IssueCertificateRequest request,
+            ICommandHandler<Application.Quality.IssueCertificateCommand, Contracts.Quality.IssuedCertificateResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new Application.Quality.IssueCertificateCommand(id, request.Reference), ct)))
+        .RequirePermission(Permissions.LotRecords, Site.Of(SiteOf.Lot));
+
         var documents = routes.MapGroup("/lot-documents").WithTags("Inventory");
 
         // The stored file, as an attachment and never sniffed by the browser.

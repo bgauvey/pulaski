@@ -334,6 +334,7 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Quality.ISamplingReadStore>(new InMemorySampling());
         services.AddSingleton<Application.Approvals.IReleaseApprovalRepository>(Approvals);
         services.AddSingleton<Application.Approvals.IReleaseApprovalReadStore>(Approvals);
+        services.TryAddSingleton<Application.Quality.ICertificateRenderer>(new FakeCertificateRenderer());
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);
@@ -519,4 +520,16 @@ public sealed class InMemoryReleaseApprovals : Application.Approvals.IReleaseApp
     public Task<IReadOnlyList<(Domain.Approvals.ReleaseRequest Request, int VersionNumber, string? SubmittedByName, string? DecidedByName)>> ListAsync(
         string kind, Guid documentId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<(Domain.Approvals.ReleaseRequest, int, string?, string?)>>([]);
+}
+
+/// <summary>A certificate (#137) as a few bytes that pass for a PDF, with what it was drawn from kept for tests to look at.</summary>
+public sealed class FakeCertificateRenderer : Application.Quality.ICertificateRenderer
+{
+    public Contracts.Quality.CertificateDto? Last { get; private set; }
+
+    public byte[] Render(Contracts.Quality.CertificateDto certificate)
+    {
+        Last = certificate;
+        return System.Text.Encoding.ASCII.GetBytes($"%PDF-1.7\n% certificate {certificate.LotNumber}\n%%EOF\n");
+    }
 }

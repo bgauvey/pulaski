@@ -1530,6 +1530,30 @@ Below the facts, **Attributes and certificates** keeps what quality knows about 
 - **Concurrency.** If someone else changed the same value since you opened the page, you'll see *"changed by someone else"*: reload and try again.
 - **Audit.** Each change is an event: `pulaski.lot.attribute_set.v1` (with the value before and after), `pulaski.lot_document.attached.v1` and `…withdrawn.v1`.
 
+### Issue a certificate of analysis
+
+When the lot's material has a released [specification](#write-a-specification), Pulaski writes the lot's certificate of analysis from the
+results recorded.
+
+1. On the lot's page, under **Certificate of analysis**, click **Prepare**. It shows one line per item of the specification: the requirement,
+   the results (for a measured one, their mean and range; for an inspected one, defects in units inspected) and **Pass**, **Fail**, **No
+   result** or **Not judged**. Anything to know first is listed above it: an item out of specification or with no result, a lot on hold.
+2. Optionally type the **Customer order or shipment** to print on it. **Download a preview** gives the PDF as it would be.
+3. Click **Issue and attach**. The PDF is attached under **Attributes and certificates** as a certificate of analysis, numbered
+   *COA-{lot}-{date and time}*, and goes out through a [documents feed](#send-movements-to-the-erp-and-certificates-to-a-document-system)
+   like any certificate.
+
+When shipping a lot, tick **Issue its certificate of analysis** to issue it with the shipment's number in one step.
+
+In detail:
+
+- **Whose results:** the lot's own, not left out. For an item the lot has none of, those recorded against the job that made it with no lot
+  named (marked *from its job*). Results of the lots it was split or merged from aren't used.
+- **Nothing is hidden or refused:** a failed item says **FAIL** on the certificate, a missing one **NO RESULT**, and every note is printed
+  above the signature line. Issuing needs permission to record lot attributes and certificates; looking at it, to see inventory or quality.
+- A certificate is a snapshot: issuing it again after more results makes a new one; withdraw the old one if it was sent by mistake. It is
+  printed in English.
+
 ### Record what a job used and made: the Jobs tab
 
 Until Pulaski records production from the machines, operators declare it here. Material is used and made while a job runs, so everything goes into one of the job's runs (see [The Floor](#11-the-floor-running-jobs-and-reporting-production)).
@@ -3576,7 +3600,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **The demo's history** stops where it was recorded: EXT-02 shows no signal after it (its edge node isn't live), and nothing more is reported on its running orders unless you do it. Labor of the current shift is left open, as if the crew were still on.
 - **The demo's** OEE on EXT-01 has no output until you report production on its running job (machine counts only fill in a report's *From the machine*), and its counts are pieces, counted as one unit of the material each. Its control limits are set by hand from the simulator's design, not from a baseline. The OPC UA simulator isn't connected.
 - **Units** have no temperature dimension, so a temperature characteristic has no unit (name it, as the demo's *Melt temperature (°C)*).
-- **Quality:** alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, and Pulaski doesn't produce certificates of analysis from results. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
+- **Quality:** alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, so a certificate of analysis has one layout and no customer-specific
+requirements; it takes no results from the lots a lot was split or merged from, and is printed in English. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 

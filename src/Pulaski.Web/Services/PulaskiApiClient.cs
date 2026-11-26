@@ -1009,6 +1009,16 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<ReleaseDecisionResponse> DecideReleaseAsync(Guid requestId, string action, DecideReleaseRequest request, CancellationToken ct = default) =>
         SendAsync<ReleaseDecisionResponse>(HttpMethod.Post, $"api/release-requests/{requestId}/{action}", request, ct);
 
+    /// <summary>A lot's certificate of analysis (#137): worked out, as a PDF preview, or issued and attached.</summary>
+    public Task<CertificateDto> GetCertificateAsync(Guid lotId, string? reference, CancellationToken ct = default) =>
+        GetAsync<CertificateDto>($"api/lots/{lotId}/certificate{(string.IsNullOrWhiteSpace(reference) ? "" : $"?reference={Uri.EscapeDataString(reference)}")}", ct);
+
+    public Task<(byte[] Content, string ContentType, string FileName)> GetCertificatePreviewAsync(Guid lotId, string? reference, CancellationToken ct = default) =>
+        GetFileAsync($"api/lots/{lotId}/certificate.pdf{(string.IsNullOrWhiteSpace(reference) ? "" : $"?reference={Uri.EscapeDataString(reference)}")}", ct);
+
+    public Task<IssuedCertificateResponse> IssueCertificateAsync(Guid lotId, IssueCertificateRequest request, CancellationToken ct = default) =>
+        SendAsync<IssuedCertificateResponse>(HttpMethod.Post, $"api/lots/{lotId}/certificate", request, ct);
+
     /// <summary>The samples running jobs owe at a site (#136).</summary>
     public Task<IReadOnlyList<DueSampleDto>> ListDueSamplesAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<DueSampleDto>>($"api/quality/samples-due?siteId={siteId}", ct);
