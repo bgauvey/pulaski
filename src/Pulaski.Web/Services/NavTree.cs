@@ -118,3 +118,55 @@ public static class NavTree
 
     private static NavEntry Folder(string key, string text, string icon, IReadOnlyList<NavLinkItem> children) => new(null, children, key, text, icon);
 }
+
+/// <summary>
+/// Which menu groups are unfolded (#199, #205): those the reader opened (kept per browser) and the group of the screen they are on, unless they
+/// folded it since arriving there. Every group folds and unfolds with its arrow, the current one too. Pure.
+/// </summary>
+public sealed class NavFolds
+{
+    private readonly HashSet<string> _open = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _folded = new(StringComparer.Ordinal);
+    private string? _arrivedAt;
+
+    /// <summary>The groups the reader opened, to keep in the browser.</summary>
+    public IReadOnlyCollection<string> Opened => _open;
+
+    public void Restore(IEnumerable<string> opened) => _open.UnionWith(opened);
+
+    /// <summary>The screen's group is <paramref name="current"/>; arriving in another group unfolds it again.</summary>
+    public void At(string? current)
+    {
+        if (current != _arrivedAt)
+        {
+            if (current is not null)
+            {
+                _folded.Remove(current);
+            }
+
+            _arrivedAt = current;
+        }
+    }
+
+    public bool IsOpen(string key) => !_folded.Contains(key) && (_open.Contains(key) || key == _arrivedAt);
+
+    /// <summary>Folds an unfolded group or unfolds a folded one; true when what is kept in the browser changed.</summary>
+    public bool Toggle(string key)
+    {
+        if (IsOpen(key))
+        {
+            _folded.Add(key);
+            return _open.Remove(key);
+        }
+
+        _folded.Remove(key);
+        return _open.Add(key);
+    }
+
+    /// <summary>The group's main screen was opened: it unfolds and stays so; true when what is kept changed.</summary>
+    public bool Opening(string key)
+    {
+        _folded.Remove(key);
+        return _open.Add(key);
+    }
+}

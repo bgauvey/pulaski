@@ -111,7 +111,8 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
     rates**); **Site settings** (with **Shifts**, **Reasons**); **People** (with **Users**, for administrators, with tabs for users, roles and
     permissions); **Integrations** (with **System health**, **Languages**).
   - Click a group's name to open its main page; its other pages unfold below it. The arrow beside it folds or unfolds a group without
-    leaving the page you're on. The group of the page you're on is always unfolded, and the browser remembers which others you left open.
+    leaving the page you're on, the group of the page you're on too. That group unfolds when you arrive in it, and the browser remembers
+    which others you left open.
     **Planning** has no page of its own: its name only folds and unfolds.
   - You see only the pages your roles let you open. If you may open some of a group's pages but not its main one, the group's name only
     folds and unfolds them.

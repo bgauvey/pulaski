@@ -453,7 +453,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   rules only in `css/touch.css` under `:root[data-touch]`; layout-specific markup via `.mouse-only`/`.touch-only` (e.g. `ReasonPicker`);
   quantities `inputmode="decimal"`, form buttons in `.form-actions`, floor card buttons in `.floor-actions`.
 - Menu (D-119, proposed, #199): `Services/NavTree.cs` holds the sidebar's sections and groups (main screen + its screens, or a folder);
-  `NavTree.Visible` filters by permission, `GroupAt` unfolds the current screen's group; open groups per browser (`pulaski.nav.open`). Add a
+  `NavTree.Visible` filters by permission, `GroupAt` unfolds the current screen's group on arrival, `NavFolds` keeps what is folded (every
+  group folds, #205); open groups per browser (`pulaski.nav.open`). Add a
   new screen there.
 - Line boards (D-106, proposed): an enrolled terminal opens `/terminal/board` (`?line=`); `GET /api/terminal/board` → `GetLineDisplayQuery`
   (Overview + floor board + current-shift OEE, filtered to the terminal's scope); `css/board.css`, meta refresh 15 s.
