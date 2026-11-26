@@ -361,6 +361,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
   `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
+- Setup checklist (D-126, proposed, #139): `SetupSteps` (guide order, required = path to a first job) + `SetupChecklist.Evaluate` (pure) over
+  `ISetupReadStore.FactsAsync` counts; optional steps marked not needed per site (`core.setup_step_skip`, `MarkSetupStepCommand`,
+  `site_settings.manage`); `/api/setup`, Configure → Setup checklist (`/setup`), Overview prompt until ready.
 - Scan to act (D-125, proposed, in pieces, #135): `GetScanActionsQuery` (`/api/inventory/scan/actions?siteId=&lineId=&code=`) = the scan +
   `ScanSuggestions` (pure; `IScanContextReadStore`: line + open run + feed points, lot, container, components, shop order jobs) → `ScanActionDto`s
   (consume / load / move / move_container / start, likely first, each with its permission) confirmed through the existing commands; Scan page

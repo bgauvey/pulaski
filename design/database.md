@@ -1823,6 +1823,18 @@ it. One pending per version (`release_request_pending_uq`); decided requests are
 | `decided_by`, `decided_at`, `decision_note` | text, timestamptz, text | yes | Who decided it and why (a comment is required to approve or return); set exactly when not pending. |
 | `created_at` | timestamptz | no | Row timestamp. |
 
+### core.setup_step_skip — setup steps not needed at a site (#139, D-126) · *In use*
+
+The setup checklist is worked out from what a site has; this keeps only the optional steps an administrator marked as not needed there.
+Taking a mark back sets `is_skipped` false; rows are kept.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid | no | The site (primary key with `step`). |
+| `step` | text | no | An optional step's key (`SetupSteps`, such as `shifts` or `edge_nodes`). |
+| `is_skipped` | boolean | no | Not needed here (true), or needed after all (false). |
+| `changed_by`, `changed_at` | text, timestamptz | no | Who marked it last, and when. |
+
 ### core.nonconformance — nonconformance reports (#133, D-124) · *In use*
 
 What was found wrong, raised on its own, from a complaint, or from what flagged it (a held or rejected lot, a result, an SPC alert, a checklist

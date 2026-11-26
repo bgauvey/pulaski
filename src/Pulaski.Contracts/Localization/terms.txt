@@ -47,6 +47,7 @@
 '{0}' isn't a priority; use low, normal or high.
 '{0}' isn't a protocol Pulaski Edge reads ({1}).
 '{0}' isn't a role.
+'{0}' isn't a setup step.
 '{0}' isn't a {1} setting ({2}).
 '{0}' isn't an attribute type; use {1}.
 '{0}' isn't an import field; the fields are {1}.
@@ -283,6 +284,7 @@ A receipt against it must be of more than zero.
 A record with the same key already exists.
 A referenced record does not exist.
 A release
+A released process
 A released version never changes; start a new draft to change the BOM.
 A released version never changes; start a new draft to change the specification.
 A role is a set of permissions you give to users at a site. Change a role here, or tick permissions role by role on
@@ -295,6 +297,7 @@ A shift schedule
 A shift schedule belongs to a site; choose one.
 A short while after stock, jobs or orders change, every open job's allocations are refreshed, as Refresh on the Shortages page does.
 A site needs a time zone.
+A site, with its time zone
 A spreadsheet or HR report saved as CSV; the first line names the columns.
 A spreadsheet saved as CSV; the first line names the columns.
 A start time as HH:mm.
@@ -312,6 +315,7 @@ A version has one {0} checklist.
 A warning:
 A webhook (HTTPS)
 A weekly schedule repeats every 7 days; a rotation such as four crews on 12-hour shifts repeats every 28. A shift belongs to the day it starts on.
+A work order
 A work order cannot move from '{0}' to '{1}'.
 A {0} file names its external system in its own columns.
 A {0} for {1}, lot {2}, not at this site yet: receive it?
@@ -618,6 +622,7 @@ BOM line {0} is consumed by operation {1}, which the process doesn't have.
 BOM unit
 BOM {0} not found.
 BOMs
+BOMs for what you make
 BTXML template
 Back
 Back to Pulaski
@@ -782,6 +787,7 @@ Cancelled, with its jobs.
 Cancel…
 Cap
 Capabilities
+Capabilities: which material runs on which line, and how fast
 Capability
 Capability indices are for measured values.
 Capability {0} not found.
@@ -1227,6 +1233,7 @@ Doesn't run
 Don't print them
 Don't use the user name in the password.
 Done
+Done: {0}
 Down
 Down h
 Down time by reason across the top equipment shown (a line's time already includes its machines'), classified as in By equipment.
@@ -1293,6 +1300,7 @@ Edge node code
 Edge node name
 Edge node {0} not found.
 Edge nodes
+Edge nodes collecting machine data
 Edge nodes, deliveries, connections, background services and the database, in one place.
 Edge nodes: connections and tags that collect machine data
 Edge quiet
@@ -1395,6 +1403,7 @@ Every site
 Every so many hours
 Every term is translated.
 Every user needs a role: add another first, or switch them off.
+Every work order is made from a process.
 Every {0} days from {1}
 Every {0} h
 Every {0} h {1} min
@@ -1404,6 +1413,7 @@ Every, days
 Every, minutes
 Everyone whose time is recorded, the crews they work in and the qualifications they hold. A shift schedule names the crew on each shift, so a supervisor can check the whole crew onto a line at once. People don't need a Pulaski sign-in; link one to let them clock themselves on. People from an HR or ERP system are imported from a file; their name and whether they are active change there.
 Everything checked is healthy.
+Everything else belongs to a site.
 Everything is covered
 Everything it was made from
 Everything made from it
@@ -1656,6 +1666,7 @@ Holds
 Holds inventory
 Holds the lot
 Holds the lot on failure
+Holds, adjustments, scrap and stops need reasons.
 Hold…
 Holiday
 Holiday, no demand, planned shutdown or other.
@@ -1772,6 +1783,7 @@ Interval
 Into
 Inventory
 Inventory adjustment
+Inventory locations
 Inventory movements
 Inventory reports
 Investigating
@@ -1898,6 +1910,7 @@ Job · lot
 Job, order or material
 Jobs
 Jobs actually run here: a line or cell. Jobs planned to a schedulable group above it can be released to it.
+Jobs are planned on lines and departments.
 Jobs as the schedule has them now
 Jobs at their published times
 Jobs can be planned to it. A schedulable group such as a department, without Can run jobs, takes jobs in a time window and its lines run them.
@@ -2044,6 +2057,7 @@ Lines and departments
 Lines that can run it
 Lines that could run it
 Lines that report their state but send nothing now: no signal, or their edge node has been quiet for over 2 minutes.
+Lines that run jobs
 Lines with no signal
 Lines without shifts
 Line…
@@ -2117,6 +2131,7 @@ Lots and runs
 Lots are indistinguishable
 Lots being filled
 Lots can only be indistinguishable where inventory is held; tick Holds inventory too.
+Lots have to be somewhere: stores, staging areas, feed points.
 Lots here mix and can't be told apart, like a silo or tank: everything received, moved or produced here joins one balance per material, with no lot number. A numbered lot is kept for its genealogy, then merged in.
 Lots here mix into one balance per material
 Lots it made
@@ -2205,6 +2220,7 @@ Map {0}: every connection needs it.
 Marginal
 Mark a work center as schedulable on the Equipment page to plan work on it.
 Mark done
+Marked not needed here by {0}, {1}.
 Mass
 Matches
 Material
@@ -2329,6 +2345,7 @@ Need attention
 Need help?
 Need {0} · consumed {1} · allocated {2} · still to allocate
 Needed
+Needed after all
 Needed in the next 24 hours
 Needed sooner than its {0}-day lead time from now
 Needed sooner than the material's {0}-day lead time from now
@@ -2615,6 +2632,8 @@ Not investigated yet.
 Not judged
 Not made from other lots.
 Not me / cancel
+Not needed
+Not needed here
 Not needed: the lots before it cover the need.
 Not on a line
 Not paired
@@ -2717,6 +2736,7 @@ Nothing: it ends the route
 Notice days (30)
 Now
 Now or next
+Now you can plan.
 Now: calculated {0}
 Nowhere yet.
 Np
@@ -2838,6 +2858,7 @@ Open the draft
 Open the lot
 Open the page
 Open the schedule
+Open the setup checklist
 Open work orders
 Open.
 Operate
@@ -2872,6 +2893,7 @@ Order number
 Order of {0}
 Orders behind
 Orders for {0} made with {1} are refused until a new BOM version is released.
+Orders, processes and BOMs need materials.
 Origin
 Other
 Other jobs can still consume it, with a warning; consuming it into its job uses the allocation up.
@@ -3665,6 +3687,7 @@ Settings
 Setup
 Setup ({0})
 Setup checklist
+Setup checklist: what a site has and still needs for its first job
 Setup time is for a job: choose it.
 Setup time is for a job; choose it.
 Several processes make {0} ({1}); send the process code, or set the material's default process.
@@ -3770,7 +3793,12 @@ Skipped
 Skipped by {0}: {1}
 Skipped.
 Skip…
+So Pulaski hears machine state and counts.
 So far
+So labor can be recorded and crews checked onto lines.
+So machines' state values and stop codes mean something.
+So orders, BOMs and rates can use any unit that converts.
+So the people who plan, run and check the work can sign in.
 Soap
 SoapAction: at most 500 characters.
 Some of those people don't exist.
@@ -4121,6 +4149,7 @@ The file is larger than {0} MB; split it.
 The file isn't valid JSON: {0}
 The file isn't well-formed XML: {0}
 The finish-by time must be after the earliest start.
+The first job started
 The first line names the columns: term,translation.
 The first line names the columns; code, name, type and base_unit are required. A column left out keeps what each material already has. Rows with external_system and external_key are the ERP's items; the others are matched on their code. A class that doesn't exist is an error unless Create missing classes is ticked (class_name names it). Nothing is saved until every row is valid.
 The first line names the columns; employee_number and name are required. A column left out keeps what each person already has. Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that key; the others are matched on their employee number.
@@ -4276,6 +4305,7 @@ The site has no crew {0}.
 The site has no qualification {0}.
 The site has no qualifications yet; add them on
 The site has no utilization reasons yet. Add them on Configure → Reasons.
+The site is running.
 The site whose lines and departments it can use.
 The site whose time zone and codes this equipment uses.
 The site's allocation settings were changed by someone else. Reload and try again.
@@ -4353,6 +4383,7 @@ There is no material {0}.
 There is no released process {0} at {1} that makes {2}.
 There is no site yet.
 There is no site yet. Add one on
+There is no site yet: start by adding the enterprise and a site on Equipment.
 There is no site {0}.
 There is no site.
 There is no such call type at {0}'s site.
@@ -4518,6 +4549,7 @@ Undoing that takes back {0} movements; at most {1} go in one step. Undo some of 
 Unfold {0}
 Unique within the site. Fixed once created.
 Unit
+Unit conversions for materials
 Unit conversions for {0}
 Unit mode
 Unit {0} is inactive.
@@ -4580,6 +4612,7 @@ User not found.
 User {0} not found.
 Users
 Users and roles
+Users with roles at the site
 Users, roles and permissions
 Uses the profile's reasons for every code.
 Utilization
@@ -4682,6 +4715,7 @@ What runs on each line and what comes next. Start, pause and complete jobs, and 
 What that undo takes back has changed since it was checked. Check it again.
 What the open jobs still need of each component, against the stock available now and the deliveries expected. Jobs take stock in the order they are needed, then what is due by then, so a shortfall shows on the first job it reaches.
 What the time is for
+What this site has and what it still needs, in the order to do it. Each step opens the screen where it is done.
 What to do
 What to fetch from the stores for open jobs' allocations, by location; the equipment chosen below narrows it
 What uses it
@@ -4761,8 +4795,11 @@ Withdraw
 Withdrawn
 Withdrawn by {0}: {1}
 Withdraw…
+Without a BOM, an order plans no components.
 Without a company prefix, containers get no SSCC.
 Without a reason
+Without one, a line can't take a material's job.
+Without one, lines are taken to run around the clock.
 Won't fit
 Work cell
 Work center
@@ -5489,6 +5526,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is made to the exact rule, so every batch is exactly its size and the tolerance on {1} counts only if the rule changes to near.
 {0} is maintained in Pulaski, not imported.
 {0} is measured, so it takes limits, not a number of defects.
+{0} is needed for the first job, so it can't be skipped.
 {0} is not a site; scheduling policy is set per site.
 {0} is not in the group job {1} was planned to.
 {0} is not schedulable; jobs cannot be placed on it.
@@ -5514,6 +5552,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is running on {1}; pause or complete it first.
 {0} is running.
 {0} is sampled from {1} {2}, from now on.
+{0} is set up for production: every step its first job needs is done.
 {0} is shown there already.
 {0} is signed off.
 {0} is still clocked on; end their time first.
@@ -5651,6 +5690,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} of {1} produced by {2}
 {0} of {1} received into {2}
 {0} of {1} shifts below target.
+{0} of {1} steps for the first job done.
 {0} of {1} was changed by someone else. Reload and try again.
 {0} of {1} {2}
 {0} on
@@ -5701,6 +5741,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} samples due
 {0} samples overdue
 {0} scrap
+{0} setup: {1} of {2} steps for the first job done.
 {0} shipped on {1}
 {0} signs in through {1}; change the password there.
 {0} signs in through {1}; only a Pulaski account can be a service account.
