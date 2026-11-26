@@ -1,0 +1,59 @@
+@using Pulaski.Web.Components.Pages.Quality
+@using Pulaski.Web.Services.Quality
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* The lot's nonconformance reports (#133): those it is linked to, and raising one from it (from its hold when it is held). *@
+<section class="inv-section" aria-labelledby="lot-ncrs">
+    <div class="d-flex align-items-center gap-2">
+        <h2 id="lot-ncrs" class="mb-0">@L["Nonconformances"]</h2>
+        @if (!_raising && User.Can(PermissionCodes.NcrRaise, Lot.SiteId))
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" @onclick="() => _raising = true">@L["Raise an NCR"]</button>
+        }
+    </div>
+    <ProblemAlert Error="_error" />
+    @if (_raising)
+    {
+        <RaiseNcrForm SiteId="Lot.SiteId" SourceKind="@(Lot.Status == "on_hold" ? "lot_hold" : "manual")" SourceId="@(Lot.Status == "on_hold" ? Lot.Id : null)"
+                      LotIds="[Lot.Id]" Title="@L["Lot {0}", Label]" Cancelled="() => _raising = false" />
+    }
+    @if (_ncrs is { Count: > 0 } ncrs)
+    {
+        <ul class="small mt-2 mb-0">
+            @foreach (var n in ncrs)
+            {
+                <li @key="n.Id">
+                    <a href="@NcrView.Href(n.Id)">@n.Number</a> · @n.Title ·
+                    <span class="@NcrView.StatusChip(n.Status)">@L.Label(n.Status)</span>
+                </li>
+            }
+        </ul>
+    }
+    else if (_ncrs is not null)
+    {
+        <p class="small text-muted mt-2 mb-0">@L["None about this lot."]</p>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public LotSummaryDto Lot { get; set; } = default!;
+
+    private IReadOnlyList<NcrSummaryDto>? _ncrs;
+    private bool _raising;
+    private ApiException? _error;
+
+    private string Label => Lot.LotNumber ?? Lot.MaterialCode;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _ncrs = await Api.ListNcrsAsync(null, null, Lot.Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+}

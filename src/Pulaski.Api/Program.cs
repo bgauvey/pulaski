@@ -145,6 +145,7 @@ api.MapAlertEndpoints();
 api.MapHandoverEndpoints();
 api.MapLanguageEndpoints();
 api.MapQualityEndpoints();
+api.MapNcrEndpoints();
 api.MapTerminalAdminEndpoints();
 
 // Shop-floor terminals (D-049) are not users: they authenticate with their own secret, and only here.

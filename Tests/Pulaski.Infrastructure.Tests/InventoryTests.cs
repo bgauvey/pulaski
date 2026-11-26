@@ -1817,6 +1817,55 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task An_ncr_raised_from_a_lot_takes_its_run_is_investigated_acted_on_and_closed_and_is_found_from_the_lot()
+    {
+        var plant = await CreatePlantAsync();
+        var s = _suffix.ToUpperInvariant();
+        CreatedResponse owner = await db.SendAsync(new Application.Security.CreateUserCommand(
+            "qa." + _suffix, "Quinn " + s, null, "Temporary-pass-1", Domain.Security.Roles.Quality, plant.Site));
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        var lotId = report.Lots.Single().LotId;
+
+        // Raised from the lot: its site, the lot and the run that made it are linked; the owner must hold a role there.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.RaiseNcrCommand(
+            null, "Wall too thin", "", "major", "lot_hold", lotId, null, Guid.CreateVersion7(), [], null)));
+        var raised = await db.SendAsync(new Application.Quality.RaiseNcrCommand(
+            null, " Wall too thin ", "Measured 3.1 on two pieces", "major", "lot_hold", lotId, null, owner.Id, [], null));
+        Assert.Matches("^NCR-[0-9]{6}$", raised.Number);
+        await Assert.ThrowsAsync<ForbiddenException>(() => db.SendAsync(new Application.Quality.RaiseNcrCommand(
+            null, "Elsewhere", "", "minor", "lot_hold", lotId, null, null, [], [Guid.CreateVersion7()])));
+        var ncr = await QueryAsync<Application.Quality.GetNcrQuery, Contracts.Quality.NcrDto>(new Application.Quality.GetNcrQuery(raised.Id));
+        Assert.Equal((plant.Site, "Wall too thin", "open", "Quinn " + s), (ncr.SiteId, ncr.Title, ncr.Status, ncr.OwnerName));
+        Assert.Equal(lotId, Assert.Single(ncr.Lots).LotId);
+        Assert.Single(ncr.Runs);
+
+        // Not closed before its cause is found and acted on, nor with an action still open.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.CloseNcrCommand(raised.Id, ncr.Version, "scrap", "Done")));
+        var investigated = await db.SendAsync(new Application.Quality.InvestigateNcrCommand(
+            raised.Id, ncr.Version, "Die worn", ["Thin wall", "Die gap opened", "Die worn past its life"], Complete: true));
+        CreatedResponse fix = await db.SendAsync(new Application.Quality.AddNcrActionCommand(raised.Id, "corrective", "Replace the die", owner.Id, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-2)));
+        CreatedResponse prevent = await db.SendAsync(new Application.Quality.AddNcrActionCommand(raised.Id, "preventive", "Track die hours", null, null));
+        ncr = await QueryAsync<Application.Quality.GetNcrQuery, Contracts.Quality.NcrDto>(new Application.Quality.GetNcrQuery(raised.Id));
+        Assert.Equal(("acting", 3), (ncr.Status, ncr.Whys.Count));
+        Assert.True(ncr.Actions.Single(a => a.Id == fix.Id).IsOverdue);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.CloseNcrCommand(raised.Id, investigated.Version, "scrap", "Done")));
+
+        // The owner finishes their own action; another needs to manage NCRs.
+        await Assert.ThrowsAsync<ForbiddenException>(() => db.SendAsync(new Application.Quality.FinishNcrActionCommand(raised.Id, fix.Id, "Replaced", false, false)));
+        await db.SendAsAsync("qa." + _suffix, new Application.Quality.FinishNcrActionCommand(raised.Id, fix.Id, "Replaced", false, false), owner.Id);
+        await db.SendAsync(new Application.Quality.FinishNcrActionCommand(raised.Id, prevent.Id, "Not needed: dies are now on the plan", true, true));
+        await Assert.ThrowsAsync<ConflictException>(() => db.SendAsync(new Application.Quality.CloseNcrCommand(raised.Id, ncr.Version - 1, "scrap", "Done")));
+        await db.SendAsync(new Application.Quality.CloseNcrCommand(raised.Id, ncr.Version, "scrap", "Lot scrapped, die replaced"));
+
+        var fromLot = await QueryAsync<Application.Quality.ListNcrsQuery, IReadOnlyList<Contracts.Quality.NcrSummaryDto>>(new Application.Quality.ListNcrsQuery(null, null, lotId));
+        var listed = Assert.Single(fromLot);
+        Assert.Equal((raised.Number, "closed", 0), (listed.Number, listed.Status, listed.OpenActions));
+        Assert.Contains(await QueryAsync<Application.Quality.ListNcrAssigneesQuery, IReadOnlyList<Contracts.Quality.NcrAssigneeDto>>(
+            new Application.Quality.ListNcrAssigneesQuery(plant.Site)), a => a.Id == owner.Id);
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new Application.Quality.AddNcrActionCommand(raised.Id, "corrective", "Late", null, null)));
+    }
+
+    [Fact]
     public async Task Results_are_checked_against_the_released_specification_hold_lots_and_rejected_lots_move_good_to_scrap()
     {
         var plant = await CreatePlantAsync();

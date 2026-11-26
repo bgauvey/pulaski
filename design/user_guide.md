@@ -105,7 +105,7 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
 - **Menu (left).** **Inbox** at the top, when your role decides anything it gathers, with how many items wait (see
   [Your inbox](#your-inbox)). Then two sections, with like pages grouped under their main one:
   - **Operate**, the pages you use day to day: **Overview**; **Planning** (**Work orders**, **Schedule**); **Floor** (with **Andon** and
-    **Handover**); **Machines**; **Inventory**; **Quality**; **Labor**.
+    **Handover**); **Machines**; **Inventory**; **Quality** (with **Nonconformances**); **Labor**.
   - **Configure**, the setup you do once and change now and then: **Equipment** (with **Machine profiles**, **Edge nodes**, **Terminals**);
     **Materials** (with **Units**, **Specifications**); **Processes** (with **BOMs**, **Work instructions**, **Changeovers**, **Planning
     rates**); **Site settings** (with **Shifts**, **Reasons**); **People** (with **Users**, for administrators, with tabs for users, roles and
@@ -2200,6 +2200,36 @@ too, keeping the cause and action you're typing. The pill at the top right says 
 - **Who:** anyone who can see quality sees alerts; closing one needs permission to record quality results at the site. Raising, adding to and
   closing are events (`pulaski.spc_alert.raised.v1`, `…signalled.v1`, `…closed.v1`) that [delivery feeds](#send-movements-to-the-erp-and-certificates-to-a-document-system) can send on.
 - Closed alerts stay listed for 30 days, and on record after that.
+- An alert's details offer **Raise an NCR**, when the cause needs following up (see below).
+
+### Nonconformance reports (NCRs)
+
+An NCR records something found wrong, through to closure: what was found and how bad, its root cause, what is done about it (corrective and
+preventive actions, each with an owner and a due day) and what becomes of the lots.
+
+1. **Raise it** where the problem shows: **Raise an NCR** on a lot's page (under **Nonconformances**), on a result out of specification
+   (Quality results), or on an SPC alert's details; or on **Operate → Quality → Nonconformances**, on its own or from a customer complaint.
+   Say what was found, how severe it is (**Minor**, **Major**, **Critical**), and optionally who owns it, then click **Raise NCR**. It opens
+   on its own page, numbered *NCR-000001*.
+2. **Investigate.** Under **Investigation**, ask why up to five times, write the **Root cause**, and click **Save the investigation** as you
+   go. When the cause is found, click **Root cause found: act on it**.
+3. **Act.** Under **Corrective and preventive actions**, add what is to be done, by whom and by when. Whoever owns an action, or anyone who
+   manages NCRs, clicks **Finish** and says what was done, then **Mark done** (or **Cancel the action**, saying why).
+4. **Close.** Once every action is done or cancelled, choose **What becomes of the lots** (*Use as is*, *Rework*, *Scrap*, *Return to
+   supplier*, *Not applicable*), add a **Closing note** and click **Close NCR**.
+
+In detail:
+
+- **What it is linked to.** Raised from a lot, it lists that lot and the runs that made it; from a result or an SPC alert, the lot and run of
+  the result (an alert's latest). A lot's page lists every NCR about it. Raised from a held lot, its source is the hold.
+- **Statuses:** *Open* when raised, *Investigating* once the investigation is saved, *Acting* once the root cause is found (it can still be
+  edited), *Closed*. An action is **Overdue** once its due day has passed; the list shows how many each NCR has.
+- **Who:** raising needs permission to raise NCRs (Quality, Supervisor and Operator roles); editing, investigating, adding actions and closing
+  need permission to work them (Quality). Owners are users with a role at the NCR's site. Anyone who can see quality or inventory sees NCRs.
+- If someone else changed the NCR since you opened it, you'll see *"changed by someone else"*: reload and try again.
+- **Audit.** Each step is an event: `pulaski.ncr.raised.v1`, `…changed.v1`, `…investigated.v1`, `…action_added.v1`, `…action_done.v1`,
+  `…action_cancelled.v1`, `…closed.v1`.
+- The disposition is recorded, not carried out: hold, write off or move the lots yourself.
 
 ### Leave out a wrong result
 
@@ -3600,6 +3630,8 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **The demo's history** stops where it was recorded: EXT-02 shows no signal after it (its edge node isn't live), and nothing more is reported on its running orders unless you do it. Labor of the current shift is left open, as if the crew were still on.
 - **The demo's** OEE on EXT-01 has no output until you report production on its running job (machine counts only fill in a report's *From the machine*), and its counts are pieces, counted as one unit of the material each. Its control limits are set by hand from the simulator's design, not from a baseline. The OPC UA simulator isn't connected.
 - **Units** have no temperature dimension, so a temperature characteristic has no unit (name it, as the demo's *Melt temperature (°C)*).
+- **Nonconformances:** an NCR's disposition isn't carried out on its lots, overdue actions don't reach the Inbox or e-mail, NCRs can't yet
+  be raised from a run or a checklist, and lots can't be added to an NCR after it is raised.
 - **Quality:** alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, so a certificate of analysis has one layout and no customer-specific
 requirements; it takes no results from the lots a lot was split or merged from, and is printed in English. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
 - **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.

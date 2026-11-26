@@ -75,8 +75,21 @@ else
                             {
                                 <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => StartExclude(r)">@L["Leave out…"]</button>
                             }
+                            @if (!r.IsExcluded && r.Conforms == false && User.Can(PermissionCodes.NcrRaise, r.SiteId))
+                            {
+                                <button type="button" class="btn btn-sm btn-link p-0 ms-2" @onclick="() => _raisingFor = r.Id">@L["Raise an NCR"]</button>
+                            }
                         </td>
                     </tr>
+                    @if (_raisingFor == r.Id)
+                    {
+                        <tr @key="@($"{r.Id}-ncr")">
+                            <td colspan="7">
+                                <RaiseNcrForm SiteId="r.SiteId" SourceKind="quality_result" SourceId="r.Id" SourceAt="r.OccurredAt"
+                                              Title="@L["{0} out of specification", r.CharacteristicCode]" Cancelled="() => _raisingFor = null" />
+                            </td>
+                        </tr>
+                    }
                     @if (_excluding?.Id == r.Id)
                     {
                         <tr @key="@($"{r.Id}-exclude")">
@@ -123,6 +136,7 @@ else
     private QualityResultDto? _excluding;
     private IReadOnlyList<ReasonCodeDto> _reasons = [];
     private Guid _reasonId;
+    private Guid? _raisingFor;
     private string? _comment;
     private bool _busy;
     private ApiException? _error;

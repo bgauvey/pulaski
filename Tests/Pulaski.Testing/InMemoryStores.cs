@@ -118,6 +118,8 @@ public sealed class InMemoryStores
 
     public InMemoryReleaseApprovals Approvals { get; } = new();
 
+    public InMemoryNcrs Ncrs { get; } = new();
+
     public InMemoryAlerts Alerts { get; } = new();
 
     public InMemoryLineOutput LineOutput { get; } = new();
@@ -230,6 +232,8 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Quality.ISamplingReadStore>();
         services.RemoveAll<Application.Approvals.IReleaseApprovalRepository>();
         services.RemoveAll<Application.Approvals.IReleaseApprovalReadStore>();
+        services.RemoveAll<Application.Quality.INcrRepository>();
+        services.RemoveAll<Application.Quality.INcrReadStore>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -334,6 +338,8 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Quality.ISamplingReadStore>(new InMemorySampling());
         services.AddSingleton<Application.Approvals.IReleaseApprovalRepository>(Approvals);
         services.AddSingleton<Application.Approvals.IReleaseApprovalReadStore>(Approvals);
+        services.AddSingleton<Application.Quality.INcrRepository>(Ncrs);
+        services.AddSingleton<Application.Quality.INcrReadStore>(Ncrs);
         services.TryAddSingleton<Application.Quality.ICertificateRenderer>(new FakeCertificateRenderer());
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);

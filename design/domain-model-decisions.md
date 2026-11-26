@@ -3368,6 +3368,22 @@ attaches it through `AttachLotDocumentCommand` (kind `coa`, number `COA-{lot}-{y
 it. `GET /api/lots/{id}/certificate[.pdf]` (inventory or quality view), `POST` (`lot_records.manage`); the lot page's **Certificate of
 analysis**; the ship form's tick box issues one with the shipment number after shipping. No schema change.
 
+### D-124 · Nonconformance reports (#133) · *Proposed, in pieces*
+
+**Context.** Holds, rejections and SPC alerts existed, but nothing recorded what was found, its root cause, who owned it and what was done
+about it, or carried that to closure.
+
+**Decision.** `core.nonconformance` per site, numbered `NCR-000042`, with severity minor / major / critical. User's choices: raised from
+**anything that flags** (a held or rejected lot, a result, an SPC alert, a checklist answer) or on its own / from a complaint; the source gives
+the site and links its lots and runs (`core.nonconformance_lot`, `_run`); workflow **open → investigating → acting → closed**
+(`Nonconformance.Investigate`: root cause + up to five whys, moving on to acting needs the root cause; `Close`: acting, at least one action,
+none open, a disposition use as is / rework / scrap / return to supplier / not applicable, a note); corrective and preventive actions
+(`core.nonconformance_action`, owner + due day, overdue after it, finished by its owner or a manager with a note, or cancelled); **two
+permissions**, `ncr.raise` (Quality, Supervisor, Operator) and `ncr.manage` (Quality), both implying `quality.view`. Owners are active users
+with a role at the site. Every change locks the NCR; edits, investigation and close carry the xmin version. `/api/ncrs`; Quality →
+Nonconformances, the NCR page, the lot page's panel (found from the lot), **Raise an NCR** on failing results and SPC alerts.
+(b) overdue actions in the Inbox and e-mail alerts, raising from runs and checklists, and carrying out the disposition on the lots.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

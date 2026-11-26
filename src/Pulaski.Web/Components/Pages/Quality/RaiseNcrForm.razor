@@ -1,0 +1,124 @@
+@using Pulaski.Web.Services.Quality
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+
+@* Raising a nonconformance report (#133, D-124), on its own or from what flagged it: a lot, a result, an SPC alert. The source gives the site
+   and the lots and runs it touches; the new NCR opens on its page. *@
+<form class="inv-facts mb-3" @onsubmit="RaiseAsync" @onsubmit:preventDefault aria-label="@L["Raise a nonconformance report"]">
+    <ProblemAlert Error="_error" />
+    <div class="row g-2">
+        <div class="col-md-8">
+            <label class="form-label small fw-semibold" for="ncr-title">@L["What was found"]</label>
+            <input id="ncr-title" class="form-control form-control-sm" maxlength="200" @bind="_title" @bind:event="oninput" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold" for="ncr-severity">@L["Severity"]</label>
+            <select id="ncr-severity" class="form-select form-select-sm" @bind="_severity">
+                @foreach (var s in NcrView.Severities)
+                {
+                    <option value="@s">@L.Label(s)</option>
+                }
+            </select>
+        </div>
+        <div class="col-12">
+            <label class="form-label small fw-semibold" for="ncr-description">@L["Description"]</label>
+            <textarea id="ncr-description" class="form-control form-control-sm" rows="3" maxlength="4000" @bind="_description"></textarea>
+        </div>
+        @if (Standalone)
+        {
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold" for="ncr-kind">@L["Raised from"]</label>
+                <select id="ncr-kind" class="form-select form-select-sm" @bind="_kind">
+                    <option value="manual">@L.Label("manual")</option>
+                    <option value="complaint">@L.Label("complaint")</option>
+                </select>
+            </div>
+        }
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold" for="ncr-owner">@L["Owner"]</label>
+            <select id="ncr-owner" class="form-select form-select-sm" @bind="_owner">
+                <option value="@Guid.Empty">@L["No one yet"]</option>
+                @foreach (var a in _assignees)
+                {
+                    <option value="@a.Id">@a.Name</option>
+                }
+            </select>
+        </div>
+    </div>
+    <div class="form-actions mt-2">
+        <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_title) ? L["Say what was found."] : null)">@L["Raise NCR"]</ActionButton>
+        <button type="button" class="btn btn-sm btn-link" @onclick="Cancelled">@L["Cancel"]</button>
+    </div>
+</form>
+
+@code {
+    [Parameter, EditorRequired] public Guid SiteId { get; set; }
+
+    /// <summary>manual (with the manual/complaint choice), lot_hold, lot_rejection, quality_result, spc_alert, checklist.</summary>
+    [Parameter] public string SourceKind { get; set; } = "manual";
+
+    [Parameter] public Guid? SourceId { get; set; }
+
+    [Parameter] public DateTimeOffset? SourceAt { get; set; }
+
+    [Parameter] public IReadOnlyList<Guid> LotIds { get; set; } = [];
+
+    [Parameter] public string? Title { get; set; }
+
+    [Parameter] public EventCallback Cancelled { get; set; }
+
+    private bool Standalone => SourceKind is "manual" or "complaint";
+
+    private IReadOnlyList<NcrAssigneeDto> _assignees = [];
+    private string? _title;
+    private string? _description;
+    private string _severity = "minor";
+    private string _kind = "manual";
+    private Guid _owner;
+    private bool _busy;
+    private ApiException? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _title = Title;
+        _kind = SourceKind;
+        try
+        {
+            _assignees = await Api.ListNcrAssigneesAsync(SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private async Task RaiseAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var raised = await Api.RaiseNcrAsync(new RaiseNcrRequest
+            {
+                SiteId = SiteId,
+                Title = _title,
+                Description = _description,
+                Severity = _severity,
+                SourceKind = Standalone ? _kind : SourceKind,
+                SourceId = SourceId,
+                SourceAt = SourceAt,
+                OwnerUserId = _owner == Guid.Empty ? null : _owner,
+                LotIds = LotIds,
+            });
+            Navigation.NavigateTo(NcrView.Href(raised.Id));
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

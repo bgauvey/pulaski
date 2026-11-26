@@ -364,6 +364,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - Certificates of analysis (D-123, proposed, #137): `GetCertificateQuery` (released spec items × the lot's results, else its job's lot-less ones;
   `Certificates.Summarize`; warnings, never refused but without a spec) → `IssueCertificateCommand` (`ICertificateRenderer` =
   `CertificatePdfRenderer` in the API, then `AttachLotDocumentCommand` kind `coa`); `/api/lots/{id}/certificate[.pdf]`; lot page panel, ship tick box.
+- Nonconformance reports (D-124, proposed, in pieces, #133): `core.nonconformance` (`NCR-000042`, `Nonconformance`: open → investigating →
+  acting → closed; root cause + ≤ 5 whys; close needs acting, ≥ 1 action, none open, disposition + note) raised from anything that flags
+  (`NcrSources`; `INcrRepository.SourceAsync` gives the site + lots/runs → `nonconformance_lot`/`_run`) or on its own; `nonconformance_action`
+  corrective/preventive, owner + due, finished by its owner or `ncr.manage`. `ncr.raise` / `ncr.manage`; `/api/ncrs`; Quality → Nonconformances, lot panel.
 - Sampling plans (D-121, proposed, in pieces, #136): `SpecItem.Sampling` (`SamplingPlan`: at start and/or every N h or N units, grace) in the
   spec definition jsonb; `SamplingSchedule.Evaluate` (pure) over open runs, processed output and the run's results → `GetDueSamplesQuery`
   (`/api/quality/samples-due?siteId=`, `/api/jobs/{id}/samples-due`); job page **Samples**, Floor card flags. (b) `StationDto.Samples` +
