@@ -525,6 +525,17 @@ internal static class InventoryEndpoints
             TypedResults.Ok(await handler.HandleAsync(new ResolveScanQuery(siteId, code), ct)))
         .RequireAny(Site.Query(), Permissions.InventoryView);
 
+        // What a scan at a line can do in one step (#135): consume into the running job, load or move it to the line, start the job.
+        inventory.MapGet("/scan/lines", async Task<Ok<IReadOnlyList<ScanLineOptionDto>>> (
+            Guid siteId, IQueryHandler<ListScanLinesQuery, IReadOnlyList<ScanLineOptionDto>> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new ListScanLinesQuery(siteId), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView, Permissions.FloorView);
+
+        inventory.MapGet("/scan/actions", async Task<Ok<ScanActionsDto>> (
+            Guid siteId, Guid? lineId, string code, IQueryHandler<GetScanActionsQuery, ScanActionsDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetScanActionsQuery(siteId, lineId, code), ct)))
+        .RequireAny(Site.Query(), Permissions.InventoryView, Permissions.FloorView);
+
         // ---- Lot attributes and documents (D-056) ----
         lots.MapGet("/{id:guid}/records", async Task<Ok<LotRecordsDto>> (
             Guid id,

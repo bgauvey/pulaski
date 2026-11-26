@@ -3389,6 +3389,23 @@ open action passes its due day at the site's midnight. Carrying out the disposit
 the closed NCR (`NcrView.NextStep`: use as is → release a held lot; scrap → hold, then reject = write off good → scrap; rework / return →
 hold), each noted with the NCR number, so their permissions and checks apply unchanged; there is no NCR command that moves stock.
 
+### D-125 · Scan to act in one step (#135) · *Proposed, in pieces*
+
+**Context.** A scan found a lot, container or location, but doing what was obviously next took several more steps.
+
+**Decision.** `GetScanActionsQuery(site, line, code)` (`GET /api/inventory/scan/actions`) resolves the scan as before and, at a line, offers
+the actions that fit, the likely one first (`ScanSuggestions`, pure), each carrying what its command needs so one confirm runs it through the
+existing endpoint: `consume` an available lot into the line's running job (its open run), for what the job still needs (planned in the
+component's unit, converted to the lot's, less what it consumed, capped at the lot; else the whole lot); off-plan or used-up components are
+offered with a warning, never refused (user's choice); `load` it at each feed point below the line it isn't at, or `move` it to the line when the
+line holds stock and has no feed points; `move_container` likewise; `start` the job a shop order barcode (`ORDER|OP-n`, `ShopOrderCode`) names
+when it is dispatched, firmed or paused and planned on the line or a group above it (warning when another job runs there). Each action names
+its permission; screens offer only those the user holds. User's choices: offered at the operator station and on the Scan page, consume /
+move here / start (no receive). (a) the query and the Scan page's **Working at** line (per browser and site, `ScanActionView.StorageKey`);
+(b) the station: `POST /api/terminal/station/scan` (signed on, `floor.view`) offers the actions at the station's line its person's user may
+take; `POST /api/terminal/station/scan/act` posts only code, kind, target and quantity, works the actions out again and runs the matching one
+(`ScanActionChoice.Find`) as that user with its own permission (`StationActing`), so a stale form is refused rather than trusted.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

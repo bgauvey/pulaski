@@ -585,6 +585,7 @@ At the line
 At the start of the run
 At the start of the run, then {0}
 At the top
+At {0}
 At {0} it goes into lot {1} ({2}).
 At {0} it starts a new lot.
 At {0}, as this version needs.
@@ -1041,6 +1042,7 @@ Configuration
 Configure
 Configure → Users
 Configured
+Confirm
 Confirm cancellation
 Confirm {0}
 Confirmed
@@ -1057,6 +1059,7 @@ Consumable
 Consume
 Consume a lot
 Consume it
+Consume {0} {1} of {2} into {3}
 Consumed
 Consumed automatically, not declared by hand
 Consumed by
@@ -1553,6 +1556,7 @@ GS1-128
 GTIN
 Gantt
 Genealogy
+Give a quantity above zero.
 Give at least one target.
 Give both BeforeAt and BeforeId, or neither.
 Give both external_system and external_key, or neither.
@@ -2052,6 +2056,7 @@ Live, updated {0}
 Load
 Load at a feed point
 Load more
+Load {0} at {1}
 Loaded
 Loaded now
 Loading current-shift OEE…
@@ -2274,6 +2279,8 @@ Move what is in {0} out first: {1}.
 Move with what it holds
 Move {0} and its lot to…
 Move {0} and its lots ({1}) to…
+Move {0} and what it holds to {1}
+Move {0} to {1}
 Moved
 Moved since the count started
 Movement
@@ -2453,6 +2460,7 @@ No line in {0} can run {1}.
 No line in {0} is set up to run material {1}; add a capability for it first.
 No line or department yet
 No line reports its state
+No line: inventory only
 No lines
 No lines in this site yet.
 No lines in {0} yet.
@@ -2685,6 +2693,7 @@ Nothing to chart.
 Nothing to check here.
 Nothing to code: every stop in this period has its reason.
 Nothing to correct: the details are the same.
+Nothing to do with {0} at this line.
 Nothing to do.
 Nothing to record.
 Nothing to see here yet
@@ -2856,6 +2865,7 @@ Operator
 Optional
 Optional notes about this equipment.
 Or with a Pulaski password:
+Or:
 Order
 Order creation pre-selects this process for {0}.
 Order number
@@ -3145,6 +3155,7 @@ Quantity
 Quantity '{0}' isn't a number.
 Quantity (optional)
 Quantity ({0})
+Quantity ({0}, {1} in the lot)
 Quantity and share of output
 Quantity to place
 Quantity, {0}
@@ -3555,9 +3566,11 @@ Scale 1
 Scale of {0} {1}
 Scan
 Scan a lot, container or location label, or type a lot or container number. Then move it, pack it, consume it or receive into it; a move or pack asks you to scan where it goes. A scanner that types like a keyboard works; click the box first.
+Scan a lot, container or shop order
 Scan another, or choose what to do
 Scan badge
 Scan or type
+Scan or type a code.
 Scan or type a lot number
 Scan or type a sample barcode
 Scan the container
@@ -3804,6 +3817,7 @@ Start it (
 Start paid break
 Start version {0}
 Start {0}
+Start {0} on {1}
 Start, enter, post and cancel stock counts
 Start, pause, resume and complete jobs
 StartTime is missing (or a SegmentRequirement's EarliestStartTime); it is the order's planned start.
@@ -3966,12 +3980,14 @@ That isn't a line of this site.
 That isn't a sample the running job's plan asks for; record it on the Quality page.
 That isn't one of the instruction's targets.
 That isn't one of {0}'s actions.
+That isn't something this scan offers here any more; scan again.
 That isn't the current password.
 That isn't your time.
 That job isn't on this station's line; act on it from the Floor.
 That job isn't running on this station's line; report it from the Floor.
 That job number is already used in this site.
 That line doesn't exist.
+That line isn't at the site.
 That link would loop back; a process must flow one way.
 That lot number is already used for this material in this site.
 That lot was made by a production report on {0}. Reverse the report on the job's page: it takes back every lot it made and its counts.
@@ -4401,6 +4417,7 @@ This specification already has a draft; change that one.
 This specification has no released version to start a draft from.
 This station doesn't offer that call; choose one of its buttons.
 This station has no line to request maintenance for.
+This station has no line to scan at.
 This station isn't enrolled
 This stop already has {0}, still waiting for maintenance.
 This stop didn't come from an adjustment, so there is nothing to undo.
@@ -4665,6 +4682,7 @@ What runs on each line and what comes next. Start, pause and complete jobs, and 
 What that undo takes back has changed since it was checked. Check it again.
 What the open jobs still need of each component, against the stock available now and the deliveries expected. Jobs take stock in the order they are needed, then what is due by then, so a shortfall shows on the first job it reaches.
 What the time is for
+What to do
 What to fetch from the stores for open jobs' allocations, by location; the equipment chosen below narrows it
 What uses it
 What waits for you to decide, at your sites. Open an item to decide it where it is kept; it leaves the inbox once decided.
@@ -4781,6 +4799,7 @@ Work out limits from results
 Work out the rate {0} really made {1} at: good output ÷ run time over its ended runs, or ÷ running time with the stops inside the runs taken out. Short runs, runs with no good output and unusually slow or fast runs are left out. Nothing changes until you accept it.
 Work unit
 Worked out from
+Working at
 Working it out…
 Working out where it lands…
 Working time
@@ -4850,6 +4869,7 @@ Your password is changed. Sign in with it now.
 Your role doesn't code stops; ask someone who does.
 Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes, planning rates or maintenance requests.
 Your role doesn't let you code stops at this site.
+Your role doesn't let you do what this scan offers here.
 Your role doesn't let you report production at this site.
 Your role doesn't let you report production or code stops at this site.
 Your role doesn't let you run jobs, report production or code stops at this site.
@@ -4937,6 +4957,7 @@ days
 default
 department
 displayName and name are missing; one is the person's name.
+do that
 down {0} min this shift
 downtime
 duration unknown (no run standard)
@@ -5130,6 +5151,7 @@ room for {0} more at the line's rate
 run hours
 run {0}
 runtime
+scan here
 securityMode is {0}.
 sent {0}
 serverThumbprint is the server certificate's SHA-1 thumbprint: 40 hexadecimal digits.
@@ -5311,6 +5333,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} doesn't normally run that day, so this adds it as an extra shift.
 {0} doesn't offer that line.
 {0} doesn't plan to consume that material, and it isn't an approved alternate on its BOM.
+{0} doesn't plan to use {1}.
 {0} doesn't run jobs, so nothing is reported there.
 {0} doesn't run jobs; a capability goes on an active line that runs jobs.
 {0} doesn't run jobs; a capability goes on an active line that runs jobs. A department gets its lines' capabilities.
@@ -5343,6 +5366,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} has a draft already.
 {0} has a new temporary password, to change when they sign in.
 {0} has a {1} counting from {2}, after {3}. {4} can count from earlier only when it is the lot's latest movement: what happened later says where the lot was and what status it had.
+{0} has already used what it planned of {1}.
 {0} has been used ({1}), so it stays a reason: what it recorded must keep its meaning. Make a new group and move {2} into it.
 {0} has changed since the merge ({1}); reverse that first.
 {0} has changed since the split ({1}); reverse that first.
@@ -5486,6 +5510,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is retired; it can't be packed.
 {0} is retired; it can't be taken out.
 {0} is retired; nothing can be packed into it.
+{0} is running on {1}: stop it first.
 {0} is running on {1}; pause or complete it first.
 {0} is running.
 {0} is sampled from {1} {2}, from now on.
@@ -5683,6 +5708,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} site time
 {0} skipped.
 {0} split off {1} into {2}.
+{0} started on {1}.
 {0} started.
 {0} starts no earlier than {1}.
 {0} stays at its site; register another terminal for another site.
@@ -5753,6 +5779,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} {1} isn't a batch: every batch is exactly {2} {3}. A short batch is reported as a partial batch when the line stops.
 {0} {1} of a {2} {3} batch
 {0} {1} of {2}
+{0} {1} of {2} consumed into {3}.
 {0} {1} of {2} is more than planned: the components allow {3} {4} for what the job has made, with the site's {5}% tolerance. It was recorded; check it.
 {0} {1} of {2} is reserved for {3}; release or move their allocation first.
 {0} · every site

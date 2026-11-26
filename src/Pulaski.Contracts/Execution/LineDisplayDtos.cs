@@ -223,6 +223,38 @@ public sealed record StationJobRequest
 }
 
 /// <summary>What a station action did: its notes (a downstream job now ready, a changeover started), the renewed ticket and the station now.</summary>
+/// <summary>A scan at the station (#135b): what was scanned, at the station's line.</summary>
+public sealed record StationScanRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public string? Code { get; init; }
+}
+
+/// <summary>
+/// Confirming an action a scan offered (#135b). The station works the actions out again from <see cref="Code"/> and runs the one of
+/// <see cref="Kind"/> going to <see cref="ToId"/> (or for <see cref="JobId"/>), so nothing but the quantity is taken from the form.
+/// </summary>
+public sealed record StationScanActRequest
+{
+    public string? Ticket { get; init; }
+    public string? Line { get; init; }
+    public string? Code { get; init; }
+    public string? Kind { get; init; }
+    public Guid? ToId { get; init; }
+    public Guid? JobId { get; init; }
+    public decimal? Quantity { get; init; }
+}
+
+/// <summary>What a scan at the station offers (#135b), only what the signed-on person's role allows; empty with a note when nothing fits.</summary>
+public sealed record StationScanResponse
+{
+    public IReadOnlyList<Pulaski.Contracts.Inventory.ScanActionDto> Actions { get; init; } = [];
+    public IReadOnlyList<MessageDto> Notes { get; init; } = [];
+    public required string Ticket { get; init; }
+    public DateTimeOffset TicketExpiresAt { get; init; }
+}
+
 public sealed record StationActionResponse
 {
     public IReadOnlyList<MessageDto> Notes { get; init; } = [];

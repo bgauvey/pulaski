@@ -794,6 +794,13 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> SetFlowAsync(Guid locationId, SetFlowRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/inventory/locations/{locationId}/flow", request, ct);
 
+    /// <summary>What a scan at a line can do in one step (#135).</summary>
+    public Task<ScanActionsDto> GetScanActionsAsync(Guid siteId, Guid? lineId, string code, CancellationToken ct = default) =>
+        GetAsync<ScanActionsDto>($"api/inventory/scan/actions?siteId={siteId}{(lineId is { } l ? $"&lineId={l}" : "")}&code={Uri.EscapeDataString(code)}", ct);
+
+    public Task<IReadOnlyList<ScanLineOptionDto>> ListScanLinesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<ScanLineOptionDto>>($"api/inventory/scan/lines?siteId={siteId}", ct);
+
     public Task<LotTransactionResponse> LoadLotAsync(Guid lotId, LoadLotRequest request, CancellationToken ct = default) =>
         SendAsync<LotTransactionResponse>(HttpMethod.Post, $"api/lots/{lotId}/load", request, ct);
 
@@ -1863,6 +1870,13 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
         TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, $"api/terminal/station/andon/{action}", request, ct);
 
     /// <summary>Request maintenance at the station (#127), for its line or one of its stops to code.</summary>
+    /// <summary>What a scan at the station offers (#135b), and confirming one of them.</summary>
+    public Task<StationScanResponse> StationScanAsync(string secret, StationScanRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationScanResponse>(secret, HttpMethod.Post, "api/terminal/station/scan", request, ct);
+
+    public Task<StationActionResponse> StationScanActAsync(string secret, StationScanActRequest request, CancellationToken ct = default) =>
+        TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/scan/act", request, ct);
+
     public Task<StationActionResponse> StationMaintenanceAsync(string secret, StationMaintenanceRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<StationActionResponse>(secret, HttpMethod.Post, "api/terminal/station/maintenance/request", request, ct);
 
