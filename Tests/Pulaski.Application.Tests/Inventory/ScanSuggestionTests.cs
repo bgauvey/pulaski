@@ -73,3 +73,23 @@ public class ScanSuggestionTests
         Assert.Equal([Line], ScanSuggestions.ForContainer(line, container).Select(a => a.ToId!.Value));
     }
 }
+
+/// <summary>The station confirms the offered action it worked out again, and says what it did (#135b).</summary>
+public class ScanActionChoiceTests
+{
+    [Fact]
+    public void The_confirmed_action_is_found_by_its_kind_and_target_and_worded_when_done()
+    {
+        var hopper = Guid.CreateVersion7();
+        var other = Guid.CreateVersion7();
+        Contracts.Inventory.ScanActionDto Load(Guid to) => new() { Kind = "load", Permission = "lot.move", LotLabel = "R-1", ToId = to, ToCode = to == hopper ? "HOP-1" : "HOP-2" };
+        var consume = new Contracts.Inventory.ScanActionDto { Kind = "consume", Permission = "production.report", LotLabel = "R-1", JobNumber = "J-1", UomCode = "kg", Quantity = 5m };
+        IReadOnlyList<Contracts.Inventory.ScanActionDto> offered = [consume, Load(hopper), Load(other)];
+
+        Assert.Same(consume, ScanActionChoice.Find(offered, "consume", null, null));
+        Assert.Equal(other, ScanActionChoice.Find(offered, "load", other, null)!.ToId);
+        Assert.Null(ScanActionChoice.Find(offered, "start", null, null));
+        Assert.Equal("250 kg of R-1 consumed into J-1.", ScanActionChoice.Done(consume, 250m).Text);
+        Assert.Equal("R-1 loaded at HOP-1.", ScanActionChoice.Done(Load(hopper), 0m).Text);
+    }
+}

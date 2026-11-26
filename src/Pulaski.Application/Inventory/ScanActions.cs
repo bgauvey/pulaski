@@ -113,6 +113,24 @@ internal sealed class GetScanActionsHandler(
     }
 }
 
+/// <summary>Choosing and wording the action a scan offered (#135b), for the station that runs it. Pure.</summary>
+public static class ScanActionChoice
+{
+    /// <summary>The offered action of <paramref name="kind"/> going to <paramref name="toId"/> or for <paramref name="jobId"/>, when given.</summary>
+    public static ScanActionDto? Find(IReadOnlyList<ScanActionDto> actions, string? kind, Guid? toId, Guid? jobId) =>
+        actions.FirstOrDefault(a => a.Kind == kind && (toId is null || a.ToId == toId) && (jobId is null || a.JobId == jobId));
+
+    /// <summary>What was done: "1,000 kg of R-1 consumed into J-1.", "R-1 loaded at HOP-1."…</summary>
+    public static MessageDto Done(ScanActionDto a, decimal quantity) => a.Kind switch
+    {
+        "consume" => Notes.Of($"{quantity} {a.UomCode} of {a.LotLabel} consumed into {a.JobNumber}."),
+        "load" => Notes.Of($"{a.LotLabel} loaded at {a.ToCode}."),
+        "move" => Notes.Of($"{a.LotLabel} moved to {a.ToCode}."),
+        "move_container" => Notes.Of($"{a.ContainerCode} moved to {a.ToCode}."),
+        _ => Notes.Of($"{a.JobNumber} started on {a.ToCode}."),
+    };
+}
+
 /// <summary>A shop order's barcode (<c>ORDER|OP-10</c>, or <c>ORDER|OP-NA</c> for a job without an operation). Pure.</summary>
 public sealed record ShopOrderCode(string OrderNumber, int? OperationNumber)
 {

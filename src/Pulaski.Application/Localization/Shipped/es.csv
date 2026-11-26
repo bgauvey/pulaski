@@ -2694,6 +2694,7 @@ Nothing to chart.,Nada que graficar.
 Nothing to check here.,Nada que revisar aquí.
 Nothing to code: every stop in this period has its reason.,Nada que codificar: cada paro de este periodo tiene su motivo.
 Nothing to correct: the details are the same.,Nada que corregir: los detalles son iguales.
+Nothing to do with {0} at this line.,Nada que hacer con {0} en esta línea.
 Nothing to do.,Nada por hacer.
 Nothing to record.,Nada que registrar.
 Nothing to see here yet,Aún no hay nada que ver aquí
@@ -3566,9 +3567,11 @@ Scale 1,Escala 1
 Scale of {0} {1},Escala de {0} {1}
 Scan,Escanear
 "Scan a lot, container or location label, or type a lot or container number. Then move it, pack it, consume it or receive into it; a move or pack asks you to scan where it goes. A scanner that types like a keyboard works; click the box first.","Escanee una etiqueta de lote, contenedor o ubicación, o escriba un número de lote o contenedor. Luego muévalo, empáquelo, consúmalo o reciba en él; mover o empacar le pide escanear adónde va. Un escáner que escribe como un teclado funciona; haga clic primero en el cuadro."
+"Scan a lot, container or shop order","Escanee un lote, contenedor u orden de taller"
 "Scan another, or choose what to do","Escanee otro, o elija qué hacer"
 Scan badge,Escanear gafete
 Scan or type,Escanear o escribir
+Scan or type a code.,Escanee o escriba un código.
 Scan or type a lot number,Escanee o escriba un número de lote
 Scan or type a sample barcode,Escanee o escriba un código de barras de ejemplo
 Scan the container,Escanee el contenedor
@@ -3978,6 +3981,7 @@ That isn't a line of this site.,Esa no es una línea de este sitio.
 That isn't a sample the running job's plan asks for; record it on the Quality page.,Esa no es una muestra que pida el plan del trabajo en curso; regístrela en la página de Calidad.
 That isn't one of the instruction's targets.,Ese no es uno de los destinos de la instrucción.
 That isn't one of {0}'s actions.,Esa no es una de las acciones de {0}.
+That isn't something this scan offers here any more; scan again.,Este escaneo ya no ofrece eso aquí; escanee de nuevo.
 That isn't the current password.,Esa no es la contraseña actual.
 That isn't your time.,Ese tiempo no es suyo.
 That job isn't on this station's line; act on it from the Floor.,Ese trabajo no está en la línea de esta estación; actúe sobre él desde Piso.
@@ -4414,6 +4418,7 @@ This specification already has a draft; change that one.,Esta especificación ya
 This specification has no released version to start a draft from.,Esta especificación no tiene versión liberada desde la cual iniciar un borrador.
 This station doesn't offer that call; choose one of its buttons.,Esta estación no ofrece esa llamada; elija uno de sus botones.
 This station has no line to request maintenance for.,Esta estación no tiene una línea para la que solicitar mantenimiento.
+This station has no line to scan at.,Esta estación no tiene una línea en la que escanear.
 This station isn't enrolled,Esta estación no está inscrita
 "This stop already has {0}, still waiting for maintenance.","Este paro ya tiene {0}, aún en espera de mantenimiento."
 "This stop didn't come from an adjustment, so there is nothing to undo.","Esta parada no vino de un ajuste, así que no hay nada que deshacer."
@@ -4865,6 +4870,7 @@ Your password is changed. Sign in with it now.,Su contraseña se cambió. Inicie
 Your role doesn't code stops; ask someone who does.,Su rol no codifica paros; pida ayuda a alguien que sí lo haga.
 "Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes, planning rates or maintenance requests.","Su rol no decide nada de lo que reúne la bandeja: tandas parciales, alertas SPC, mano de obra, cambios del ERP, tasas de planeación ni solicitudes de mantenimiento."
 Your role doesn't let you code stops at this site.,Su rol no le permite codificar paros en este sitio.
+Your role doesn't let you do what this scan offers here.,Su rol no le permite hacer lo que este escaneo ofrece aquí.
 Your role doesn't let you report production at this site.,Su rol no le permite reportar producción en este sitio.
 Your role doesn't let you report production or code stops at this site.,Su rol no le permite reportar producción ni codificar paros en este sitio.
 "Your role doesn't let you run jobs, report production or code stops at this site.","Su rol no le permite ejecutar trabajos, reportar producción ni codificar paros en este sitio."
@@ -4952,6 +4958,7 @@ days,días
 default,predeterminado
 department,departamento
 displayName and name are missing; one is the person's name.,Faltan displayName y name; uno es el nombre de la persona.
+do that,hacer eso
 down {0} min this shift,parada {0} min este turno
 downtime,tiempo parado
 duration unknown (no run standard),duración desconocida (sin estándar de corrida)
@@ -5145,6 +5152,7 @@ room for {0} more at the line's rate,cabe {0} más a la tasa de la línea
 run hours,horas de funcionamiento
 run {0},corrida {0}
 runtime,tiempo productivo
+scan here,escanear aquí
 securityMode is {0}.,securityMode es {0}.
 sent {0},envió {0}
 serverThumbprint is the server certificate's SHA-1 thumbprint: 40 hexadecimal digits.,serverThumbprint es la huella SHA-1 del certificado del servidor: 40 dígitos hexadecimales.

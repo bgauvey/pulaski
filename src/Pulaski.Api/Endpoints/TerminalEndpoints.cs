@@ -4,6 +4,7 @@ using Pulaski.Application.Abstractions;
 using Pulaski.Application.Andon;
 using Pulaski.Application.Errors;
 using Pulaski.Application.Execution;
+using Pulaski.Application.Inventory;
 using Pulaski.Application.Labor;
 using Pulaski.Application.Localization;
 using Pulaski.Application.MachineData;
@@ -12,6 +13,7 @@ using Pulaski.Application.Security;
 using Pulaski.Contracts.Andon;
 using Pulaski.Contracts.Common;
 using Pulaski.Contracts.Execution;
+using Pulaski.Contracts.Inventory;
 using Pulaski.Contracts.Labor;
 using Pulaski.Contracts.MachineData;
 using Pulaski.Contracts.Maintenance;
@@ -206,6 +208,69 @@ internal static class TerminalEndpoints
             return TypedResults.Ok(new StationActionResponse
             {
                 Notes = [StationReporting.Done(good, scrap, request.FromMachine ? form.Machine?.UomCode : form.Job.UomCode, result), .. result.Warnings.Select(Notes.Of)],
+                Ticket = ticket,
+                TicketExpiresAt = expires,
+                Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
+            });
+        });
+
+        // Scanning at the station (#135b): what a scan offers at the station's line, as the signed-on person may do it.
+        terminal.MapPost("/station/scan", async Task<Ok<StationScanResponse>> (
+            StationScanRequest request, HttpContext http, StationServices station, IQueryHandler<GetScanActionsQuery, ScanActionsDto> scan, CancellationToken ct) =>
+        {
+            var (terminal, access, ticket, expires) = await StationActing.BeginAsync(
+                http, station.Tickets, station.Security, station.Time, request.Ticket, Domain.Security.Permissions.FloorView, UserMessage.Of("scan here"));
+            var actions = await StationScanAsync(station, scan, terminal, ticket, request.Line, request.Code, ct);
+            var allowed = actions.Actions.Where(a => access.Can(a.Permission, terminal.SiteId)).ToList();
+            return TypedResults.Ok(new StationScanResponse
+            {
+                Actions = allowed,
+                Notes = allowed.Count > 0 ? []
+                    : actions.Actions.Count > 0 ? [Notes.Of($"Your role doesn't let you do what this scan offers here.")]
+                    : actions.Scan.Status == "found" ? [Notes.Of($"Nothing to do with {request.Code} at this line.")]
+                    : [actions.Scan.Message ?? Notes.Of($"Nothing matches {request.Code}.")],
+                Ticket = ticket,
+                TicketExpiresAt = expires,
+            });
+        });
+
+        // Confirming what a scan offered (#135b): worked out again from the code, then run as the signed-on person, through the usual command.
+        terminal.MapPost("/station/scan/act", async Task<Ok<StationActionResponse>> (
+            StationScanActRequest request, HttpContext http, StationServices station, IQueryHandler<GetScanActionsQuery, ScanActionsDto> scan,
+            ICommandHandler<ConsumeLotCommand, LotTransactionResponse> consume, ICommandHandler<LoadLotCommand, LotTransactionResponse> load,
+            ICommandHandler<MoveLotCommand, LotTransactionResponse> move, ICommandHandler<MoveContainerCommand, VersionResponse> moveContainer,
+            ICommandHandler<StartJobCommand, ExecutionResponse> start, CancellationToken ct) =>
+        {
+            var current = TerminalFilter.Current(http);
+            var offered = await StationScanAsync(station, scan, current, request.Ticket, request.Line, request.Code, ct);
+            var action = ScanActionChoice.Find(offered.Actions, request.Kind, request.ToId, request.JobId)
+                ?? throw new DomainRuleException("That isn't something this scan offers here any more; scan again.");
+            var (terminal, _, ticket, expires) = await StationActing.BeginAsync(
+                http, station.Tickets, station.Security, station.Time, request.Ticket, action.Permission, UserMessage.Of("do that"));
+            var quantity = request.Quantity ?? action.Quantity ?? 0m;
+            switch (action.Kind)
+            {
+                case "consume":
+                    await consume.HandleAsync(new ConsumeLotCommand(action.LotId!.Value, action.JobId!.Value, quantity, action.UomId!.Value, RunId: action.RunId), ct);
+                    break;
+                case "load":
+                    await load.HandleAsync(new LoadLotCommand(action.LotId!.Value, action.LotVersion ?? 0, action.ToId!.Value), ct);
+                    break;
+                case "move":
+                    await move.HandleAsync(new MoveLotCommand(action.LotId!.Value, action.LotVersion ?? 0, action.ToId!.Value), ct);
+                    break;
+                case "move_container":
+                    await moveContainer.HandleAsync(new MoveContainerCommand(action.ContainerId!.Value, action.ContainerVersion ?? 0, action.ToId!.Value), ct);
+                    break;
+                case "start":
+                    await start.HandleAsync(new StartJobCommand(action.JobId!.Value, action.JobVersion ?? 0, action.ToId), ct);
+                    break;
+            }
+
+            var personId = station.Tickets.PersonOf(ticket, terminal.Id);
+            return TypedResults.Ok(new StationActionResponse
+            {
+                Notes = [ScanActionChoice.Done(action, quantity)],
                 Ticket = ticket,
                 TicketExpiresAt = expires,
                 Station = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, request.Line), ct),
@@ -478,6 +543,19 @@ internal static class TerminalEndpoints
             TicketExpiresAt = expires,
             Station = await services.Station.HandleAsync(new GetStationQuery(terminal, personId, line), ct),
         });
+
+    // What a scan offers at the station's line (#135b): the line the station shows, for the person the ticket names.
+    private static async Task<ScanActionsDto> StationScanAsync(
+        StationServices station, IQueryHandler<GetScanActionsQuery, ScanActionsDto> scan, TerminalRecord terminal, string? ticket, string? line, string? code,
+        CancellationToken ct)
+    {
+        var personId = station.Tickets.PersonOf(ticket ?? "", terminal.Id);
+        var shown = await station.Station.HandleAsync(new GetStationQuery(terminal, personId, line), ct);
+        var lineId = shown.Line?.LineId ?? throw new DomainRuleException("This station has no line to scan at.");
+        return string.IsNullOrWhiteSpace(code)
+            ? throw ValidationException.Field("Code", $"Scan or type a code.")
+            : await scan.HandleAsync(new GetScanActionsQuery(terminal.SiteId, lineId, code.Trim()), ct);
+    }
 
     private static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

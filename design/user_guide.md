@@ -1039,6 +1039,13 @@ before starting it. Tap a folded one to open it, and a file's name to open the f
 the instruction and tap **Save the answers**. The station says whether it passed, or which items failed. A checklist waiting for its second
 sign-off can be signed off (**Sign it off**) or rejected with a note at the station too, by someone else badged in who may sign off checklists.
 
+**Scan at a station.** Signed on, the station has a **Scan** box: scan a lot, a container or the barcode on a shop order (a scanner that types
+like a keyboard presses Enter itself). It offers what fits at the station's line, as the [Scan page does at a line](#scan-at-a-line-one-scan-one-confirm),
+the likely action first: consume the lot into the running job (for what the job still needs; change the quantity if need be), load it at a feed
+point or move it to the line, move a container there, or start the shop order's job here. Tap **Confirm**. Only what your role allows is offered;
+if nothing fits, it says why. The station works the action out again when you confirm, so a lot that changed in the meantime is refused, not
+guessed at: scan it again.
+
 **Run the job at a station.** Signed on with a role that runs jobs:
 
 1. **Start** (or **Resume**) is on the line's next job that is ready, while nothing runs.
@@ -1886,7 +1893,8 @@ The **Scan** tab is for a barcode scanner that types like a keyboard (most USB a
 
 At a line, the Scan page offers the likely action straight away.
 
-1. Choose the line under **Working at**, once: this browser keeps it for the site.
+1. Choose the line under **Working at**, once: this browser keeps it for the site. (An [operator station](#use-an-operator-station) always
+   scans at its own line.)
 2. Scan. Above the lot, Pulaski shows what fits at that line, the likely action first, ready to **Confirm**:
    - **A lot** of a material the line's running job uses: **Consume … into …**, for what the job still needs of it (its planned quantity less
      what it has used, at most what the lot holds). Change the quantity if you used another amount, then **Confirm**.

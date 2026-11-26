@@ -3402,7 +3402,9 @@ line holds stock and has no feed points; `move_container` likewise; `start` the 
 when it is dispatched, firmed or paused and planned on the line or a group above it (warning when another job runs there). Each action names
 its permission; screens offer only those the user holds. User's choices: offered at the operator station and on the Scan page, consume /
 move here / start (no receive). (a) the query and the Scan page's **Working at** line (per browser and site, `ScanActionView.StorageKey`);
-(b) the station.
+(b) the station: `POST /api/terminal/station/scan` (signed on, `floor.view`) offers the actions at the station's line its person's user may
+take; `POST /api/terminal/station/scan/act` posts only code, kind, target and quantity, works the actions out again and runs the matching one
+(`ScanActionChoice.Find`) as that user with its own permission (`StationActing`), so a stale form is refused rather than trusted.
 
 ## Application architecture
 

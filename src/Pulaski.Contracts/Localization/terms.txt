@@ -2693,6 +2693,7 @@ Nothing to chart.
 Nothing to check here.
 Nothing to code: every stop in this period has its reason.
 Nothing to correct: the details are the same.
+Nothing to do with {0} at this line.
 Nothing to do.
 Nothing to record.
 Nothing to see here yet
@@ -3565,9 +3566,11 @@ Scale 1
 Scale of {0} {1}
 Scan
 Scan a lot, container or location label, or type a lot or container number. Then move it, pack it, consume it or receive into it; a move or pack asks you to scan where it goes. A scanner that types like a keyboard works; click the box first.
+Scan a lot, container or shop order
 Scan another, or choose what to do
 Scan badge
 Scan or type
+Scan or type a code.
 Scan or type a lot number
 Scan or type a sample barcode
 Scan the container
@@ -3977,6 +3980,7 @@ That isn't a line of this site.
 That isn't a sample the running job's plan asks for; record it on the Quality page.
 That isn't one of the instruction's targets.
 That isn't one of {0}'s actions.
+That isn't something this scan offers here any more; scan again.
 That isn't the current password.
 That isn't your time.
 That job isn't on this station's line; act on it from the Floor.
@@ -4413,6 +4417,7 @@ This specification already has a draft; change that one.
 This specification has no released version to start a draft from.
 This station doesn't offer that call; choose one of its buttons.
 This station has no line to request maintenance for.
+This station has no line to scan at.
 This station isn't enrolled
 This stop already has {0}, still waiting for maintenance.
 This stop didn't come from an adjustment, so there is nothing to undo.
@@ -4864,6 +4869,7 @@ Your password is changed. Sign in with it now.
 Your role doesn't code stops; ask someone who does.
 Your role doesn't decide anything the inbox gathers: partial batches, SPC alerts, labor, ERP changes, planning rates or maintenance requests.
 Your role doesn't let you code stops at this site.
+Your role doesn't let you do what this scan offers here.
 Your role doesn't let you report production at this site.
 Your role doesn't let you report production or code stops at this site.
 Your role doesn't let you run jobs, report production or code stops at this site.
@@ -4951,6 +4957,7 @@ days
 default
 department
 displayName and name are missing; one is the person's name.
+do that
 down {0} min this shift
 downtime
 duration unknown (no run standard)
@@ -5144,6 +5151,7 @@ room for {0} more at the line's rate
 run hours
 run {0}
 runtime
+scan here
 securityMode is {0}.
 sent {0}
 serverThumbprint is the server certificate's SHA-1 thumbprint: 40 hexadecimal digits.
