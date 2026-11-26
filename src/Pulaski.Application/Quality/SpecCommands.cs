@@ -204,7 +204,8 @@ internal sealed class CreateSpecHandler(IUnitOfWork unitOfWork, IQualityReposito
     }
 }
 
-internal sealed class SaveSpecDraftHandler(IUnitOfWork unitOfWork, IQualityRepository quality, IEventLog eventLog, IEventFactory events)
+internal sealed class SaveSpecDraftHandler(
+    IUnitOfWork unitOfWork, IQualityRepository quality, IEventLog eventLog, IEventFactory events, Approvals.IReleaseApprovalRepository? approvals = null)
     : ICommandHandler<SaveSpecDraftCommand, SaveSpecDraftResponse>
 {
     public async Task<SaveSpecDraftResponse> HandleAsync(SaveSpecDraftCommand command, CancellationToken cancellationToken)
@@ -214,6 +215,7 @@ internal sealed class SaveSpecDraftHandler(IUnitOfWork unitOfWork, IQualityRepos
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var spec = await SpecLocks.SpecAsync(quality, command.SpecId, cancellationToken);
         var current = await SpecLocks.VersionAsync(quality, spec.Id, command.VersionId, command.ExpectedVersion, cancellationToken);
+        await Approvals.ReleaseGate.EnsureEditableAsync(approvals, current.Id, cancellationToken);
         var characteristics = await quality.GetCharacteristicsAsync(SpecRules.CharacteristicIds(definition), cancellationToken);
         if (SpecRules.ReferenceProblems(definition, characteristics, malformedOnly: true) is { Count: > 0 } malformed)
         {
@@ -232,7 +234,8 @@ internal sealed class SaveSpecDraftHandler(IUnitOfWork unitOfWork, IQualityRepos
 }
 
 internal sealed class ReleaseSpecVersionHandler(
-    IUnitOfWork unitOfWork, IQualityRepository quality, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+    IUnitOfWork unitOfWork, IQualityRepository quality, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider,
+    Approvals.IReleaseApprovalRepository? approvals = null)
     : ICommandHandler<ReleaseSpecVersionCommand, VersionResponse>
 {
     public async Task<VersionResponse> HandleAsync(ReleaseSpecVersionCommand command, CancellationToken cancellationToken)
@@ -244,18 +247,43 @@ internal sealed class ReleaseSpecVersionHandler(
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var spec = await SpecLocks.SpecAsync(quality, command.SpecId, cancellationToken);
         var draft = await SpecLocks.VersionAsync(quality, spec.Id, command.VersionId, command.ExpectedVersion, cancellationToken);
+
+        // Where a site that makes the material asks for approval (#138), the draft is submitted instead.
+        if (approvals is not null)
+        {
+            var (sites, _) = await approvals.MaterialSitesAsync(spec.MaterialId, null, cancellationToken);
+            await Approvals.ReleaseGate.EnsureDirectReleaseAsync(approvals, Domain.Approvals.ReleaseKinds.Spec, draft.Id, sites, cancellationToken);
+        }
+
+        var version = await new SpecReleaser(quality, eventLog, events, timeProvider).ReleaseAsync(spec, draft, command.Note, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
+    }
+}
+
+/// <summary>Releasing a locked specification draft (D-085), in the caller's transaction: by its own command, or by an approval (#138).</summary>
+internal sealed class SpecReleaser(IQualityRepository quality, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+{
+    /// <exception cref="DomainRuleException">The draft can't be released as it is.</exception>
+    public async Task EnsureReleasableAsync(SpecVersion draft, CancellationToken cancellationToken)
+    {
         var characteristics = await quality.GetCharacteristicsAsync(SpecRules.CharacteristicIds(draft.Definition), cancellationToken);
-        if (SpecRules.ReferenceProblems(draft.Definition, characteristics, malformedOnly: false) is { Count: > 0 } problems)
+        var problems = draft.Definition.ReleaseProblems().Concat(SpecRules.ReferenceProblems(draft.Definition, characteristics, malformedOnly: false)).ToList();
+        if (problems.Count > 0)
         {
             throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
         }
+    }
 
+    public async Task<long> ReleaseAsync(MaterialSpec spec, SpecVersion draft, string? note, CancellationToken cancellationToken)
+    {
+        await EnsureReleasableAsync(draft, cancellationToken);
         var previous = await quality.GetReleasedForUpdateAsync(spec.Id, cancellationToken);
         var envelope = events.Create(
             EventTypes.SpecVersionReleased, "material_spec", spec.Id,
             new { VersionId = draft.Id, draft.Number, ObsoleteVersionId = previous?.Value.Id, draft.Definition },
-            SpecRules.Text(command.Note));
-        var released = draft.Release(timeProvider.GetUtcNow(), envelope.ActorId, SpecRules.Text(command.Note));
+            SpecRules.Text(note));
+        var released = draft.Release(timeProvider.GetUtcNow(), envelope.ActorId, SpecRules.Text(note));
         if (previous is not null)
         {
             // Obsolete first: only one version of a specification may be released at a time.
@@ -265,8 +293,45 @@ internal sealed class ReleaseSpecVersionHandler(
         var version = await quality.UpdateVersionAsync(released, envelope.OccurredAt, cancellationToken);
         await quality.InsertReleasedItemsAsync(released, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return new VersionResponse(version);
+        return version;
+    }
+}
+
+/// <summary>A specification as release approval sees it (#138b): the sites that make its material decide.</summary>
+internal sealed class SpecReleasable(IQualityRepository quality, Approvals.IReleaseApprovalRepository approvals, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+    : Approvals.IReleasableDocument
+{
+    private MaterialSpec? _spec;
+    private SpecVersion? _draft;
+
+    public string Kind => Domain.Approvals.ReleaseKinds.Spec;
+
+    public IReadOnlyList<string> DraftSavedEvents { get; } = [EventTypes.SpecDraftSaved];
+
+    public async Task<Approvals.ReleasableDraft> LockAsync(Guid documentId, Guid versionId, long? expectedVersion, CancellationToken cancellationToken)
+    {
+        _spec = await SpecLocks.SpecAsync(quality, documentId, cancellationToken);
+        var current = await quality.GetVersionForUpdateAsync(documentId, versionId, cancellationToken)
+            ?? throw new NotFoundException($"Version {versionId} of specification {documentId} not found.");
+        if (expectedVersion is { } expected && current.Version != expected)
+        {
+            throw new ConflictException($"Version {current.Value.Number} was changed by someone else. Reload and try again.");
+        }
+
+        _draft = current.Value;
+        var (sites, code) = await approvals.MaterialSitesAsync(_spec.MaterialId, null, cancellationToken);
+        return new Approvals.ReleasableDraft(_spec.Id, _draft.Id, code, _draft.Number, sites);
+    }
+
+    public Task EnsureReleasableAsync(Approvals.ReleasableDraft draft, CancellationToken cancellationToken) =>
+        _draft!.Status != SpecVersionStatus.Draft
+            ? throw new DomainRuleException($"Version {_draft.Number} of the specification for {draft.Code} isn't a draft.")
+            : new SpecReleaser(quality, eventLog, events, timeProvider).EnsureReleasableAsync(_draft, cancellationToken);
+
+    public async Task<IReadOnlyList<MessageDto>> ReleaseAsync(Approvals.ReleasableDraft draft, string? note, CancellationToken cancellationToken)
+    {
+        await new SpecReleaser(quality, eventLog, events, timeProvider).ReleaseAsync(_spec!, _draft!, note, cancellationToken);
+        return [];
     }
 }
 

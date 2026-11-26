@@ -2539,6 +2539,35 @@ CREATE INDEX work_instruction_target_process_ix ON core.work_instruction_target 
 CREATE INDEX work_instruction_target_material_ix ON core.work_instruction_target (material_id) WHERE is_active;
 CREATE INDEX work_instruction_target_line_ix ON core.work_instruction_target (equipment_id) WHERE is_active;
 
+-- Approval before release (#138, D-122): which kinds need it per site, and the requests submitted.
+CREATE TABLE core.release_approval_settings (
+    site_id         uuid PRIMARY KEY REFERENCES core.equipment(id),
+    processes       boolean NOT NULL DEFAULT false,
+    boms            boolean NOT NULL DEFAULT false,
+    specs           boolean NOT NULL DEFAULT false,
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE core.release_request (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    kind            text NOT NULL CONSTRAINT release_request_kind_ck CHECK (kind IN ('process', 'bom', 'spec')),
+    document_id     uuid NOT NULL,                                  -- the process, BOM or specification (by kind)
+    version_id      uuid NOT NULL,                                  -- its version submitted
+    site_ids        uuid[] NOT NULL,                                -- the sites whose setting asks for approval
+    status          text NOT NULL DEFAULT 'pending' CONSTRAINT release_request_status_ck CHECK (status IN ('pending', 'approved', 'returned', 'withdrawn')),
+    submitted_by    text NOT NULL,
+    submitted_at    timestamptz NOT NULL,
+    note            text,
+    decided_by      text,
+    decided_at      timestamptz,
+    decision_note   text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT release_request_decided_ck CHECK ((status = 'pending') = (decided_at IS NULL))
+);
+CREATE UNIQUE INDEX release_request_pending_uq ON core.release_request (version_id) WHERE status = 'pending';
+CREATE INDEX release_request_document_ix ON core.release_request (kind, document_id, submitted_at DESC);
+
+
 -- Checklists answered (#126c, D-116): for a job on a line, kept with the run; a failed one is kept and the job needs one that passes.
 CREATE TABLE core.checklist_response (
     id              uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -2922,7 +2951,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0079_work_instructions'),
     ('0080_instruction_checklists'),
     ('0081_checklist_sign_off'),
-    ('0082_system_health');
+    ('0082_system_health'),
+    ('0083_release_approval');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -2996,7 +3026,8 @@ INSERT INTO sec.permission (code, description) VALUES
     ('instructions.view', 'See work instructions and their versions'),
     ('instructions.manage', 'Maintain work instructions: write, attach and release them'),
     ('checklists.sign_off', 'Give setup and first-article checklists their second sign-off, or reject them'),
-    ('system.view', 'See system health: edge nodes, deliveries, connections, background services and the database')
+    ('system.view', 'See system health: edge nodes, deliveries, connections, background services and the database'),
+    ('releases.approve', 'Approve or send back processes, BOMs and specifications submitted for release')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
@@ -3031,6 +3062,8 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('maintenance', 'instructions.view'),
     ('supervisor', 'checklists.sign_off'),
     ('quality', 'checklists.sign_off'),
+    ('quality', 'releases.approve'),
+    ('process_engineer', 'releases.approve'),
     ('operator', 'maintenance.request'),
     ('supervisor', 'maintenance.request'),
     ('supervisor', 'maintenance.work'),

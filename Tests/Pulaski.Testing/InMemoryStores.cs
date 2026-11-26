@@ -116,6 +116,8 @@ public sealed class InMemoryStores
 
     public InMemorySystemHealth Health { get; } = new();
 
+    public InMemoryReleaseApprovals Approvals { get; } = new();
+
     public InMemoryAlerts Alerts { get; } = new();
 
     public InMemoryLineOutput LineOutput { get; } = new();
@@ -226,6 +228,8 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Live.ILiveSignals>();
         services.RemoveAll<Application.Health.ISystemHealthReadStore>();
         services.RemoveAll<Application.Quality.ISamplingReadStore>();
+        services.RemoveAll<Application.Approvals.IReleaseApprovalRepository>();
+        services.RemoveAll<Application.Approvals.IReleaseApprovalReadStore>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -328,6 +332,8 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Live.ILiveSignals>(LiveSignals);
         services.AddSingleton<Application.Health.ISystemHealthReadStore>(Health);
         services.AddSingleton<Application.Quality.ISamplingReadStore>(new InMemorySampling());
+        services.AddSingleton<Application.Approvals.IReleaseApprovalRepository>(Approvals);
+        services.AddSingleton<Application.Approvals.IReleaseApprovalReadStore>(Approvals);
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);
         services.AddSingleton<Application.Execution.ILineOutputRepository>(LineOutput);
@@ -473,4 +479,44 @@ public sealed class InMemorySampling : Application.Quality.ISamplingReadStore
     public Task<IReadOnlyList<(Guid RunId, Guid CharacteristicId, DateTimeOffset At)>> SamplesAsync(
         IReadOnlyCollection<Guid> runIds, DateTimeOffset since, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<(Guid, Guid, DateTimeOffset)>>([]);
+}
+
+/// <summary>Release approval (#138) switched off everywhere, with no requests; approval is tested against the database.</summary>
+public sealed class InMemoryReleaseApprovals : Application.Approvals.IReleaseApprovalRepository, Application.Approvals.IReleaseApprovalReadStore
+{
+    public Task<Application.Abstractions.Versioned<Domain.Approvals.ReleaseApprovalSettings>> GetSettingsForUpdateAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Task.FromResult(new Application.Abstractions.Versioned<Domain.Approvals.ReleaseApprovalSettings>(Domain.Approvals.ReleaseApprovalSettings.Off(siteId), 1));
+
+    public Task<long> UpdateSettingsAsync(Domain.Approvals.ReleaseApprovalSettings settings, DateTimeOffset at, CancellationToken cancellationToken) => Task.FromResult(2L);
+
+    public Task<IReadOnlyList<Guid>> SitesRequiringAsync(string kind, IReadOnlyCollection<Guid> siteIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Guid>>([]);
+
+    public Task<Domain.Approvals.ReleaseRequest?> GetPendingForVersionAsync(Guid versionId, CancellationToken cancellationToken) =>
+        Task.FromResult<Domain.Approvals.ReleaseRequest?>(null);
+
+    public Task<Domain.Approvals.ReleaseRequest?> GetAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<Domain.Approvals.ReleaseRequest?>(null);
+
+    public Task<Domain.Approvals.ReleaseRequest?> GetForUpdateAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<Domain.Approvals.ReleaseRequest?>(null);
+
+    public Task InsertAsync(Domain.Approvals.ReleaseRequest request, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task UpdateAsync(Domain.Approvals.ReleaseRequest request, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task<IReadOnlyList<string>> EditorsAsync(Guid documentId, Guid versionId, IReadOnlyList<string> eventTypes, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
+
+    public Task<(IReadOnlyList<Guid> Sites, string MaterialCode)> MaterialSitesAsync(Guid materialId, Guid? processId, CancellationToken cancellationToken) =>
+        Task.FromResult<(IReadOnlyList<Guid>, string)>(([], "?"));
+
+    public Task<Contracts.Approvals.ReleaseApprovalSettingsDto> GetSettingsAsync(Guid siteId, CancellationToken cancellationToken) =>
+        Task.FromResult(new Contracts.Approvals.ReleaseApprovalSettingsDto { SiteId = siteId });
+
+    public Task<IReadOnlyList<Guid>> SitesForAsync(string kind, Guid documentId, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Guid>>([]);
+
+    public Task<bool> AnyRequiresAsync(string kind, IReadOnlyCollection<Guid> siteIds, CancellationToken cancellationToken) => Task.FromResult(false);
+
+    public Task<IReadOnlyList<(Domain.Approvals.ReleaseRequest Request, int VersionNumber, string? SubmittedByName, string? DecidedByName)>> ListAsync(
+        string kind, Guid documentId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(Domain.Approvals.ReleaseRequest, int, string?, string?)>>([]);
 }

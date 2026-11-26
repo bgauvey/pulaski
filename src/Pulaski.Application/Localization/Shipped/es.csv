@@ -41,6 +41,7 @@ term,translation
 '{0}' isn't a batch rule; use exact or near.,'{0}' no es una regla de lote de producción; use exacta o aproximada.
 '{0}' isn't a checklist's phase; use setup or first_article.,'{0}' no es una fase de lista de verificación; use setup o first_article.
 '{0}' isn't a container kind; use {1}.,'{0}' no es un tipo de contenedor; use {1}.
+'{0}' isn't a kind of document that is released.,'{0}' no es un tipo de documento que se libere.
 '{0}' isn't a kind of event.,'{0}' no es un tipo de evento.
 '{0}' isn't a material type; use {1}.,'{0}' no es un tipo de material; use {1}.
 '{0}' isn't a meter; use run_hours or counts.,'{0}' no es un medidor; use run_hours o counts.
@@ -511,10 +512,17 @@ Any value,Cualquier valor
 Anything,Cualquier cosa
 Applied,Aplicado
 Applies to,Se aplica a
+Approval before release,Aprobación antes de liberar
+Approval is required before release here: submit the draft for approval.,Aquí se requiere aprobación antes de liberar: envíe el borrador a aprobación.
+Approval isn't required for {0}: release it directly.,{0} no requiere aprobación: libérelo directamente.
 Approval note,Nota de aprobación
+Approval settings saved.,Configuración de aprobación guardada.
+Approvals ({0}),Aprobaciones ({0})
 Approve,Aprobar
 Approve a shift's labor and correct approved labor,Aprobar la mano de obra de un turno y corregir la mano de obra aprobada
+Approve and release,Aprobar y liberar
 Approve or reject partial batches (not one's own),Aprobar o rechazar tandas parciales (no las propias)
+"Approve or send back processes, BOMs and specifications submitted for release","Aprobar o devolver procesos, listas de materiales y especificaciones enviados a liberar"
 Approve these limits,Aprobar estos límites
 Approved,Aprobado
 Approved by {0},Aprobados por {0}
@@ -686,6 +694,7 @@ Blank: straight into the balance,En blanco: directo al saldo
 "Blank: {0} days from today, {1}'s shelf life.","En blanco: {0} días desde hoy, la vida útil de {1}."
 "Blank: {0}-01, -02…","En blanco: {0}-01, -02…"
 Blank: {0}-1…,En blanco: {0}-1…
+Bom,Lista de materiales
 Boolean,Booleano
 Both parts keep the stop's reason; code each one afterwards.,Ambas partes conservan el motivo del paro; codifique cada una después.
 "Both parts of the split are replaced by the stop they came from, with its reason and coding. Only if neither part was adjusted since.","Ambas partes de la división se reemplazan por el paro del que vinieron, con su motivo y codificación. Solo si ninguna parte se ajustó desde entonces."
@@ -987,6 +996,7 @@ Comes with {0},Viene con {0}
 Coming,Próxima
 Comment,Comentario
 Comment (needed for this reason),Comentario (necesario para este motivo)
+Comment (needed),Comentario (necesario)
 Comment (optional),Comentario (opcional)
 Comment (required),Comentario (obligatorio)
 Complete,Terminar
@@ -1854,6 +1864,7 @@ Keep a translation to {0} characters.,Limite la traducción a {0} caracteres.
 Keep allocations current,Mantener las asignaciones al día
 Keep it,Conservarlo
 Keep it to {0} characters.,Limítelo a {0} caracteres.
+Keep the comment to {0} characters.,Limite el comentario a {0} caracteres.
 Keep the instruction to {0} characters; put the rest in an attached file.,Limite la instrucción a {0} caracteres; ponga el resto en un archivo adjunto.
 Keep the note to {0} characters.,Mantenga la nota en {0} caracteres.
 "Keep the placeholders {0}, {1}… of the English where they are: they stand for the values shown.","Conserve los marcadores {0}, {1}… del inglés: representan los valores que se muestran."
@@ -2545,6 +2556,7 @@ Not yet,Aún no
 Note,Nota
 Note (optional),Nota (opcional)
 "Note (optional), e.g. month end","Nota (opcional), p. ej. cierre de mes"
+Note for the approver,Nota para quien aprueba
 Note or reason,Nota o motivo
 "Note, e.g. certificate number","Nota, p. ej. número de certificado"
 Notes,Notas
@@ -2711,6 +2723,7 @@ Only rows with errors,Solo filas con errores
 Only stops of one machine can be merged.,Solo se pueden unir paros de una misma máquina.
 Only stops to code,Solo paros por codificar
 Only the latest {0} are shown.,Solo se muestran los {0} más recientes.
+Only who submitted it withdraws it; an approver sends it back.,Solo quien lo envió lo retira; quien aprueba lo devuelve.
 Only with warnings,Solo con advertencias
 Only {0} hours of usable runs; a rate needs at least {1}.,Solo {0} horas de corridas utilizables; una tasa necesita al menos {1}.
 Only {0} usable runs; a rate needs at least {1}.,Solo {0} corridas utilizables; una tasa necesita al menos {1}.
@@ -3156,6 +3169,7 @@ Rejoining the server...,Reconectando con el servidor...
 Release,Liberar
 Release note,Nota de liberación
 Release note: {0},Nota de liberación: {0}
+Release request {0} not found.,No se encontró la solicitud de liberación {0}.
 Release version {0},Liberar la versión {0}
 Release version {0}…,Liberar la versión {0}…
 "Release what is no longer usable, trim what a lot can no longer give, and allocate what is still needed","Libere lo que ya no sirve, recorte lo que un lote ya no puede dar, y asigne lo que aún se necesita"
@@ -3163,6 +3177,7 @@ Released,Liberado
 Released BOMs using it,Listas de materiales liberadas que lo usan
 "Released, but some BOMs need a new version:","Liberada, pero algunas listas de materiales necesitan una versión nueva:"
 Released: version {0},Liberada: versión {0}
+Releases to approve,Liberaciones por aprobar
 Reload,Recargar
 Remove,Quitar
 Remove alternate,Quitar alterno
@@ -3257,6 +3272,7 @@ Retry,Reintentar
 Retry all failed,Reintentar todos los fallidos
 Retry or skip failed deliveries to the ERP,Reintentar u omitir entregas fallidas al ERP
 Retrying,Reintentando
+Returned,Devuelto
 Reverse,Revertir
 Reverse a movement,Revertir un movimiento
 "Reverse production reports: their counts, the run's totals and the lots they made","Revertir reportes de producción: sus conteos, los totales de la corrida y los lotes que hicieron"
@@ -3357,6 +3373,7 @@ Samples,Muestras
 Sampling ms,Muestreo ms
 Save,Guardar
 Save allocation settings,Guardar ajustes de asignación
+Save approval settings,Guardar la configuración de aprobación
 Save attribute,Guardar atributo
 Save change,Guardar cambio
 Save changeovers,Guardar cambios
@@ -3424,6 +3441,7 @@ Say why the limits are entered by hand.,Diga por qué los límites se ingresan a
 Say why the line stopped: a partial batch is an exception.,Diga por qué se detuvo la línea: una tanda parcial es una excepción.
 Say why the movement is back-dated.,Diga por qué el movimiento tiene fecha anterior.
 Say why they are entered by hand.,Diga por qué se ingresan a mano.
+"Say why, in a comment.","Diga por qué, en un comentario."
 Say why.,Diga por qué.
 Say why: the shift is approved already.,Diga por qué: el turno ya está aprobado.
 Say why: the shift was approved already.,Diga por qué: el turno ya fue aprobado.
@@ -3495,6 +3513,7 @@ Select visible ({0}),Elegir los visibles ({0})
 Select {0},Elegir {0}
 Self,Uno mismo
 Send a certificate's file with its event,Enviar el archivo de un certificado con su evento
+Send back,Devolver
 Send machine data as a Pulaski Edge node: read its configuration and forward what it collects,Enviar datos de máquina como nodo de Pulaski Edge: leer su configuración y reenviar lo que recoge
 Send the link,Enviar el enlace
 Send to this receiver,Enviar a este receptor
@@ -3642,11 +3661,13 @@ Someone else changed this draft; showing their version.,Alguien más cambió est
 Someone else changed this first; the board now shows their change.,Alguien más cambió esto primero; el tablero ahora muestra su cambio.
 Someone else started this material's balance at that location at the same moment. Try again.,Otra persona inició el saldo de este material en esa ubicación en el mismo momento. Intente de nuevo.
 Someone other than who answered it gives the second sign-off.,La segunda firma la da alguien distinto de quien la respondió.
+Someone who didn't edit or submit the draft approves it.,Lo aprueba alguien que no editó ni envió el borrador.
 Something to fix?,¿Algo que reparar?
 Source,Origen
 "Sparkplug B, OPC UA or EtherNet/IP.","Sparkplug B, OPC UA o EtherNet/IP."
 Spc alert,Alerta de SPC
 Spc cause,Causa de SPC
+Spec,Especificación
 Specification,Especificación
 Specification version {0}:,Versión de especificación {0}:
 Specification {0} not found.,Especificación {0} no encontrada.
@@ -3734,6 +3755,9 @@ Storage unit,Unidad de almacenamiento
 Storage zone,Zona de almacenamiento
 Struck-through rows were replaced or removed by a correction after approval; the hours count the correction. Hours are worked time: breaks are left out.,Las filas tachadas se reemplazaron o quitaron por una corrección después de la aprobación; las horas cuentan la corrección. Las horas son tiempo trabajado: los descansos se excluyen.
 Subject,Sujeto
+Submit,Enviar
+Submit version {0} for approval…,Enviar la versión {0} a aprobación…
+Submitted {0} by {1}.,Enviado el {0} por {1}.
 Suggested,Sugerido
 Suggested lot,Lote sugerido
 "Suggestions use the lot that expires first, then the site's preferences (Configure → Site settings), then the oldest; approved alternates on the BOM line come after the component's own lots. They leave out stock that is held, would expire before {0} (when the job needs it) or is allocated to other jobs. Allocated stock is kept for this job: other jobs see it as taken.","Las sugerencias usan el lote que vence primero, luego las preferencias del sitio (Configurar → Ajustes del sitio), luego el más antiguo; los alternos aprobados en la línea de la lista de materiales van después de los lotes del propio componente. Excluyen la existencia retenida, que vencería antes de {0} (cuando el trabajo la necesita) o que está asignada a otros trabajos. La existencia asignada se guarda para este trabajo: otros trabajos la ven como tomada."
@@ -3762,6 +3786,7 @@ Switched off.,Apagado.
 "Switched off. It can't be received, ordered or added to BOMs any more; these carry on: {0}.","Desactivado. Ya no puede recibirse, ordenarse ni agregarse a listas de materiales; estos continúan: {0}."
 Switched off; nothing more is sent for it.,Desactivada; ya no se envía nada por ella.
 Switched on again.,Activada de nuevo.
+"Switched on, a draft is submitted for approval instead of released, and someone else who may approve releases approves it (which releases it) or sends it back, each with a comment. A process follows its own site; a BOM or specification needs approval when any site that can make its material asks for it.","Activado, un borrador se envía a aprobación en lugar de liberarse, y otra persona que pueda aprobar liberaciones lo aprueba (lo que lo libera) o lo devuelve, cada vez con un comentario. Un proceso sigue a su propio sitio; una lista de materiales o especificación requiere aprobación cuando lo pide cualquier sitio que pueda fabricar su material."
 Switched {0} on again.,Se volvió a activar {0}.
 "Switched-off roles aren't shown. To add a role or change its name, use","Los roles desactivados no se muestran. Para agregar un rol o cambiar su nombre, use"
 Switching off people who are missing needs every row to be one external system's person: name the system and give each an external_key.,Desactivar a las personas que faltan requiere que cada fila sea una persona de un mismo sistema externo: nombre el sistema y dé a cada una un external_key.
@@ -3858,6 +3883,7 @@ That process has no operation {0} at this site.,Ese proceso no tiene operación 
 That proposal has been decided or replaced since. Reload to see the latest.,Esa propuesta se decidió o reemplazó desde entonces. Recargue para ver la más reciente.
 That report was reversed already.,Ese reporte ya se revirtió.
 That report was reversed already; report the right figures instead.,Ese reporte ya se revirtió; reporte las cifras correctas en su lugar.
+That request is {0} already.,Esa solicitud ya está {0}.
 That role has already been taken away.,Ese rol ya se quitó.
 "That run has ended: this is recorded late, into it.","Esa corrida terminó: esto se registra tarde, en ella."
 That run isn't one of {0}'s.,Esa corrida no es de {0}.
@@ -4069,6 +4095,7 @@ The reasons in bold make up the first 80% of the stops. Code stops on the Stops 
 The reasons in bold make up the first 80% of the time. Code stops on the Stops tab to move time out of Uncoded.,Los motivos en negrita forman el primer 80% del tiempo. Codifique paros en la pestaña Paros para sacar tiempo de Sin codificar.
 "The reasons people choose when they write stock up or off, hold a lot, report scrap or end a run, and the utilization reasons a machine's time is coded with. A code and its kind can't change once created, because history refers to them; switch a reason off instead of reusing it. File reasons under","Los motivos que las personas eligen al ajustar existencias al alza o a la baja, retener un lote, reportar desperdicio o terminar una corrida, y los motivos de utilización con que se codifica el tiempo de una máquina. Un código y su tipo no pueden cambiar una vez creados, porque el historial se refiere a ellos; desactive un motivo en lugar de reutilizarlo. Agrupe los motivos bajo"
 The receiver won't get this event. Put it right there by hand first; the later events of the same lot or certificate are sent next.,El receptor no recibirá este evento. Corríjalo allá a mano primero; los eventos posteriores del mismo lote o certificado se envían después.
+The release approval settings were changed by someone else. Reload and try again.,Otra persona cambió la configuración de aprobación. Vuelva a cargar e intente de nuevo.
 "The released version names operation {0}, which {1}'s released version no longer has,","La versión liberada nombra la operación {0}, que la versión liberada de {1} ya no tiene,"
 "The report is reversed and the figures above reported in its place, at its time, in one go: its lots give their quantity back and new lots are made. ","El reporte se revierte y las cifras de arriba se reportan en su lugar, a su hora, de una vez: sus lotes devuelven su cantidad y se hacen lotes nuevos."
 The request names this stop; maintenance sees it on the Maintenance tab.,La solicitud nombra este paro; mantenimiento la ve en la pestaña Mantenimiento.
@@ -4221,6 +4248,7 @@ This chart has a dispersion chart: give its centre line and upper limit (and a l
 This chart is set up as X̄-R: its standard deviation limits come from the same sigma as its range limits.,Este gráfico está configurado como X̄-R: sus límites de desviación estándar salen de la misma sigma que sus límites de rango.
 This chart is set up as X̄-S: its range limits come from the same sigma as its standard deviation limits.,Este gráfico está configurado como X̄-S: sus límites de rango salen de la misma sigma que sus límites de desviación estándar.
 This device is enrolled already; enrolling again replaces that.,Este dispositivo ya está inscrito; inscribirlo de nuevo lo reemplaza.
+This draft waits for approval; withdraw it to change it.,Este borrador espera aprobación; retírelo para cambiarlo.
 This expected receipt,Esta recepción esperada
 "This is a placeholder, not a job yet.","Esto es un marcador, aún no un trabajo."
 This is the last active administrator; make someone else an administrator first.,Este es el último administrador activo; haga administrador a alguien más primero.
@@ -4245,6 +4273,7 @@ This run: {0} {1},Esta corrida: {0} {1}
 This screen isn't enrolled,Esta pantalla no está inscrita
 This shift,Este turno
 This shift:,Este turno:
+This site asks for approval before release: someone else approves it.,Este sitio pide aprobación antes de liberar: otra persona lo aprueba.
 "This site uses the default, automatic.","Este sitio usa el predeterminado, automático."
 "This site uses the defaults, 110% each.","Este sitio usa los predeterminados, 110% cada uno."
 This specification already has a draft; change that one.,Esta especificación ya tiene un borrador; cambie ese.
@@ -4428,6 +4457,7 @@ Vendor and model,Proveedor y modelo
 Version,Versión
 Version shown,Versión mostrada
 Version {0},Versión {0}
+Version {0} approved and released,Versión {0} aprobada y liberada
 Version {0} is obsolete; it was released{1} and a newer version has replaced it,La versión {0} es obsoleta; se liberó{1} y una versión más nueva la reemplazó
 Version {0} is released.,La versión {0} está liberada.
 Version {0} is released: jobs show it.,La versión {0} está liberada: los trabajos la muestran.
@@ -4439,14 +4469,22 @@ Version {0} is {1}; start a new draft to have it released.,La versión {0} está
 Version {0} of BOM {1} not found.,No se encontró la versión {0} de la lista de materiales {1}.
 Version {0} of process {1} not found.,No se encontró la versión {0} del proceso {1}.
 Version {0} of specification {1} not found.,No se encontró la versión {0} de la especificación {1}.
+Version {0} of the BOM for {1} isn't a draft.,La versión {0} de la lista de materiales de {1} no es un borrador.
+Version {0} of the specification for {1} isn't a draft.,La versión {0} de la especificación de {1} no es un borrador.
+Version {0} of {1} isn't a draft.,La versión {0} de {1} no es un borrador.
 Version {0} released,Versión {0} liberada
+Version {0} sent back to its editors,Versión {0} devuelta a sus editores
+Version {0} submitted for approval,Versión {0} enviada a aprobación
+Version {0} waits for approval.,La versión {0} espera aprobación.
 Version {0} was applied already.,La versión {0} ya se aplicó.
 Version {0} was changed by someone else. Reload and try again.,Alguien más cambió la versión {0}. Recargue e intente de nuevo.
 Version {0} was released{1},La versión {0} se liberó{1}
+Version {0} withdrawn: it can be changed again,Versión {0} retirada: puede cambiarse de nuevo
 Version {0} · {1},Versión {0} · {1}
 Version {0} · {1} characteristics,Versión {0} · {1} características
 Version {0} · {1} components,Versión {0} · {1} componentes
 "Version {0}, {1}","Versión {0}, {1}"
+Version {0}: {1},Versión {0}: {1}
 Versions,Versiones
 View,Ver
 Viewing,Consulta
@@ -4455,6 +4493,7 @@ Waited,Esperó
 Waiting,En espera
 Waiting external,Esperando externo
 Waiting for a line,Esperando una línea
+Waiting for approval,En espera de aprobación
 Waiting for its request,En espera de su solicitud
 Waiting for review,Esperando revisión
 Waiting for sign-off,Espera firma
@@ -4661,6 +4700,7 @@ You can't switch yourself off.,No puede desactivarse a sí mismo.
 "You have no Pulaski user, so the station can't run jobs or record production for you. Ask a supervisor to link your badge to a user.","No tiene usuario de Pulaski, así que la estación no puede ejecutar trabajos ni registrar producción por usted. Pida a un supervisor que vincule su gafete a un usuario."
 "You have no e-mail address in Pulaski, so your alerts can't reach you. Ask an administrator to add it on Configure → Users.","No tiene correo electrónico en Pulaski, así que sus alertas no pueden llegarle. Pida a un administrador que lo agregue en Configurar → Usuarios."
 You may not back-date movements at this site: it needs permission to back-date inventory movements.,No puede registrar movimientos con fecha anterior en este sitio: necesita permiso para fechar hacia atrás movimientos de inventario.
+You may not decide releases at the sites that asked for this approval.,No puede decidir liberaciones en los sitios que pidieron esta aprobación.
 You may not do this at this site: it needs the permission “{0}”.,No puede hacer esto en este sitio: necesita el permiso “{0}”.
 You may not do this: it needs the permission “{0}”.,No puede hacer esto: necesita el permiso “{0}”.
 You may not see this at this site: it needs the permission “{0}”.,No puede ver esto en este sitio: necesita el permiso “{0}”.
@@ -4668,6 +4708,7 @@ You may not see this: it needs the permission “{0}”.,No puede ver esto: nece
 You reported it: someone else decides,Usted lo reportó: alguien más decide
 "You reported this partial batch, so someone else must approve or reject it.","Usted reportó esta tanda parcial, así que alguien más debe aprobarla o rechazarla."
 You signed in with a temporary password. Choose your own before you carry on.,Inició sesión con una contraseña temporal. Elija la suya antes de continuar.
+You submitted it: withdraw it instead.,Usted lo envió: retírelo en su lugar.
 You're on the {0} call on {1}.,Usted atiende la llamada de {0} en {1}.
 You're on the {0} call.,Usted atiende la llamada de {0}.
 Your PIN,Su PIN
@@ -4972,6 +5013,7 @@ status change,cambio de estado
 stock,existencia
 "stopped for {0}, {1} ago","detenido durante {0}, hace {1}"
 "stopped {0} ago, still stopped","detenido hace {0}, sigue detenido"
+submitted {0} by {1},enviado el {0} por {1}
 substitution,sustitución
 such as Grease the gearbox,como Engrasar la caja de engranes
 supplier lot {0},lote del proveedor {0}
@@ -5076,6 +5118,7 @@ yes,sí
 {0} belongs to another site; {1} can only follow its own site's schedules.,{0} pertenece a otro sitio; {1} solo puede seguir los horarios de su propio sitio.
 {0} by day,{0} por día
 {0} by shift,{0} por turno
+{0} by {1},{0} por {1}
 {0} by {1}{2},{0} por {1}{2}
 {0} calls are switched off at this site.,Las llamadas de {0} están desactivadas en este sitio.
 {0} can now sign in as {1} with the temporary password.,{0} ya puede iniciar sesión como {1} con la contraseña temporal.

@@ -68,7 +68,8 @@ internal sealed class SaveBomDraftHandler(
     IProcessRepository processes,
     IUnitRepository units,
     IEventLog eventLog,
-    IEventFactory events) : ICommandHandler<SaveBomDraftCommand, SaveBomDraftResponse>
+    IEventFactory events,
+    Approvals.IReleaseApprovalRepository? approvals = null) : ICommandHandler<SaveBomDraftCommand, SaveBomDraftResponse>
 {
     public async Task<SaveBomDraftResponse> HandleAsync(SaveBomDraftCommand command, CancellationToken cancellationToken)
     {
@@ -77,6 +78,7 @@ internal sealed class SaveBomDraftHandler(
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var bom = await BomLocks.BomAsync(boms, command.BomId, cancellationToken);
         var current = await BomLocks.VersionAsync(boms, command.BomId, command.VersionId, command.ExpectedVersion, cancellationToken);
+        await Approvals.ReleaseGate.EnsureEditableAsync(approvals, current.Id, cancellationToken);
 
         var materials = await boms.GetMaterialsAsync(BomRules.MaterialIds(definition, bom.MaterialId), cancellationToken);
         if (BomRules.ReferenceProblems(definition, bom, materials, null, malformedOnly: true) is { Count: > 0 } malformed)
@@ -105,7 +107,8 @@ internal sealed class ReleaseBomVersionHandler(
     IUnitRepository units,
     IEventLog eventLog,
     IEventFactory events,
-    TimeProvider timeProvider) : ICommandHandler<ReleaseBomVersionCommand, VersionResponse>
+    TimeProvider timeProvider,
+    Approvals.IReleaseApprovalRepository? approvals = null) : ICommandHandler<ReleaseBomVersionCommand, VersionResponse>
 {
     public async Task<VersionResponse> HandleAsync(ReleaseBomVersionCommand command, CancellationToken cancellationToken)
     {
@@ -117,15 +120,39 @@ internal sealed class ReleaseBomVersionHandler(
         var bom = await BomLocks.BomAsync(boms, command.BomId, cancellationToken);
         var draft = await BomLocks.VersionAsync(boms, command.BomId, command.VersionId, command.ExpectedVersion, cancellationToken);
 
+        // Where a site that makes the material asks for approval (#138), the draft is submitted instead.
+        if (approvals is not null)
+        {
+            var (sites, _) = await approvals.MaterialSitesAsync(bom.MaterialId, bom.ProcessId, cancellationToken);
+            await Approvals.ReleaseGate.EnsureDirectReleaseAsync(approvals, Domain.Approvals.ReleaseKinds.Bom, draft.Id, sites, cancellationToken);
+        }
+
+        var version = await new BomReleaser(boms, processes, units, eventLog, events, timeProvider).ReleaseAsync(bom, draft, command.Note, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new VersionResponse(version);
+    }
+}
+
+/// <summary>Releasing a locked BOM draft (D-025), in the caller's transaction: by its own command, or by an approval (#138).</summary>
+internal sealed class BomReleaser(IBomRepository boms, IProcessRepository processes, IUnitRepository units, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+{
+    /// <exception cref="DomainRuleException">What the draft names doesn't let it be released.</exception>
+    public async Task EnsureReleasableAsync(Bom bom, BomVersion draft, CancellationToken cancellationToken)
+    {
         var materials = await boms.GetMaterialsAsync(BomRules.MaterialIds(draft.Definition, bom.MaterialId), cancellationToken);
         var operations = await BomLocks.OperationsAsync(processes, bom, cancellationToken);
         var converterFor = await BomLocks.ConvertersAsync(units, materials, cancellationToken);
-        if (BomRules.ReferenceProblems(draft.Definition, bom, materials, operations, malformedOnly: false, converterFor) is { Count: > 0 } problems)
+        var problems = draft.Definition.ReleaseProblems().Concat(BomRules.ReferenceProblems(draft.Definition, bom, materials, operations, malformedOnly: false, converterFor)).ToList();
+        if (problems.Count > 0)
         {
             throw new DomainRuleException(UserMessage.Join(problems.Select(p => p.Text)));
         }
+    }
 
-        var released = draft.Release(timeProvider.GetUtcNow(), string.IsNullOrWhiteSpace(command.Note) ? null : command.Note.Trim());
+    public async Task<long> ReleaseAsync(Bom bom, BomVersion draft, string? note, CancellationToken cancellationToken)
+    {
+        await EnsureReleasableAsync(bom, draft, cancellationToken);
+        var released = draft.Release(timeProvider.GetUtcNow(), string.IsNullOrWhiteSpace(note) ? null : note.Trim());
         var previous = await boms.GetReleasedForUpdateAsync(bom.Id, cancellationToken);
 
         var envelope = events.Create(
@@ -143,9 +170,51 @@ internal sealed class ReleaseBomVersionHandler(
         var version = await boms.UpdateVersionAsync(released, envelope.OccurredAt, cancellationToken);
         await boms.InsertReleasedRowsAsync(released, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        return version;
+    }
+}
 
-        return new VersionResponse(version);
+/// <summary>A BOM as release approval sees it (#138b): the sites that make its material (and its process's) decide.</summary>
+internal sealed class BomReleasable(
+    IBomRepository boms, IProcessRepository processes, IUnitRepository units, Approvals.IReleaseApprovalRepository approvals, IEventLog eventLog, IEventFactory events,
+    TimeProvider timeProvider) : Approvals.IReleasableDocument
+{
+    private Bom? _bom;
+    private BomVersion? _draft;
+
+    public string Kind => Domain.Approvals.ReleaseKinds.Bom;
+
+    public IReadOnlyList<string> DraftSavedEvents { get; } = [EventTypes.BomDraftSaved];
+
+    public async Task<Approvals.ReleasableDraft> LockAsync(Guid documentId, Guid versionId, long? expectedVersion, CancellationToken cancellationToken)
+    {
+        _bom = await BomLocks.BomAsync(boms, documentId, cancellationToken);
+        var current = await boms.GetVersionForUpdateAsync(documentId, versionId, cancellationToken)
+            ?? throw new NotFoundException($"Version {versionId} of BOM {documentId} not found.");
+        if (expectedVersion is { } expected && current.Version != expected)
+        {
+            throw new ConflictException($"Version {current.Value.Number} was changed by someone else. Reload and try again.");
+        }
+
+        _draft = current.Value;
+        var (sites, code) = await approvals.MaterialSitesAsync(_bom.MaterialId, _bom.ProcessId, cancellationToken);
+        return new Approvals.ReleasableDraft(_bom.Id, _draft.Id, code, _draft.Number, sites);
+    }
+
+    public async Task EnsureReleasableAsync(Approvals.ReleasableDraft draft, CancellationToken cancellationToken)
+    {
+        if (_draft!.Status != BomVersionStatus.Draft)
+        {
+            throw new DomainRuleException($"Version {_draft.Number} of the BOM for {draft.Code} isn't a draft.");
+        }
+
+        await new BomReleaser(boms, processes, units, eventLog, events, timeProvider).EnsureReleasableAsync(_bom!, _draft, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<MessageDto>> ReleaseAsync(Approvals.ReleasableDraft draft, string? note, CancellationToken cancellationToken)
+    {
+        await new BomReleaser(boms, processes, units, eventLog, events, timeProvider).ReleaseAsync(_bom!, _draft!, note, cancellationToken);
+        return [];
     }
 }
 

@@ -1,0 +1,148 @@
+@inject PulaskiApiClient Api
+
+@* Approval before release for a BOM or specification (#138b, D-122): submit the draft where approval is required, the waiting request with
+   its decision for approvers or withdrawal for its submitter, and every request so far. The editor hides its own Release then. *@
+@if (Status is { } status)
+{
+    var pending = status.Requests.FirstOrDefault(r => r.VersionId == VersionId && r.Status == "pending");
+    <ProblemAlert Error="_error" />
+    @if (pending is { } request)
+    {
+        <div class="drawer-alert is-warning mb-3" role="status">
+            <div>
+                <strong>@L["Version {0} waits for approval.", request.VersionNumber]</strong>
+                @L["Submitted {0} by {1}.", Display.SiteTime(request.SubmittedAt, null), request.SubmittedByName ?? "?"]
+                @if (request.Note is { } note)
+                {
+                    <span>“@note”</span>
+                }
+                @if (request.MayDecide)
+                {
+                    <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                        <input class="form-control form-control-sm w-auto flex-grow-1" maxlength="1000" placeholder="@L["Comment (needed)"]" aria-label="@L["Comment"]"
+                               @bind="_comment" @bind:event="oninput" />
+                        <ActionButton Class="btn btn-sm btn-success" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_comment) ? L["Say why first."] : null)"
+                                      OnClick="() => DecideAsync(request, Approve)">@L["Approve and release"]</ActionButton>
+                        <ActionButton Class="btn btn-sm btn-outline-danger" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_comment) ? L["Say why first."] : null)"
+                                      OnClick="() => DecideAsync(request, SendBack)">@L["Send back"]</ActionButton>
+                    </div>
+                }
+                @if (request.MayWithdraw)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" disabled="@_busy" @onclick="() => DecideAsync(request, Withdraw)">@L["Withdraw"]</button>
+                }
+            </div>
+        </div>
+    }
+    else if (status.ApprovalRequired && IsDraft && CanEdit)
+    {
+        <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+            <div class="flex-grow-1" style="max-width: 28rem">
+                <label class="form-label" for="approval-note">@L["Note for the approver"]</label>
+                <input id="approval-note" class="form-control" maxlength="1000" @bind="_note" />
+            </div>
+            <ActionButton Class="btn btn-primary" Busy="_busy"
+                          Reason="@(HasProblems ? L["Fix the items listed below first."] : Dirty ? L["Save the draft first: the version released is the one saved."] : null)"
+                          OnClick="SubmitAsync">@L["Submit version {0} for approval…", VersionNumber]</ActionButton>
+        </div>
+    }
+
+    @if (status.Requests.Count > 0)
+    {
+        <details class="small mb-3">
+            <summary>@L["Approvals ({0})", status.Requests.Count]</summary>
+            <ul class="mb-0">
+                @foreach (var r in status.Requests)
+                {
+                    <li @key="r.Id">
+                        @L["Version {0}: {1}", r.VersionNumber, L.Label(r.Status)] · @L["submitted {0} by {1}", Display.SiteTime(r.SubmittedAt, null), r.SubmittedByName ?? "?"]
+                        @if (r.DecidedAt is { } at)
+                        {
+                            <span> · @L["{0} by {1}", Display.SiteTime(at, null), r.DecidedByName ?? "?"]</span>
+                        }
+                        @if (r.DecisionNote is { } why)
+                        {
+                            <span class="text-muted"> · “@why”</span>
+                        }
+                    </li>
+                }
+            </ul>
+        </details>
+    }
+}
+
+@code {
+    private const string Approve = "approve";
+    private const string SendBack = "return";
+    private const string Withdraw = "withdraw";
+
+    /// <summary><c>bom</c> or <c>spec</c>.</summary>
+    [Parameter, EditorRequired] public string Kind { get; set; } = "";
+
+    [Parameter, EditorRequired] public Guid DocumentId { get; set; }
+
+    [Parameter, EditorRequired] public Guid VersionId { get; set; }
+
+    [Parameter] public int VersionNumber { get; set; }
+
+    /// <summary>The draft's own version, to submit it as saved.</summary>
+    [Parameter] public long VersionToken { get; set; }
+
+    [Parameter] public bool IsDraft { get; set; }
+
+    [Parameter] public bool CanEdit { get; set; }
+
+    [Parameter] public bool Dirty { get; set; }
+
+    [Parameter] public bool HasProblems { get; set; }
+
+    [Parameter] public ReleaseStatusDto? Status { get; set; }
+
+    /// <summary>Something changed (submitted, decided): the editor reloads, saying <c>message</c>.</summary>
+    [Parameter] public EventCallback<string> Changed { get; set; }
+
+    private string? _note;
+    private string? _comment;
+    private bool _busy;
+    private ApiException? _error;
+
+    private async Task SubmitAsync()
+    {
+        await RunAsync(async () =>
+        {
+            await Api.SubmitReleaseAsync(Kind, DocumentId, VersionId, new SubmitReleaseRequest { Version = VersionToken, Note = _note });
+            _note = null;
+            return L["Version {0} submitted for approval", VersionNumber];
+        });
+    }
+
+    private Task DecideAsync(ReleaseRequestDto request, string action) => RunAsync(async () =>
+    {
+        await Api.DecideReleaseAsync(request.Id, action, new DecideReleaseRequest { Comment = _comment });
+        _comment = null;
+        return action switch
+        {
+            Approve => L["Version {0} approved and released", request.VersionNumber],
+            SendBack => L["Version {0} sent back to its editors", request.VersionNumber],
+            _ => L["Version {0} withdrawn: it can be changed again", request.VersionNumber],
+        };
+    });
+
+    private async Task RunAsync(Func<Task<string>> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Changed.InvokeAsync(await action());
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

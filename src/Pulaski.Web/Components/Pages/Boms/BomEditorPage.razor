@@ -220,7 +220,7 @@ else
                 </ul>
             </div>
         }
-        else
+        else if (_release?.ApprovalRequired != true)
         {
             <div class="d-flex flex-wrap gap-2 align-items-end">
                 <div class="flex-grow-1" style="max-width: 28rem">
@@ -238,6 +238,14 @@ else
             @L["A released version never changes; start a new draft to change the BOM."]
         </p>
     }
+
+    @if (_approvalMessage is { } said)
+    {
+        <div class="alert alert-success small" role="status">@said</div>
+    }
+    <ReleaseApprovalPanel Kind="bom" DocumentId="Id" VersionId="_version.Id" VersionNumber="_version.Number" VersionToken="_version.Version"
+                          IsDraft="@(_version.Status == "draft")" CanEdit="CanEdit" Dirty="_dirty" HasProblems="_problems.Count > 0" Status="_release"
+                          Changed="OnApprovalChangedAsync" />
 }
 
 @code {
@@ -268,7 +276,27 @@ else
     // BOMs belong to process engineering (D-037); everyone else sees them as they are.
     private bool CanEdit => User.Can(PermissionCodes.Processes);
 
-    private bool ReadOnly => _version?.Status != "draft" || !CanEdit;
+    // A draft waiting for approval (#138) doesn't change until it is withdrawn or sent back.
+    private bool ReadOnly => _version?.Status != "draft" || !CanEdit || Waiting;
+
+    private ReleaseStatusDto? _release;
+    private string? _approvalMessage;
+
+    // Submitted or decided in the panel (#138): read it all again, the version too (approving releases it).
+    private async Task OnApprovalChangedAsync(string message)
+    {
+        _approvalMessage = message;
+        try
+        {
+            await LoadAsync(_version!.Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private bool Waiting => _version is { } v && _release?.Requests.Any(r => r.VersionId == v.Id && r.Status == "pending") == true;
 
     private bool CanStartDraft => _bom is not null
         && _bom.Versions.All(v => v.Status != "draft")
@@ -310,6 +338,7 @@ else
         _problems = _version.Problems;
         _dirty = false;
         _note = null;
+        _release = await Api.GetReleaseStatusAsync("bom", Id);
     }
 
     private async Task OpenVersionAsync(Guid versionId)

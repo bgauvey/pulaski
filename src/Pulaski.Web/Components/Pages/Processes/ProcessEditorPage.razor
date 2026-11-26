@@ -38,6 +38,32 @@
             @if (!CanEdit)
             {
             }
+            else if (Pending is { } waiting)
+            {
+                <span class="chip chip-warning">@L["Waiting for approval"]</span>
+                @if (waiting.MayWithdraw)
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_busy" @onclick="() => WithdrawAsync(waiting)">@L["Withdraw"]</button>
+                }
+            }
+            else if (IsDraft && _release?.ApprovalRequired == true)
+            {
+                @* Approval is on at the site (#138): the draft is submitted, and someone else approves it. *@
+                @if (_submitting)
+                {
+                    <input class="form-control form-control-sm" placeholder="@L["What changed (optional)"]" aria-label="@L["Note for the approver"]" @bind="_releaseNote" />
+                    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="SubmitAsync">@L["Submit"]</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _submitting = false">@L["Not yet"]</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-primary btn-sm" disabled="@(_problems.Count > 0 || _saving)"
+                            title="@(_problems.Count > 0 ? L["Fix the items listed below first."] : L["This site asks for approval before release: someone else approves it."])"
+                            @onclick="() => _submitting = true">
+                        @L["Submit version {0} for approval…", _version.Number]
+                    </button>
+                }
+            }
             else if (IsDraft)
             {
                 @if (_releasing)
@@ -78,6 +104,51 @@
             </ul>
             <a href="boms">@L["Open BOMs"]</a>
         </div>
+    }
+
+    @if (Pending is { } request)
+    {
+        <div class="process-banner is-todo" role="status">
+            <strong>@L["Version {0} waits for approval.", request.VersionNumber]</strong>
+            @L["Submitted {0} by {1}.", Display.SiteTime(request.SubmittedAt, null), request.SubmittedByName ?? "?"]
+            @if (request.Note is { } note)
+            {
+                <span>“@note”</span>
+            }
+            @if (request.MayDecide)
+            {
+                <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                    <input class="form-control form-control-sm w-auto flex-grow-1" maxlength="1000" placeholder="@L["Comment (needed)"]" aria-label="@L["Comment"]" @bind="_decisionComment" @bind:event="oninput" />
+                    <ActionButton Class="btn btn-sm btn-success" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_decisionComment) ? L["Say why first."] : null)"
+                                  OnClick="() => ApproveAsync(request)">@L["Approve and release"]</ActionButton>
+                    <ActionButton Class="btn btn-sm btn-outline-danger" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_decisionComment) ? L["Say why first."] : null)"
+                                  OnClick="() => SendBackAsync(request)">@L["Send back"]</ActionButton>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_release is { Requests.Count: > 0 } history)
+    {
+        <details class="process-banner">
+            <summary>@L["Approvals ({0})", history.Requests.Count]</summary>
+            <ul class="small mb-0">
+                @foreach (var r in history.Requests)
+                {
+                    <li @key="r.Id">
+                        @L["Version {0}: {1}", r.VersionNumber, L.Label(r.Status)] · @L["submitted {0} by {1}", Display.SiteTime(r.SubmittedAt, null), r.SubmittedByName ?? "?"]
+                        @if (r.DecidedAt is { } at)
+                        {
+                            <span> · @L["{0} by {1}", Display.SiteTime(at, null), r.DecidedByName ?? "?"]</span>
+                        }
+                        @if (r.DecisionNote is { } why)
+                        {
+                            <span class="text-muted"> · “@why”</span>
+                        }
+                    </li>
+                }
+            </ul>
+        </details>
     }
 
     @if (!CanEdit)
@@ -341,7 +412,14 @@ else if (_error is null)
     // Only someone who maintains processes edits a draft (D-037); everyone else sees it as it is.
     private bool CanEdit => User.Can(PermissionCodes.Processes, _process?.SiteId);
 
-    private bool IsDraft => IsDraftVersion && CanEdit;
+    // A draft waiting for approval (#138) doesn't change until it is withdrawn or sent back.
+    private bool IsDraft => IsDraftVersion && CanEdit && Pending is null;
+
+    private ReleaseStatusDto? _release;
+    private string? _decisionComment;
+    private bool _submitting;
+
+    private ReleaseRequestDto? Pending => _version is { } v ? _release?.Requests.FirstOrDefault(r => r.VersionId == v.Id && r.Status == "pending") : null;
 
     private ProcessOperationDto? SelectedOperation => _definition.Operations.FirstOrDefault(o => o.Id == _selectedOp);
 
@@ -423,11 +501,66 @@ else if (_error is null)
             _selectedOp = null;
             _selectedLink = null;
             _releasing = false;
+            _submitting = false;
             _error = null;
+            _release = await Api.GetProcessReleaseStatusAsync(Id);
         }
         catch (ApiException ex)
         {
             _error = ex;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Api.SubmitProcessReleaseAsync(Id, _version!.Id, new SubmitReleaseRequest { Version = _token, Note = _releaseNote });
+            _releaseNote = null;
+            await LoadAsync(_version.Id);
+            _saveMessage = L["Version {0} submitted for approval", _version!.Number];
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task WithdrawAsync(ReleaseRequestDto request) => DecideAsync(request, "withdraw");
+
+    private Task ApproveAsync(ReleaseRequestDto request) => DecideAsync(request, "approve");
+
+    private Task SendBackAsync(ReleaseRequestDto request) => DecideAsync(request, "return");
+
+    // Approve (which releases it), send back, or withdraw the version's waiting request (#138).
+    private async Task DecideAsync(ReleaseRequestDto request, string action)
+    {
+        _busy = true;
+        try
+        {
+            var decided = await Api.DecideReleaseAsync(request.Id, action, new DecideReleaseRequest { Comment = _decisionComment });
+            _decisionComment = null;
+            await LoadAsync(request.VersionId);
+            _releaseWarnings = L.Notes(decided.Notes);
+            _saveMessage = action switch
+            {
+                "approve" => L["Version {0} approved and released", request.VersionNumber],
+                "return" => L["Version {0} sent back to its editors", request.VersionNumber],
+                _ => L["Version {0} withdrawn: it can be changed again", request.VersionNumber],
+            };
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 

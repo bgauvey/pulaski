@@ -40,6 +40,7 @@
 '{0}' isn't a batch rule; use exact or near.
 '{0}' isn't a checklist's phase; use setup or first_article.
 '{0}' isn't a container kind; use {1}.
+'{0}' isn't a kind of document that is released.
 '{0}' isn't a kind of event.
 '{0}' isn't a material type; use {1}.
 '{0}' isn't a meter; use run_hours or counts.
@@ -510,10 +511,17 @@ Any value
 Anything
 Applied
 Applies to
+Approval before release
+Approval is required before release here: submit the draft for approval.
+Approval isn't required for {0}: release it directly.
 Approval note
+Approval settings saved.
+Approvals ({0})
 Approve
 Approve a shift's labor and correct approved labor
+Approve and release
 Approve or reject partial batches (not one's own)
+Approve or send back processes, BOMs and specifications submitted for release
 Approve these limits
 Approved
 Approved by {0}
@@ -685,6 +693,7 @@ Blank: straight into the balance
 Blank: {0} days from today, {1}'s shelf life.
 Blank: {0}-01, -02…
 Blank: {0}-1…
+Bom
 Boolean
 Both parts keep the stop's reason; code each one afterwards.
 Both parts of the split are replaced by the stop they came from, with its reason and coding. Only if neither part was adjusted since.
@@ -986,6 +995,7 @@ Comes with {0}
 Coming
 Comment
 Comment (needed for this reason)
+Comment (needed)
 Comment (optional)
 Comment (required)
 Complete
@@ -1853,6 +1863,7 @@ Keep a translation to {0} characters.
 Keep allocations current
 Keep it
 Keep it to {0} characters.
+Keep the comment to {0} characters.
 Keep the instruction to {0} characters; put the rest in an attached file.
 Keep the note to {0} characters.
 Keep the placeholders {0}, {1}… of the English where they are: they stand for the values shown.
@@ -2544,6 +2555,7 @@ Not yet
 Note
 Note (optional)
 Note (optional), e.g. month end
+Note for the approver
 Note or reason
 Note, e.g. certificate number
 Notes
@@ -2710,6 +2722,7 @@ Only rows with errors
 Only stops of one machine can be merged.
 Only stops to code
 Only the latest {0} are shown.
+Only who submitted it withdraws it; an approver sends it back.
 Only with warnings
 Only {0} hours of usable runs; a rate needs at least {1}.
 Only {0} usable runs; a rate needs at least {1}.
@@ -3155,6 +3168,7 @@ Rejoining the server...
 Release
 Release note
 Release note: {0}
+Release request {0} not found.
 Release version {0}
 Release version {0}…
 Release what is no longer usable, trim what a lot can no longer give, and allocate what is still needed
@@ -3162,6 +3176,7 @@ Released
 Released BOMs using it
 Released, but some BOMs need a new version:
 Released: version {0}
+Releases to approve
 Reload
 Remove
 Remove alternate
@@ -3256,6 +3271,7 @@ Retry
 Retry all failed
 Retry or skip failed deliveries to the ERP
 Retrying
+Returned
 Reverse
 Reverse a movement
 Reverse production reports: their counts, the run's totals and the lots they made
@@ -3356,6 +3372,7 @@ Samples
 Sampling ms
 Save
 Save allocation settings
+Save approval settings
 Save attribute
 Save change
 Save changeovers
@@ -3423,6 +3440,7 @@ Say why the limits are entered by hand.
 Say why the line stopped: a partial batch is an exception.
 Say why the movement is back-dated.
 Say why they are entered by hand.
+Say why, in a comment.
 Say why.
 Say why: the shift is approved already.
 Say why: the shift was approved already.
@@ -3494,6 +3512,7 @@ Select visible ({0})
 Select {0}
 Self
 Send a certificate's file with its event
+Send back
 Send machine data as a Pulaski Edge node: read its configuration and forward what it collects
 Send the link
 Send to this receiver
@@ -3641,11 +3660,13 @@ Someone else changed this draft; showing their version.
 Someone else changed this first; the board now shows their change.
 Someone else started this material's balance at that location at the same moment. Try again.
 Someone other than who answered it gives the second sign-off.
+Someone who didn't edit or submit the draft approves it.
 Something to fix?
 Source
 Sparkplug B, OPC UA or EtherNet/IP.
 Spc alert
 Spc cause
+Spec
 Specification
 Specification version {0}:
 Specification {0} not found.
@@ -3733,6 +3754,9 @@ Storage unit
 Storage zone
 Struck-through rows were replaced or removed by a correction after approval; the hours count the correction. Hours are worked time: breaks are left out.
 Subject
+Submit
+Submit version {0} for approval…
+Submitted {0} by {1}.
 Suggested
 Suggested lot
 Suggestions use the lot that expires first, then the site's preferences (Configure → Site settings), then the oldest; approved alternates on the BOM line come after the component's own lots. They leave out stock that is held, would expire before {0} (when the job needs it) or is allocated to other jobs. Allocated stock is kept for this job: other jobs see it as taken.
@@ -3761,6 +3785,7 @@ Switched off.
 Switched off. It can't be received, ordered or added to BOMs any more; these carry on: {0}.
 Switched off; nothing more is sent for it.
 Switched on again.
+Switched on, a draft is submitted for approval instead of released, and someone else who may approve releases approves it (which releases it) or sends it back, each with a comment. A process follows its own site; a BOM or specification needs approval when any site that can make its material asks for it.
 Switched {0} on again.
 Switched-off roles aren't shown. To add a role or change its name, use
 Switching off people who are missing needs every row to be one external system's person: name the system and give each an external_key.
@@ -3857,6 +3882,7 @@ That process has no operation {0} at this site.
 That proposal has been decided or replaced since. Reload to see the latest.
 That report was reversed already.
 That report was reversed already; report the right figures instead.
+That request is {0} already.
 That role has already been taken away.
 That run has ended: this is recorded late, into it.
 That run isn't one of {0}'s.
@@ -4068,6 +4094,7 @@ The reasons in bold make up the first 80% of the stops. Code stops on the Stops 
 The reasons in bold make up the first 80% of the time. Code stops on the Stops tab to move time out of Uncoded.
 The reasons people choose when they write stock up or off, hold a lot, report scrap or end a run, and the utilization reasons a machine's time is coded with. A code and its kind can't change once created, because history refers to them; switch a reason off instead of reusing it. File reasons under
 The receiver won't get this event. Put it right there by hand first; the later events of the same lot or certificate are sent next.
+The release approval settings were changed by someone else. Reload and try again.
 The released version names operation {0}, which {1}'s released version no longer has,
 The report is reversed and the figures above reported in its place, at its time, in one go: its lots give their quantity back and new lots are made. 
 The request names this stop; maintenance sees it on the Maintenance tab.
@@ -4220,6 +4247,7 @@ This chart has a dispersion chart: give its centre line and upper limit (and a l
 This chart is set up as X̄-R: its standard deviation limits come from the same sigma as its range limits.
 This chart is set up as X̄-S: its range limits come from the same sigma as its standard deviation limits.
 This device is enrolled already; enrolling again replaces that.
+This draft waits for approval; withdraw it to change it.
 This expected receipt
 This is a placeholder, not a job yet.
 This is the last active administrator; make someone else an administrator first.
@@ -4244,6 +4272,7 @@ This run: {0} {1}
 This screen isn't enrolled
 This shift
 This shift:
+This site asks for approval before release: someone else approves it.
 This site uses the default, automatic.
 This site uses the defaults, 110% each.
 This specification already has a draft; change that one.
@@ -4427,6 +4456,7 @@ Vendor and model
 Version
 Version shown
 Version {0}
+Version {0} approved and released
 Version {0} is obsolete; it was released{1} and a newer version has replaced it
 Version {0} is released.
 Version {0} is released: jobs show it.
@@ -4438,14 +4468,22 @@ Version {0} is {1}; start a new draft to have it released.
 Version {0} of BOM {1} not found.
 Version {0} of process {1} not found.
 Version {0} of specification {1} not found.
+Version {0} of the BOM for {1} isn't a draft.
+Version {0} of the specification for {1} isn't a draft.
+Version {0} of {1} isn't a draft.
 Version {0} released
+Version {0} sent back to its editors
+Version {0} submitted for approval
+Version {0} waits for approval.
 Version {0} was applied already.
 Version {0} was changed by someone else. Reload and try again.
 Version {0} was released{1}
+Version {0} withdrawn: it can be changed again
 Version {0} · {1}
 Version {0} · {1} characteristics
 Version {0} · {1} components
 Version {0}, {1}
+Version {0}: {1}
 Versions
 View
 Viewing
@@ -4454,6 +4492,7 @@ Waited
 Waiting
 Waiting external
 Waiting for a line
+Waiting for approval
 Waiting for its request
 Waiting for review
 Waiting for sign-off
@@ -4660,6 +4699,7 @@ You have no Pulaski user, so only your time can be recorded here. Ask a supervis
 You have no Pulaski user, so the station can't run jobs or record production for you. Ask a supervisor to link your badge to a user.
 You have no e-mail address in Pulaski, so your alerts can't reach you. Ask an administrator to add it on Configure → Users.
 You may not back-date movements at this site: it needs permission to back-date inventory movements.
+You may not decide releases at the sites that asked for this approval.
 You may not do this at this site: it needs the permission “{0}”.
 You may not do this: it needs the permission “{0}”.
 You may not see this at this site: it needs the permission “{0}”.
@@ -4667,6 +4707,7 @@ You may not see this: it needs the permission “{0}”.
 You reported it: someone else decides
 You reported this partial batch, so someone else must approve or reject it.
 You signed in with a temporary password. Choose your own before you carry on.
+You submitted it: withdraw it instead.
 You're on the {0} call on {1}.
 You're on the {0} call.
 Your PIN
@@ -4971,6 +5012,7 @@ status change
 stock
 stopped for {0}, {1} ago
 stopped {0} ago, still stopped
+submitted {0} by {1}
 substitution
 such as Grease the gearbox
 supplier lot {0}
@@ -5075,6 +5117,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} belongs to another site; {1} can only follow its own site's schedules.
 {0} by day
 {0} by shift
+{0} by {1}
 {0} by {1}{2}
 {0} calls are switched off at this site.
 {0} can now sign in as {1} with the temporary password.

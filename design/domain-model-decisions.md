@@ -3330,6 +3330,29 @@ table of the data plotted (open, newest first). Computed on read; no schema chan
   due or overdue, on boards.
 - **Pieces:** (a) plans, the calculation, the job page and the Floor; (b) the operator station prompting and recording them, and line boards.
 
+### D-122 · Approval before release (#138) · *Proposed, in pieces*
+
+**Context.** Processes, BOMs and specifications were released by whoever may edit them; no second person looked.
+
+**Decision.**
+- **Per site, per kind** (`core.release_approval_settings`: processes, BOMs, specifications), on Configure → Site settings (`site_settings.manage`).
+  A process follows its site; a BOM or specification belongs to a material shared by every site, so it needs approval when **any site that
+  can make the material** (a line there with a capability for it) asks.
+- **Submit, then approve** (user's choice): `SubmitReleaseCommand` checks the draft would release and records `core.release_request`
+  (`pending`, the requiring sites); the draft then doesn't change (`ReleaseGate.EnsureEditableAsync` in the draft save) and isn't released
+  directly (`EnsureDirectReleaseAsync` in the release command, also refused wherever approval is on). `ApproveReleaseCommand`: someone else
+  holding `releases.approve` (new; Quality and Process engineer; implies the views) at one of the request's sites, not its submitter and not one
+  of the draft's editors (actors of its draft-saved events naming the version), with a comment; it releases the version through the kind's own
+  release (`IReleasableDocument`: lock document then draft, check, release, in the caller's transaction). `ReturnReleaseCommand` (comment) makes
+  it a draft again; `WithdrawReleaseCommand` by its submitter. Events `pulaski.release.submitted/approved/returned/withdrawn.v1` on the
+  document, `pulaski.site.release_approval_changed.v1`. Waiting requests are Inbox kind `release`. Migration 0083.
+- **BOMs and specifications (b).** `BomReleasable` / `SpecReleasable` (the releases moved into `BomReleaser` / `SpecReleaser`, shared with
+  their own commands); the deciding sites are those with a capability for the material now, and a BOM's process's site
+  (`MaterialSitesAsync`). Their editors show `ReleaseApprovalPanel` (submit, waiting with decide/withdraw, history) and hide Release where
+  approval is required. `/api/boms/{id}/…/submit`, `/release-status` and `/api/quality/specs/{id}/…` with the permissions their releases need.
+- **Pieces:** (a) settings, permission, requests, processes (editor: Submit, waiting, Approve and release / Send back, history); (b) BOMs
+  and specifications.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

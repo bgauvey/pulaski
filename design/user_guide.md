@@ -517,6 +517,21 @@ While the draft has problems, a yellow box lists them (click one to select the o
 
 The released version is what new orders are made from. It can never be changed.
 
+### Release with approval
+
+Where the site asks for approval before release ([Approval before release](#approval-before-release)), a draft isn't released by whoever
+edits it: someone else approves it.
+
+1. Click **Submit version 1 for approval…**, optionally type what changed, and click **Submit**. The draft now **waits for approval** and
+   can't be changed; it shows in the [Inbox](#your-inbox) of those who may approve releases at the site.
+2. Someone who didn't edit or submit the draft opens it (from the Inbox), types a **Comment** and clicks **Approve and release**, which
+   releases it, or **Send back**, which makes it a draft again for its editors.
+3. Whoever submitted it may **Withdraw** it while it waits, to change it.
+
+**Approvals** on the process's page lists every request: the version, what became of it, who submitted it and when, who decided and why.
+Approving needs *Approve or send back processes, BOMs and specifications submitted for release* at the site (Quality and Process engineer
+to start with).
+
 ### Change a released process
 
 1. Open the process. If there is no draft, click **Change: start version 2** (the number follows on). This copies the released version into a new draft.
@@ -690,6 +705,11 @@ There can be one BOM per material and process, plus one for any process.
 ### Release it
 
 When the draft is saved and has no problems, type an optional **Release note** and click **Release version N**. From then on, new orders for that material (with that process) plan their components from it.
+
+Where approval is required ([Approval before release](#approval-before-release): any site that can make the material, or the BOM's
+process's site, asks for it), **Release version N** gives way to **Submit version N for approval…**, as for
+[processes](#release-with-approval): the draft waits, someone else approves it (which releases it) or sends it back, and **Approvals** lists
+every request.
 
 ### Change it
 
@@ -2080,7 +2100,9 @@ from the [process values](#process-values) its tag sends, instead of by hand.
    every** so many **hours** or **units of output** (in the job's unit), and the minutes after which a due sample is **overdue** (15 to start
    with). Leave both empty for no plan.
 6. Click **Save draft**. A yellow box lists anything that stops the release, and the lines concerned are highlighted.
-7. Type an optional **Release note** and click **Release version N**.
+7. Type an optional **Release note** and click **Release version N**. Where approval is required (any site that can make the material asks
+   for it, under [Approval before release](#approval-before-release)), click **Submit version N for approval…** instead; someone else approves
+   it, which releases it, or sends it back, as for [processes](#release-with-approval).
 
 To change it later, click **New draft**: it starts as a copy of the released version.
 
@@ -2586,10 +2608,10 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 | **Planner** | The schedule (place, sequence, pin, assign and cancel jobs, and replace one with a partial batch); work orders (create, dispatch, un-dispatch, firm, cancel, close); planning rates; changeover rules; materials; allocating lots to jobs. |
 | **Supervisor** | Start, pause, complete and reopen jobs; report production and reverse reports; record and approve labor; code machine stops, and enter, split and merge them; receive, move, ship, hold and release lots; allocate lots to jobs; stock counts; approve or reject partial batches; record quality results; request maintenance and start and close requests; give checklists their second sign-off. |
 | **Operator** | Start, pause and complete jobs; report production; code machine stops; receive and move lots; clock themselves on and off; record quality results; request maintenance. |
-| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality; write and release work instructions; give checklists their second sign-off. |
+| **Quality** | Hold and release lots; correct inventory (write up, write off, correct, reverse, split, merge); allocate lots to jobs; approve or reject partial batches; record lot attributes and certificates; maintain lot attribute definitions; back-date inventory movements; maintain characteristics and specifications; record quality results, leave them out and reject lots on quality; write and release work instructions; give checklists their second sign-off; approve releases. |
 | **Manager** | Reopen jobs; cancel and close work orders; approve labor; reason codes; shift schedules; people and crews; shop-floor terminals; lot attribute definitions; the site's settings. |
 | **Auditor** | Correct inventory, including reversing consumption, splits, merges and transfers; reverse production reports; stock counts; back-date inventory movements. Can't plan or run jobs. |
-| **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, characteristics and specifications, and work instructions. |
+| **Process engineer** | Processes, BOMs, which lines can run each material, changeover rules, characteristics and specifications, and work instructions; approve releases. |
 | **Maintenance** | Start and close maintenance requests, and raise them; code machine stops; answer andon calls; write handover notes. |
 | **Edge node** | Nothing on screen: it is for the user a Pulaski Edge node signs in as, to read its configuration and forward machine data. |
 
@@ -3041,6 +3063,18 @@ In detail:
 4. Scan or type a sample under **Try it on a scan** and click **Try** to see what it reads. Click **Save format**.
 
 Formats are tried in their **Order**, after GS1; the whole scan must match.
+
+### Approval before release
+
+**Approval before release** asks for a second person's approval before a draft is released, for each kind of document: **Processes**,
+**BOMs**, **Specifications**. Tick the kinds and click **Save approval settings**.
+
+- A process follows its own site's setting. A BOM or specification needs approval when any site that can make its material asks for it: a
+  site with a line that has a capability for the material, or (for a BOM made for a process) the process's site. An approver may decide it
+  if they may approve releases at any one of those sites.
+- Turning it on doesn't affect what is released already. A draft that waits when it is turned off still waits until it is decided or
+  withdrawn; after that, drafts are released directly again.
+- Changing it needs permission to manage the site's settings.
 
 ### Choose who places changeovers
 
@@ -3501,6 +3535,9 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Maintenance requests** are started and closed on the Machines page only, not at the operator station, and no e-mail alert says one is
   waiting. A CMMS link is a feed and a signed answer, not an adapter for a particular CMMS's own API. Preventive plans count only run hours
   and machine counts, not days on the calendar.
+- **Approval before release:** nothing is e-mailed about a draft waiting for approval (it is in the Inbox). A BOM's or specification's need for
+  approval follows the sites that can make its material now; a capability added later doesn't affect a request already waiting. Work
+  instructions are released directly.
 - **Sampling plans** show on the job page, the Floor, operator stations and line boards; nothing is e-mailed about an overdue sample, and a
   sample recorded at a station can't be tied to a lot there (use the Quality page). A unit-based plan counts reported output, not machine counts.
 - **Work instructions** show on the job page and at the station, not on the Floor's board or line boards. At a station only the running job's

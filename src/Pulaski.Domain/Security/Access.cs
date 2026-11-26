@@ -49,6 +49,9 @@ public static class Permissions
     public const string QualityRecord = "quality.record";
     public const string QualityDecide = "quality.decide";
 
+    /// <summary>Approve or send back drafts submitted for release where a site asks for approval (#138).</summary>
+    public const string ReleaseApprove = "releases.approve";
+
     /// <summary>See how Pulaski is running (#141): edge nodes, deliveries, connections, background services, the database.</summary>
     public const string SystemView = "system.view";
 
@@ -129,6 +132,7 @@ public static class Permissions
         new(MaintenanceWork, Term.Mark("Floor"), Term.Mark("Work maintenance requests: start them and close them with what was done")),
         new(QualityRecord, Term.Mark("Quality"), Term.Mark("Record quality results against runs and lots")),
         new(QualityDecide, Term.Mark("Quality"), Term.Mark("Exclude quality results and reject held lots on quality")),
+        new(ReleaseApprove, Term.Mark("Configuration"), Term.Mark("Approve or send back processes, BOMs and specifications submitted for release")),
         new(ChecklistSignOff, Term.Mark("Quality"), Term.Mark("Give setup and first-article checklists their second sign-off, or reject them")),
         new(LotReceive, Term.Mark("Inventory"), Term.Mark("Receive lots")),
         new(LotMove, Term.Mark("Inventory"), Term.Mark("Move lots between locations")),
@@ -226,6 +230,8 @@ public static class Permissions
         // Specifications belong to materials.
         [Specs] = [QualityView, MaterialsView],
         [Instructions] = [InstructionsView],
+        // Approvers read what they approve.
+        [ReleaseApprove] = [ProcessesView, MaterialsView, QualityView],
         // Checklists are signed off at the job.
         [ChecklistSignOff] = [FloorView, InstructionsView],
     };
@@ -286,7 +292,7 @@ public static class Roles
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
              Permissions.InventoryBackdate, Permissions.LotAllocate, Permissions.QualityView, Permissions.QualityRecord, Permissions.QualityDecide,
              Permissions.Specs, Permissions.AndonRespond, Permissions.Handover, Permissions.InstructionsView, Permissions.Instructions,
-             Permissions.ChecklistSignOff],
+             Permissions.ChecklistSignOff, Permissions.ReleaseApprove],
             "Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality, answers andon calls."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,
@@ -297,7 +303,7 @@ public static class Roles
             "Views everything, corrects inventory and reverses production reports; counts stock. Doesn't plan or run jobs."),
         new(ProcessEngineer, "Process engineer", false,
             [Permissions.EquipmentView, Permissions.MaterialsView, Permissions.ProcessesView, Permissions.UnitsView, Permissions.Processes, Permissions.Changeovers,
-             Permissions.QualityView, Permissions.Specs, Permissions.InstructionsView, Permissions.Instructions],
+             Permissions.QualityView, Permissions.Specs, Permissions.InstructionsView, Permissions.Instructions, Permissions.ReleaseApprove],
             "Maintains processes, BOMs, capabilities, changeover times and specifications. Sees equipment, materials, units and the schedule."),
         new(Maintenance, "Maintenance", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.MachinesView, Permissions.EquipmentView, Permissions.DowntimeCode,

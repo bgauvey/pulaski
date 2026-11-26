@@ -271,6 +271,13 @@ public static class EventTypes
 
     /// <summary>A checklist's second sign-off given or refused (#126d); subject the job.</summary>
     public const string ChecklistSignedOff = "pulaski.job.checklist_signed_off.v1";
+
+    /// <summary>Release approval (#138, D-122): a site's settings changed; a draft submitted, approved (and released), returned or withdrawn.</summary>
+    public const string ReleaseApprovalSettingsChanged = "pulaski.site.release_approval_changed.v1";
+    public const string ReleaseSubmitted = "pulaski.release.submitted.v1";
+    public const string ReleaseApproved = "pulaski.release.approved.v1";
+    public const string ReleaseReturned = "pulaski.release.returned.v1";
+    public const string ReleaseWithdrawn = "pulaski.release.withdrawn.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";

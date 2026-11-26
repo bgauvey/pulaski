@@ -1797,6 +1797,32 @@ One row per operation, material or line (`work_instruction_target_shape_ck` keep
 | `is_active` | boolean | no | Ended rather than deleted. |
 | `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
 
+### core.release_approval_settings — approval before release (#138, D-122) · *In use*
+
+Per site: which kinds of document need a second person's approval to be released. A site without a row needs none.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `site_id` | uuid → equipment | no | Primary key: the site. |
+| `processes`, `boms`, `specs` | boolean | no | Whether its processes, BOMs and specifications (of materials it can make) need approval. |
+| `updated_at` | timestamptz | no | Row timestamp. |
+
+### core.release_request — drafts submitted for release (#138, D-122) · *In use*
+
+A draft submitted where approval is required. While `pending` the draft doesn't change and can't be released directly; approving releases
+it. One pending per version (`release_request_pending_uq`); decided requests are kept.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `kind` | text | no | `process`, `bom` or `spec`. |
+| `document_id`, `version_id` | uuid | no | The process, BOM or specification and its version (no FK: by kind). |
+| `site_ids` | uuid[] | no | The sites whose setting asked for approval; an approver holds `releases.approve` at one of them. |
+| `status` | text | no | `pending`, `approved` (released), `returned` (a draft again) or `withdrawn` (by its submitter). |
+| `submitted_by`, `submitted_at`, `note` | text, timestamptz, text | | Who submitted it, when, and what changed. |
+| `decided_by`, `decided_at`, `decision_note` | text, timestamptz, text | yes | Who decided it and why (a comment is required to approve or return); set exactly when not pending. |
+| `created_at` | timestamptz | no | Row timestamp. |
+
 ### core.checklist_response — checklists answered (#126c, D-116) · *In use*
 
 A job's setup or first-article checklist answered on a line. A failed one is kept and doesn't count; a start (setup) or a report (both) needs
