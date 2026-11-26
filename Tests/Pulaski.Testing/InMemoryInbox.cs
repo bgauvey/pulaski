@@ -15,4 +15,11 @@ public sealed class InMemoryInbox : IInboxReadStore
 
     public Task<IReadOnlyList<InboxItemDto>> ListAsync(string kind, IReadOnlyCollection<Guid> siteIds, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<InboxItemDto>>([.. Items.Where(i => i.Kind == kind && siteIds.Contains(i.SiteId))]);
+
+    /// <summary>NCR actions (#133b): whose they are and whether they are overdue.</summary>
+    public List<(Guid? OwnerId, bool Overdue, InboxItemDto Item)> NcrActions { get; } = [];
+
+    public Task<IReadOnlyList<InboxItemDto>> ListNcrActionsAsync(Guid userId, IReadOnlyCollection<Guid> manageSiteIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<InboxItemDto>>(
+            [.. NcrActions.Where(a => a.OwnerId == userId || (a.Overdue && manageSiteIds.Contains(a.Item.SiteId))).Select(a => a.Item)]);
 }

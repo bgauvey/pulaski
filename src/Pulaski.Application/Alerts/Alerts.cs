@@ -334,6 +334,14 @@ public static class AlertMessages
                     $"Job {alert.Note} on {alert.EquipmentCode} at {alert.SiteCode} needs {alert.What} from {Time(alert.Start)}, and {alert.Item} of it isn't covered by stock or supply due by then.",
                 },
                 "inventory/shortages"),
+            AlertKind.NcrActionOverdue => (
+                $"NCR action overdue: {alert.What}",
+                new[]
+                {
+                    $"An action of {alert.Note} at {alert.SiteCode} was due by {Time(alert.Start)} and isn't done: {alert.What}.",
+                    alert.Item is { } owner ? $"Owner: {owner}." : "It has no owner.",
+                },
+                alert.ItemId is { } ncr ? $"quality/ncrs/{ncr}" : "quality/ncrs"),
             _ => throw new ArgumentOutOfRangeException(nameof(alert), alert.Kind, "Not an alert that is sent."),
         };
 

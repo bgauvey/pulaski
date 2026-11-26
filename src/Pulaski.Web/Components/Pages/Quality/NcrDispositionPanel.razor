@@ -1,0 +1,125 @@
+@using Pulaski.Web.Services.Quality
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* Carrying out a closed NCR's disposition on its lots (#133b), one lot at a time through the lot's own commands, each noted with the NCR:
+   release what is used as is, hold and then write off what is scrapped, hold what is reworked or returned (rework and returns are then done
+   as usual). *@
+<div class="table-panel mt-2">
+    <table class="table table-sm align-middle small mb-0">
+        <thead><tr><th>@L["Lot"]</th><th class="inv-num">@L["On hand"]</th><th>@L["Status"]</th><th>@L["To do"]</th></tr></thead>
+        <tbody>
+            @foreach (var lot in Ncr.Lots)
+            {
+                var step = NcrView.NextStep(Ncr.Disposition, lot.Status, lot.Quantity);
+                <tr @key="lot.LotId">
+                    <td><ScreenLink Href="@($"inventory/lots/{lot.LotId}")" Permission="@PermissionCodes.InventoryView">@lot.Label</ScreenLink> · @lot.MaterialCode</td>
+                    <td class="inv-num">@lot.Quantity.ToString("0.###", System.Globalization.CultureInfo.CurrentCulture) @lot.UomCode</td>
+                    <td>@L.Label(lot.Status)</td>
+                    <td>
+                        @switch (step)
+                        {
+                            case "release" when User.Can(PermissionCodes.LotHold, Ncr.SiteId):
+                                <ActionButton Class="btn btn-sm btn-outline-primary" Busy="_busy" OnClick="() => ReleaseAsync(lot)">@L["Release it"]</ActionButton>
+                                break;
+                            case "hold" when User.Can(PermissionCodes.LotHold, Ncr.SiteId):
+                                <div class="d-flex gap-2">
+                                    <select class="form-select form-select-sm w-auto" aria-label="@L["Hold reason"]" @bind="_holdReason">
+                                        <option value="@Guid.Empty">@L["Hold reason…"]</option>
+                                        @foreach (var r in _holdReasons)
+                                        {
+                                            <option value="@r.Id">@Display.ReasonLabel(r)</option>
+                                        }
+                                    </select>
+                                    <ActionButton Class="btn btn-sm btn-outline-primary" Busy="_busy" Reason="@(_holdReason == Guid.Empty ? L["Choose a hold reason."] : null)"
+                                                  OnClick="() => HoldAsync(lot)">@L["Hold it"]</ActionButton>
+                                </div>
+                                break;
+                            case "reject" when User.Can(PermissionCodes.QualityDecide, Ncr.SiteId):
+                                <div class="d-flex gap-2">
+                                    <select class="form-select form-select-sm w-auto" aria-label="@L["Scrap reason"]" @bind="_scrapReason">
+                                        <option value="@Guid.Empty">@L["Scrap reason…"]</option>
+                                        @foreach (var r in _scrapReasons)
+                                        {
+                                            <option value="@r.Id">@Display.ReasonLabel(r)</option>
+                                        }
+                                    </select>
+                                    <ActionButton Class="btn btn-sm btn-outline-danger" Busy="_busy" Reason="@(_scrapReason == Guid.Empty ? L["Choose a scrap reason."] : null)"
+                                                  OnClick="() => RejectAsync(lot)">@L["Write it off"]</ActionButton>
+                                </div>
+                                break;
+                            case null:
+                                <span class="text-muted">@Done(lot)</span>
+                                break;
+                            default:
+                                <span class="text-muted">@L["Needs someone who may hold, release or reject lots."]</span>
+                                break;
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+<ProblemAlert Error="_error" />
+
+@code {
+    [Parameter, EditorRequired] public NcrDto Ncr { get; set; } = default!;
+
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private IReadOnlyList<ReasonCodeDto> _holdReasons = [];
+    private IReadOnlyList<ReasonCodeDto> _scrapReasons = [];
+    private Guid _holdReason;
+    private Guid _scrapReason;
+    private bool _busy;
+    private ApiException? _error;
+
+    private string Comment => $"{Ncr.Number}: {L.Label(Ncr.Disposition ?? "")}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _holdReasons = await Api.ListReasonCodesAsync("hold", Ncr.SiteId);
+            _scrapReasons = await Api.ListReasonCodesAsync("scrap", Ncr.SiteId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private string Done(NcrLotDto lot) => lot.Quantity <= 0 || lot.Status is not ("available" or "on_hold" or "quarantine")
+        ? L["Nothing left to do: it has no stock."]
+        : Ncr.Disposition is "rework" or "return_to_supplier" ? L["Held: rework or return it, then release, write off or ship it as usual."]
+        : L["Nothing to do."];
+
+    private Task ReleaseAsync(NcrLotDto lot) =>
+        RunAsync(() => Api.ChangeLotStatusAsync(lot.LotId, new ChangeLotStatusRequest { Version = lot.Version, Status = "available", Comment = Comment }));
+
+    private Task HoldAsync(NcrLotDto lot) =>
+        RunAsync(() => Api.ChangeLotStatusAsync(lot.LotId, new ChangeLotStatusRequest { Version = lot.Version, Status = "on_hold", ReasonCodeId = _holdReason, Comment = Comment }));
+
+    private Task RejectAsync(NcrLotDto lot) =>
+        RunAsync(() => Api.RejectLotAsync(lot.LotId, new RejectLotRequest { Version = lot.Version, ScrapReasonCodeId = _scrapReason, Comment = Comment }));
+
+    private async Task RunAsync(Func<Task<LotTransactionResponse>> work)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await work();
+            await Changed.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

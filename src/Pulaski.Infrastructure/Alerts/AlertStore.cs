@@ -92,7 +92,7 @@ internal sealed class AlertQueries(NpgsqlDataSource dataSource) : IAlertReadStor
             FROM core.alert_subscription s
             JOIN sec.app_user u ON u.id = s.user_id AND u.is_active AND coalesce(u.email, '') <> ''
             JOIN core.equipment site ON site.id = s.site_id
-            WHERE s.is_active AND s.kind IN ('long_stop', 'uncoded_stop', 'andon_escalated', 'spc_alert', 'lot_hold')
+            WHERE s.is_active AND s.kind IN ('long_stop', 'uncoded_stop', 'andon_escalated', 'spc_alert', 'lot_hold', 'ncr_action_overdue')
         )
         -- A stop that reached the minutes, still going or not.
         SELECT s.id AS subscription_id, s.kind, s.minutes, d.id AS subject_id, s.user_id, s.idp_issuer AS issuer, s.idp_subject AS subject, s.email,
@@ -164,6 +164,18 @@ internal sealed class AlertQueries(NpgsqlDataSource dataSource) : IAlertReadStor
           AND (s.equipment_id IS NULL OR lot.location_equipment_id = s.equipment_id
                OR lot.location_equipment_id IN (SELECT descendant_id FROM core.equipment_closure WHERE ancestor_id = s.equipment_id))
           AND NOT EXISTS (SELECT 1 FROM core.alert_sent x WHERE x.subscription_id = s.id AND x.subject_id = ev.id)
+        UNION ALL
+        -- An NCR action still open when its due day ended (#133b), at the site's midnight; whole-site subscriptions only.
+        SELECT s.id, s.kind, s.minutes, a.id, s.user_id, s.idp_issuer, s.idp_subject, s.email, s.display_name, s.site_id, s.site_code, s.time_zone,
+               NULL, a.description, n.number || ' ' || n.title, due.at, NULL, o.display_name, n.id
+        FROM subs s
+        JOIN core.nonconformance n ON n.site_id = s.site_id AND n.status <> 'closed'
+        JOIN core.nonconformance_action a ON a.ncr_id = n.id AND a.status = 'open' AND a.due_on IS NOT NULL
+        LEFT JOIN sec.app_user o ON o.id = a.owner_user_id
+        CROSS JOIN LATERAL (SELECT ((a.due_on + 1)::timestamp AT TIME ZONE coalesce(s.time_zone, 'UTC')) AS at) due
+        WHERE s.kind = 'ncr_action_overdue' AND s.equipment_id IS NULL
+          AND due.at BETWEEN greatest(@Since, s.created_at) AND @Now
+          AND NOT EXISTS (SELECT 1 FROM core.alert_sent x WHERE x.subscription_id = s.id AND x.subject_id = a.id)
         """;
 
     private const string SubscribersSql = """

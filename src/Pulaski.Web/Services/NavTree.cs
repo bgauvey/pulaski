@@ -39,7 +39,9 @@ public static class NavTree
                 ]),
             One(new("machines", "gauge", Term.Mark("Machines"), Term.Mark("Machines: live state and stops to code"), PermissionCodes.MachinesView)),
             One(new("inventory", "lot", Term.Mark("Inventory"), Term.Mark("Inventory"), PermissionCodes.InventoryView)),
-            One(new("quality/results", "spc", Term.Mark("Quality"), Term.Mark("Quality results: record and review what was measured or inspected"), PermissionCodes.QualityView)),
+            Group("quality", new("quality/results", "spc", Term.Mark("Quality"), Term.Mark("Quality results: record and review what was measured or inspected"), PermissionCodes.QualityView), [
+                new("quality/ncrs", "alert", Term.Mark("Nonconformances"), Term.Mark("Nonconformance reports: root cause, actions and disposition"), PermissionCodes.QualityView),
+                ]),
             One(new("labor", "users", Term.Mark("Labor"), Term.Mark("Labor: who is on, shift review and reports"), PermissionCodes.LaborView)),
         ]),
         new(Term.Mark("Configure"),

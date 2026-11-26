@@ -175,7 +175,7 @@
             <h2 id="checklists-title">@L["Checklists answered"]</h2>
             <div class="table-panel">
                 <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>@L["Run"]</th><th>@L["Checklist"]</th><th>@L["Outcome"]</th><th>@L["Answered"]</th><th>@L["Second sign-off"]</th></tr></thead>
+                    <thead><tr><th>@L["Run"]</th><th>@L["Checklist"]</th><th>@L["Outcome"]</th><th>@L["Answered"]</th><th>@L["Second sign-off"]</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var r in _checklistHistory)
                         {
@@ -213,7 +213,22 @@
                                         <span>—</span>
                                     }
                                 </td>
+                                <td class="text-end">
+                                    @if ((r.Result == "failed" || r.SignOff == "rejected") && May(PermissionCodes.NcrRaise))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => RaiseFrom(r.Id)">@L["Raise an NCR"]</button>
+                                    }
+                                </td>
                             </tr>
+                            @if (_ncrFrom == r.Id)
+                            {
+                                <tr @key="@($"{r.Id}-ncr")">
+                                    <td colspan="6">
+                                        <Pulaski.Web.Components.Pages.Quality.RaiseNcrForm SiteId="job.SiteId" SourceKind="checklist" SourceId="r.Id"
+                                                      Title="@L["{0} of job {1} not passed", Services.Instructions.ChecklistView.Title(L, r.Phase), job.JobNumber]" Cancelled="() => _ncrFrom = null" />
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
@@ -349,7 +364,7 @@
         {
             <div class="table-panel">
                 <table class="table table-sm align-middle">
-                    <thead><tr><th>@L["Run"]</th><th>@L["Line"]</th><th>@L["Started"]</th><th>@L["Ended"]</th><th>@L["Length"]</th><th class="inv-num">@L["Good"]</th><th class="inv-num">@L["Scrap"]</th><th class="inv-num">@L["Cap"]</th><th>@L["Why it ended"]</th></tr></thead>
+                    <thead><tr><th>@L["Run"]</th><th>@L["Line"]</th><th>@L["Started"]</th><th>@L["Ended"]</th><th>@L["Length"]</th><th class="inv-num">@L["Good"]</th><th class="inv-num">@L["Scrap"]</th><th class="inv-num">@L["Cap"]</th><th>@L["Why it ended"]</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var r in job.Runs)
                         {
@@ -363,7 +378,22 @@
                                 <td class="inv-num">@FloorView.Qty(r.ScrapQty)</td>
                                 <td class="inv-num">@FloorView.Qty(r.CapQty)</td>
                                 <td class="small">@(r.EndReason ?? (r.EndedAt is null ? "" : "—"))</td>
+                                <td class="text-end">
+                                    @if (May(PermissionCodes.NcrRaise))
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link p-0" @onclick="() => RaiseFrom(r.Id)">@L["Raise an NCR"]</button>
+                                    }
+                                </td>
                             </tr>
+                            @if (_ncrFrom == r.Id)
+                            {
+                                <tr @key="@($"{r.Id}-ncr")">
+                                    <td colspan="10">
+                                        <Pulaski.Web.Components.Pages.Quality.RaiseNcrForm SiteId="job.SiteId" SourceKind="run" SourceId="r.Id"
+                                                      Title="@L["Job {0}, run {1} on {2}", job.JobNumber, r.RunNo, r.LineCode]" Cancelled="() => _ncrFrom = null" />
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
@@ -508,6 +538,11 @@ else if (_error is null)
 
     private readonly Dictionary<(Guid, string), Dictionary<int, string?>> _answers = [];
     private IReadOnlyList<ChecklistRecordDto> _checklistHistory = [];
+
+    // The run or checklist answer an NCR is being raised from (#133b).
+    private Guid? _ncrFrom;
+
+    private void RaiseFrom(Guid source) => _ncrFrom = source;
     private IReadOnlyList<DueSampleDto> _samples = [];
     private string? _signOffNote;
 

@@ -1,0 +1,416 @@
+@page "/quality/ncrs/{Id:guid}"
+@attribute [RequiresView(PermissionCodes.QualityView, PermissionCodes.InventoryView)]
+@using Pulaski.Web.Services.Quality
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+<PageTitle>@(_ncr?.Number ?? L["Nonconformance"]) · Pulaski</PageTitle>
+
+@* One nonconformance report (#133, D-124): what was found and where it came from, the lots and runs it touches, the investigation (root cause and
+   up to five whys), corrective and preventive actions with owners and due days, and its close with a disposition. *@
+<p class="mb-2"><ScreenLink Href="quality/ncrs" Permission="@PermissionCodes.QualityView">← @L["Nonconformances"]</ScreenLink></p>
+<ProblemAlert Error="_error" />
+@if (_message is { } message)
+{
+    <div class="alert alert-success small" role="status">@message</div>
+}
+
+@if (_ncr is { } n)
+{
+    var manage = !n.Status.Equals("closed") && User.Can(PermissionCodes.NcrManage, n.SiteId);
+    <div class="inv-head">
+        <div>
+            <h1 class="mb-1">@n.Number · @n.Title</h1>
+            <p class="mb-0">
+                <span class="@NcrView.SeverityChip(n.Severity)">@L.Label(n.Severity)</span>
+                <span class="@NcrView.StatusChip(n.Status)">@L.Label(n.Status)</span>
+                <span class="small text-muted ms-2">@L["Raised {0} by {1}, from: {2}.", Display.SiteTime(n.RaisedAt, n.SiteTimeZone), n.RaisedByName ?? "—", L.Label(n.SourceKind)]</span>
+            </p>
+        </div>
+        @if (manage && !_editing)
+        {
+            <div class="inv-head-tools"><button type="button" class="btn btn-sm btn-outline-secondary" @onclick="StartEdit">@L["Edit"]</button></div>
+        }
+    </div>
+    <ViewOnlyNote Permission="@PermissionCodes.NcrManage" What="@L["work NCRs"]" SiteId="n.SiteId" />
+
+    @if (_editing)
+    {
+        <form class="inv-facts mb-3" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <div class="row g-2">
+                <div class="col-md-8">
+                    <label class="form-label small fw-semibold" for="ncr-edit-title">@L["What was found"]</label>
+                    <input id="ncr-edit-title" class="form-control form-control-sm" maxlength="200" @bind="_title" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold" for="ncr-edit-severity">@L["Severity"]</label>
+                    <select id="ncr-edit-severity" class="form-select form-select-sm" @bind="_severity">
+                        @foreach (var s in NcrView.Severities)
+                        {
+                            <option value="@s">@L.Label(s)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-semibold" for="ncr-edit-description">@L["Description"]</label>
+                    <textarea id="ncr-edit-description" class="form-control form-control-sm" rows="3" maxlength="4000" @bind="_description"></textarea>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold" for="ncr-edit-owner">@L["Owner"]</label>
+                    @OwnerSelect("ncr-edit-owner", _owner, v => _owner = v)
+                </div>
+            </div>
+            <div class="form-actions mt-2">
+                <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy">@L["Save"]</ActionButton>
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => _editing = false">@L["Cancel"]</button>
+            </div>
+        </form>
+    }
+    else
+    {
+        <section class="inv-facts mb-3" aria-label="@L["What was found"]">
+            <p class="mb-1" style="white-space: pre-line">@(n.Description.Length > 0 ? n.Description : L["No description."])</p>
+            <p class="small text-muted mb-0">@L["Owner: {0}", n.OwnerName ?? L["no one yet"]]</p>
+        </section>
+    }
+
+    <section class="inv-section" aria-labelledby="ncr-links">
+        <h2 id="ncr-links">@L["Lots and runs"]</h2>
+        @if (n.Lots.Count == 0 && n.Runs.Count == 0)
+        {
+            <p class="small text-muted">@L["None linked."]</p>
+        }
+        <ul class="small">
+            @foreach (var lot in n.Lots)
+            {
+                <li @key="lot.LotId"><ScreenLink Href="@($"inventory/lots/{lot.LotId}")" Permission="@PermissionCodes.InventoryView">@lot.Label</ScreenLink> · @lot.MaterialCode · @L.Label(lot.Status)</li>
+            }
+            @foreach (var run in n.Runs)
+            {
+                <li @key="run.RunId">@L["Job {0}, run {1} on {2}", run.JobNumber, run.RunNo, run.LineCode]</li>
+            }
+        </ul>
+        @if (manage)
+        {
+            <form class="d-flex gap-2 align-items-end" @onsubmit="LinkLotAsync" @onsubmit:preventDefault aria-label="@L["Add a lot"]">
+                <div>
+                    <label class="form-label small fw-semibold" for="ncr-lot-number">@L["Add a lot by its number"]</label>
+                    <input id="ncr-lot-number" class="form-control form-control-sm" maxlength="100" @bind="_lotNumber" @bind:event="oninput" />
+                </div>
+                <ActionButton Type="submit" Class="btn btn-sm btn-outline-secondary" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_lotNumber) ? L["Give the lot number."] : null)">@L["Add"]</ActionButton>
+            </form>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="ncr-investigation">
+        <h2 id="ncr-investigation">@L["Investigation"]</h2>
+        @if (manage)
+        {
+            <form @onsubmit="() => InvestigateAsync(false)" @onsubmit:preventDefault>
+                <label class="form-label small fw-semibold">@L["Why? Ask up to five times"]</label>
+                @for (var i = 0; i < _whys.Length; i++)
+                {
+                    var index = i;
+                    <input class="form-control form-control-sm mb-1" maxlength="500" aria-label="@L["Why {0}", index + 1]" placeholder="@L["Why {0}", index + 1]"
+                           value="@_whys[index]" @onchange="e => _whys[index] = e.Value?.ToString()" />
+                }
+                <label class="form-label small fw-semibold mt-2" for="ncr-cause">@L["Root cause"]</label>
+                <textarea id="ncr-cause" class="form-control form-control-sm" rows="2" maxlength="4000" @bind="_rootCause"></textarea>
+                <div class="form-actions mt-2">
+                    <ActionButton Type="submit" Class="btn btn-sm btn-outline-secondary" Busy="_busy">@L["Save the investigation"]</ActionButton>
+                    @if (n.Status != "acting")
+                    {
+                        <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" OnClick="() => InvestigateAsync(true)"
+                                      Reason="@(string.IsNullOrWhiteSpace(_rootCause) ? L["Say what the root cause is first."] : null)">@L["Root cause found: act on it"]</ActionButton>
+                    }
+                </div>
+            </form>
+        }
+        else if (n.RootCause is null && n.Whys.Count == 0)
+        {
+            <p class="small text-muted">@L["Not investigated yet."]</p>
+        }
+        else
+        {
+            <ol class="small">
+                @foreach (var why in n.Whys)
+                {
+                    <li>@why</li>
+                }
+            </ol>
+            <p class="small"><span class="fw-semibold">@L["Root cause"]:</span> @(n.RootCause ?? "—")</p>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="ncr-actions">
+        <h2 id="ncr-actions">@L["Corrective and preventive actions"]</h2>
+        <div class="table-panel mb-2">
+            <table class="table table-sm align-middle small mb-0">
+                <thead><tr><th>@L["Action"]</th><th>@L["Owner"]</th><th>@L["Due"]</th><th>@L["Status"]</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var a in n.Actions)
+                    {
+                        <tr @key="a.Id">
+                            <td><span class="text-muted">@L.Label(a.Kind)</span> · @a.Description</td>
+                            <td>@(a.OwnerName ?? "—")</td>
+                            <td>
+                                @(a.DueOn is { } due ? due.ToString("d", System.Globalization.CultureInfo.CurrentCulture) : "—")
+                                @if (a.IsOverdue)
+                                {
+                                    <span class="chip chip-danger ms-1">@L["Overdue"]</span>
+                                }
+                            </td>
+                            <td>
+                                @L.Label(a.Status)
+                                @if (a.Note is { } note)
+                                {
+                                    <div class="text-muted">@L["{0}, {1}: {2}", a.DoneByName ?? "—", Display.SiteTime(a.DoneAt, n.SiteTimeZone), note]</div>
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (a.Status == "open" && n.Status != "closed" && (manage || a.OwnerUserId == User.Me?.Id))
+                                {
+                                    <button type="button" class="btn btn-sm btn-link" @onclick="() => StartFinish(a.Id)">@L["Finish"]</button>
+                                }
+                            </td>
+                        </tr>
+                        @if (_finishing == a.Id)
+                        {
+                            <tr @key="@($"{a.Id}-finish")">
+                                <td colspan="5">
+                                    <form class="d-flex flex-wrap gap-2 align-items-end" @onsubmit="() => FinishAsync(a.Id, false)" @onsubmit:preventDefault>
+                                        <div class="flex-grow-1">
+                                            <label class="form-label small fw-semibold" for="ncr-finish-note">@L["What was done (or why not)"]</label>
+                                            <input id="ncr-finish-note" class="form-control form-control-sm" maxlength="1000" @bind="_finishNote" @bind:event="oninput" />
+                                        </div>
+                                        <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy" Reason="@NoteReason">@L["Mark done"]</ActionButton>
+                                        @if (manage)
+                                        {
+                                            <ActionButton Class="btn btn-sm btn-outline-danger" Busy="_busy" Reason="@NoteReason" OnClick="() => FinishAsync(a.Id, true)">@L["Cancel the action"]</ActionButton>
+                                        }
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _finishing = null">@L["Back"]</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    @if (n.Actions.Count == 0)
+                    {
+                        <tr><td colspan="5" class="text-muted">@L["No actions yet."]</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (manage)
+        {
+            <form class="row g-2 align-items-end" @onsubmit="AddActionAsync" @onsubmit:preventDefault aria-label="@L["Add an action"]">
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold" for="ncr-action-kind">@L["Kind"]</label>
+                    <select id="ncr-action-kind" class="form-select form-select-sm" @bind="_actionKind">
+                        <option value="corrective">@L.Label("corrective")</option>
+                        <option value="preventive">@L.Label("preventive")</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold" for="ncr-action-text">@L["What is to be done"]</label>
+                    <input id="ncr-action-text" class="form-control form-control-sm" maxlength="1000" @bind="_actionText" @bind:event="oninput" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold" for="ncr-action-owner">@L["Owner"]</label>
+                    @OwnerSelect("ncr-action-owner", _actionOwner, v => _actionOwner = v)
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold" for="ncr-action-due">@L["Due"]</label>
+                    <input id="ncr-action-due" type="date" class="form-control form-control-sm" @bind="_actionDue" />
+                </div>
+                <div class="col-md-1">
+                    <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_actionText) ? L["Say what is to be done."] : null)">@L["Add"]</ActionButton>
+                </div>
+            </form>
+        }
+    </section>
+
+    <section class="inv-section" aria-labelledby="ncr-close">
+        <h2 id="ncr-close">@L["Close"]</h2>
+        @if (n.Status == "closed")
+        {
+            <p class="small">@L["Closed {0} by {1}. Disposition: {2}.", Display.SiteTime(n.ClosedAt, n.SiteTimeZone), n.ClosedByName ?? "—", L.Label(n.Disposition ?? "")]</p>
+            <p class="small" style="white-space: pre-line">@n.ClosingNote</p>
+            @if (n.Lots.Count > 0 && n.Disposition is not "not_applicable")
+            {
+                <h3 class="h6">@L["Carry out the disposition"]</h3>
+                <NcrDispositionPanel @key="n.Version" Ncr="n" Changed="LoadAsync" />
+            }
+        }
+        else if (manage)
+        {
+            <form class="row g-2 align-items-end" @onsubmit="CloseAsync" @onsubmit:preventDefault>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold" for="ncr-disposition">@L["What becomes of the lots"]</label>
+                    <select id="ncr-disposition" class="form-select form-select-sm" @bind="_disposition">
+                        <option value="">@L["Choose…"]</option>
+                        @foreach (var d in NcrView.Dispositions)
+                        {
+                            <option value="@d">@L.Label(d)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-7">
+                    <label class="form-label small fw-semibold" for="ncr-closing-note">@L["Closing note"]</label>
+                    <input id="ncr-closing-note" class="form-control form-control-sm" maxlength="4000" @bind="_closingNote" @bind:event="oninput" />
+                </div>
+                <div class="col-md-2">
+                    <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy" Reason="@CloseReason(n)">@L["Close NCR"]</ActionButton>
+                </div>
+            </form>
+        }
+        else
+        {
+            <p class="small text-muted">@L["Open."]</p>
+        }
+    </section>
+}
+else if (_error is null)
+{
+    <p class="text-muted">@L["Loading…"]</p>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private NcrDto? _ncr;
+    private IReadOnlyList<NcrAssigneeDto> _assignees = [];
+    private bool _editing;
+    private string? _title;
+    private string? _description;
+    private string _severity = "minor";
+    private Guid _owner;
+    private string?[] _whys = new string?[5];
+    private string? _rootCause;
+    private string _actionKind = "corrective";
+    private string? _actionText;
+    private Guid _actionOwner;
+    private DateOnly? _actionDue;
+    private Guid? _finishing;
+    private string? _finishNote;
+    private string? _disposition;
+    private string? _lotNumber;
+    private string? _closingNote;
+    private bool _busy;
+    private string? _message;
+    private ApiException? _error;
+
+    private string? NoteReason => string.IsNullOrWhiteSpace(_finishNote) ? L["Say what was done, or why not."] : null;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _ncr = await Api.GetNcrAsync(Id);
+            _rootCause = _ncr.RootCause;
+            _whys = [.. _ncr.Whys.Cast<string?>().Concat(Enumerable.Repeat<string?>(null, 5)).Take(5)];
+            if (_assignees.Count == 0 && User.CanAny([PermissionCodes.NcrManage, PermissionCodes.NcrRaise], _ncr.SiteId))
+            {
+                _assignees = await Api.ListNcrAssigneesAsync(_ncr.SiteId);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+
+    private RenderFragment OwnerSelect(string id, Guid value, Action<Guid> set) =>
+        @<select id="@id" class="form-select form-select-sm" value="@value" @onchange="e => set(Guid.TryParse(e.Value?.ToString(), out var g) ? g : Guid.Empty)">
+            <option value="@Guid.Empty">@L["No one yet"]</option>
+            @foreach (var a in _assignees)
+            {
+                <option value="@a.Id">@a.Name</option>
+            }
+        </select>;
+
+    private string? CloseReason(NcrDto n) =>
+        n.Status != "acting" ? L["Find the root cause and act on it first."]
+        : n.Actions.Count == 0 ? L["Add at least one action first."]
+        : n.Actions.Any(a => a.Status == "open") ? L["Every action has to be done or cancelled first."]
+        : string.IsNullOrEmpty(_disposition) ? L["Say what becomes of the lots."]
+        : string.IsNullOrWhiteSpace(_closingNote) ? L["Add a closing note."]
+        : null;
+
+    private void StartEdit()
+    {
+        var n = _ncr!;
+        (_editing, _title, _description, _severity, _owner) = (true, n.Title, n.Description, n.Severity, n.OwnerUserId ?? Guid.Empty);
+    }
+
+    private void StartFinish(Guid actionId) => (_finishing, _finishNote) = (actionId, null);
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        await Api.UpdateNcrAsync(Id, new UpdateNcrRequest { Version = _ncr!.Version, Title = _title, Description = _description, Severity = _severity, OwnerUserId = Owner(_owner) });
+        _editing = false;
+        return L["Saved."];
+    });
+
+    private Task LinkLotAsync() => RunAsync(async () =>
+    {
+        await Api.LinkNcrLotAsync(Id, new LinkNcrLotRequest { LotNumber = _lotNumber });
+        _lotNumber = null;
+        return L["The lot is linked."];
+    });
+
+    private Task InvestigateAsync(bool complete) => RunAsync(async () =>
+    {
+        await Api.InvestigateNcrAsync(Id, new InvestigateNcrRequest
+        {
+            Version = _ncr!.Version,
+            RootCause = _rootCause,
+            Whys = [.. _whys.Where(w => !string.IsNullOrWhiteSpace(w)).Select(w => w!)],
+            Complete = complete,
+        });
+        return complete ? L["The root cause is found: add the actions that deal with it."] : L["The investigation is saved."];
+    });
+
+    private Task AddActionAsync() => RunAsync(async () =>
+    {
+        await Api.AddNcrActionAsync(Id, new AddNcrActionRequest { Kind = _actionKind, Description = _actionText, OwnerUserId = Owner(_actionOwner), DueOn = _actionDue });
+        (_actionText, _actionOwner, _actionDue) = (null, Guid.Empty, null);
+        return L["The action is added."];
+    });
+
+    private Task FinishAsync(Guid actionId, bool cancel) => RunAsync(async () =>
+    {
+        await Api.FinishNcrActionAsync(Id, actionId, new FinishNcrActionRequest { Note = _finishNote, Cancel = cancel });
+        _finishing = null;
+        return cancel ? L["The action is cancelled."] : L["The action is done."];
+    });
+
+    private Task CloseAsync() => RunAsync(async () =>
+    {
+        await Api.CloseNcrAsync(Id, new CloseNcrRequest { Version = _ncr!.Version, Disposition = _disposition, Note = _closingNote });
+        return L["The NCR is closed."];
+    });
+
+    private static Guid? Owner(Guid value) => value == Guid.Empty ? null : value;
+
+    private async Task RunAsync(Func<Task<string>> work)
+    {
+        _busy = true;
+        (_error, _message) = (null, null);
+        try
+        {
+            _message = await work();
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

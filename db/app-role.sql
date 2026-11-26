@@ -40,6 +40,7 @@ GRANT SELECT, INSERT, UPDATE ON evt.delivery, evt.sink_checkpoint TO pulaski_app
 GRANT USAGE ON SEQUENCE core.label_seq TO pulaski_app;
 -- Maintenance request numbers (#127).
 GRANT USAGE ON SEQUENCE core.maintenance_request_no TO pulaski_app;
+GRANT USAGE ON SEQUENCE core.nonconformance_no TO pulaski_app;
 
 -- History the application appends to (D-010). Like evt.event, never updated or deleted.
 GRANT SELECT, INSERT ON ts.job_status_change TO pulaski_app;

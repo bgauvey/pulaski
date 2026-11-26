@@ -49,6 +49,12 @@ public static class Permissions
     public const string QualityRecord = "quality.record";
     public const string QualityDecide = "quality.decide";
 
+    /// <summary>Raise nonconformance reports (#133).</summary>
+    public const string NcrRaise = "ncr.raise";
+
+    /// <summary>Work nonconformance reports: investigate, add actions, close (#133).</summary>
+    public const string NcrManage = "ncr.manage";
+
     /// <summary>Approve or send back drafts submitted for release where a site asks for approval (#138).</summary>
     public const string ReleaseApprove = "releases.approve";
 
@@ -132,6 +138,8 @@ public static class Permissions
         new(MaintenanceWork, Term.Mark("Floor"), Term.Mark("Work maintenance requests: start them and close them with what was done")),
         new(QualityRecord, Term.Mark("Quality"), Term.Mark("Record quality results against runs and lots")),
         new(QualityDecide, Term.Mark("Quality"), Term.Mark("Exclude quality results and reject held lots on quality")),
+        new(NcrRaise, Term.Mark("Quality"), Term.Mark("Raise nonconformance reports")),
+        new(NcrManage, Term.Mark("Quality"), Term.Mark("Work nonconformance reports: investigate, add actions and close them")),
         new(ReleaseApprove, Term.Mark("Configuration"), Term.Mark("Approve or send back processes, BOMs and specifications submitted for release")),
         new(ChecklistSignOff, Term.Mark("Quality"), Term.Mark("Give setup and first-article checklists their second sign-off, or reject them")),
         new(LotReceive, Term.Mark("Inventory"), Term.Mark("Receive lots")),
@@ -230,6 +238,9 @@ public static class Permissions
         // Specifications belong to materials.
         [Specs] = [QualityView, MaterialsView],
         [Instructions] = [InstructionsView],
+        // Nonconformances are read on the quality screens.
+        [NcrRaise] = [QualityView],
+        [NcrManage] = [QualityView],
         // Approvers read what they approve.
         [ReleaseApprove] = [ProcessesView, MaterialsView, QualityView],
         // Checklists are signed off at the job.
@@ -279,20 +290,20 @@ public static class Roles
              Permissions.LotShip, Permissions.LotHold, Permissions.StockCount, Permissions.PartialBatchDecide, Permissions.ProductionCorrect,
              Permissions.LotAllocate, Permissions.LaborView, Permissions.LaborRecord, Permissions.LaborApprove, Permissions.MachinesView, Permissions.DowntimeCode,
              Permissions.DowntimeAdjust, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.AndonRespond, Permissions.Handover,
-             Permissions.MaintenanceRequest, Permissions.MaintenanceWork, Permissions.InstructionsView, Permissions.ChecklistSignOff],
+             Permissions.MaintenanceRequest, Permissions.MaintenanceWork, Permissions.InstructionsView, Permissions.ChecklistSignOff, Permissions.NcrRaise],
             "Runs the floor: jobs, reports, receipts, moves, holds and counts; approves partial batches; reverses production reports; records and approves labor; codes, enters, splits and merges machine stops; records quality results; calls for and answers andon calls; requests and works maintenance. Doesn't correct inventory."),
         new(Operator, "Operator", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.WorkOrdersView,
              Permissions.JobExecute, Permissions.ProductionReport, Permissions.LotReceive, Permissions.LotMove, Permissions.LaborRecordOwn,
              Permissions.MachinesView, Permissions.DowntimeCode, Permissions.QualityView, Permissions.QualityRecord, Permissions.AndonCall, Permissions.Handover,
-             Permissions.MaintenanceRequest, Permissions.InstructionsView],
+             Permissions.MaintenanceRequest, Permissions.InstructionsView, Permissions.NcrRaise],
             "Starts, pauses and completes jobs, reports production and consumption, receives and moves lots, clocks on and off, codes machine stops, records quality results, calls for help, requests maintenance."),
         new(Quality, "Quality", false,
             [Permissions.OverviewView, Permissions.FloorView, Permissions.InventoryView, Permissions.MaterialsView, Permissions.MachinesView,
              Permissions.LotHold, Permissions.InventoryCorrect, Permissions.PartialBatchDecide, Permissions.LotRecords, Permissions.LotAttributes,
              Permissions.InventoryBackdate, Permissions.LotAllocate, Permissions.QualityView, Permissions.QualityRecord, Permissions.QualityDecide,
              Permissions.Specs, Permissions.AndonRespond, Permissions.Handover, Permissions.InstructionsView, Permissions.Instructions,
-             Permissions.ChecklistSignOff, Permissions.ReleaseApprove],
+             Permissions.ChecklistSignOff, Permissions.ReleaseApprove, Permissions.NcrRaise, Permissions.NcrManage],
             "Holds and releases lots, corrects inventory, decides on partial batches, keeps lot attributes and certificates, maintains specifications, records quality results, excludes them and rejects lots on quality, answers andon calls."),
         new(Manager, "Manager", false,
             [.. Permissions.Views, Permissions.JobReopen, Permissions.WorkOrderClose, Permissions.Reasons, Permissions.SiteSettings, Permissions.Shifts,

@@ -1436,6 +1436,37 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<SpcAlertDto> GetSpcAlertAsync(Guid siteId, Guid id, CancellationToken ct = default) =>
         GetAsync<SpcAlertDto>($"api/quality/alerts/{id}?siteId={siteId}", ct);
 
+    /// <summary>Nonconformance reports (#133): at a site, or about a lot; <paramref name="status"/> <c>open_any</c> = not closed.</summary>
+    public Task<IReadOnlyList<NcrSummaryDto>> ListNcrsAsync(Guid? siteId, string? status, Guid? lotId = null, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<NcrSummaryDto>>(
+            $"api/ncrs?{string.Join("&", new[] { siteId is { } s ? $"siteId={s}" : null, status is { } st ? $"status={st}" : null, lotId is { } l ? $"lotId={l}" : null }.OfType<string>())}", ct);
+
+    public Task<NcrDto> GetNcrAsync(Guid id, CancellationToken ct = default) => GetAsync<NcrDto>($"api/ncrs/{id}", ct);
+
+    public Task<IReadOnlyList<NcrAssigneeDto>> ListNcrAssigneesAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<IReadOnlyList<NcrAssigneeDto>>($"api/ncrs/assignees?siteId={siteId}", ct);
+
+    public Task<NcrCreatedResponse> RaiseNcrAsync(RaiseNcrRequest request, CancellationToken ct = default) =>
+        SendAsync<NcrCreatedResponse>(HttpMethod.Post, "api/ncrs", request, ct);
+
+    public Task<VersionResponse> UpdateNcrAsync(Guid id, UpdateNcrRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/ncrs/{id}", request, ct);
+
+    public Task<VersionResponse> LinkNcrLotAsync(Guid id, LinkNcrLotRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/ncrs/{id}/lots", request, ct);
+
+    public Task<VersionResponse> InvestigateNcrAsync(Guid id, InvestigateNcrRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, $"api/ncrs/{id}/investigation", request, ct);
+
+    public Task<CreatedResponse> AddNcrActionAsync(Guid id, AddNcrActionRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/ncrs/{id}/actions", request, ct);
+
+    public Task<VersionResponse> FinishNcrActionAsync(Guid id, Guid actionId, FinishNcrActionRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/ncrs/{id}/actions/{actionId}/finish", request, ct);
+
+    public Task<VersionResponse> CloseNcrAsync(Guid id, CloseNcrRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Post, $"api/ncrs/{id}/close", request, ct);
+
     public Task<SpcAlertDto> CloseSpcAlertAsync(Guid siteId, Guid id, CloseSpcAlertRequest request, CancellationToken ct = default) =>
         SendAsync<SpcAlertDto>(HttpMethod.Post, $"api/quality/alerts/{id}/close?siteId={siteId}", request, ct);
 

@@ -208,6 +208,11 @@
 
     @if (User.Can(PermissionCodes.QualityView, l.SiteId))
     {
+        <LotNcrPanel @key="l.Id" Lot="l" />
+    }
+
+    @if (User.Can(PermissionCodes.QualityView, l.SiteId))
+    {
         <Pulaski.Web.Components.Pages.Quality.LotQualityPanel @key="@($"{l.Id}-{l.Version}")" Lot="l" TimeZone="@tz" Changed="LoadAsync" />
     }
 

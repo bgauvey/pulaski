@@ -1823,6 +1823,48 @@ it. One pending per version (`release_request_pending_uq`); decided requests are
 | `decided_by`, `decided_at`, `decision_note` | text, timestamptz, text | yes | Who decided it and why (a comment is required to approve or return); set exactly when not pending. |
 | `created_at` | timestamptz | no | Row timestamp. |
 
+### core.nonconformance — nonconformance reports (#133, D-124) · *In use*
+
+What was found wrong, raised on its own, from a complaint, or from what flagged it (a held or rejected lot, a result, an SPC alert, a checklist
+answer). `open` → `investigating` (root cause and whys being written) → `acting` (root cause found) → `closed` (every action finished, with a
+disposition and note). Numbered from `core.nonconformance_no` as `NCR-000042`. Changes lock the row first.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `site_id` | uuid | no | Its site: the source's, or chosen for one raised on its own. |
+| `number` | text | no | `NCR-` and six digits; unique. |
+| `title`, `description` | text | no | What was found (title at most 200 characters). |
+| `severity` | text | no | `minor`, `major` or `critical`. |
+| `status` | text | no | `open`, `investigating`, `acting` or `closed`. |
+| `source_kind` | text | no | `manual`, `complaint`, `lot_hold`, `lot_rejection`, `quality_result`, `spc_alert`, `checklist` or `run` (#133b). |
+| `source_id`, `source_at` | uuid, timestamptz | yes | The lot, result (with its sampled time, the partition key), alert or checklist answer; no FK (by kind). |
+| `owner_user_id` | uuid | yes | Who owns it: an active user with a role at the site. |
+| `raised_by`, `raised_at` | text, timestamptz | no | Who raised it, when. |
+| `root_cause` | text | yes | What the investigation found; needed to move on to `acting`. |
+| `whys` | text[] | no | Up to five whys, in order. |
+| `disposition` | text | yes | What becomes of the lots: `use_as_is`, `rework`, `scrap`, `return_to_supplier` or `not_applicable`; set exactly when closed. |
+| `closing_note`, `closed_at`, `closed_by` | text, timestamptz, text | yes | The close. |
+| `created_at`, `updated_at` | timestamptz | no | Row timestamps. |
+
+### core.nonconformance_action — corrective and preventive actions (#133) · *In use*
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | no | Primary key. |
+| `ncr_id` | uuid | no | Its NCR. |
+| `kind` | text | no | `corrective` or `preventive`. |
+| `description` | text | no | What is to be done (at most 1000 characters). |
+| `owner_user_id`, `due_on` | uuid, date | yes | Who does it and by when; overdue when still open after that day (at the site's midnight), in the owner's inbox and alerted (`nonconformance_action_due_ix`). |
+| `status` | text | no | `open`, `done` or `cancelled`; finished by its owner or someone with `ncr.manage`, with a note. |
+| `done_at`, `done_by`, `note` | timestamptz, text, text | yes | When it was finished, by whom, and what was done or why not; set exactly when not open. |
+| `created_at`, `created_by` | timestamptz, text | no | When and by whom it was added. |
+
+### core.nonconformance_lot, core.nonconformance_run — what an NCR touches (#133) · *In use*
+
+The lots and runs an NCR concerns, `(ncr_id, lot_id)` / `(ncr_id, run_id)`: from its source (a lot and the runs that made it; a result's or an
+alert's latest result's lot and run; a checklist's run; a run and the lots it made) and lots added by number while the NCR is open. Found from the lot through `nonconformance_lot_lot_ix`.
+
 ### core.checklist_response — checklists answered (#126c, D-116) · *In use*
 
 A job's setup or first-article checklist answered on a line. A failed one is kept and doesn't count; a start (setup) or a report (both) needs
@@ -1876,7 +1918,7 @@ A user's own subscription to an alert at a site. Changed only in its minutes and
 | `user_id` | uuid → sec.app_user | no | Whose it is; alerts go to their e-mail address. |
 | `site_id` | uuid → equipment | no | The site. |
 | `equipment_id` | uuid → equipment | yes | Only what happens at or below this area or line; null = the whole site. One per user, site, kind and scope (`alert_subscription_uq`). |
-| `kind` | text | no | `long_stop`, `uncoded_stop`, `andon_escalated`, `spc_alert`, `lot_hold`, `shortage`. |
+| `kind` | text | no | `long_stop`, `uncoded_stop`, `andon_escalated`, `spc_alert`, `lot_hold`, `shortage`, `ncr_action_overdue` (#133b; whole site only). |
 | `minutes` | integer | yes | 1–10080: how long a stop lasts (`long_stop`), how long after it ended it stays without a reason (`uncoded_stop`), how long before a job needs a short component (`shortage`); null for kinds without. |
 | `is_active` | boolean | no | Sent while on. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions; nothing that reached its moment before `created_at` is sent. |

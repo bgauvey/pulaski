@@ -19,6 +19,9 @@ public static class InboxKinds
     public const string Checklist = "checklist";
     public const string Release = "release";
 
+    /// <summary>NCR actions (#133b): the caller's own open ones, and those overdue where they manage NCRs; owners need no permission.</summary>
+    public const string NcrAction = "ncr_action";
+
     public static IReadOnlyList<(string Kind, string Permission)> All { get; } =
     [
         (PartialBatch, Permissions.PartialBatchDecide),
@@ -29,6 +32,7 @@ public static class InboxKinds
         (Maintenance, Permissions.MaintenanceWork),
         (Checklist, Permissions.ChecklistSignOff),
         (Release, Permissions.ReleaseApprove),
+        (NcrAction, Permissions.NcrManage),
     ];
 }
 
@@ -40,6 +44,9 @@ public interface IInboxReadStore
 
     /// <summary>The waiting items of <paramref name="kind"/> at these sites; labor comes from its own query.</summary>
     Task<IReadOnlyList<InboxItemDto>> ListAsync(string kind, IReadOnlyCollection<Guid> siteIds, CancellationToken cancellationToken);
+
+    /// <summary>Open actions of NCRs not closed: <paramref name="userId"/>'s own, and those overdue at <paramref name="manageSiteIds"/>.</summary>
+    Task<IReadOnlyList<InboxItemDto>> ListNcrActionsAsync(Guid userId, IReadOnlyCollection<Guid> manageSiteIds, CancellationToken cancellationToken);
 }
 
 /// <summary>Everything the user may decide, at every site where they hold the deciding permission (#123).</summary>
@@ -55,6 +62,12 @@ internal sealed class GetInboxHandler(IInboxReadStore store, IQueryHandler<ListP
         foreach (var (kind, permission) in InboxKinds.All)
         {
             var at = sites.Where(s => query.Caller.Can(permission, s.Id)).ToList();
+            if (kind == InboxKinds.NcrAction)
+            {
+                items.AddRange(await store.ListNcrActionsAsync(query.Caller.UserId, [.. at.Select(s => s.Id)], cancellationToken));
+                continue;
+            }
+
             if (at.Count == 0)
             {
                 continue;

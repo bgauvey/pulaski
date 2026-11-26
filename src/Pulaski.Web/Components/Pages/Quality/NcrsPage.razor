@@ -1,0 +1,139 @@
+@page "/quality/ncrs"
+@attribute [RequiresView(PermissionCodes.QualityView)]
+@using Pulaski.Web.Services.Quality
+@inject PulaskiApiClient Api
+@inject SiteSelection Sites
+@inject CurrentUser User
+
+<PageTitle>@L["Nonconformances"] · Pulaski</PageTitle>
+
+@* Nonconformance reports (#133, D-124) at a site: open first, with their actions still to do and those overdue. *@
+<div class="inv-head">
+    <div>
+        <h1 class="mb-1">@L["Nonconformances"]</h1>
+        <p class="text-muted mb-0">@L["What was found wrong, its root cause, what is being done about it and what became of the lots."]</p>
+    </div>
+    <div class="inv-head-tools">
+        <select class="form-select form-select-sm w-auto" aria-label="@L["Show"]" value="@_status" @onchange="OnStatusChangedAsync">
+            <option value="open_any">@L["Not closed"]</option>
+            <option value="closed">@L["Closed"]</option>
+            <option value="">@L["All"]</option>
+        </select>
+        @if (Sites.Sites.Count > 1)
+        {
+            <select class="form-select form-select-sm w-auto" aria-label="@L["Site"]" value="@Sites.SiteId" @onchange="OnSiteChangedAsync">
+                @foreach (var site in Sites.Sites)
+                {
+                    <option value="@site.Id">@site.Code · @site.Name</option>
+                }
+            </select>
+        }
+        @if (Sites.SiteId is { } here && User.Can(PermissionCodes.NcrRaise, here) && !_raising)
+        {
+            <button type="button" class="btn btn-sm btn-primary" @onclick="() => _raising = true">@L["Raise an NCR"]</button>
+        }
+    </div>
+</div>
+
+<ProblemAlert Error="_error" />
+<ViewOnlyNote Permission="@PermissionCodes.NcrRaise" What="@L["raise NCRs"]" SiteId="Sites.SiteId" />
+
+@if (_raising && Sites.SiteId is { } siteId)
+{
+    <RaiseNcrForm SiteId="siteId" Cancelled="() => _raising = false" />
+}
+
+@if (Sites.SiteId is null)
+{
+    <p class="text-muted">@L["There is no site yet."]</p>
+}
+else if (_ncrs is null)
+{
+    @if (_error is null)
+    {
+        <p class="text-muted">@L["Loading…"]</p>
+    }
+}
+else
+{
+    <div class="table-panel">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>@L["NCR"]</th><th>@L["Severity"]</th><th>@L["Status"]</th><th>@L["Raised from"]</th><th>@L["Owner"]</th><th class="inv-num">@L["Actions open"]</th><th>@L["Raised"]</th></tr></thead>
+            <tbody>
+                @foreach (var n in _ncrs)
+                {
+                    <tr @key="n.Id">
+                        <td><a href="@NcrView.Href(n.Id)" class="fw-semibold">@n.Number</a> · @n.Title</td>
+                        <td><span class="@NcrView.SeverityChip(n.Severity)">@L.Label(n.Severity)</span></td>
+                        <td><span class="@NcrView.StatusChip(n.Status)">@L.Label(n.Status)</span></td>
+                        <td class="small">@L.Label(n.SourceKind)</td>
+                        <td class="small">@(n.OwnerName ?? "—")</td>
+                        <td class="inv-num">
+                            @n.OpenActions
+                            @if (n.OverdueActions > 0)
+                            {
+                                <span class="chip chip-danger ms-1">@L["{0} overdue", n.OverdueActions]</span>
+                            }
+                        </td>
+                        <td class="small">@Display.SiteTime(n.RaisedAt, Sites.Site?.TimeZone)</td>
+                    </tr>
+                }
+                @if (_ncrs.Count == 0)
+                {
+                    <tr><td colspan="7" class="text-muted small">@L["No nonconformance reports here."]</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<NcrSummaryDto>? _ncrs;
+    private string _status = "open_any";
+    private bool _raising;
+    private ApiException? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Sites.EnsureAsync(Api);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnSiteChangedAsync(ChangeEventArgs e)
+    {
+        Sites.SiteId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        (_ncrs, _raising) = (null, false);
+        await LoadAsync();
+    }
+
+    private async Task OnStatusChangedAsync(ChangeEventArgs e)
+    {
+        _status = e.Value?.ToString() ?? "";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Sites.SiteId is not { } site)
+        {
+            return;
+        }
+
+        try
+        {
+            _ncrs = await Api.ListNcrsAsync(site, _status.Length == 0 ? null : _status);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+    }
+}

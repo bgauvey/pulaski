@@ -2539,6 +2539,68 @@ CREATE INDEX work_instruction_target_process_ix ON core.work_instruction_target 
 CREATE INDEX work_instruction_target_material_ix ON core.work_instruction_target (material_id) WHERE is_active;
 CREATE INDEX work_instruction_target_line_ix ON core.work_instruction_target (equipment_id) WHERE is_active;
 
+-- Nonconformance reports (#133, D-124): raised from anything that flags, investigated, acted on and closed with a disposition.
+CREATE SEQUENCE core.nonconformance_no;
+
+CREATE TABLE core.nonconformance (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    site_id         uuid NOT NULL REFERENCES core.equipment(id),
+    number          text NOT NULL UNIQUE,                               -- NCR-000042
+    title           text NOT NULL,
+    description     text NOT NULL DEFAULT '',
+    severity        text NOT NULL CONSTRAINT nonconformance_severity_ck CHECK (severity IN ('minor', 'major', 'critical')),
+    status          text NOT NULL DEFAULT 'open' CONSTRAINT nonconformance_status_ck CHECK (status IN ('open', 'investigating', 'acting', 'closed')),
+    source_kind     text NOT NULL CONSTRAINT nonconformance_source_ck CHECK (source_kind IN ('manual', 'lot_hold', 'lot_rejection', 'quality_result', 'spc_alert', 'checklist', 'complaint', 'run')),
+    source_id       uuid,                                               -- the lot, result, alert or checklist answer (no FK: by kind)
+    source_at       timestamptz,                                        -- a result's sampled time (its partition key)
+    owner_user_id   uuid REFERENCES sec.app_user(id),
+    raised_by       text NOT NULL,
+    raised_at       timestamptz NOT NULL,
+    root_cause      text,
+    whys            text[] NOT NULL DEFAULT '{}',
+    disposition     text CONSTRAINT nonconformance_disposition_ck CHECK (disposition IN ('use_as_is', 'rework', 'scrap', 'return_to_supplier', 'not_applicable')),
+    closing_note    text,
+    closed_at       timestamptz,
+    closed_by       text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT nonconformance_closed_ck CHECK ((status = 'closed') = (closed_at IS NOT NULL AND disposition IS NOT NULL))
+);
+CREATE INDEX nonconformance_site_ix ON core.nonconformance (site_id, status, raised_at DESC);
+
+CREATE TABLE core.nonconformance_action (
+    id              uuid PRIMARY KEY DEFAULT uuidv7(),
+    ncr_id          uuid NOT NULL REFERENCES core.nonconformance(id),
+    kind            text NOT NULL CONSTRAINT nonconformance_action_kind_ck CHECK (kind IN ('corrective', 'preventive')),
+    description     text NOT NULL,
+    owner_user_id   uuid REFERENCES sec.app_user(id),
+    due_on          date,
+    status          text NOT NULL DEFAULT 'open' CONSTRAINT nonconformance_action_status_ck CHECK (status IN ('open', 'done', 'cancelled')),
+    done_at         timestamptz,
+    done_by         text,
+    note            text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    created_by      text NOT NULL,
+    CONSTRAINT nonconformance_action_done_ck CHECK ((status = 'open') = (done_at IS NULL))
+);
+CREATE INDEX nonconformance_action_ncr_ix ON core.nonconformance_action (ncr_id);
+CREATE INDEX nonconformance_action_owner_ix ON core.nonconformance_action (owner_user_id) WHERE status = 'open';
+CREATE INDEX nonconformance_action_due_ix ON core.nonconformance_action (due_on) WHERE status = 'open';
+
+CREATE TABLE core.nonconformance_lot (
+    ncr_id          uuid NOT NULL REFERENCES core.nonconformance(id),
+    lot_id          uuid NOT NULL REFERENCES core.lot(id),
+    PRIMARY KEY (ncr_id, lot_id)
+);
+CREATE INDEX nonconformance_lot_lot_ix ON core.nonconformance_lot (lot_id);
+
+CREATE TABLE core.nonconformance_run (
+    ncr_id          uuid NOT NULL REFERENCES core.nonconformance(id),
+    run_id          uuid NOT NULL REFERENCES core.job_run(id),
+    PRIMARY KEY (ncr_id, run_id)
+);
+
+
 -- Approval before release (#138, D-122): which kinds need it per site, and the requests submitted.
 CREATE TABLE core.release_approval_settings (
     site_id         uuid PRIMARY KEY REFERENCES core.equipment(id),
@@ -2659,7 +2721,7 @@ CREATE TABLE core.alert_subscription (
     site_id             uuid NOT NULL REFERENCES core.equipment(id),
     equipment_id        uuid REFERENCES core.equipment(id),         -- only what happens at or below it; null = the whole site
     kind                text NOT NULL CONSTRAINT alert_subscription_kind_ck
-                            CHECK (kind IN ('long_stop', 'uncoded_stop', 'andon_escalated', 'spc_alert', 'lot_hold', 'shortage')),
+                            CHECK (kind IN ('long_stop', 'uncoded_stop', 'andon_escalated', 'spc_alert', 'lot_hold', 'shortage', 'ncr_action_overdue')),
     minutes             integer CONSTRAINT alert_subscription_minutes_ck CHECK (minutes IS NULL OR minutes BETWEEN 1 AND 10080),
     is_active           boolean NOT NULL DEFAULT true,
     created_at          timestamptz NOT NULL DEFAULT now(),
@@ -2952,7 +3014,9 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0080_instruction_checklists'),
     ('0081_checklist_sign_off'),
     ('0082_system_health'),
-    ('0083_release_approval');
+    ('0083_release_approval'),
+    ('0084_nonconformance'),
+    ('0085_nonconformance_follow_up');
 
 -- =====================================================================
 -- 17. SEED DATA
@@ -3027,7 +3091,9 @@ INSERT INTO sec.permission (code, description) VALUES
     ('instructions.manage', 'Maintain work instructions: write, attach and release them'),
     ('checklists.sign_off', 'Give setup and first-article checklists their second sign-off, or reject them'),
     ('system.view', 'See system health: edge nodes, deliveries, connections, background services and the database'),
-    ('releases.approve', 'Approve or send back processes, BOMs and specifications submitted for release')
+    ('releases.approve', 'Approve or send back processes, BOMs and specifications submitted for release'),
+    ('ncr.raise', 'Raise nonconformance reports'),
+    ('ncr.manage', 'Work nonconformance reports: investigate, add actions and close them')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 -- The roles a new database starts with (Roles.Defaults); after that they are the administrator's to change.
@@ -3064,6 +3130,10 @@ SELECT r.id, v.permission_code FROM (VALUES
     ('quality', 'checklists.sign_off'),
     ('quality', 'releases.approve'),
     ('process_engineer', 'releases.approve'),
+    ('quality', 'ncr.raise'),
+    ('quality', 'ncr.manage'),
+    ('supervisor', 'ncr.raise'),
+    ('operator', 'ncr.raise'),
     ('operator', 'maintenance.request'),
     ('supervisor', 'maintenance.request'),
     ('supervisor', 'maintenance.work'),

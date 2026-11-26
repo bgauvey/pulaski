@@ -116,6 +116,18 @@ else
                 </table>
             </div>
 
+            @if (User.Can(PermissionCodes.NcrRaise, Sites.SiteId))
+            {
+                @if (_raisingNcr)
+                {
+                    <RaiseNcrForm @key="alert.Id" SiteId="Sites.SiteId!.Value" SourceKind="spc_alert" SourceId="alert.Id"
+                                  Title="@L["{0} on {1} signalled", alert.CharacteristicCode, alert.MaterialCode]" Cancelled="() => _raisingNcr = false" />
+                }
+                else
+                {
+                    <p class="mb-2"><button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _raisingNcr = true">@L["Raise an NCR"]</button></p>
+                }
+            }
             @if (alert.Status == "open" && User.Can(PermissionCodes.QualityRecord, Sites.SiteId))
             {
                 <form class="row g-2 align-items-end" @onsubmit="CloseAsync" @onsubmit:preventDefault>
@@ -151,6 +163,7 @@ else
     private IReadOnlyList<SpcAlertDto>? _alerts;
     private IReadOnlyList<ReasonCodeDto> _causes = [];
     private SpcAlertDto? _selected;
+    private bool _raisingNcr;
     private DateTimeOffset? _loadedAt;
     private Guid _causeId;
     private string? _action;
@@ -236,7 +249,7 @@ else
 
     private async Task OpenAsync(SpcAlertDto alert)
     {
-        _error = null;
+        (_error, _raisingNcr) = (null, false);
         try
         {
             _selected = await Api.GetSpcAlertAsync(alert.SiteId, alert.Id);

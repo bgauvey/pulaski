@@ -278,6 +278,15 @@ public static class EventTypes
     public const string ReleaseApproved = "pulaski.release.approved.v1";
     public const string ReleaseReturned = "pulaski.release.returned.v1";
     public const string ReleaseWithdrawn = "pulaski.release.withdrawn.v1";
+
+    /// <summary>Nonconformance reports (#133, D-124): raised, changed, investigated, actions added, done or cancelled, closed.</summary>
+    public const string NcrRaised = "pulaski.ncr.raised.v1";
+    public const string NcrChanged = "pulaski.ncr.changed.v1";
+    public const string NcrInvestigated = "pulaski.ncr.investigated.v1";
+    public const string NcrActionAdded = "pulaski.ncr.action_added.v1";
+    public const string NcrActionDone = "pulaski.ncr.action_done.v1";
+    public const string NcrActionCancelled = "pulaski.ncr.action_cancelled.v1";
+    public const string NcrClosed = "pulaski.ncr.closed.v1";
     public const string CharacteristicTagBound = "pulaski.quality_characteristic.tag_bound.v1";
     public const string CharacteristicTagChanged = "pulaski.quality_characteristic.tag_changed.v1";
     public const string LabelPrinterSaved = "pulaski.label_printer.saved.v1";
