@@ -242,6 +242,7 @@
                                 {
                                     <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartEdit(c)">@L["Change"]</button>
                                 }
+                                <HistoryLink Subject="c.Id" Class="btn btn-sm btn-link" />
                                 @if (c.RunStandardId is not null && User.Can(PermissionCodes.RateModify))
                                 {
                                     <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => StartRate(c)">@L["Rate"]</button>

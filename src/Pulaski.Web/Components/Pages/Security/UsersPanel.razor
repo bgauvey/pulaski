@@ -161,6 +161,7 @@ else
                                     @(_open == u.Id ? L["Close"] : L["Change"])
                                 </button>
                             }
+                            <HistoryLink Subject="u.Id" Class="btn btn-sm btn-link p-0 ms-2" />
                         </td>
                     </tr>
                     @if (_open == u.Id && _edit is { } edit)

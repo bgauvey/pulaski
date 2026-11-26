@@ -127,7 +127,10 @@
     private const string OpenKey = "pulaski.nav.open";
     private readonly NavFolds _folds = new();
 
-    private bool May(NavLinkItem link) => User.Can(link.Permission) || (link.OrPermission is { } other && User.Can(other));
+    // The audit trail covers every site, so only those who may see it everywhere get it (#129).
+    private bool May(NavLinkItem link) =>
+        link.Permission == PermissionCodes.AuditView ? User.CanEverywhere(link.Permission)
+        : User.Can(link.Permission) || (link.OrPermission is { } other && User.Can(other));
 
     private string Path => Navigation.ToBaseRelativePath(Navigation.Uri);
 

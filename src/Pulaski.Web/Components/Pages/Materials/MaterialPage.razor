@@ -25,6 +25,7 @@
     <div class="inv-head-tools">
         <ScreenLink Href="@($"units?material={MaterialId}")" Permission="@PermissionCodes.UnitsView" Hide class="btn btn-outline-secondary">@L["Conversions"]</ScreenLink>
         <ScreenLink Href="@($"inventory/materials/{MaterialId}")" Permission="@PermissionCodes.InventoryView" Hide class="btn btn-outline-secondary">@L["Stock"]</ScreenLink>
+        <HistoryLink Subject="MaterialId" Class="btn btn-outline-secondary" />
     </div>
 </div>
 

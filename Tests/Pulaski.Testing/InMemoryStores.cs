@@ -124,6 +124,8 @@ public sealed class InMemoryStores
 
     public InMemorySetup Setup { get; } = new();
 
+    public InMemoryAudit Audit { get; } = new();
+
     public InMemoryAlerts Alerts { get; } = new();
 
     public InMemoryLineOutput LineOutput { get; } = new();
@@ -241,6 +243,7 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Inventory.IScanContextReadStore>();
         services.RemoveAll<Application.Setup.ISetupReadStore>();
         services.RemoveAll<Application.Setup.ISetupRepository>();
+        services.RemoveAll<Application.Audit.IAuditReadStore>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -350,6 +353,7 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Inventory.IScanContextReadStore>(ScanContext);
         services.AddSingleton<Application.Setup.ISetupReadStore>(Setup);
         services.AddSingleton<Application.Setup.ISetupRepository>(Setup);
+        services.AddSingleton<Application.Audit.IAuditReadStore>(Audit);
         services.TryAddSingleton<Application.Quality.ICertificateRenderer>(new FakeCertificateRenderer());
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);

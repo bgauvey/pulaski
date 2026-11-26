@@ -204,6 +204,7 @@ A chart covers at most 366 days.,Una gráfica cubre como máximo 366 días.
 A checklist has at most {0} items.,Una lista de verificación tiene como máximo {0} puntos.
 A choice,Una opción
 A choice attribute needs at least one choice.,Un atributo de opciones necesita al menos una opción.
+"A code, number or name","Un código, número o nombre"
 "A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's configuration, never here.","Una conexión se ejecuta al hacer clic en Importar, o según su programación. Las credenciales y cadenas de conexión a bases de datos se guardan en la configuración de la API, nunca aquí."
 A connection's code is fixed once made: it names its credentials in the configuration ({0}).,El código de una conexión es fijo una vez creada: nombra sus credenciales en la configuración ({0}).
 A connection's kind is fixed once made ({0}); add another connection instead.,El tipo de una conexión es fijo una vez creada ({0}); agregue otra conexión en su lugar.
@@ -443,6 +444,7 @@ Alert,Alerta
 Alert {0} not found.,Alerta {0} no encontrada.
 Alerts go to,Las alertas van a
 All,Todos
+All areas,Todas las áreas
 All calls,Todas las llamadas
 All changes saved,Todos los cambios guardados
 All classes,Todas las clases
@@ -553,6 +555,7 @@ Around the clock,Todo el día
 Around the clock: no shift schedule is set here or above,Las 24 horas: no hay horario de turnos aquí ni por encima
 Arrange,Acomodar
 As it was,Como estaba
+As recorded,Tal como se registró
 Ask a supervisor to enrol it.,Pida a un supervisor que lo inscriba.
 Ask for a new one.,Pida uno nuevo.
 Ask on each report,Preguntar en cada reporte
@@ -602,6 +605,8 @@ Attempts must be 1 to 50.,Los intentos deben ser de 1 a 50.
 Attribute,Atributo
 Attributes,Atributos
 Attributes and certificates,Atributos y certificados
+Audit trail,Registro de auditoría
+"Audit trail: who changed what, and when","Registro de auditoría: quién cambió qué, y cuándo"
 Auto,Automático
 Auto accepted,Aceptado automáticamente
 "Automated consumption (backflush, time window, a counter) takes from it while it is loaded.","El consumo automático (consumo automático, ventana de tiempo, un contador) toma de él mientras está cargado."
@@ -683,6 +688,7 @@ Batch size,Tamaño de tanda
 Batch tolerance,Tolerancia de tanda
 "Batch tolerance on this line, %","Tolerancia de tanda en esta línea, %"
 Batches,Tandas
+Before,Antes
 "Before a run, on {0}","Antes de una corrida, en {0}"
 Before it can be released:,Antes de que pueda liberarse:
 Before this version can be released:,Antes de que esta versión pueda liberarse:
@@ -731,6 +737,7 @@ Broker host,Host del broker
 Broker's address,Dirección del broker
 Browse depth,Profundidad de exploración
 Browse from,Explorar desde
+"Browse the audit trail: who changed what, and when, everywhere","Consultar el registro de auditoría: quién cambió qué, y cuándo, en todas partes"
 "Business key, unique within the site. Fixed once the equipment is created.","Clave de negocio, única dentro del sitio. Fija una vez creado el equipo."
 By,Por
 By day,Por día
@@ -1386,6 +1393,7 @@ Every 1 to 168 hours.,Cada 1 a 168 horas.
 Every 1 to {0:0} counts.,Cada 1 a {0:0} conteos.
 Every 1 to {0:0} run hours.,Cada 1 a {0:0} horas de funcionamiento.
 Every action has to be done or cancelled first.,"Antes, cada acción debe estar hecha o cancelada."
+"Every change Pulaski recorded: what, by whom and when. Open one to see what changed.","Cada cambio que Pulaski registró: qué, quién y cuándo. Abra uno para ver qué cambió."
 Every characteristic,Todas las características
 "Every class and material as B2MML, which the B2MML import reads back","Cada clase y material como B2MML, que la importación B2MML vuelve a leer"
 Every day from {0},Cada día desde {0}
@@ -1465,6 +1473,7 @@ Feed,Canal
 Feed point,Punto de alimentación
 Feed points,Puntos de alimentación
 Feed points · Inventory,Puntos de alimentación · Inventario
+Field,Campo
 "Fields: Pulaski's field ← the item's property (use / for a property of a property, such as Unit/Code)","Campos: campo de Pulaski ← propiedad del elemento (use / para una propiedad de una propiedad, como Unit/Code)"
 Fields: Pulaski's field ← the query's column,Campos: campo de Pulaski ← columna de la consulta
 Fifo,FIFO
@@ -2091,6 +2100,7 @@ Locked: it keeps its place when others move,Bloqueado: conserva su lugar cuando 
 Long stop,Paro largo
 Longest,Más larga
 Longest waits,Esperas más largas
+"Look back at most 92 days, or choose one thing to see all its history.","Busque como máximo 92 días atrás, o elija una cosa para ver toda su historia."
 Look back {0} to {1} days.,Mire hacia atrás de {0} a {1} días.
 Loose,Suelto
 Lot,Lote
@@ -2328,6 +2338,7 @@ Name at least one lot attribute in the header.,Nombre al menos un atributo de lo
 Name of state {0},Nombre del estado {0}
 Name of {0},Nombre de {0}
 Name on the controller,Nombre en el controlador
+Name or user name,Nombre o nombre de usuario
 Name the ERP the orders come from first.,Nombre primero el ERP del que vienen las órdenes.
 "Name, e.g. Case packer, vendor A","Nombre, p. ej. Encajonadora, proveedor A"
 "Name, e.g. Damaged in handling","Nombre, p. ej. Dañado en el manejo"
@@ -2699,6 +2710,7 @@ Nothing planned here.,Nada planeado aquí.
 Nothing planned on {0}.,Nada planeado en {0}.
 Nothing planned until {0},Nada planeado hasta {0}
 Nothing received yet.,Aún no se recibe nada.
+Nothing recorded matches.,Nada registrado coincide.
 Nothing reported or planned this shift,Nada reportado ni planeado en este turno
 Nothing reported this shift,Nada reportado en este turno
 Nothing reported yet.,Aún no se ha reportado nada.
@@ -2758,6 +2770,7 @@ Offer {0},Ofrecer {0}
 Offered,Disponible
 Offers,Ofrece
 Offers the lines of,Ofrece las líneas de
+Older changes,Cambios anteriores
 Oldest,Más antiguo
 On,Encendido
 On a break {0}.,En descanso {0}.
@@ -3235,6 +3248,7 @@ Reason {0} can't be chosen.,El motivo {0} no puede elegirse.
 Reason {0} needs a comment.,El motivo {0} necesita un comentario.
 Reason {0} not found.,Motivo {0} no encontrado.
 Reason {0} was changed by someone else. Reload and try again.,Alguien más cambió el motivo {0}. Recargue e intente de nuevo.
+Reason: {0},Motivo: {0}
 Reasons,Motivos
 Reasons offered,Motivos ofrecidos
 Reason…,Motivo…
@@ -3262,6 +3276,7 @@ Record the sample,Registrar la muestra
 Recorded,Registrado
 Recorded as {0}.,Registrado como {0}.
 "Recorded late, into a run that has ended.","Registrado tarde, en una corrida que ya terminó."
+Recorded {0} from {1}; event {2} ({3}).,Registrado el {0} desde {1}; evento {2} ({3}).
 Recorded.,Registrado.
 Recorded: in specification.,Registrado: dentro de especificación.
 Recorded: out of specification. Tell quality.,Registrado: fuera de especificación. Avise a calidad.
@@ -3621,8 +3636,10 @@ Scrap reason…,Motivo de desperdicio…
 Scrapped,Desechado
 Sds,Hoja de seguridad
 Search,Buscar
+Search everything instead,Buscar en todo
 Search properties,Buscar propiedades
 Search terms,Buscar términos
+Search the audit trail,Buscar en el registro de auditoría
 Second sign-off,Segunda firma
 Security,Seguridad
 "See a site's settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions","Ver los ajustes de un sitio: modo de cambio, tolerancias de reporte, metas de OEE y excepciones de calendario"
@@ -3966,6 +3983,7 @@ Terminal {0} not found.,Terminal {0} no encontrada.
 Terminals,Terminales
 Test report,Reporte de prueba
 Text,Texto
+Text in the change,Texto en el cambio
 That action is {0} already.,Esa acción ya está {0}.
 That address is already bound to an active tag on this connection.,Esa dirección ya está vinculada a una etiqueta activa en esta conexión.
 That alert was closed already.,Esa alerta ya se cerró.
@@ -4080,6 +4098,8 @@ The action is added.,La acción está agregada.
 The action is cancelled.,La acción está cancelada.
 The action is done.,La acción está hecha.
 The address must be a full https:// URL.,La dirección debe ser una URL https:// completa.
+"The audit trail covers every site, so it needs permission to browse it everywhere.","El registro de auditoría abarca todos los sitios, así que necesita permiso para consultarlo en todas partes."
+"The audit trail covers every site, so it needs permission to browse it everywhere. Ask an administrator.","El registro de auditoría abarca todos los sitios, así que necesita permiso para consultarlo en todas partes. Pida a un administrador."
 The balance at {0} is {1} and this one is {2}; stock moves between balances in the same status.,El saldo en {0} está {1} y este está {2}; la existencia se mueve entre saldos del mismo estado.
 The balance of {0} at {1}:,El saldo de {0} en {1}:
 The base quantity must be greater than zero.,La cantidad base debe ser mayor que cero.
@@ -4156,6 +4176,7 @@ The first job started,El primer trabajo iniciado
 "The first line names the columns; employee_number and name are required. A column left out keeps what each person already has. Rows with an external_key are people from the external system (named above, or in an external_system column), matched on that key; the others are matched on their employee number.","La primera línea nombra las columnas; employee_number y name son obligatorias. Una columna que falte conserva lo que cada persona ya tiene. Las filas con external_key son personas del sistema externo (nombrado arriba, o en una columna external_system), emparejadas por esa clave; las demás se emparejan por su número de empleado."
 "The first time it's switched on, start from now (not the whole history)","La primera vez que se active, empezar desde ahora (no todo el historial)"
 "The group id has no '/', '+', '#' or ':'.","El group id no tiene '/', '+', '#' ni ':'."
+"The history of one thing ({0}), all time.","La historia de una cosa ({0}), de siempre."
 "The ideal rate is in {0}, which doesn't convert to {1}; the rate wasn't checked.","La tasa ideal está en {0}, que no se convierte a {1}; la tasa no se revisó."
 The ideal rate must be greater than zero.,La tasa ideal debe ser mayor que cero.
 The investigation is saved.,La investigación está guardada.
@@ -4579,6 +4600,7 @@ Untranslated,Sin traducir
 Unusually fast: over {0} an hour,Inusualmente rápida: más de {0} por hora
 Unusually slow: under {0} an hour,Inusualmente lenta: menos de {0} por hora
 Up to 30 days,Hasta 30 días
+"Up to 92 days at a time; without dates, the last 30.","Hasta 92 días a la vez; sin fechas, los últimos 30."
 Up to {0} MB.,Hasta {0} MB.
 Up to {0} {1} more fits this run at the line's rate.,Caben hasta {0} {1} más en esta corrida a la tasa de la línea.
 "Up to, %","Hasta, %"
@@ -4748,6 +4770,7 @@ Where what was taken came from,De dónde vino lo que se tomó
 Which signal means what on which equipment. A Sparkplug B address is,Qué señal significa qué en qué equipo. Una dirección Sparkplug B es
 Who,Quién
 "Who can sign in, and which roles they hold. Everyone who signs in can view every screen; roles decide the changes. Every user needs a role, and every role but Administrator is held at a site.","Quién puede iniciar sesión y qué roles tiene. Todos los que inician sesión pueden ver todas las pantallas; los roles deciden los cambios. Cada usuario necesita un rol, y todos los roles menos Administrador se tienen en un sitio."
+"Who changed this, and when","Quién cambió esto, y cuándo"
 Who holds what,Quién tiene qué
 "Who is on each line, the labor of each shift to review and approve, and hours against the standard crew.","Quién está en cada línea, la mano de obra de cada turno para revisar y aprobar, y horas contra la cuadrilla estándar."
 Who places changeovers,Quién coloca los cambios

@@ -361,6 +361,9 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
   `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
+- Audit trail (D-128, proposed, #129): `SearchAuditQuery` over `evt.event` (`/api/audit`; subject = all time, else ≤ 92-day window; cursor
+  `AuditCursor`), `AuditChanges` (pure: before/after diff by value, fields, label, action); `audit.view` held everywhere (`CanEverywhere`);
+  `/audit` page, `HistoryLink` on record pages; `AuditAreas.All` (Contracts) checked against `events.Create` subject types by a test.
 - Accessibility (D-127, proposed, in pieces, #142): WCAG 2.2 AA for the main flows. Build checks in `Tests/Pulaski.Web.Tests/Accessibility`
   (`RazorMarkup` scanner: labels, names, alt, titles, tabindex, skip link; `ContrastTests`: tokens + colour/background rules, both themes);
   findings and the screen-reader script in `design/accessibility.md`; `tools/a11y-audit` (axe, keyboard, reflow) reruns the demo audit. New

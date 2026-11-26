@@ -136,6 +136,10 @@
                                     </button>
                                 </li>
                             }
+                            @if (User.CanEverywhere(PermissionCodes.AuditView))
+                            {
+                                <li role="none"><a role="menuitem" class="wo-menu-item" href="@($"audit?subject={selected.Order.Id}")">@L["History"]</a></li>
+                            }
                             @foreach (var next in selected.Order.NextStatuses.Where(n => MayMove(selected.Order, n)))
                             {
                                 <li role="none">

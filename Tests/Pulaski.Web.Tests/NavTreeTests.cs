@@ -14,7 +14,7 @@ public class NavTreeTests
     {
         var hrefs = All(NavTree.Sections).Select(l => l.Href).ToList();
         Assert.Equal(hrefs.Count, hrefs.Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(32, hrefs.Count);
+        Assert.Equal(33, hrefs.Count);
         Assert.Contains("machine-profiles", NavTree.Sections[1].Entries.Single(e => e.Key == "equipment").Children.Select(c => c.Href));
         Assert.Contains("quality/ncrs", NavTree.Sections[0].Entries.Single(e => e.Key == "quality").Children.Select(c => c.Href));
     }

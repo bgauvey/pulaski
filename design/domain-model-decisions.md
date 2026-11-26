@@ -3431,6 +3431,19 @@ and a screen-reader script is kept for people to run (user's choices). Findings,
 keyboard walk, reflow at 320 px), its four fixes (OEE bars named as images, the user menu named by what it shows, unavailable-action tips out
 of the layout until shown, a scrolling *Next up* table) and the screen-reader script for people to run.
 
+### D-128 · Audit trail browser (#129) · *Proposed*
+
+**Context.** Every change was an event in `evt.event`, but nothing let anyone see who changed what without SQL.
+
+**Decision.** `SearchAuditQuery` (`GET /api/audit`) reads `evt.event` newest first, a page at a time (cursor = recorded time + id): one
+subject's history through the `(subject, sequence)` index, all time; otherwise by area (subject type, `AuditAreas.All`, kept in step with the
+code by a test), action (type or its start), who (actor id or the user's display name), text in the data, within a window of the partition key
+(default 30 days, at most 92). `AuditChanges` (pure) reads `before`/`after` field by field, numbers by value, else the data as fields, and a
+label (code, number, name). User's choices: a new `audit.view`, which must be held at every site (events record no site; administrator only by
+default); Configure → Integrations → Audit trail (`/audit`) plus **History** links on the material (and its capabilities), equipment, process,
+lot, work order and user pages; field-by-field before and after, the recorded data a click away. No schema change but the permission
+(migration 0087).
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

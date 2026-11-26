@@ -1443,6 +1443,29 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<SpcAlertDto> GetSpcAlertAsync(Guid siteId, Guid id, CancellationToken ct = default) =>
         GetAsync<SpcAlertDto>($"api/quality/alerts/{id}?siteId={siteId}", ct);
 
+    /// <summary>The audit trail (#129): a page of recorded changes, newest first.</summary>
+    public Task<Pulaski.Contracts.Audit.AuditPageDto> SearchAuditAsync(
+        Guid? subjectId, string? area, string? actor, string? text, DateTimeOffset? from, DateTimeOffset? to, string? before, CancellationToken ct = default)
+    {
+        var query = new List<string>();
+        void Add(string name, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                query.Add($"{name}={Uri.EscapeDataString(value)}");
+            }
+        }
+
+        Add("subjectId", subjectId?.ToString());
+        Add("area", area);
+        Add("actor", actor);
+        Add("text", text);
+        Add("from", from?.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        Add("to", to?.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        Add("before", before);
+        return GetAsync<Pulaski.Contracts.Audit.AuditPageDto>("api/audit" + (query.Count > 0 ? "?" + string.Join("&", query) : ""), ct);
+    }
+
     /// <summary>The setup checklist (#139): at a site, or without one before any site exists.</summary>
     public Task<Pulaski.Contracts.Setup.SetupChecklistDto> GetSetupChecklistAsync(Guid? siteId, CancellationToken ct = default) =>
         GetAsync<Pulaski.Contracts.Setup.SetupChecklistDto>($"api/setup{(siteId is { } s ? $"?siteId={s}" : "")}", ct);

@@ -1,0 +1,13 @@
+@inject CurrentUser User
+
+@* A thing's history in the audit trail (#129): shown only to those who may browse it, which is everywhere. *@
+@if (User.CanEverywhere(PermissionCodes.AuditView))
+{
+    <a class="@Class" href="@($"audit?subject={Subject}")" title="@L["Who changed this, and when"]">@L["History"]</a>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid Subject { get; set; }
+
+    [Parameter] public string Class { get; set; } = "btn btn-sm btn-outline-secondary";
+}
