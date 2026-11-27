@@ -210,6 +210,7 @@ A connection's code is fixed once made: it names its credentials in the configur
 A connection's kind is fixed once made ({0}); add another connection instead.,El tipo de una conexión es fijo una vez creada ({0}); agregue otra conexión en su lugar.
 A control chart signalled (SPC alert),Un gráfico de control dio una señal (alerta SPC)
 A conversion needs two different units.,Una conversión necesita dos unidades distintas.
+A copied line goes under its own site or an area of it.,Una línea copiada va bajo su propio sitio o un área de este.
 A count can't be negative.,Un conteo no puede ser negativo.
 "A count can't go below zero, so neither can its lower limit.","Una cuenta no puede bajar de cero, y su límite inferior tampoco."
 A crew belongs to a site; choose one.,Una cuadrilla pertenece a un sitio; elija uno.
@@ -795,6 +796,7 @@ Cancelled in the ERP before Pulaski had it; nothing to do.,Cancelada en el ERP a
 Cancel…,Cancelar…
 Cap,Tope
 Capabilities,Capacidades
+Capabilities and rates ({0}) and changeover rules ({1}),Capacidades y tasas ({0}) y reglas de cambio ({1})
 "Capabilities: which material runs on which line, and how fast","Capacidades: qué material corre en qué línea, y a qué velocidad"
 Capability,Capacidad
 Capability indices are for measured values.,Los índices de capacidad son para valores medidos.
@@ -953,6 +955,7 @@ Choose the site.,Elija el sitio.
 Choose to merge,Elegir para unir
 Choose what caused it.,Elija qué lo causó.
 Choose when it starts.,Elija cuándo empieza.
+Choose where the copy goes.,Elija dónde va la copia.
 Choose where the good output goes.,Elija a dónde va la producción buena.
 Choose who to check in.,Elija a quién registrar.
 Choose who.,Elija a quién.
@@ -1021,6 +1024,7 @@ Coc,Certificado de conformidad
 Code,Código
 Code (optional),Código (opcional)
 Code and kind can't change once created; switch one off instead.,El código y el tipo no pueden cambiar una vez creados; desactive uno en su lugar.
+Code for the copy of {0},Código de la copia de {0}
 Code machine stops: confirm or change their reason,Codificar paradas de máquina: confirmar o cambiar su motivo
 "Code, name, base unit and type come from {0}","El código, nombre, unidad base y tipo vienen de {0}"
 Codes starting PUL1 are Pulaski's barcodes.,Los códigos que empiezan con PUL1 son códigos de barras de Pulaski.
@@ -1101,7 +1105,12 @@ Control module,Módulo de control
 Conversion,Conversión
 Conversions,Conversiones
 Convert,Convertir
+Copied from,Copiado de
 Copies,Copias
+Copy the line,Copiar la línea
+Copy this line,Copiar esta línea
+Copying a line needs permission to manage equipment at its site.,Copiar una línea necesita permiso para gestionar equipos en su sitio.
+Copying capabilities needs permission to maintain processes and capabilities at the site.,Copiar capacidades necesita permiso para mantener procesos y capacidades en el sitio.
 Correct,Corregir
 Correct details,Corregir detalles
 "Correct inventory: write up, write off, correct, reverse, split and merge lots","Corregir inventario: ajustar, dar de baja, corregir, revertir, dividir y combinar lotes"
@@ -1584,6 +1593,7 @@ Give at least one target.,Indique al menos una meta.
 "Give both BeforeAt and BeforeId, or neither.","Dé BeforeAt y BeforeId, o ninguno."
 "Give both external_system and external_key, or neither.","Dé external_system y external_key, o ninguno."
 Give each shift a start time as HH:mm.,Dé a cada turno una hora de inicio como HH:mm.
+Give every piece of equipment a code of at most {0} characters.,Dé a cada equipo un código de {0} caracteres como máximo.
 Give how often first.,Indique primero con qué frecuencia.
 "Give or take away a role held at every site, rather than at one","Dar o quitar un rol que se tiene en todos los sitios, en lugar de en uno"
 "Give setup and first-article checklists their second sign-off, or reject them","Dar la segunda firma a las listas de verificación de preparación y de primera pieza, o rechazarlas"
@@ -1612,6 +1622,7 @@ Give the time in whole minutes.,Indique el tiempo en minutos enteros.
 Give the {0} as 1 to {1} (a week).,Indique {0} como 1 a {1} (una semana).
 "Give them a new temporary password, which they must change when they sign in. It also unlocks them.","Darle una nueva contraseña temporal, que deberá cambiar al iniciar sesión. También lo desbloquea."
 Give them a reason,Dele un motivo
+Give {0} a name of at most 200 characters.,Dé a {0} un nombre de 200 caracteres como máximo.
 Giving or taking away a role at every site needs permission to grant roles everywhere.,Dar o quitar un rol en todos los sitios necesita permiso para otorgar roles en todas partes.
 Go,Ir
 Go to the start,Ir al inicio
@@ -1819,6 +1830,7 @@ It expires on or after the day it is valid from.,Vence el día desde el que es v
 It filled {0} of {1} {2}.,Llenó {0} de {1} {2}.
 "It goes into a lot of its own, on hold until someone approves it: it can't be sold as a partial.","Va a un lote propio, retenido hasta que alguien lo apruebe: no puede venderse como parcial."
 It goes into the run going on then.,Va a la corrida en curso en ese momento.
+It goes under,Va bajo
 It has never connected.,Nunca se ha conectado.
 It hasn't run yet.,Aún no se ha ejecutado.
 It is accepted: it will be used.,Se acepta: se usará.
@@ -1883,6 +1895,7 @@ Its shift isn't approved yet: change the break instead.,Su turno aún no está a
 Its shift isn't approved yet: change the session instead.,Su turno aún no está aprobado: cambie la sesión en su lugar.
 Its stops have been adjusted since: undo that first.,Sus paros se ajustaron después: deshaga eso primero.
 Its tag was deleted; bind another tag instead.,Su etiqueta se borró; asocie otra etiqueta en su lugar.
+Its {0} machine tags aren't copied: bind the new machines on Edge nodes.,Sus {0} etiquetas de máquina no se copian: vincule las máquinas nuevas en Nodos de borde.
 Job,Trabajo
 Job status,Estado del trabajo
 Job {0},Trabajo {0}
@@ -2187,8 +2200,10 @@ Machine profile,Perfil de máquina
 Machine profile {0} not found.,Perfil de máquina {0} no encontrado.
 Machine profiles,Perfiles de máquina
 Machine profiles: state values and stop codes,Perfiles de máquina: valores de estado y códigos de paro
+"Machine settings: profile, counter, constraint, output, label printer, stop codes ({0})","Ajustes de máquina: perfil, contador, restricción, salida, impresora de etiquetas, códigos de paro ({0})"
 Machine speed,Velocidad de máquina
 Machine stops coded and adjusted,Paros de máquina codificados y ajustados
+Machine tags aren't copied: bind the new machines on Edge nodes.,Los etiquetas de máquina no se copian: vincule las máquinas nuevas en Nodos de borde.
 Machines,Máquinas
 Machines: live state and stops to code,Máquinas: estado en vivo y paros por codificar
 Machine…,Máquina…
@@ -2342,6 +2357,7 @@ NCR actions to do,Acciones de NC por hacer
 Name,Nombre
 Name at least one lot attribute in the header.,Nombre al menos un atributo de lote en el encabezado.
 "Name at least one part that finds a lot or a material: (?<lot>…), (?<supplier_lot>…), (?<material>…) or (?<gtin>…).","Nombre al menos una parte que encuentre un lote o un material: (?<lot>…), (?<supplier_lot>…), (?<material>…) o (?<gtin>…)."
+Name for the copy of {0},Nombre de la copia de {0}
 Name of state {0},Nombre del estado {0}
 Name of {0},Nombre de {0}
 Name on the controller,Nombre en el controlador
@@ -2385,6 +2401,7 @@ New containers get SSCCs from serial {0}.,Los contenedores nuevos reciben SSCC a
 New draft,Nuevo borrador
 New equipment,Equipo nuevo
 New instruction,Nueva instrucción
+New line's code,Código de la nueva línea
 New lot each shift,Lote nuevo cada turno
 New lot number,Nuevo número de lote
 New material,Nuevo material
@@ -2823,6 +2840,7 @@ Only a balance takes in lots as they arrive.,Solo un saldo recibe los lotes a me
 Only a choice attribute has choices.,Solo un atributo de opciones tiene opciones.
 Only a constraint-machine line names one.,Solo una línea con máquina restricción nombra una.
 Only a counter rolls over.,Solo un contador se reinicia.
+Only a line that runs jobs can be copied.,Solo se puede copiar una línea que ejecuta trabajos.
 Only a measured characteristic has a unit.,Solo una característica medida tiene unidad.
 Only a number attribute can stand for a quality characteristic.,Solo un atributo numérico puede representar una característica de calidad.
 Only a number attribute has a unit.,Solo un atributo numérico tiene unidad.
@@ -3115,6 +3133,7 @@ Process-value tag,Etiqueta de valor de proceso
 Processed,Procesado
 Processed count,Cuenta procesada
 Processes,Procesos
+"Processes still name the original line: move or assign a job to the copy, or add it to a process.","Los procesos siguen nombrando la línea original: mueva o asigne un trabajo a la copia, o agréguela a un proceso."
 Processes that make it,Procesos que lo hacen
 Process…,Proceso…
 Produce,Producir
@@ -3188,6 +3207,7 @@ Qualification to grant,Calificación a otorgar
 Qualification to require,Calificación a exigir
 Qualification {0} not found.,Calificación {0} no encontrada.
 Qualifications,Calificaciones
+"Qualifications ({0}), OEE targets ({1}), maintenance plans ({2}), work instructions ({3})","Calificaciones ({0}), objetivos de OEE ({1}), planes de mantenimiento ({2}), instrucciones de trabajo ({3})"
 Qualifications can't be imported here.,Las calificaciones no pueden importarse aquí.
 Qualification…,Calificación…
 Quality,Calidad
@@ -3431,6 +3451,7 @@ Reversed,Revertido
 Reversed: its counts are offset and its lots taken back,Revertido: sus cuentas se compensan y sus lotes se retiran
 Reversed: run now has {0} good and {1} scrap; {2} lot(s) took the output back.,Revertido: la corrida ahora tiene {0} buenos y {1} de desperdicio; lotes que devolvieron la producción: {2}.
 Reverse…,Revertir…
+Review the copy,Revisar la copia
 Revoke,Revocar
 Revoked,Revocada
 Revoked by {0}: {1},Revocada por {0}: {1}
@@ -4157,6 +4178,7 @@ The draft of {0} was changed by someone else. Reload and try again.,Otra persona
 The earlier operation.,La operación anterior.
 The edge node already has a connection with that code.,El nodo de borde ya tiene una conexión con ese código.
 "The endpoint is an opc.tcp:// address, such as opc.tcp://plc1:4840.","El endpoint es una dirección opc.tcp://, como opc.tcp://plc1:4840."
+The equipment below it ({0}),Los equipos debajo de ella ({0})
 "The equipment that uses this profile; give equipment its profile on the Equipment screen, under Machine data. A machine whose stop code means something else than on the others can take its own reason for it here.","Los equipos que usan este perfil; asigne a los equipos su perfil en la pantalla Equipos, en Datos de máquina. Una máquina cuyo código de paro significa algo distinto que en las demás puede tomar aquí su propio motivo."
 The equipment this sits under.,El equipo bajo el que está.
 The equipment this will sit under.,El equipo bajo el que estará.
@@ -4729,6 +4751,7 @@ What automation couldn't consume,Lo que la automatización no pudo consumir
 "What availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line with targets of its own uses those instead. A change starts on the day you choose, so earlier days keep the targets they had. Leave a figure blank for no target.","A qué deben llegar la disponibilidad, el desempeño, la calidad y el OEE. Las metas del sitio se aplican a todos sus equipos; una máquina o línea con metas propias usa esas. Un cambio empieza el día que elija, así que los días anteriores conservan las metas que tenían. Deje una cifra en blanco para no tener meta."
 What becomes of the lots,Qué pasa con los lotes
 What changed (optional),Qué cambió (opcional)
+What comes with it,Qué viene con ella
 What each line's shifts hand on: open items stay until someone closes them; notes stay with their shift.,Lo que los turnos de cada línea entregan: los asuntos abiertos quedan hasta que alguien los cierre; las notas quedan con su turno.
 "What each machine bound here last reported, as Pulaski applied it: its PackML state (and the value the machine sent), unit mode, latched stop code and speed. The machines' stops are coded on Operate → Machines.","Lo último que reportó cada máquina vinculada aquí, tal como Pulaski lo aplicó: su estado PackML (y el valor que envió la máquina), modo de unidad, código de paro retenido y velocidad. Los paros de las máquinas se codifican en Operar → Máquinas."
 "What each material is made from, one level deep. A BOM for a process says which operation consumes each component.","De qué se hace cada material, un nivel. Una lista de materiales para un proceso dice qué operación consume cada componente."
@@ -5516,6 +5539,7 @@ yes,sí
 {0} is already on {1}.,{0} ya está en {1}.
 {0} is already sampled on {1}; switch that off first.,{0} ya se muestrea en {1}; desactive eso primero.
 {0} is already there.,{0} ya está allí.
+{0} is already used at the site.,{0} ya se usa en el sitio.
 {0} is already withdrawn.,{0} ya está retirado.
 {0} is already {1}.,{0} ya está {1}.
 {0} is another material or site; only lots of one material merge.,{0} es de otro material o sitio; solo se unen lotes de un mismo material.
@@ -5538,6 +5562,7 @@ yes,sí
 {0} is for another material or site.,{0} es de otro material o sitio.
 {0} is for another site.,{0} es de otro sitio.
 {0} is given twice (property '{1}').,{0} se da dos veces (propiedad '{1}').
+{0} is given twice.,{0} se da dos veces.
 "{0} is held at a site; choose one, or allow it at every site on the Roles tab.","{0} se tiene en un sitio; elija uno, o permítalo en todos los sitios en la pestaña Roles."
 {0} is held at a site; choose one.,{0} se tiene en un sitio; elija uno.
 "{0} is held everywhere, not at a site.","{0} se tiene en todas partes, no en un sitio."

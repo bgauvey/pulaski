@@ -361,6 +361,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
   `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
+- Line copy (D-132, proposed, in pieces, #140): `GetLineCopyPlanQuery` (review: codes by `LineCopyRules.ChildCode`, counts, problems) and
+  `CopyLineCommand` (one transaction through `ILineCopyRepository`: equipment + closure, references inside remapped, capabilities from now with
+  ideal-rate run standards, changeover rules, stop codes, qualifications, targets, plans, instruction targets; never tags); `/api/equipment/{id}/copy[-plan]`;
+  `LineCopyPanel` on the Equipment page. (b) site reference data.
 - User settings (D-131, proposed, in pieces, #131): `sec.user_setting` (`home`, `favorites`, `filters:<page>`; no events) via `PUT /api/me/settings`
   and `MeDto.Settings`; web `CurrentUser.Setting<T>`/`SetSettingAsync`, `UserViews` (keys, favourites), `FavoriteStar` (header), Favourites in
   `NavMenu`, home in `UserMenu` + `MainLayout`; a list page keeps its filters as a private `Filters` record through `SavedFilters.Load/SaveAsync`

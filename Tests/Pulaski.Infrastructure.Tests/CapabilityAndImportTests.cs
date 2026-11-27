@@ -34,6 +34,71 @@ public sealed class CapabilityAndImportTests(DatabaseFixture db)
         ScalarAsync<long>("SELECT xmin::text::bigint FROM core.equipment_capability WHERE id = @Id", new { Id = id });
 
     [Fact]
+    public async Task A_copied_line_brings_its_machines_capabilities_rules_and_targets_with_references_inside_it_pointing_at_the_copies()
+    {
+        var (line, area) = await PlantAsync();
+        CreatedResponse saw = await db.SendAsync(new CreateEquipmentCommand(line, "LN-" + _s + "-SAW", "Saw", null, "work_unit", "machine", true, false, false, null));
+        CreatedResponse material = await db.SendAsync(new CreateMaterialCommand("CPY-" + _s, "Profile", null, "finished", null, db.UomId, true, null));
+        await db.SendAsync(new AddCapabilityCommand(material.Id, line, 500m, db.UomId, 30, 2m, true, null, null));
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            await admin.ExecuteAsync(
+                """
+                UPDATE core.equipment SET constraint_equipment_id = @Saw, state_derivation = 'constraint_machine' WHERE id = @Line;
+                INSERT INTO core.changeover_rule (id, site_id, equipment_id, to_material_id, duration, is_active, created_at, updated_at)
+                SELECT uuidv7(), site_id, @Line, @Material, interval '20 minutes', true, now(), now() FROM core.equipment WHERE id = @Line;
+                INSERT INTO core.oee_target (id, site_id, equipment_id, effective_from, oee_pct, created_at, updated_at)
+                SELECT uuidv7(), site_id, @Line, current_date - 10, 75, now(), now() FROM core.equipment WHERE id = @Line;
+                """, new { Saw = saw.Id, Line = line, Material = material.Id });
+        }
+
+        async Task<Contracts.EquipmentModel.LineCopyPlanDto> PlanAsync(string code)
+        {
+            await using var scope = db.Services.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<Application.Abstractions.IQueryHandler<GetLineCopyPlanQuery, Contracts.EquipmentModel.LineCopyPlanDto>>()
+                .HandleAsync(new GetLineCopyPlanQuery(line, code, "Line two"), CancellationToken.None);
+        }
+
+        // The review: children follow the new code; a code in use is a problem.
+        var plan = await PlanAsync("LN2-" + _s);
+        Assert.Equal(["LN2-" + _s, "LN2-" + _s + "-SAW"], plan.Items.Select(i => i.Code));
+        Assert.Equal((1, 1, 1, 0), (plan.Capabilities, plan.ChangeoverRules, plan.OeeTargets, plan.TagsLeftOut));
+        Assert.Empty(plan.Problems);
+        Assert.NotEmpty((await PlanAsync("LN-" + _s)).Problems);
+
+        var admin2 = new Domain.Security.UserAccess(Guid.CreateVersion7(), "test-user", "Test", "test-user", true,
+            [new Domain.Security.RoleGrant(Guid.CreateVersion7(), Domain.Security.Roles.Administrator, "Administrator", null, [])]);
+
+        var copied = await db.SendAsync(new CopyLineCommand(admin2, line, new Contracts.EquipmentModel.CopyLineRequest
+        {
+            Items = [.. plan.Items.Select(i => new Contracts.EquipmentModel.LineCopyNameDto(i.SourceId, i.Code, i.Name))],
+        }));
+
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            var (code, parent, constraint) = await admin.QuerySingleAsync<(string, Guid, Guid?)>(
+                "SELECT code, parent_id, constraint_equipment_id FROM core.equipment WHERE id = @Id", new { Id = copied.Id });
+            var newSaw = await admin.ExecuteScalarAsync<Guid>("SELECT id FROM core.equipment WHERE parent_id = @Id", new { Id = copied.Id });
+            Assert.Equal(("LN2-" + _s, area, (Guid?)newSaw), (code, parent, constraint));
+            Assert.Equal(2, await admin.ExecuteScalarAsync<int>("SELECT count(*) FROM core.equipment_closure WHERE descendant_id = @Saw AND depth > 0 AND ancestor_id IN (@Line, @Area)",
+                new { Saw = newSaw, Line = copied.Id, Area = area }));
+            Assert.Equal((500m, "ideal_rate"), await admin.QuerySingleAsync<(decimal, string)>(
+                "SELECT calculated_rate_per_hour, calculation_basis FROM core.run_standard WHERE equipment_id = @Id AND material_id = @M", new { Id = copied.Id, M = material.Id }));
+            Assert.Equal(1, await admin.ExecuteScalarAsync<int>("SELECT count(*) FROM core.equipment_capability WHERE equipment_id = @Id AND effective_to IS NULL", new { Id = copied.Id }));
+            Assert.Equal(1, await admin.ExecuteScalarAsync<int>("SELECT count(*) FROM core.changeover_rule WHERE equipment_id = @Id AND is_active", new { Id = copied.Id }));
+            Assert.Equal(75m, await admin.ExecuteScalarAsync<decimal>("SELECT oee_pct FROM core.oee_target WHERE equipment_id = @Id", new { Id = copied.Id }));
+            Assert.Equal(1, await admin.ExecuteScalarAsync<int>(
+                "SELECT count(*) FROM evt.event WHERE subject = @Id AND type = 'pulaski.equipment.line_copied.v1'", new { Id = copied.Id }));
+        }
+
+        // The same codes again: refused.
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CopyLineCommand(admin2, line, new Contracts.EquipmentModel.CopyLineRequest
+        {
+            Items = [.. plan.Items.Select(i => new Contracts.EquipmentModel.LineCopyNameDto(i.SourceId, i.Code, i.Name))],
+        })));
+    }
+
+    [Fact]
     public async Task The_audit_trail_says_who_changed_a_capability_and_what_changed()
     {
         var (line, _) = await PlantAsync();

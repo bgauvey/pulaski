@@ -3489,6 +3489,22 @@ my home page** in the user menu sets where a visit starts (the first arrival at 
 `SavedFilters` (stock, journal, containers, shortages, materials, the schedule's view, NCRs, the OEE report, deliveries, audit trail):
 dates aren't kept (a window stays recent: the OEE report keeps its length), nor words typed as you go; a test checks each page's key.
 
+### D-132 · Copy a line, or a site's reference data (#140) · *Proposed, in pieces*
+
+**Context.** Similar lines and sites were set up by hand each time.
+
+**Decision.** (a) **A line**: `GetLineCopyPlanQuery` shows the review (every piece with its proposed code: `LineCopyRules.ChildCode`, the new
+line's code replacing the old one's at the start or put in front; counts of what comes; codes in use flagged by `LineCopyRules.Problems`) and
+`CopyLineCommand` makes it in one transaction (`ILineCopyRepository`, ids from the app): the line and the equipment below it with the tree;
+references inside the copy (constraint machine, counter, links, an output location inside it) point at the copies, those outside stay (a
+constraint machine's line is written with `own_tags` until its copy exists). User's choices: everything can come, each part switched off in the
+review: the equipment below; capabilities in force (from now, each planning rate from the ideal rate, as D-034) and changeover rules; machine
+settings (profile, derivation, counter, output location, label printer, stop-code overrides); requirements (qualifications, OEE targets from
+today, maintenance plans counting from now, instructions aimed at the line). Codes follow the new line's; **tags are never copied** (bind them
+on Edge nodes), nor history, and processes keep naming the original. Same site only. Needs `equipment.manage`, and `processes.manage` for
+capabilities. Events: `equipment.created` per piece, `capability.added` per capability, `equipment.line_copied`.
+(b) a site's reference data.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

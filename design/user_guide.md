@@ -470,6 +470,33 @@ For a line that runs jobs, the equipment's panel has a **Production reports** pa
 In detail: the location must hold inventory at the line's site and the printer be one of the site's active printers (set up under
 **Site settings → Labels**). On a line that fills lots, the lot being filled's location is offered first. A report can always choose another place.
 
+### Copy a line
+
+A new line much like one you have doesn't need setting up from nothing.
+
+1. Select the line on **Equipment**, and under its properties, in **Copy this line**, type the **New line's code** and its **Name**, then click
+   **Review the copy**.
+2. Check what comes with it, and untick what you don't want:
+   - **The equipment below it**: its machines, feed points and storage, with their flags, calendar and inventory settings.
+   - **Capabilities and rates**: what it can run, ideal rates, batch and lot rules, from now on, each with its planning rate from the ideal rate
+     (as when added by hand); and its changeover rules. Needs permission to maintain processes and capabilities.
+   - **Machine settings**: machine profile, how its state is worked out (its counter and constraint machine become the copies'), output
+     location, label printer and stop-code overrides.
+   - **Qualifications** required, **OEE targets** of its own (from today), **maintenance plans** (counting from now) and **work instructions**
+     aimed at the line.
+3. Choose where it goes (**It goes under**: the site or one of its areas; the same as the original to start with), and check every copy's
+   **Code** and **Name**: a child whose code starts with the line's gets the new line's code instead (EXT-01-SAW → EXT-03-SAW), any other the
+   new code in front. A code already used at the site is flagged.
+4. Click **Copy the line**. The tree shows the new line, selected.
+
+In detail:
+
+- **Not copied:** machine tags (the addresses an edge node reads; bind the new machines on **Edge nodes**), stops, history and anything that
+  happened; processes keep naming the original line, so move or assign a job to the copy, or add it to a process, for orders to reach it.
+- The copy stays at the same site. It is one change: everything is copied or nothing is, and each new piece of equipment and capability is in
+  the audit trail, with the copy itself (`pulaski.equipment.line_copied.v1`).
+- Copying needs permission to manage equipment at the site.
+
 ### Deactivate equipment
 
 Set **Active** to *false*. Inactive equipment stays in the tree and in history, greyed out, but can no longer be used for new work. Pulaski never deletes equipment.

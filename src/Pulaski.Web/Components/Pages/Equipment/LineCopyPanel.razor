@@ -1,0 +1,157 @@
+@inject PulaskiApiClient Api
+@inject CurrentUser User
+
+@* Copying a line (#140, D-132): give the new line's code and name, review what comes with it and every copy's code, then copy it in one step.
+   Machine tags aren't copied (bind them on Edge nodes), and processes keep naming the original line. *@
+<section class="mt-3" aria-labelledby="copy-title">
+    <h3 id="copy-title" class="h6">@L["Copy this line"]</h3>
+    <ProblemAlert Error="_error" />
+    <form class="row g-2 align-items-end" @onsubmit="ReviewAsync" @onsubmit:preventDefault>
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold" for="copy-code">@L["New line's code"]</label>
+            <input id="copy-code" class="form-control form-control-sm" maxlength="50" @bind="_code" />
+        </div>
+        <div class="col-md-5">
+            <label class="form-label small fw-semibold" for="copy-name">@L["Name"]</label>
+            <input id="copy-name" class="form-control form-control-sm" maxlength="200" @bind="_name" />
+        </div>
+        <div class="col-md-3">
+            <ActionButton Type="submit" Class="btn btn-sm btn-outline-primary" Busy="_busy">@L["Review the copy"]</ActionButton>
+        </div>
+    </form>
+
+    @if (_plan is { } plan)
+    {
+        <div class="mt-3">
+            <label class="form-label small fw-semibold" for="copy-parent">@L["It goes under"]</label>
+            <select id="copy-parent" class="form-select form-select-sm w-auto" @bind="_parentId">
+                @foreach (var p in Parents)
+                {
+                    <option value="@p.Id">@p.Code · @p.Name</option>
+                }
+            </select>
+        </div>
+        <fieldset class="mt-3">
+            <legend class="small fw-semibold">@L["What comes with it"]</legend>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="copy-equipment" @bind="_equipment" />
+                <label class="form-check-label" for="copy-equipment">@L["The equipment below it ({0})", plan.Items.Count - 1]</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="copy-capabilities" @bind="_capabilities" disabled="@(!MayCapabilities)" />
+                <label class="form-check-label" for="copy-capabilities">@L["Capabilities and rates ({0}) and changeover rules ({1})", plan.Capabilities, plan.ChangeoverRules]</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="copy-settings" @bind="_settings" />
+                <label class="form-check-label" for="copy-settings">@L["Machine settings: profile, counter, constraint, output, label printer, stop codes ({0})", plan.StopCodeOverrides]</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="copy-requirements" @bind="_requirements" />
+                <label class="form-check-label" for="copy-requirements">@L["Qualifications ({0}), OEE targets ({1}), maintenance plans ({2}), work instructions ({3})", plan.Qualifications, plan.OeeTargets, plan.MaintenancePlans, plan.InstructionTargets]</label>
+            </div>
+        </fieldset>
+
+        <div class="table-panel mt-2">
+            <table class="table table-sm align-middle small mb-0">
+                <thead><tr><th>@L["Copied from"]</th><th>@L["Code"]</th><th>@L["Name"]</th></tr></thead>
+                <tbody>
+                    @foreach (var item in plan.Items.Where(i => _equipment || i.SourceParentId is null))
+                    {
+                        <tr @key="item.SourceId">
+                            <td style="padding-left: @(0.5 + item.Depth)rem">@item.SourceCode <span class="text-muted">· @L.Label(item.Role)</span></td>
+                            <td><input class="form-control form-control-sm" maxlength="50" aria-label="@L["Code for the copy of {0}", item.SourceCode]" @bind="_codes[item.SourceId]" /></td>
+                            <td><input class="form-control form-control-sm" maxlength="200" aria-label="@L["Name for the copy of {0}", item.SourceCode]" @bind="_names[item.SourceId]" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (plan.Problems.Count > 0)
+        {
+            <div class="drawer-alert is-warning mt-2" role="status"><Icon Name="alert" Size="18" /><span>@string.Join(" ", L.Notes(plan.Problems))</span></div>
+        }
+        <p class="small text-muted mt-2 mb-2">
+            @(plan.TagsLeftOut > 0 ? L["Its {0} machine tags aren't copied: bind the new machines on Edge nodes.", plan.TagsLeftOut] : L["Machine tags aren't copied: bind the new machines on Edge nodes."])
+            @L["Processes still name the original line: move or assign a job to the copy, or add it to a process."]
+        </p>
+        <ActionButton Class="btn btn-sm btn-primary" Busy="_busy" OnClick="CopyAsync">@L["Copy the line"]</ActionButton>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public EquipmentDto Line { get; set; } = default!;
+
+    /// <summary>The site's areas and the site itself: where a line can go.</summary>
+    [Parameter] public IReadOnlyList<EquipmentDto> Equipment { get; set; } = [];
+
+    [Parameter] public EventCallback<Guid> Copied { get; set; }
+
+    private string? _code;
+    private string? _name;
+    private LineCopyPlanDto? _plan;
+    private Guid? _parentId;
+    private bool _equipment = true;
+    private bool _capabilities = true;
+    private bool _settings = true;
+    private bool _requirements = true;
+    private Dictionary<Guid, string> _codes = [];
+    private Dictionary<Guid, string> _names = [];
+    private bool _busy;
+    private ApiException? _error;
+
+    private bool MayCapabilities => User.Can(PermissionCodes.Processes, Line.SiteId);
+
+    private IEnumerable<EquipmentDto> Parents =>
+        Equipment.Where(e => e.SiteId == Line.SiteId && e.IsActive && e.Level is "site" or "area").OrderBy(e => e.Level != "site").ThenBy(e => e.Code, StringComparer.Ordinal);
+
+    private async Task ReviewAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _plan = await Api.GetLineCopyPlanAsync(Line.Id, _code, _name);
+            _codes = _plan.Items.ToDictionary(i => i.SourceId, i => i.Code);
+            _names = _plan.Items.ToDictionary(i => i.SourceId, i => i.Name);
+            _parentId ??= _plan.ParentId;
+            _capabilities = MayCapabilities;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CopyAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CopyLineAsync(Line.Id, new CopyLineRequest
+            {
+                ParentId = _parentId,
+                Equipment = _equipment,
+                Capabilities = _capabilities,
+                MachineSettings = _settings,
+                Requirements = _requirements,
+                Items = [.. _plan!.Items.Select(i => new LineCopyNameDto(i.SourceId, _codes[i.SourceId], _names[i.SourceId]))],
+            });
+            _plan = null;
+            await Copied.InvokeAsync(created.Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
