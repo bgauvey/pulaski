@@ -72,6 +72,39 @@ public sealed class SecurityTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_users_own_settings_come_with_their_profile_and_are_theirs_alone()
+    {
+        var site = await SiteAsync();
+        CreatedResponse created = await db.SendAsync(new CreateUserCommand("Set." + _s, "Settings " + _s, null, "Temporary-pass-1", Roles.Operator, site));
+        await db.SendAsync(new CreateUserCommand("Oth." + _s, "Other " + _s, null, "Temporary-pass-1", Roles.Operator, site));
+        static System.Text.Json.JsonElement Json(string text) => System.Text.Json.JsonDocument.Parse(text).RootElement.Clone();
+
+        await db.SendAsync(new SetUserSettingCommand(created.Id, "home", Json("\"floor\"")));
+        await db.SendAsync(new SetUserSettingCommand(created.Id, "favorites", Json("""[{"href":"inventory/lots","title":"Lots"}]""")));
+        await db.SendAsync(new SetUserSettingCommand(created.Id, "filters:inventory/lots", Json("""{"status":"on_hold"}""")));
+        await db.SendAsync(new SetUserSettingCommand(created.Id, "filters:inventory/lots", Json("""{"status":"available"}""")));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new SetUserSettingCommand(created.Id, "anything", Json("1"))));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new SetUserSettingCommand(created.Id, "home", Json($"\"{new string('x', 17000)}\""))));
+
+        async Task<MeDto> MeAsync(string username)
+        {
+            await using var scope = db.Services.CreateAsyncScope();
+            var access = (await scope.ServiceProvider.GetRequiredService<ISecurityReadStore>().GetAccessAsync(Issuers.Local, username, TestTime.Now, CancellationToken.None))!;
+            return await scope.ServiceProvider.GetRequiredService<IQueryHandler<GetMeQuery, MeDto>>().HandleAsync(new GetMeQuery(access), CancellationToken.None);
+        }
+
+        var me = await MeAsync("set." + _s);
+        Assert.Equal(["favorites", "filters:inventory/lots", "home"], me.Settings.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("\"floor\"", me.Settings["home"]);
+        Assert.Contains("available", me.Settings["filters:inventory/lots"], StringComparison.Ordinal);
+        Assert.Empty((await MeAsync("oth." + _s)).Settings);
+
+        // Cleared: gone from the profile.
+        await db.SendAsync(new SetUserSettingCommand(created.Id, "home", null));
+        Assert.DoesNotContain("home", (await MeAsync("set." + _s)).Settings.Keys);
+    }
+
+    [Fact]
     public async Task A_provider_user_is_kept_by_issuer_and_subject_and_signs_in_once_given_a_role()
     {
         var site = await SiteAsync();

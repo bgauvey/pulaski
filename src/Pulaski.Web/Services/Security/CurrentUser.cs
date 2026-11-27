@@ -19,6 +19,52 @@ public sealed class CurrentUser
     /// <summary>For tests and previews: the user as given.</summary>
     public void Set(MeDto me) => Me = me;
 
+    /// <summary>A view setting changed (#131): the menu shows favourites again.</summary>
+    public event Action? SettingsChanged;
+
+    private static readonly System.Text.Json.JsonSerializerOptions SettingJson = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+    /// <summary>One of the user's own view settings (#131), read from their profile; default when unset or unreadable.</summary>
+    public T? Setting<T>(string key)
+    {
+        if (Me?.Settings.TryGetValue(key, out var json) != true)
+        {
+            return default;
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<T>(json!, SettingJson);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return default;
+        }
+    }
+
+    /// <summary>Keeps a view setting for the user (#131): here at once, and on the server for next time and other devices. Null clears it.</summary>
+    public async Task SetSettingAsync<T>(PulaskiApiClient api, string key, T? value)
+    {
+        var element = value is null ? (System.Text.Json.JsonElement?)null : System.Text.Json.JsonSerializer.SerializeToElement(value, SettingJson);
+        if (Me is { } me)
+        {
+            var settings = new Dictionary<string, string>(me.Settings, StringComparer.Ordinal);
+            if (element is { } e)
+            {
+                settings[key] = e.GetRawText();
+            }
+            else
+            {
+                settings.Remove(key);
+            }
+
+            Me = me with { Settings = settings };
+            SettingsChanged?.Invoke();
+        }
+
+        await api.SetUserSettingAsync(new UserSettingRequest { Key = key, Value = element });
+    }
+
     /// <summary>Whether the user holds <paramref name="permission"/> at <paramref name="siteId"/>; without a site, at any site.</summary>
     public bool Can(string permission, Guid? siteId = null) =>
         Me?.Permissions.FirstOrDefault(p => p.Code == permission) is { } grant

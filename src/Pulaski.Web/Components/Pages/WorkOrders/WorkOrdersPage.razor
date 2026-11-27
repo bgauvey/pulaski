@@ -55,7 +55,7 @@
 <div class="table-panel wo-panel">
     <div class="wo-toolbar">
         <label class="wo-toolbar-label" for="wo-find-by">@L["Find by"]</label>
-        <select id="wo-find-by" class="form-select form-select-sm w-auto" @bind="_findBy">
+        <select id="wo-find-by" class="form-select form-select-sm w-auto" @bind="_findBy" @bind:after="SaveFiltersAsync">
             <option value="order">@L["Order"]</option>
             <option value="material">@L["Material"]</option>
             <option value="line">@L["Line or department"]</option>
@@ -65,7 +65,7 @@
                    @bind="_search" @bind:event="oninput" />
             <Icon Name="search" Size="16" />
         </div>
-        <select class="form-select form-select-sm w-auto" aria-label="@L["Status"]" @bind="_status">
+        <select class="form-select form-select-sm w-auto" aria-label="@L["Status"]" @bind="_status" @bind:after="SaveFiltersAsync">
             <option value="">@L["Open orders"]</option>
             @foreach (var status in Display.WorkOrderStatuses)
             {
@@ -448,6 +448,7 @@
     public string? Status { get; set; }
 
     private string? _statusApplied;
+    private bool _restored;
 
     private IReadOnlyList<EquipmentDto> _equipment = [];
     private Dictionary<Guid, string?> _siteZones = [];
@@ -500,6 +501,23 @@
         {
             Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("equipment", remembered), replace: true);
             return;
+        }
+
+        // A new visit opens with the user's saved filters (#131), unless the link names its own.
+        if (!_restored)
+        {
+            _restored = true;
+            if (Status is null && User.Setting<Filters>(FiltersKey) is { } saved)
+            {
+                (_status, _findBy) = (saved.Status ?? "", saved.FindBy ?? "order");
+                _statusApplied = Status;
+                if (EquipmentId is null && saved.EquipmentId is { } line)
+                {
+                    Selection.EquipmentId = line;
+                    Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("equipment", line), replace: true);
+                    return;
+                }
+            }
         }
 
         Selection.EquipmentId = EquipmentId;
@@ -612,7 +630,26 @@
     private void OnEquipmentChanged(Guid? id)
     {
         Selection.EquipmentId = id;
+        _ = SaveFiltersAsync(id);
         Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("equipment", id));
+    }
+
+    // The filters last chosen (#131), kept for the user: equipment, status and what the search looks in. The words typed aren't kept.
+    private sealed record Filters(Guid? EquipmentId, string? Status, string? FindBy);
+
+    private static readonly string FiltersKey = UserViews.FiltersKey("work-orders");
+
+    private Task SaveFiltersAsync() => SaveFiltersAsync(EquipmentId);
+
+    private async Task SaveFiltersAsync(Guid? equipmentId)
+    {
+        try
+        {
+            await User.SetSettingAsync(Api, FiltersKey, new Filters(equipmentId, _status, _findBy));
+        }
+        catch (ApiException)
+        {
+        }
     }
 
     private void ToggleTile(string key) => _tile = _tile == key ? null : key;

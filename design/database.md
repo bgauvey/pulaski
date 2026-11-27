@@ -1825,6 +1825,19 @@ it. One pending per version (`release_request_pending_uq`); decided requests are
 | `decided_by`, `decided_at`, `decision_note` | text, timestamptz, text | yes | Who decided it and why (a comment is required to approve or return); set exactly when not pending. |
 | `created_at` | timestamptz | no | Row timestamp. |
 
+### sec.user_setting — a user's own view settings (#131, D-131) · *In use*
+
+What a user's screens remember for them, on any device: `home` (a page), `favorites` (pages with their titles) and `filters:<page>` (the
+filters a list page opens with). Personal view state, not plant records, so no events, as language and region. Cleared values are kept as
+JSON `null`.
+
+| Column | Type | Null | Description |
+| --- | --- | --- | --- |
+| `app_user_id` | uuid | no | The user (primary key with `key`). |
+| `key` | text | no | `home`, `favorites` or `filters:` and a page (`filters:inventory/lots`). |
+| `value` | jsonb | no | The setting, at most 16 KB; `null` when cleared. |
+| `updated_at` | timestamptz | no | When it was last set. |
+
 ### core.setup_step_skip — setup steps not needed at a site (#139, D-126) · *In use*
 
 The setup checklist is worked out from what a site has; this keeps only the optional steps an administrator marked as not needed there.

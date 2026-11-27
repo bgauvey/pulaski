@@ -31,6 +31,9 @@ public sealed record MeDto
     /// <summary>The screens' language and region (#128): a language code (null: English) and a culture name for dates and numbers.</summary>
     public string? Language { get; init; }
     public string? Region { get; init; }
+
+    /// <summary>The user's own view settings (#131): last-used filters per page, favourites, home page; JSON by key.</summary>
+    public IReadOnlyDictionary<string, string> Settings { get; init; } = new Dictionary<string, string>();
     public IReadOnlyList<RoleGrantDto> Roles { get; init; } = [];
 
     /// <summary>Each permission the user holds, with the sites it holds it at; null sites means everywhere.</summary>
@@ -238,4 +241,11 @@ public sealed record CompleteProviderSignInRequest
     public string Code { get; init; } = "";
     public string State { get; init; } = "";
     public string Transaction { get; init; } = "";
+}
+
+/// <summary>One of the signed-in user's own view settings (#131): a null value clears it.</summary>
+public sealed record UserSettingRequest
+{
+    public string? Key { get; init; }
+    public System.Text.Json.JsonElement? Value { get; init; }
 }

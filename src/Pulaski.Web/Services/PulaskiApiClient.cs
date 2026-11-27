@@ -85,6 +85,10 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<MeDto> GetMeAsync(CancellationToken ct = default) => GetAsync<MeDto>("api/me", ct);
 
+    /// <summary>One of the signed-in user's own view settings (#131).</summary>
+    public Task<VersionResponse> SetUserSettingAsync(UserSettingRequest request, CancellationToken ct = default) =>
+        SendAsync<VersionResponse>(HttpMethod.Put, "api/me/settings", request, ct);
+
     public Task<IReadOnlyList<RoleDto>> ListRolesAsync(CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<RoleDto>>("api/roles", ct);
 

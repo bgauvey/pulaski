@@ -124,6 +124,7 @@ public static class DependencyInjection
         services.AddScoped<Application.Approvals.IReleaseApprovalRepository, Approvals.ReleaseApprovalRepository>();
         services.AddScoped<Application.Quality.INcrRepository, Quality.NcrRepository>();
         services.AddScoped<Application.Setup.ISetupRepository, Setup.SetupRepository>();
+        services.AddScoped<Application.Security.IUserSettingRepository, Security.UserSettingRepository>();
         services.AddScoped<Application.Live.ILiveSignals, Live.LiveSignals>();
         services.AddScoped<Application.Maintenance.IMaintenancePlanRepository, Maintenance.MaintenancePlanRepository>();
         services.AddScoped<Application.Alerts.IAlertRepository, Alerts.AlertRepository>();
@@ -144,6 +145,7 @@ public static class DependencyInjection
         services.AddSingleton<Application.Quality.INcrReadStore, Quality.NcrQueries>();
         services.AddSingleton<Application.Setup.ISetupReadStore, Setup.SetupQueries>();
         services.AddSingleton<Application.Audit.IAuditReadStore, Audit.AuditQueries>();
+        services.AddSingleton<Application.Security.IUserSettingStore, Security.UserSettingQueries>();
         services.AddSingleton<Application.Inventory.IScanContextReadStore, Inventory.ScanContextQueries>();
         services.AddSingleton<Application.Maintenance.IMaintenancePlanReadStore, Maintenance.MaintenancePlanQueries>();
         services.AddScoped<ILotFillingStore, LotFillingStore>();

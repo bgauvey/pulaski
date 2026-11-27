@@ -405,6 +405,7 @@ Add shift
 Add someone
 Add state
 Add the
+Add this page to your favourites
 Add {0}
 Add {0} group
 Add {0} reason
@@ -979,6 +980,7 @@ Classification
 Cleaning
 Clear
 Clear In stock only to see materials with no stock.
+Clear filters
 Clear finish-by
 Clear hold
 Clear selection
@@ -1469,6 +1471,7 @@ Failed to rejoin.
 Failed to resume the session.
 Failing
 False
+Favourites
 Feed
 Feed point
 Feed points
@@ -2223,6 +2226,7 @@ Make a material class…
 Make a single material…
 Make group
 Make reason
+Make this page my home page
 Make this version the one orders are made from.
 Makes
 Makes {0} · {1} on {2}
@@ -2752,6 +2756,7 @@ Now
 Now or next
 Now you can plan.
 Now: calculated {0}
+Now: {0}
 Nowhere yet.
 Np
 Number
@@ -3328,6 +3333,7 @@ Remove line
 Remove shift
 Remove shift {0}
 Remove stop
+Remove this page from your favourites
 Remove {0}
 Removed
 Removed by {0}
@@ -3861,6 +3867,7 @@ Start a new lot
 Start a paid break now
 Start again
 Start an unpaid break now
+Start at the Overview again
 Start break
 Start it (
 Start paid break
@@ -4028,6 +4035,7 @@ That instruction has no released {0} checklist for {1}.
 That is {0}'s only role, and every user needs one. Give them another first, or switch them off.
 That isn't a line of this site.
 That isn't a sample the running job's plan asks for; record it on the Quality page.
+That isn't a setting Pulaski keeps.
 That isn't one of the instruction's targets.
 That isn't one of {0}'s actions.
 That isn't something this scan offers here any more; scan again.
@@ -4064,6 +4072,7 @@ That run isn't one of {0}'s.
 That session has ended already.
 That session was changed by someone else. Reload and try again.
 That session was corrected already; correct the correction.
+That setting is too large to keep.
 That shift schedule doesn't exist.
 That shortfall was changed by someone else. Reload and try again.
 That shortfall was {0} already.
@@ -4453,6 +4462,7 @@ This line doesn't report its machine state. Bind its tags through an edge node a
 This link has expired or was already used. Ask for a new one on the sign-in page.
 This lot wasn't made from other lots.
 This month
+This page is your home page
 This page needs the link from the e-mail.
 This partial batch didn't need approval; it was accepted when reported.
 This partial batch was already {0}.
