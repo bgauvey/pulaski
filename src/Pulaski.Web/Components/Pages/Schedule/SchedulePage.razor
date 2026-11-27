@@ -200,6 +200,33 @@ else
 
     private string ViewHref(string key) => Navigation.GetUriWithQueryParameter("view", key == "gantt" ? null : key);
 
+    // The view last used (#131): a visit opens on it unless the address names one; choosing a view keeps it.
+    private sealed record Filters(string? View);
+
+    private const string Page = "schedule";
+    private bool _viewRestored;
+    private string? _savedView;
+
+    protected override void OnParametersSet()
+    {
+        if (!_viewRestored)
+        {
+            _viewRestored = true;
+            _savedView = SavedFilters.Load<Filters>(User, Page)?.View;
+            if (View is null && _savedView is { } saved && saved != "gantt" && Views.Any(v => v.Key == saved))
+            {
+                Navigation.NavigateTo(ViewHref(saved), replace: true);
+                return;
+            }
+        }
+
+        if (CurrentView != (_savedView ?? "gantt"))
+        {
+            _savedView = CurrentView;
+            _ = SavedFilters.SaveAsync(User, Api, Page, new Filters(CurrentView));
+        }
+    }
+
     private Task RefreshAsync() => _controller.RefreshAsync(_cts.Token);
 
     private async Task OnHorizonAsync(DateTimeOffset until)

@@ -66,6 +66,14 @@ internal static class LanguageEndpoints
         .WithTags("Languages")
         .RequireAnyView();
 
+        // A user's own view settings (#131): filters, favourites, home page; only their own, whatever they may see.
+        routes.MapPut("/me/settings", async Task<Ok<VersionResponse>> (
+            Contracts.Security.UserSettingRequest request, HttpContext http, ICommandHandler<Application.Security.SetUserSettingCommand, VersionResponse> handler,
+            CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new Application.Security.SetUserSettingCommand((await CallerAccess.RequireAsync(http)).UserId, request.Key, request.Value), ct)))
+        .WithTags("Security")
+        .RequireAnyView();
+
         return routes;
     }
 }

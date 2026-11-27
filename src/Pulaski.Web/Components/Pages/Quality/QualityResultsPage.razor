@@ -205,6 +205,11 @@ else
             await Sites.EnsureAsync(Api);
             _characteristics = await Api.ListCharacteristicsAsync();
             ResetWhen();
+            if (User.Setting<Filters>(FiltersKey) is { } saved)
+            {
+                (_filterCharacteristic, _failingOnly) = (saved.CharacteristicId, saved.FailingOnly);
+            }
+
             if (LotId is { } lotId)
             {
                 var lot = (await Api.GetLotAsync(lotId)).Lot;
@@ -255,13 +260,31 @@ else
     private async Task OnFilterChangedAsync(ChangeEventArgs e)
     {
         _filterCharacteristic = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await SaveFiltersAsync();
         await LoadResultsAsync();
     }
 
     private async Task OnFailingChangedAsync(ChangeEventArgs e)
     {
         _failingOnly = e.Value is true;
+        await SaveFiltersAsync();
         await LoadResultsAsync();
+    }
+
+    // The list's filters last chosen (#131), kept for the user: the characteristic and out-of-specification only.
+    private sealed record Filters(Guid? CharacteristicId, bool FailingOnly);
+
+    private static readonly string FiltersKey = UserViews.FiltersKey("quality/results");
+
+    private async Task SaveFiltersAsync()
+    {
+        try
+        {
+            await User.SetSettingAsync(Api, FiltersKey, new Filters(_filterCharacteristic, _failingOnly));
+        }
+        catch (ApiException)
+        {
+        }
     }
 
     private async Task FindLotAsync()

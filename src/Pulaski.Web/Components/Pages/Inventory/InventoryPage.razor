@@ -32,7 +32,7 @@
                @bind="_search" @bind:event="oninput" />
         <Icon Name="search" Size="16" />
     </div>
-    <select class="form-select" aria-label="@L["Material class"]" @bind="_classCode">
+    <select class="form-select" aria-label="@L["Material class"]" @bind="_classCode" @bind:after="SaveFiltersAsync">
         <option value="">@L["All classes"]</option>
         @foreach (var g in _groups)
         {
@@ -47,7 +47,7 @@
         }
     </select>
     <div class="form-check ms-1">
-        <input class="form-check-input" type="checkbox" id="inv-in-stock" @bind="_inStockOnly" />
+        <input class="form-check-input" type="checkbox" id="inv-in-stock" @bind="_inStockOnly" @bind:after="SaveFiltersAsync" />
         <label class="form-check-label" for="inv-in-stock">@L["In stock only"]</label>
     </div>
     <button type="button" class="btn btn-sm btn-outline-secondary btn-square" title="@L["Expand all"]" aria-label="@L["Expand all"]" @onclick="() => _collapsed.Clear()">
@@ -160,10 +160,22 @@ else
             || s.Code.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
             || s.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)));
 
+    // The filters last chosen (#131): class, location and in stock only; the words typed aren't kept. A link naming a location wins.
+    private sealed record Filters(string? ClassCode, Guid? LocationId, bool InStockOnly);
+
+    private const string Page = "inventory";
+
+    private Task SaveFiltersAsync() => SavedFilters.SaveAsync(User, Api, Page, new Filters(_classCode, _locationId, _inStockOnly));
+
     protected override async Task OnInitializedAsync()
     {
         _locationId = LocationQuery;
         _inStockOnly = LocationQuery is not null;
+        if (LocationQuery is null && SavedFilters.Load<Filters>(User, Page) is { } f)
+        {
+            (_classCode, _locationId, _inStockOnly) = (f.ClassCode ?? "", f.LocationId, f.InStockOnly);
+        }
+
         await LoadAsync();
     }
 
@@ -186,6 +198,7 @@ else
     private async Task OnLocationChangedAsync(ChangeEventArgs e)
     {
         _locationId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await SaveFiltersAsync();
         await LoadAsync();
     }
 

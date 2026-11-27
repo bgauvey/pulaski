@@ -1,6 +1,7 @@
 @inject CurrentUser User
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject PulaskiApiClient Api
 
 @* The header's user menu: who is signed in, then Preferences (a dialog with language and region, colour theme and touch layout), My alerts,
    changing the password and signing out. The menu is a native popover (closes on Escape or a click outside); theme and touch layout are kept
@@ -34,6 +35,23 @@
             <Icon Name="categorized" Size="18" /><span>@L["Preferences…"]</span>
             <span class="user-menu-hint">@L["Language, theme, touch"]</span>
         </button>
+        @if (CurrentPage != Home)
+        {
+            <button type="button" role="menuitem" class="user-menu-item" @onclick="MakeHomeAsync">
+                <Icon Name="overview" Size="18" /><span>@L["Make this page my home page"]</span>
+                @if (Home.Length > 0)
+                {
+                    <span class="user-menu-hint">@L["Now: {0}", Home]</span>
+                }
+            </button>
+        }
+        else if (Home.Length > 0)
+        {
+            <button type="button" role="menuitem" class="user-menu-item" @onclick="ClearHomeAsync">
+                <Icon Name="overview" Size="18" /><span>@L["Start at the Overview again"]</span>
+                <span class="user-menu-hint">@L["This page is your home page"]</span>
+            </button>
+        }
         <a role="menuitem" class="user-menu-item" href="my-alerts"><Icon Name="alert" Size="18" /><span>@L["My alerts"]</span></a>
         <a role="menuitem" class="user-menu-item" href="account/password"><Icon Name="lock" Size="18" /><span>@L["Change your password"]</span></a>
         <div class="user-menu-rule" role="separator"></div>
@@ -82,6 +100,26 @@
 @code {
     /// <summary>The signed-in user, from the layout once it has loaded them.</summary>
     [Parameter, EditorRequired] public MeDto? Me { get; set; }
+
+    // The home page (#131): where a visit starts; the Overview when none is set.
+    private string Home => User.Setting<string>(UserViews.HomeKey) ?? "";
+
+    private string CurrentPage => UserViews.PageOf(Navigation.ToBaseRelativePath(Navigation.Uri));
+
+    private Task MakeHomeAsync() => SetHomeAsync(CurrentPage.Length == 0 ? null : CurrentPage);
+
+    private Task ClearHomeAsync() => SetHomeAsync(null);
+
+    private async Task SetHomeAsync(string? page)
+    {
+        try
+        {
+            await User.SetSettingAsync(Api, UserViews.HomeKey, page);
+        }
+        catch (ApiException)
+        {
+        }
+    }
 
     // The language form loads the languages from the API, so only once the dialog is first opened.
     private bool _preferencesOpened;

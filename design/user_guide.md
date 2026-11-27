@@ -121,10 +121,20 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
 - **Help (?, top right).** Opens this guide's section for the screen you're on, beside it; it follows you as you move to another screen.
   **Open the whole guide** opens all of it in a new tab, at that section. Esc or ✕ closes it. The sign-in page, terminals and operator
   stations have a **Help** link instead, which opens the guide in a new tab. The guide is in English.
+- **Favourites (☆, top right).** Click the star to add the page you're on to **Favourites** at the top of the menu, named as the page is;
+  click the filled star to take it off. Up to 20, kept for you on any device.
 - **You (top right).** Your initials, name and roles. Click them for your menu:
   - **Preferences…** opens a dialog with your [language and region](#your-language-and-region), the **colour theme** (*Like the device*,
     *Light* or *Dark*) and the [touch layout](#use-a-touch-screen) (*Automatic*, *On* or *Off*).
+  - **Make this page my home page**: where Pulaski opens for you when you sign in or come back to it (the Pulaski logo goes there too); the
+    Overview is still in the menu. On your home page, **Start at the Overview again** undoes it.
   - **My alerts** (e-mails when something needs you), **Change your password** and **Sign out**.
+- **Filters are remembered.** List pages open with the filters you last used, on any device and after you sign out: **Stock**, **Lots**,
+  the **movement journal**, **Containers**, **Shortages**, **Materials**, **Work orders**, the **Schedule** (its view), **Quality results**,
+  **Nonconformances**, the **OEE report** on Machines, **deliveries** on Integrations and the **Audit trail**. Words you type as you go (a quick
+  search box) and exact dates aren't kept: a date range stays a recent one (the journal's last week, the OEE report's same number of days up
+  to today). A link that names its own filters (from the Overview, a lot's page) wins. **Clear filters** on the Lots list goes back to the
+  start. Favourites, your home page and filters are yours alone, and aren't part of the audit trail.
 
   Press Esc or click elsewhere to close the menu. Theme and touch layout are kept on that device; language and region on your user.
 - **Main area.** The page you picked.

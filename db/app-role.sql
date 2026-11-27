@@ -72,6 +72,7 @@ GRANT SELECT, INSERT, UPDATE ON sec.role, sec.permission, sec.role_permission TO
 
 -- Shop-floor terminals and badges (D-049): enrolled, switched off and revoked, never deleted.
 GRANT SELECT, INSERT, UPDATE ON sec.terminal, sec.badge TO pulaski_app;
+GRANT SELECT, INSERT, UPDATE ON sec.user_setting TO pulaski_app;
 
 -- Partition maintenance and the schema version check at API startup (D-028). Guarded, so this
 -- file still runs on a database that db/migrate.sh hasn't brought up to date yet.

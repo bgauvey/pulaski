@@ -361,6 +361,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   (`releases.approve` at a request site, not submitter/editor, comment; releases via `IReleasableDocument`), `Return…`, `Withdraw…`;
   `ReleaseGate` in draft saves and direct releases; Inbox kind `release`. Processes, BOMs (`BomReleasable`) and specs (`SpecReleasable`);
   BOM/spec sites = capabilities for the material + a BOM's process site (`MaterialSitesAsync`); shared web `ReleaseApprovalPanel`.
+- User settings (D-131, proposed, in pieces, #131): `sec.user_setting` (`home`, `favorites`, `filters:<page>`; no events) via `PUT /api/me/settings`
+  and `MeDto.Settings`; web `CurrentUser.Setting<T>`/`SetSettingAsync`, `UserViews` (keys, favourites), `FavoriteStar` (header), Favourites in
+  `NavMenu`, home in `UserMenu` + `MainLayout`; a list page keeps its filters as a private `Filters` record through `SavedFilters.Load/SaveAsync`
+  (`const string Page`; `SavedFiltersTests` checks the keys); never save on opening, only on a search or change.
 - Help (D-130, proposed, #130): `design/user_guide.md` ships with the web app (csproj link, web image) and is rendered by `UserGuide` (Markdig,
   GitHub anchors); `HelpTopics` maps each route to its section (a new page needs an entry; `HelpTests` checks routes, anchors and the guide's
   links); `HelpPanel` (header ?) and `/help`; `HelpLink` on sign-in, terminal and station layouts.

@@ -17,7 +17,7 @@ public sealed record ListRolesQuery : IQuery<IReadOnlyList<RoleDto>>;
 /// <summary>Every permission the code checks (D-037).</summary>
 public sealed record ListPermissionsQuery : IQuery<IReadOnlyList<PermissionDto>>;
 
-internal sealed class GetMeHandler(ISecurityReadStore store, Localization.ILanguageReadStore languages) : IQueryHandler<GetMeQuery, MeDto>
+internal sealed class GetMeHandler(ISecurityReadStore store, Localization.ILanguageReadStore languages, IUserSettingStore settings) : IQueryHandler<GetMeQuery, MeDto>
 {
     public async Task<MeDto> HandleAsync(GetMeQuery query, CancellationToken cancellationToken)
     {
@@ -28,6 +28,7 @@ internal sealed class GetMeHandler(ISecurityReadStore store, Localization.ILangu
         {
             Language = language,
             Region = region,
+            Settings = await settings.ListAsync(access.UserId, cancellationToken),
             Id = access.UserId,
             Username = access.Username,
             DisplayName = access.DisplayName,

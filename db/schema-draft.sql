@@ -806,6 +806,16 @@ CREATE TABLE sec.app_user (
 CREATE UNIQUE INDEX app_user_username_uq ON sec.app_user (lower(username)) WHERE username IS NOT NULL;
 
 -- A local user's password (D-037), until IT's identity provider takes over: a salted PBKDF2 hash, never the password.
+-- A user's own view settings (#131, D-131): last-used filters per page, favourites, home page. No events.
+CREATE TABLE sec.user_setting (
+    app_user_id     uuid NOT NULL REFERENCES sec.app_user(id),
+    key             text NOT NULL CONSTRAINT user_setting_key_ck CHECK (key ~ '^(home|favorites|filters:[a-z0-9/_-]{1,80})$'),
+    value           jsonb NOT NULL CONSTRAINT user_setting_size_ck CHECK (octet_length(value::text) <= 16384),   -- 'null' = cleared
+    updated_at      timestamptz NOT NULL,
+    PRIMARY KEY (app_user_id, key)
+);
+
+
 CREATE TABLE sec.local_credential (
     app_user_id         uuid PRIMARY KEY REFERENCES sec.app_user(id),
     password_hash       text NOT NULL,
@@ -3344,7 +3354,8 @@ INSERT INTO public.schema_migration (version) VALUES
     ('0086_setup_checklist'),
     ('0087_audit_trail'),
     ('0088_report_views'),
-    ('0089_report_views_more');
+    ('0089_report_views_more'),
+    ('0090_user_settings');
 
 -- =====================================================================
 -- 17. SEED DATA

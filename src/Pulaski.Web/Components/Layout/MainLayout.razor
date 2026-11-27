@@ -12,7 +12,7 @@
         <button type="button" class="icon-button" aria-label="@L["Toggle navigation"]" onclick="pulaski.toggleSidebar()">
             <Icon Name="menu" />
         </button>
-        <a class="brand" href="">
+        <a class="brand" href="@(User.Setting<string>(UserViews.HomeKey) ?? "")">
             @* Placeholder mark: Pulaski is a working codename. *@
             <svg class="brand-mark" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <circle cx="12" cy="12" r="12" />
@@ -23,6 +23,10 @@
         </a>
         <span class="chip">@L["Pre-alpha"]</span>
         <div class="header-end">
+            @if (User.Me is not null)
+            {
+                <FavoriteStar />
+            }
             <Pulaski.Web.Components.Help.HelpPanel />
             @if (User.Me is { } me)
             {
@@ -90,6 +94,9 @@
 </div>
 
 @code {
+    // Whether the first arrival has been sent to the user's home page (#131): only once per visit.
+    private bool _homed;
+
     private static readonly string Version =
         typeof(MainLayout).Assembly.GetName().Version?.ToString(3) ?? "dev";
 
@@ -111,6 +118,16 @@
         if (User.Me is not null && !MaySeePage && RouteData?.PageType == typeof(Pages.Home) && User.FirstScreen is { Length: > 0 } first)
         {
             Navigation.NavigateTo(first, replace: true);
+        }
+        else if (User.Me is not null && !_homed)
+        {
+            // The first page of a visit (a sign-in, or opening Pulaski) is the user's home page when they arrive at the start (#131); the
+            // Overview stays a click away after that.
+            _homed = true;
+            if (RouteData?.PageType == typeof(Pages.Home) && User.Setting<string>(UserViews.HomeKey) is { Length: > 0 } home)
+            {
+                Navigation.NavigateTo(home, replace: true);
+            }
         }
     }
 

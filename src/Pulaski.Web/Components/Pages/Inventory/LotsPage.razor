@@ -1,6 +1,7 @@
 @page "/inventory/lots"
 @attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
+@inject CurrentUser User
 @inject SiteSelection Sites
 @inject TimeProvider Time
 @inject Downloads Downloads
@@ -73,6 +74,7 @@
         }
     }
     <button type="submit" class="btn btn-primary">@L["Search"]</button>
+    <button type="button" class="btn btn-outline-secondary" @onclick="ClearAsync">@L["Clear filters"]</button>
     <button type="button" class="btn btn-outline-secondary" disabled="@(_lots is not { Count: > 0 })" @onclick="ExportAsync">@L["Export CSV"]</button>
 </form>
 
@@ -161,11 +163,54 @@ else
 
     private LotAttributeDto? Attribute => _attributes.FirstOrDefault(a => a.Id == _attributeId);
 
+    // The filters last searched with (#131), kept for the user; a link that names a material, location or status opens with those instead.
+    private sealed record Filters(string? Search, Guid? MaterialId, Guid? LocationId, string? Status, int? ExpiryDays, Guid? AttributeId,
+        string? AttributeValue, string? AttributeMin, string? AttributeMax);
+
+    private static readonly string FiltersKey = UserViews.FiltersKey("inventory/lots");
+
+    private void Restore()
+    {
+        if (MaterialQuery is null && LocationQuery is null && StatusQuery is null && User.Setting<Filters>(FiltersKey) is { } f)
+        {
+            (_search, _materialId, _locationId, _status, _expiryDays) = (f.Search, f.MaterialId, f.LocationId, f.Status ?? "", f.ExpiryDays);
+            (_attributeId, _attributeValue, _attributeMin, _attributeMax) = (f.AttributeId, f.AttributeValue, f.AttributeMin, f.AttributeMax);
+        }
+    }
+
+    private async Task SaveFiltersAsync()
+    {
+        try
+        {
+            await User.SetSettingAsync(Api, FiltersKey,
+                new Filters(_search, _materialId, _locationId, _status, _expiryDays, _attributeId, _attributeValue, _attributeMin, _attributeMax));
+        }
+        catch (ApiException)
+        {
+        }
+    }
+
+    private async Task ClearAsync()
+    {
+        (_search, _materialId, _locationId, _status, _expiryDays) = (null, null, null, "", null);
+        (_attributeId, _attributeValue, _attributeMin, _attributeMax) = (null, null, null, null);
+        try
+        {
+            await User.SetSettingAsync<Filters>(Api, FiltersKey, null);
+        }
+        catch (ApiException)
+        {
+        }
+
+        await LoadAsync(0);
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _materialId = MaterialQuery;
         _locationId = LocationQuery;
         _status = StatusQuery ?? "";
+        Restore();
         try
         {
             await Sites.EnsureAsync(Api);
@@ -178,7 +223,8 @@ else
             _error = ex;
         }
 
-        await SearchAsync();
+        // Opening the page saves nothing: only a search does.
+        await LoadAsync(0);
     }
 
     // Attributes belong to a site (D-056), so the filter offers the chosen site's.
@@ -207,7 +253,11 @@ else
 
     private void AttributeChanged() => (_attributeValue, _attributeMin, _attributeMax) = (null, null, null);
 
-    private Task SearchAsync() => LoadAsync(0);
+    private async Task SearchAsync()
+    {
+        await SaveFiltersAsync();
+        await LoadAsync(0);
+    }
 
     private Task MoreAsync() => LoadAsync(_lots?.Count ?? 0);
 

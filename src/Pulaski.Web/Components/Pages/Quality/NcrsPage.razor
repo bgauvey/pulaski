@@ -95,6 +95,11 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        if (SavedFilters.Load<Filters>(User, Page) is { Status: { } status })
+        {
+            _status = status;
+        }
+
         try
         {
             await Sites.EnsureAsync(Api);
@@ -117,8 +122,14 @@ else
     private async Task OnStatusChangedAsync(ChangeEventArgs e)
     {
         _status = e.Value?.ToString() ?? "";
+        await SavedFilters.SaveAsync(User, Api, Page, new Filters(_status));
         await LoadAsync();
     }
+
+    // Which NCRs show (#131): not closed, closed or all, as last chosen.
+    private sealed record Filters(string? Status);
+
+    private const string Page = "quality/ncrs";
 
     private async Task LoadAsync()
     {

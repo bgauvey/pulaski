@@ -106,7 +106,7 @@
                @bind="_search" @bind:event="oninput" />
         <Icon Name="search" Size="16" />
     </div>
-    <select class="form-select" aria-label="@L["Class"]" @bind="_class">
+    <select class="form-select" aria-label="@L["Class"]" @bind="_class" @bind:after="SaveFiltersAsync">
         <option value="">@L["All classes"]</option>
         @foreach (var c in _classes)
         {
@@ -114,20 +114,20 @@
         }
         <option value="@NoClassFilter">@L["No class"]</option>
     </select>
-    <select class="form-select" aria-label="@L["Type"]" @bind="_type">
+    <select class="form-select" aria-label="@L["Type"]" @bind="_type" @bind:after="SaveFiltersAsync">
         <option value="">@L["All types"]</option>
         @foreach (var t in MaterialProperties.Types)
         {
             <option value="@t">@L.Label(t)</option>
         }
     </select>
-    <select class="form-select" aria-label="@L["Origin"]" @bind="_origin">
+    <select class="form-select" aria-label="@L["Origin"]" @bind="_origin" @bind:after="SaveFiltersAsync">
         <option value="">@L["Any origin"]</option>
         <option value="local">@L["Pulaski"]</option>
         <option value="erp">@L["ERP"]</option>
     </select>
     <div class="form-check ms-1">
-        <input class="form-check-input" type="checkbox" id="show-inactive" @bind="_showInactive" />
+        <input class="form-check-input" type="checkbox" id="show-inactive" @bind="_showInactive" @bind:after="SaveFiltersAsync" />
         <label class="form-check-label" for="show-inactive">@L["Show inactive"]</label>
     </div>
 </div>
@@ -235,8 +235,20 @@ else
             || m.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
             || (m.Description?.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false));
 
+    // The filters last chosen (#131): class, type, origin and switched-off ones; the words typed aren't kept. A link naming a class wins.
+    private sealed record Filters(string? Class, string? Type, string? Origin, bool ShowInactive);
+
+    private const string Page = "materials";
+
+    private Task SaveFiltersAsync() => SavedFilters.SaveAsync(User, Api, Page, new Filters(_class, _type, _origin, _showInactive));
+
     protected override async Task OnInitializedAsync()
     {
+        if (string.IsNullOrWhiteSpace(ClassCode) && SavedFilters.Load<Filters>(User, Page) is { } f)
+        {
+            (_class, _type, _origin, _showInactive) = (f.Class ?? "", f.Type ?? "", f.Origin ?? "", f.ShowInactive);
+        }
+
         if (!string.IsNullOrWhiteSpace(ClassCode))
         {
             // The class's count includes switched-off materials, so show them too.

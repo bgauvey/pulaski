@@ -3474,6 +3474,21 @@ the guide lands on a heading (one broken link was found and fixed). User's choic
 **side panel** (`HelpPanel`, the header's ?), showing the screen's section and following navigation, with the whole guide at `/help` (static,
 open to anyone: it holds only the guide). Static pages without the panel (sign-in, terminal, station) carry a `HelpLink`. English only.
 
+### D-131 · Remembered filters, favourites and a home page (#131) · *Proposed, in pieces*
+
+**Context.** Everyone got the same pages, and filters were set again each visit.
+
+**Decision.** `sec.user_setting` keeps a user's own view settings by key (`home`, `favorites`, `filters:<page>`; JSON ≤ 16 KB), set through
+`PUT /api/me/settings` (`SetUserSettingCommand`, their own only) and returned with their profile (`MeDto.Settings`), so they follow the user
+anywhere and survive signing out. Like language and region they are personal view state, not plant records: **no events**, and not in the
+audit trail. The web reads and writes them through `CurrentUser.Setting`/`SetSettingAsync` (seen at once, saved in the background).
+User's choices: filters remembered **automatically, last used** (a link naming its own wins; **Clear filters** resets), on every list page
+with filters; a **star** in the header adds the page to **Favourites** at the top of the menu (≤ 20, as the page was titled); **Make this page
+my home page** in the user menu sets where a visit starts (the first arrival at the start goes there) and where the logo leads.
+(a) the store, favourites, the home page, and filters on Lots, Work orders and Quality results; (b) the other list pages through
+`SavedFilters` (stock, journal, containers, shortages, materials, the schedule's view, NCRs, the OEE report, deliveries, audit trail):
+dates aren't kept (a window stays recent: the OEE report keeps its length), nor words typed as you go; a test checks each page's key.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

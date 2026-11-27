@@ -134,6 +134,10 @@
         focus(id) {
             document.getElementById(id)?.focus();
         },
+        // The page's title, for naming a favourite (#131).
+        title() {
+            return document.title;
+        },
         // Per-browser view preferences (collapsed panes); storage may be blocked, which is fine.
         load(key) {
             try { return localStorage.getItem(key); } catch { return null; }

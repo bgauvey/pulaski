@@ -21,6 +21,17 @@
             </NavLink>
         </div>
     }
+    @if (User.Setting<List<FavoritePage>>(UserViews.FavoritesKey) is { Count: > 0 } favorites)
+    {
+        @* The user's starred pages (#131), as they named them; one they can no longer open isn't shown. *@
+        <div class="nav-group">
+            <div class="nav-group-label">@L["Favourites"]</div>
+            @foreach (var f in favorites.Where(MayOpen))
+            {
+                <NavLink class="nav-item" href="@f.Href" Match="NavLinkMatch.All" title="@f.Title"><Icon Name="star" /><span class="nav-text">@f.Title</span></NavLink>
+            }
+        </div>
+    }
     @foreach (var section in NavTree.Visible(May))
     {
         <div class="nav-group">
@@ -81,6 +92,7 @@
     protected override async Task OnInitializedAsync()
     {
         Navigation.LocationChanged += OnLocationChanged;
+        User.SettingsChanged += OnSettingsChanged;
         _timer = new Timer(_ => InvokeAsync(() => CountInboxAsync(force: true)), null, InboxView.Refresh, InboxView.Refresh);
         await CountInboxAsync(force: true);
     }
@@ -120,6 +132,7 @@
     public void Dispose()
     {
         Navigation.LocationChanged -= OnLocationChanged;
+        User.SettingsChanged -= OnSettingsChanged;
         _timer?.Dispose();
     }
 
@@ -133,6 +146,13 @@
         : User.Can(link.Permission) || (link.OrPermission is { } other && User.Can(other));
 
     private string Path => Navigation.ToBaseRelativePath(Navigation.Uri);
+
+    private void OnSettingsChanged() => _ = InvokeAsync(StateHasChanged);
+
+    // A favourite under a menu screen the user may no longer open is left out; any other page checks for itself.
+    private bool MayOpen(FavoritePage f) =>
+        NavTree.Sections.SelectMany(s => s.Entries).SelectMany(e => e.Link is { } l ? [l, .. e.Children] : e.Children)
+            .Where(l => NavTree.IsAt(l.Href, f.Href)).OrderByDescending(l => l.Href.Length).FirstOrDefault() is not { } link || May(link);
 
     private bool IsOpen(string key)
     {

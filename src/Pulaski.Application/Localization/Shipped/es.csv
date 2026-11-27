@@ -406,6 +406,7 @@ Add shift,Agregar turno
 Add someone,Agregar a alguien
 Add state,Agregar estado
 Add the,Agregue el
+Add this page to your favourites,Añadir esta página a sus favoritos
 Add {0},Agregar {0}
 Add {0} group,Agregar grupo de {0}
 Add {0} reason,Agregar motivo de {0}
@@ -980,6 +981,7 @@ Classification,Clasificación
 Cleaning,Limpieza
 Clear,Borrar
 Clear In stock only to see materials with no stock.,Desmarque En existencia para ver materiales sin existencia.
+Clear filters,Quitar filtros
 Clear finish-by,Quitar hora límite
 Clear hold,Quitar retención
 Clear selection,Quitar selección
@@ -1470,6 +1472,7 @@ Failed to rejoin.,No se pudo reconectar.
 Failed to resume the session.,No se pudo reanudar la sesión.
 Failing,Fallando
 False,Falso
+Favourites,Favoritos
 Feed,Canal
 Feed point,Punto de alimentación
 Feed points,Puntos de alimentación
@@ -2224,6 +2227,7 @@ Make a material class…,Hacer una clase de material…
 Make a single material…,Hacer un solo material…
 Make group,Convertir en grupo
 Make reason,Convertir en motivo
+Make this page my home page,Hacer de esta página mi página de inicio
 Make this version the one orders are made from.,Hacer de esta versión aquella desde la que se hacen las órdenes.
 Makes,Hace
 Makes {0} · {1} on {2},Hace {0} · {1} en {2}
@@ -2753,6 +2757,7 @@ Now,Ahora
 Now or next,Ahora o siguiente
 Now you can plan.,Ahora puede planear.
 Now: calculated {0},Ahora: calculada {0}
+Now: {0},Ahora: {0}
 Nowhere yet.,Aún en ningún lugar.
 Np,Np
 Number,Número
@@ -3329,6 +3334,7 @@ Remove line,Quitar línea
 Remove shift,Quitar turno
 Remove shift {0},Quitar el turno {0}
 Remove stop,Quitar paro
+Remove this page from your favourites,Quitar esta página de sus favoritos
 Remove {0},Quitar {0}
 Removed,Quitada
 Removed by {0},Quitado por {0}
@@ -3862,6 +3868,7 @@ Start a new lot,Iniciar un lote nuevo
 Start a paid break now,Iniciar un descanso pagado ahora
 Start again,Empezar de nuevo
 Start an unpaid break now,Iniciar un descanso no pagado ahora
+Start at the Overview again,Volver a empezar en el Resumen
 Start break,Iniciar descanso
 Start it (,Inícielo (
 Start paid break,Iniciar descanso pagado
@@ -4029,6 +4036,7 @@ That instruction has no released {0} checklist for {1}.,Esa instrucción no tien
 "That is {0}'s only role, and every user needs one. Give them another first, or switch them off.","Ese es el único rol de {0}, y todo usuario necesita uno. Dele otro primero, o desactívelo."
 That isn't a line of this site.,Esa no es una línea de este sitio.
 That isn't a sample the running job's plan asks for; record it on the Quality page.,Esa no es una muestra que pida el plan del trabajo en curso; regístrela en la página de Calidad.
+That isn't a setting Pulaski keeps.,Ese no es un ajuste que Pulaski guarde.
 That isn't one of the instruction's targets.,Ese no es uno de los destinos de la instrucción.
 That isn't one of {0}'s actions.,Esa no es una de las acciones de {0}.
 That isn't something this scan offers here any more; scan again.,Este escaneo ya no ofrece eso aquí; escanee de nuevo.
@@ -4065,6 +4073,7 @@ That run isn't one of {0}'s.,Esa corrida no es de {0}.
 That session has ended already.,Esa sesión ya terminó.
 That session was changed by someone else. Reload and try again.,Alguien más cambió esa sesión. Recargue e intente de nuevo.
 That session was corrected already; correct the correction.,Esa sesión ya se corrigió; corrija la corrección.
+That setting is too large to keep.,Ese ajuste es demasiado grande para guardarlo.
 That shift schedule doesn't exist.,Ese horario de turnos no existe.
 That shortfall was changed by someone else. Reload and try again.,Alguien más cambió ese faltante. Recargue e intente de nuevo.
 That shortfall was {0} already.,Ese faltante ya estaba {0}.
@@ -4454,6 +4463,7 @@ This line doesn't report its machine state. Bind its tags through an edge node a
 This link has expired or was already used. Ask for a new one on the sign-in page.,Este enlace venció o ya se usó. Pida uno nuevo en la página de inicio de sesión.
 This lot wasn't made from other lots.,Este lote no se hizo de otros lotes.
 This month,Este mes
+This page is your home page,Esta es su página de inicio
 This page needs the link from the e-mail.,Esta página necesita el enlace del correo electrónico.
 This partial batch didn't need approval; it was accepted when reported.,Esta tanda parcial no necesitaba aprobación; se aceptó al reportarse.
 This partial batch was already {0}.,Esta tanda parcial ya estaba {0}.

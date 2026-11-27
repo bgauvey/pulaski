@@ -1,0 +1,47 @@
+@implements IDisposable
+@inject CurrentUser User
+@inject PulaskiApiClient Api
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@* Starring a page (#131, D-131): it joins Favourites at the top of the menu, kept for the user on any device. *@
+<button type="button" class="icon-button" aria-pressed="@(IsFavorite ? "true" : "false")"
+        aria-label="@(IsFavorite ? L["Remove this page from your favourites"] : L["Add this page to your favourites"])"
+        title="@(IsFavorite ? L["Remove this page from your favourites"] : L["Add this page to your favourites"])" @onclick="ToggleAsync">
+    <Icon Name="@(IsFavorite ? "star-filled" : "star")" />
+</button>
+
+@code {
+    private string Page => UserViews.PageOf(Navigation.ToBaseRelativePath(Navigation.Uri));
+
+    private IReadOnlyList<FavoritePage>? Favorites => User.Setting<List<FavoritePage>>(UserViews.FavoritesKey);
+
+    private bool IsFavorite => UserViews.IsFavorite(Favorites, Page);
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    private async Task ToggleAsync()
+    {
+        var title = Page;
+        try
+        {
+            title = UserViews.TitleOf(await JS.InvokeAsync<string>("pulaski.ui.title"), Page.Length == 0 ? L["Overview"] : Page);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+
+        try
+        {
+            await User.SetSettingAsync(Api, UserViews.FavoritesKey, UserViews.Toggle(Favorites, new FavoritePage(Page, title)));
+        }
+        catch (ApiException)
+        {
+            // Kept for this session at least; the next change saves it again.
+        }
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}
