@@ -2471,6 +2471,7 @@ No classes yet. Add one above.,Aún no hay clases. Agregue una arriba.
 "No components are planned for this job, and nothing has been consumed. Its order had no BOM.","No hay componentes planeados para este trabajo, y no se ha consumido nada. Su orden no tenía lista de materiales."
 "No components are planned for this job, so there is nothing to allocate.","No hay componentes planeados para este trabajo, así que no hay nada que asignar."
 No components yet.,Aún no hay componentes.
+No connection to Pulaski: nothing is saved until it is back. This screen comes back by itself.,Sin conexión con Pulaski: no se guarda nada hasta que vuelva. Esta pantalla vuelve sola.
 No connections yet.,Aún no hay conexiones.
 "No connections yet. Add the broker, server or PLC your machines are read through.","Aún no hay conexiones. Agregue el broker, servidor o PLC a través del cual se leen sus máquinas."
 No connections yet. Someone who manages integrations adds them.,Aún no hay conexiones. Las agrega quien administra las integraciones.
@@ -4804,6 +4805,7 @@ What was done (or why not),Qué se hizo (o por qué no)
 What was found,Qué se encontró
 "What was found wrong, its root cause, what is being done about it and what became of the lots.","Lo que se encontró mal, su causa raíz, qué se está haciendo al respecto y qué pasó con los lotes."
 "What was measured or inspected, against a lot or a job's run, checked against the material's released","Lo que se midió o inspeccionó, contra un lote o la corrida de un trabajo, revisado contra la especificación liberada del material"
+What you entered wasn't sent: it is still here. Send it again once the connection is back.,Lo que introdujo no se envió: sigue aquí. Envíelo de nuevo cuando vuelva la conexión.
 When,Cuándo
 When each site works. Planning places jobs only inside shifts. Equipment follows a schedule of its own or inherits its parent's (choose on,Cuándo trabaja cada sitio. La planeación coloca trabajos solo dentro de los turnos. Un equipo sigue un horario propio o hereda el de su padre (elíjalo en
 "When it works, for planning: inherit its parent's shifts, follow one of the site's shift schedules, or run around the clock. Schedules are kept on Configure → Shifts.","Cuándo trabaja, para la planeación: heredar los turnos de su padre, seguir uno de los horarios de turnos del sitio, o trabajar las 24 horas. Los horarios se mantienen en Configurar → Turnos."

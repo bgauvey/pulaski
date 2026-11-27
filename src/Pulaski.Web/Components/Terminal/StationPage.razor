@@ -17,6 +17,7 @@
    without scripts, the meta refresh), except while a PIN is being typed. *@
 <HeadContent>
     <meta name="pulaski-touch" content="always" />
+    <OfflineMeta />
     @if (!_needsPin)
     {
         <meta name="pulaski-live" content="station" data-every="@RefreshSeconds" data-idle="@(_station?.IdleMinutes ?? 15)" />

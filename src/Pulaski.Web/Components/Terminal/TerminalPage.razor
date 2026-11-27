@@ -10,10 +10,14 @@
    in: the terminal's secret, in this device's cookie, and the badge's short ticket identify who records what. *@
 <PageTitle>@(_status?.TerminalName ?? L["Terminal"]) · Pulaski</PageTitle>
 
-@if (_reset is { } seconds)
-{
-    <HeadContent><meta http-equiv="refresh" content="@seconds;url=@TerminalCookie.HomePath" /></HeadContent>
-}
+@* One HeadContent: a page keeps only its last. Offline handling (#134) always; the reset to the start after an action when there is one. *@
+<HeadContent>
+    <OfflineMeta />
+    @if (_reset is { } seconds)
+    {
+        <meta http-equiv="refresh" content="@seconds;url=@TerminalCookie.HomePath" />
+    }
+</HeadContent>
 
 @if (_status is null)
 {

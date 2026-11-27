@@ -497,6 +497,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `NavTree.Visible` filters by permission, `GroupAt` unfolds the current screen's group on arrival, `NavFolds` keeps what is folded (every
   group folds, #205); open groups per browser (`pulaski.nav.open`). Add a
   new screen there.
+- Network drops (D-133, proposed, #134): no offline queue. Floor pages carry `OfflineMeta` (`<meta name="pulaski-offline">`); `terminal-live.js`
+  pings the web's `/terminal/ping` before reloads and form sends, shows `.offline-banner`, keeps the form and reloads when it answers.
 - Line boards (D-106, proposed): an enrolled terminal opens `/terminal/board` (`?line=`); `GET /api/terminal/board` → `GetLineDisplayQuery`
   (Overview + floor board + current-shift OEE, filtered to the terminal's scope); `css/board.css`, meta refresh 15 s.
 - Operator station (D-107, proposed, in pieces #146–#150): enrolled terminal at `/terminal/station`, line by `StationLine.Choose`; badge →

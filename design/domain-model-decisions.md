@@ -3515,6 +3515,21 @@ output location outside the line; qualifications; a site's own stop-code reasons
 off and listed in the review (`ILineCopyRepository.UnmatchedAsync`, plan `Unmatched`). Changeover rules, OEE targets and maintenance plans take
 the target site. Within the same site the same matching finds the same rows. D-132 complete.
 
+### D-133 · Network drops on the floor screens (#134) · *Proposed*
+
+**Decision (user's choice): detect and say so; no offline queue.** The station, line board and badge terminal pages carry
+`<meta name="pulaski-offline">` (`OfflineMeta`, worded in the reader's language); `terminal-live.js` then asks the web's `GET /terminal/ping`
+(204, no API call, no cache) before every reload and every form send, and every 5 s while it fails. Down: a `role="alert"` banner
+(`.offline-banner`), the page stays as it is, a send is held back with what was typed kept; up again: the banner goes and the page reloads
+(a station not while it is being typed in). Nothing is stored on the device.
+
+**Why not queue reports.** Machine data, the part a drop would lose, is already buffered at the edge (D-050, D-103) and offered again by
+**From the machine** (D-097). A queued report would need its badge ticket accepted late (identity at the time it was made), an idempotency key
+the API takes once, and rules for when the floor moved on meanwhile (job paused or completed, lot changed, run ended, rate cap from the time
+it was made); each is a way to record something wrong long after the operator walked away. Floor drops are usually short; a clear "not
+saved" is safer than a silent late write. Revisit if a site has long, frequent outages on stations that report by hand: build it then as a
+station-only queue of `ReportProductionCommand`s with a client id (unique per terminal), replayed in order, each re-checked as if made now.
+
 ## Application architecture
 
 The UI, the API and the database each have one job, and only the API reaches the database (D-011, D-012, D-013).

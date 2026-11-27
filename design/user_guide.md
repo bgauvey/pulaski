@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-25 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-26 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -1192,6 +1192,21 @@ in: an operator's role lets them start, pause and complete jobs, report producti
 user on **People** (their user name). Someone with no user can still clock on and off at the badge terminal, and the station tells them what it
 can't do for them. Everything done at a station is recorded under the person's user, with the station named as where it was done.
 
+**When the network drops.** The station, the line board and the badge terminal need their connection to Pulaski: nothing is kept on the
+device to send later.
+
+1. If the connection goes, a red bar across the top says **No connection to Pulaski: nothing is saved until it is back**. The screen stays as
+   it was (its figures stop moving) instead of turning into the browser's error page.
+2. If you tap a button to send something (a report, a stop's reason, a clock-on) while it is down, it isn't sent: the bar says so, and what you
+   typed stays in the form.
+3. When the connection is back, the bar goes and the screen reloads by itself (a station waits until you have finished typing). Send again
+   what wasn't sent.
+
+In detail: the screen checks with Pulaski before every reload and every send, and every five seconds while the bar shows. Machine counts and
+states don't depend on it: the edge node keeps them and forwards them once its own link is back, so **From the machine** still offers the
+counts afterwards. If the link goes in the moment a send is on its way, the browser may show its own error page; go back and look at the
+job, stop or clock before sending again, since it may have arrived.
+
 ### Show a line board on a TV
 
 A TV on the floor can show each line's state, running job, output, down time and OEE for the shift, in large type, without anyone signing in.
@@ -1201,7 +1216,7 @@ A TV on the floor can show each line's state, running job, output, down time and
 3. Open `/terminal/board` on the TV (add `?line=EXT-01` to show one line full screen) and leave it running.
 
 In detail: the board reloads [within seconds](#screens-that-update-themselves) of a change at its site, and every 15 seconds, so it recovers by
-itself after a network drop. Its figures are the Overview's: a line that tracks
+itself after a network drop (see [When the network drops](#use-an-operator-station)). Its figures are the Overview's: a line that tracks
 machine state but has no signal shows **No signal**, and down time counts no-signal time. Colour is kept for what needs attention: down, no
 signal, waiting, OEE below target, stops to code. Switching the terminal off stops the board at once. A line's calls for help that aren't
 resolved show under its name: amber while waiting, quiet once someone is on it, and red, with the line's frame, once escalated. Its
@@ -3747,6 +3762,10 @@ Between two production jobs on different materials, a line needs a changeover. P
 ## 23. What Pulaski doesn't do yet
 
 Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for them:
+
+- **Working offline:** the station, line boards and badge terminals say when the connection is gone and keep what was typed, but don't queue
+  reports, stop reasons or clock-ons to send later; they are sent again by hand once it is back. The signed-in screens show Blazor's own
+  reconnecting notice.
 
 - **Help** is the guide in English, whatever your language; line boards (TV screens) have no help link.
 - **Your own reports and dashboards** aren't built in Pulaski: analysts build them in Power BI, Excel or a warehouse from the read-only
