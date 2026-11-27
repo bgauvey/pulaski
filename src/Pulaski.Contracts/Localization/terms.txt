@@ -2470,6 +2470,7 @@ No classes yet. Add one above.
 No components are planned for this job, and nothing has been consumed. Its order had no BOM.
 No components are planned for this job, so there is nothing to allocate.
 No components yet.
+No connection to Pulaski: nothing is saved until it is back. This screen comes back by itself.
 No connections yet.
 No connections yet. Add the broker, server or PLC your machines are read through.
 No connections yet. Someone who manages integrations adds them.
@@ -4803,6 +4804,7 @@ What was done (or why not)
 What was found
 What was found wrong, its root cause, what is being done about it and what became of the lots.
 What was measured or inspected, against a lot or a job's run, checked against the material's released
+What you entered wasn't sent: it is still here. Send it again once the connection is back.
 When
 When each site works. Planning places jobs only inside shifts. Equipment follows a schedule of its own or inherits its parent's (choose on
 When it works, for planning: inherit its parent's shifts, follow one of the site's shift schedules, or run around the clock. Schedules are kept on Configure → Shifts.

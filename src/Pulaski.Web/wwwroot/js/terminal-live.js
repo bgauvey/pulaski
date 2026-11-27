@@ -31,10 +31,93 @@
         return dirty || focused;
     };
 
-    const reload = () => {
+    // Network drops (#134, D-133). A page with <meta name="pulaski-offline" data-offline="…" data-unsent="…"> never swaps itself for the browser's
+    // error page: before reloading or sending a form it asks /terminal/ping; while that fails it stays as it is, says so in a banner, keeps what
+    // was typed, and tries again every few seconds, reloading once Pulaski answers. Nothing is queued: what wasn't sent is sent again by hand.
+    const offlineMeta = () => document.querySelector('meta[name="pulaski-offline"]');
+    let offline = false;
+    let notice = null;
+
+    const reachable = async () => {
+        const abort = new AbortController();
+        const timeout = setTimeout(() => abort.abort(), 4000);
+        try {
+            const response = await fetch('terminal/ping', { cache: 'no-store', credentials: 'same-origin', signal: abort.signal });
+            return response.status < 500;
+        } catch {
+            return false;
+        } finally {
+            clearTimeout(timeout);
+        }
+    };
+
+    const showBanner = (text) => {
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.className = 'offline-banner';
+            notice.setAttribute('role', 'alert');
+            document.body.prepend(notice);
+        }
+        notice.textContent = text;
+    };
+
+    const goOffline = (unsent) => {
+        const meta = offlineMeta();
+        offline = true;
+        const text = (meta && meta.dataset.offline) || 'No connection to Pulaski: nothing is saved until it is back.';
+        showBanner(unsent ? `${text} ${(meta && meta.dataset.unsent) || 'What you entered was not sent: it is still here; send it again once the connection is back.'}` : text);
+    };
+
+    const goOnline = () => {
+        offline = false;
+        if (notice) { notice.remove(); notice = null; }
+    };
+
+    const reload = async () => {
         lastReload = Date.now();
+        if (offlineMeta() && !(await reachable())) {
+            goOffline(false);
+            return;
+        }
         location.replace(location.pathname + location.search);
     };
+
+    // While offline, try every five seconds; once Pulaski answers, the page comes back as it now is (unless a form is being typed in).
+    setInterval(async () => {
+        if (!offline || !offlineMeta()) return;
+        if (await reachable()) {
+            goOnline();
+            const c = config();
+            if (!c || !typing(c)) location.replace(location.pathname + location.search);
+        }
+    }, 5000);
+
+    window.addEventListener('offline', () => { if (offlineMeta()) goOffline(false); });
+    window.addEventListener('online', async () => { if (offlineMeta() && await reachable()) goOnline(); });
+
+    // A form is sent only when Pulaski answers; otherwise it stays, as typed, and the banner says it wasn't sent.
+    document.addEventListener('submit', async (e) => {
+        const form = e.target;
+        if (!offlineMeta() || !(form instanceof HTMLFormElement) || form.dataset.pulaskiChecked === '1') {
+            if (form instanceof HTMLFormElement) delete form.dataset.pulaskiChecked;
+            return;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        // A second tap while the check is on its way would send the form twice.
+        if (form.dataset.pulaskiChecking === '1') return;
+        form.dataset.pulaskiChecking = '1';
+        const submitter = e.submitter;
+        const ok = await reachable();
+        delete form.dataset.pulaskiChecking;
+        if (ok) {
+            goOnline();
+            form.dataset.pulaskiChecked = '1';
+            if (submitter) form.requestSubmit(submitter); else form.requestSubmit();
+        } else {
+            goOffline(true);
+        }
+    }, true);
 
     const tryReload = () => {
         const c = config();

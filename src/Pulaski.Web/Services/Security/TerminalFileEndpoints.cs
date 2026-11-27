@@ -30,6 +30,13 @@ public static class TerminalFileEndpoints
 
         // Live changes for a board or station (#143b): the browser can't send the terminal's secret itself, so its cookie is read here and the
         // API's stream passed through as it comes. An unenrolled device gets 404; the script then keeps to its timer.
+        // Whether this device still reaches Pulaski (#134, D-133): the floor screens ask before reloading or sending a form. Nothing else.
+        routes.MapGet("/terminal/ping", (HttpContext http) =>
+        {
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.NoContent();
+        }).AllowAnonymous();
+
         routes.MapGet("/terminal/live", async (HttpContext http, PulaskiApiClient api, CancellationToken ct) =>
         {
             if (TerminalCookie.Get(http) is not { } secret)
