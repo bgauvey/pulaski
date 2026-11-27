@@ -1,0 +1,119 @@
+@inject PulaskiApiClient Api
+
+@* Copying a site's reference data into a new site beside it (#140b, D-132): its lists and settings, not its equipment; lines are then copied
+   one by one. *@
+<section class="mt-3" aria-labelledby="site-copy-title">
+    <h3 id="site-copy-title" class="h6">@L["Start a new site from this one"]</h3>
+    <ProblemAlert Error="_error" />
+    @if (_plan is null)
+    {
+        <ActionButton Class="btn btn-sm btn-outline-primary" Busy="_busy" OnClick="ReviewAsync">@L["Review what it would bring"]</ActionButton>
+    }
+    else
+    {
+        var plan = _plan;
+        <form class="row g-2 align-items-end" @onsubmit="CopyAsync" @onsubmit:preventDefault>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold" for="site-copy-code">@L["New site's code"]</label>
+                <input id="site-copy-code" class="form-control form-control-sm" maxlength="50" @bind="_code" />
+            </div>
+            <div class="col-md-5">
+                <label class="form-label small fw-semibold" for="site-copy-name">@L["Name"]</label>
+                <input id="site-copy-name" class="form-control form-control-sm" maxlength="200" @bind="_name" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold" for="site-copy-zone">@L["Time zone"]</label>
+                <input id="site-copy-zone" class="form-control form-control-sm" maxlength="64" placeholder="Europe/Berlin" @bind="_timeZone" />
+            </div>
+            <fieldset class="col-12">
+                <legend class="small fw-semibold">@L["What comes with it"]</legend>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="site-copy-shifts" @bind="_shifts" />
+                    <label class="form-check-label" for="site-copy-shifts">@L["Shift schedules ({0}) and calendar exceptions still to come ({1})", plan.ShiftSchedules, plan.CalendarExceptions]</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="site-copy-reasons" @bind="_reasons" />
+                    <label class="form-check-label" for="site-copy-reasons">@L["The site's own reasons ({0}) and machine profiles ({1})", plan.Reasons, plan.MachineProfiles]</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="site-copy-people" @bind="_people" />
+                    <label class="form-check-label" for="site-copy-people">@L["Crews ({0}), qualifications ({1}) and andon call types ({2})", plan.Crews, plan.Qualifications, plan.AndonTypes]</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="site-copy-settings" @bind="_settings" />
+                    <label class="form-check-label" for="site-copy-settings">@L["Site settings and OEE targets ({0}), and lot attributes ({1})", plan.Settings, plan.LotAttributes]</label>
+                </div>
+            </fieldset>
+            <p class="small text-muted col-12 mb-1">@L["Not copied: areas and lines (copy them one by one with Copy this line), people, devices, label serial numbers, and anything that happened."]</p>
+            <div class="col-12">
+                <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy"
+                              Reason="@(string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_timeZone) ? L["Give the new site's code, name and time zone."] : null)">@L["Make the new site"]</ActionButton>
+            </div>
+        </form>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public EquipmentDto Site { get; set; } = default!;
+
+    [Parameter] public EventCallback<Guid> Copied { get; set; }
+
+    private SiteCopyPlanDto? _plan;
+    private string? _code;
+    private string? _name;
+    private string? _timeZone;
+    private bool _shifts = true;
+    private bool _reasons = true;
+    private bool _people = true;
+    private bool _settings = true;
+    private bool _busy;
+    private ApiException? _error;
+
+    private async Task ReviewAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _plan = await Api.GetSiteCopyPlanAsync(Site.Id);
+            _timeZone ??= _plan.SourceTimeZone;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CopyAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CopySiteAsync(Site.Id, new CopySiteRequest
+            {
+                Code = _code,
+                Name = _name,
+                TimeZone = _timeZone,
+                Shifts = _shifts,
+                Reasons = _reasons,
+                People = _people,
+                Settings = _settings,
+            });
+            _plan = null;
+            await Copied.InvokeAsync(created.Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -85,6 +85,21 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     public Task<MeDto> GetMeAsync(CancellationToken ct = default) => GetAsync<MeDto>("api/me", ct);
 
+    /// <summary>What copying a line would make (#140), and the copy.</summary>
+    public Task<LineCopyPlanDto> GetLineCopyPlanAsync(Guid lineId, string? code, string? name, Guid? parentId = null, CancellationToken ct = default) =>
+        GetAsync<LineCopyPlanDto>(
+            $"api/equipment/{lineId}/copy-plan?code={Uri.EscapeDataString(code ?? "")}&name={Uri.EscapeDataString(name ?? "")}{(parentId is { } p ? $"&parentId={p}" : "")}", ct);
+
+    public Task<CreatedResponse> CopyLineAsync(Guid lineId, CopyLineRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/equipment/{lineId}/copy", request, ct);
+
+    /// <summary>What copying a site's reference data would bring (#140b), and the copy into a new site.</summary>
+    public Task<SiteCopyPlanDto> GetSiteCopyPlanAsync(Guid siteId, CancellationToken ct = default) =>
+        GetAsync<SiteCopyPlanDto>($"api/equipment/{siteId}/site-copy-plan", ct);
+
+    public Task<CreatedResponse> CopySiteAsync(Guid siteId, CopySiteRequest request, CancellationToken ct = default) =>
+        SendAsync<CreatedResponse>(HttpMethod.Post, $"api/equipment/{siteId}/copy-site", request, ct);
+
     /// <summary>One of the signed-in user's own view settings (#131).</summary>
     public Task<VersionResponse> SetUserSettingAsync(UserSettingRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, "api/me/settings", request, ct);

@@ -209,6 +209,7 @@ A connection's code is fixed once made: it names its credentials in the configur
 A connection's kind is fixed once made ({0}); add another connection instead.
 A control chart signalled (SPC alert)
 A conversion needs two different units.
+A copied line goes under a site or an area.
 A count can't be negative.
 A count can't go below zero, so neither can its lower limit.
 A crew belongs to a site; choose one.
@@ -511,6 +512,7 @@ Another count was started at the same moment. Try again.
 Another material already has that external key.
 Another material already has the code {0} ({1} key {2}).
 Another material already has the code {0}.
+Another site: what it uses is found there by its code.
 Another version of this process was released at the same time. Reload and try again.
 Answer
 Answer andon calls: acknowledge them on arrival and resolve them
@@ -794,6 +796,7 @@ Cancelled, with its jobs.
 Cancel…
 Cap
 Capabilities
+Capabilities and rates ({0}) and changeover rules ({1})
 Capabilities: which material runs on which line, and how fast
 Capability
 Capability indices are for measured values.
@@ -947,11 +950,13 @@ Choose the material classes it is for, or offer it for every material.
 Choose the material or class on each side, or Anything.
 Choose the material, a line if it should have its own, and a period when the process ran normally. At least {0} results are needed; 25 or more give better limits.
 Choose the material.
+Choose the new site's time zone.
 Choose the process and the operation's number.
 Choose the site.
 Choose to merge
 Choose what caused it.
 Choose when it starts.
+Choose where the copy goes.
 Choose where the good output goes.
 Choose who to check in.
 Choose who.
@@ -1020,6 +1025,7 @@ Coc
 Code
 Code (optional)
 Code and kind can't change once created; switch one off instead.
+Code for the copy of {0}
 Code machine stops: confirm or change their reason
 Code, name, base unit and type come from {0}
 Codes starting PUL1 are Pulaski's barcodes.
@@ -1100,7 +1106,12 @@ Control module
 Conversion
 Conversions
 Convert
+Copied from
 Copies
+Copy the line
+Copy this line
+Copying a line needs permission to manage equipment where the copy goes.
+Copying capabilities needs permission to maintain processes and capabilities where the copy goes.
 Correct
 Correct details
 Correct inventory: write up, write off, correct, reverse, split and merge lots
@@ -1166,6 +1177,7 @@ Crew working shift {0}
 Crew {0} is on shift; tick who is here.
 Crew {0} not found.
 Crews
+Crews ({0}), qualifications ({1}) and andon call types ({2})
 Critical
 Cumulative
 Current
@@ -1583,6 +1595,7 @@ Give at least one target.
 Give both BeforeAt and BeforeId, or neither.
 Give both external_system and external_key, or neither.
 Give each shift a start time as HH:mm.
+Give every piece of equipment a code of at most {0} characters.
 Give how often first.
 Give or take away a role held at every site, rather than at one
 Give setup and first-article checklists their second sign-off, or reject them
@@ -1602,6 +1615,9 @@ Give the language a name of at most 100 characters, as its speakers write it, su
 Give the language a name of at most 100 characters.
 Give the language's code and name.
 Give the lot number.
+Give the new site a code.
+Give the new site a name.
+Give the new site's code, name and time zone.
 Give the reason
 Give the receiver's address before switching the feed on.
 Give the server's endpoint, such as opc.tcp://plc1:4840.
@@ -1611,6 +1627,7 @@ Give the topic to publish to, such as pulaski/{{type}}, without # or + and not s
 Give the {0} as 1 to {1} (a week).
 Give them a new temporary password, which they must change when they sign in. It also unlocks them.
 Give them a reason
+Give {0} a name of at most 200 characters.
 Giving or taking away a role at every site needs permission to grant roles everywhere.
 Go
 Go to the start
@@ -1818,6 +1835,7 @@ It expires {0}, before the job needs it ({1}).
 It filled {0} of {1} {2}.
 It goes into a lot of its own, on hold until someone approves it: it can't be sold as a partial.
 It goes into the run going on then.
+It goes under
 It has never connected.
 It hasn't run yet.
 It is accepted: it will be used.
@@ -1882,6 +1900,7 @@ Its shift isn't approved yet: change the break instead.
 Its shift isn't approved yet: change the session instead.
 Its stops have been adjusted since: undo that first.
 Its tag was deleted; bind another tag instead.
+Its {0} machine tags aren't copied: bind the new machines on Edge nodes.
 Job
 Job status
 Job {0}
@@ -2186,8 +2205,10 @@ Machine profile
 Machine profile {0} not found.
 Machine profiles
 Machine profiles: state values and stop codes
+Machine settings: profile, counter, constraint, output, label printer, stop codes ({0})
 Machine speed
 Machine stops coded and adjusted
+Machine tags aren't copied: bind the new machines on Edge nodes.
 Machines
 Machines: live state and stops to code
 Machine…
@@ -2226,11 +2247,13 @@ Make a material class…
 Make a single material…
 Make group
 Make reason
+Make the new site
 Make this page my home page
 Make this version the one orders are made from.
 Makes
 Makes {0} · {1} on {2}
 Makes {0} · {1} on {2}{3}
+Making a site needs permission to manage equipment everywhere.
 Manual
 Map {0}: every connection needs it.
 Marginal
@@ -2341,6 +2364,7 @@ NCR actions to do
 Name
 Name at least one lot attribute in the header.
 Name at least one part that finds a lot or a material: (?<lot>…), (?<supplier_lot>…), (?<material>…) or (?<gtin>…).
+Name for the copy of {0}
 Name of state {0}
 Name of {0}
 Name on the controller
@@ -2384,6 +2408,7 @@ New containers get SSCCs from serial {0}.
 New draft
 New equipment
 New instruction
+New line's code
 New lot each shift
 New lot number
 New material
@@ -2394,6 +2419,7 @@ New process
 New role
 New schedule
 New shift schedule
+New site's code
 New specification
 New state name
 New state value
@@ -2640,6 +2666,7 @@ Not applied
 Not at this site yet: receive it?
 Not capable
 Not closed
+Not copied: areas and lines (copy them one by one with Copy this line), people, devices, label serial numbers, and anything that happened.
 Not due yet
 Not found
 Not heard from for {0} hours.
@@ -2822,6 +2849,7 @@ Only a balance takes in lots as they arrive.
 Only a choice attribute has choices.
 Only a constraint-machine line names one.
 Only a counter rolls over.
+Only a line that runs jobs can be copied.
 Only a measured characteristic has a unit.
 Only a number attribute can stand for a quality characteristic.
 Only a number attribute has a unit.
@@ -3114,6 +3142,7 @@ Process-value tag
 Processed
 Processed count
 Processes
+Processes still name the original line: move or assign a job to the copy, or add it to a process.
 Processes that make it
 Process…
 Produce
@@ -3187,6 +3216,7 @@ Qualification to grant
 Qualification to require
 Qualification {0} not found.
 Qualifications
+Qualifications ({0}), OEE targets ({1}), maintenance plans ({2}), work instructions ({3})
 Qualifications can't be imported here.
 Qualification…
 Quality
@@ -3430,6 +3460,8 @@ Reversed
 Reversed: its counts are offset and its lots taken back
 Reversed: run now has {0} good and {1} scrap; {2} lot(s) took the output back.
 Reverse…
+Review the copy
+Review what it would bring
 Revoke
 Revoked
 Revoked by {0}: {1}
@@ -3734,6 +3766,7 @@ Shift name
 Shift review
 Shift schedule {0} not found.
 Shift schedules
+Shift schedules ({0}) and calendar exceptions still to come ({1})
 Shift {0}
 Shift {0} doesn't run on {1:yyyy-MM-dd}, so there is nothing to take off.
 Shift {0} has two overrides on {1}.
@@ -3811,6 +3844,7 @@ Since {0}{1}{2}
 Site
 Site (default)
 Site settings
+Site settings and OEE targets ({0}), and lot attributes ({1})
 Site {0} not found.
 Site, where the file names none
 Size
@@ -3864,6 +3898,7 @@ Start a count
 Start a line with # or ## for a heading, 1. for a numbered step, - for a point; **words** are bold. A blank line starts a new paragraph.
 Start a new draft, move those lines to operations the process has, and release it.
 Start a new lot
+Start a new site from this one
 Start a paid break now
 Start again
 Start an unpaid break now
@@ -4156,6 +4191,7 @@ The draft of {0} was changed by someone else. Reload and try again.
 The earlier operation.
 The edge node already has a connection with that code.
 The endpoint is an opc.tcp:// address, such as opc.tcp://plc1:4840.
+The equipment below it ({0})
 The equipment that uses this profile; give equipment its profile on the Equipment screen, under Machine data. A machine whose stop code means something else than on the others can take its own reason for it here.
 The equipment this sits under.
 The equipment this will sit under.
@@ -4345,6 +4381,7 @@ The site whose lines and departments it can use.
 The site whose time zone and codes this equipment uses.
 The site's allocation settings were changed by someone else. Reload and try again.
 The site's label settings were changed by someone else. Reload and try again.
+The site's own reasons ({0}) and machine profiles ({1})
 The site's planning rate settings were changed by someone else. Reload and try again.
 The site's reporting tolerances were changed by someone else. Reload and try again.
 The site's rule
@@ -4728,6 +4765,7 @@ What automation couldn't consume
 What availability, performance, quality and OEE should reach. The site's targets apply to all its equipment; a machine or line with targets of its own uses those instead. A change starts on the day you choose, so earlier days keep the targets they had. Leave a figure blank for no target.
 What becomes of the lots
 What changed (optional)
+What comes with it
 What each line's shifts hand on: open items stay until someone closes them; notes stay with their shift.
 What each machine bound here last reported, as Pulaski applied it: its PackML state (and the value the machine sent), unit mode, latched stop code and speed. The machines' stops are coded on Operate → Machines.
 What each material is made from, one level deep. A BOM for a process says which operation consumes each component.
@@ -5515,6 +5553,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is already on {1}.
 {0} is already sampled on {1}; switch that off first.
 {0} is already there.
+{0} is already used at the site.
 {0} is already withdrawn.
 {0} is already {1}.
 {0} is another material or site; only lots of one material merge.
@@ -5537,6 +5576,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is for another material or site.
 {0} is for another site.
 {0} is given twice (property '{1}').
+{0} is given twice.
 {0} is held at a site; choose one, or allow it at every site on the Roles tab.
 {0} is held at a site; choose one.
 {0} is held everywhere, not at a site.
@@ -5859,6 +5899,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} {1} is {2} batches of {3} {4}: planned {5} {6}, rounded up to whole batches.
 {0} {1} isn't a batch: a batch is {2} to {3} {4} ({5} ± {6}%). A short batch is reported as a partial batch when the line stops.
 {0} {1} isn't a batch: every batch is exactly {2} {3}. A short batch is reported as a partial batch when the line stops.
+{0} {1} isn't at that site, so the copy goes without it.
 {0} {1} of a {2} {3} batch
 {0} {1} of {2}
 {0} {1} of {2} consumed into {3}.

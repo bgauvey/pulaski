@@ -81,6 +81,14 @@ else
                 {
                     <EquipmentOutput @key="(selected.Id, selected.Version)" Equipment="selected" Saved="() => RefreshAsync(selected.Id)" />
                 }
+                @if (selected.Level == "site" && User.CanEverywhere(PermissionCodes.Equipment))
+                {
+                    <SiteCopyPanel @key="selected.Id" Site="selected" Copied="OnLineCopiedAsync" />
+                }
+                @if (selected.CanRunJob && selected.Level is not ("site" or "area") && User.Can(PermissionCodes.Equipment, selected.SiteId))
+                {
+                    <LineCopyPanel @key="selected.Id" Line="selected" Equipment="_equipment ?? []" Copied="OnLineCopiedAsync" />
+                }
             }
         </div>
     </div>
@@ -277,7 +285,14 @@ else
         }
     }
 
-    private async Task RefreshAsync(Guid id)
+    // A line copied (#140): the tree reloads with the copy selected.
+    private async Task OnLineCopiedAsync(Guid id)
+    {
+        await LoadAsync();
+        _selectedId = id;
+    }
+
+        private async Task RefreshAsync(Guid id)
     {
         var fresh = await Api.GetEquipmentAsync(id);
         _equipment = [.. _equipment!.Select(e => e.Id == id ? fresh : e)];
