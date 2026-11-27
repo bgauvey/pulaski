@@ -210,7 +210,7 @@ A connection's code is fixed once made: it names its credentials in the configur
 A connection's kind is fixed once made ({0}); add another connection instead.,El tipo de una conexión es fijo una vez creada ({0}); agregue otra conexión en su lugar.
 A control chart signalled (SPC alert),Un gráfico de control dio una señal (alerta SPC)
 A conversion needs two different units.,Una conversión necesita dos unidades distintas.
-A copied line goes under its own site or an area of it.,Una línea copiada va bajo su propio sitio o un área de este.
+A copied line goes under a site or an area.,Una línea copiada va bajo un sitio o un área.
 A count can't be negative.,Un conteo no puede ser negativo.
 "A count can't go below zero, so neither can its lower limit.","Una cuenta no puede bajar de cero, y su límite inferior tampoco."
 A crew belongs to a site; choose one.,Una cuadrilla pertenece a un sitio; elija uno.
@@ -513,6 +513,7 @@ Another count was started at the same moment. Try again.,Se inició otro conteo 
 Another material already has that external key.,Otro material ya tiene esa clave externa.
 Another material already has the code {0} ({1} key {2}).,Otro material ya tiene el código {0} (clave {2} de {1}).
 Another material already has the code {0}.,Otro material ya tiene el código {0}.
+Another site: what it uses is found there by its code.,Otro sitio: lo que usa se busca allí por su código.
 Another version of this process was released at the same time. Reload and try again.,Se liberó otra versión de este proceso al mismo tiempo. Recargue e inténtelo de nuevo.
 Answer,Respuesta
 Answer andon calls: acknowledge them on arrival and resolve them,Atender llamadas andon: confirmarlas al llegar y resolverlas
@@ -1110,8 +1111,8 @@ Copied from,Copiado de
 Copies,Copias
 Copy the line,Copiar la línea
 Copy this line,Copiar esta línea
-Copying a line needs permission to manage equipment at its site.,Copiar una línea necesita permiso para gestionar equipos en su sitio.
-Copying capabilities needs permission to maintain processes and capabilities at the site.,Copiar capacidades necesita permiso para mantener procesos y capacidades en el sitio.
+Copying a line needs permission to manage equipment where the copy goes.,Copiar una línea necesita permiso para gestionar equipos donde va la copia.
+Copying capabilities needs permission to maintain processes and capabilities where the copy goes.,Copiar capacidades necesita permiso para mantener procesos y capacidades donde va la copia.
 Correct,Corregir
 Correct details,Corregir detalles
 "Correct inventory: write up, write off, correct, reverse, split and merge lots","Corregir inventario: ajustar, dar de baja, corregir, revertir, dividir y combinar lotes"
@@ -5899,6 +5900,7 @@ yes,sí
 "{0} {1} is {2} batches of {3} {4}: planned {5} {6}, rounded up to whole batches.","{0} {1} son {2} tandas de {3} {4}: se planearon {5} {6}, redondeado hacia arriba a tandas completas."
 {0} {1} isn't a batch: a batch is {2} to {3} {4} ({5} ± {6}%). A short batch is reported as a partial batch when the line stops.,{0} {1} no es una tanda: una tanda es de {2} a {3} {4} ({5} ± {6}%). Una tanda corta se reporta como tanda parcial cuando la línea se detiene.
 {0} {1} isn't a batch: every batch is exactly {2} {3}. A short batch is reported as a partial batch when the line stops.,{0} {1} no es una tanda: cada tanda es exactamente {2} {3}. Una tanda corta se reporta como tanda parcial cuando la línea se detiene.
+"{0} {1} isn't at that site, so the copy goes without it.","{0} {1} no está en ese sitio, así que la copia va sin ello."
 {0} {1} of a {2} {3} batch,{0} {1} de una tanda de {2} {3}
 {0} {1} of {2},{0} {1} de {2}
 {0} {1} of {2} consumed into {3}.,{0} {1} de {2} consumidos en {3}.

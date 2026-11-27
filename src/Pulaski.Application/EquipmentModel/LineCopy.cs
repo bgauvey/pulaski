@@ -27,24 +27,33 @@ public interface ILineCopyRepository
     /// <summary>Every code in use at the site, ignoring case.</summary>
     Task<IReadOnlySet<string>> CodesAsync(Guid siteId, CancellationToken cancellationToken);
 
-    /// <summary>Whether <paramref name="parentId"/> is equipment of <paramref name="siteId"/> that can hold a line (a site or an area), locked.</summary>
-    Task<bool> LockParentAsync(Guid parentId, Guid siteId, CancellationToken cancellationToken);
+    /// <summary>The site of <paramref name="parentId"/> when it can hold a line (a site or an area), locked; null otherwise.</summary>
+    Task<Guid?> LockParentAsync(Guid parentId, CancellationToken cancellationToken);
 
-    /// <summary>Makes the copies (parents first), with the tree; machine settings and links inside the copy follow when asked.</summary>
-    Task CopyEquipmentAsync(IReadOnlyList<LineCopyRow> rows, bool machineSettings, Func<Guid> newId, DateTimeOffset at, CancellationToken cancellationToken);
+    /// <summary>
+    /// Into another site (#140c): what the line uses that the target site has nothing of by code (machine profile, shift schedule, label printer,
+    /// output location, qualifications, stop-code reasons, work instructions), for the review.
+    /// </summary>
+    Task<IReadOnlyList<(string Kind, string Code)>> UnmatchedAsync(Guid lineId, Guid targetSiteId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Makes the copies (parents first) at <paramref name="targetSiteId"/>, with the tree; machine settings and links inside the copy follow when
+    /// asked. Site-owned references (profile, schedule, printer, an output location outside the line) are found at the target site by code.
+    /// </summary>
+    Task CopyEquipmentAsync(IReadOnlyList<LineCopyRow> rows, Guid targetSiteId, bool machineSettings, Func<Guid> newId, DateTimeOffset at, CancellationToken cancellationToken);
 
     /// <summary>Copies capabilities in force (from now, each with its planning rate from the ideal rate) and the line's changeover rules.</summary>
-    Task<IReadOnlyList<Guid>> CopyCapabilitiesAsync(IReadOnlyList<LineCopyRow> rows, Func<Guid> newId, DateTimeOffset at, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Guid>> CopyCapabilitiesAsync(IReadOnlyList<LineCopyRow> rows, Guid targetSiteId, Func<Guid> newId, DateTimeOffset at, CancellationToken cancellationToken);
 
-    /// <summary>Copies stop-code overrides (machine settings).</summary>
-    Task CopyStopCodesAsync(IReadOnlyList<LineCopyRow> rows, CancellationToken cancellationToken);
+    /// <summary>Copies stop-code overrides (machine settings), a site's own reason found at the target site by kind and code.</summary>
+    Task CopyStopCodesAsync(IReadOnlyList<LineCopyRow> rows, Guid targetSiteId, CancellationToken cancellationToken);
 
     /// <summary>Copies qualifications required, OEE targets in force (from today), maintenance plans (started now) and instructions aimed at a copied line.</summary>
-    Task CopyRequirementsAsync(IReadOnlyList<LineCopyRow> rows, Func<Guid> newId, DateTimeOffset at, string by, CancellationToken cancellationToken);
+    Task CopyRequirementsAsync(IReadOnlyList<LineCopyRow> rows, Guid targetSiteId, Func<Guid> newId, DateTimeOffset at, string by, CancellationToken cancellationToken);
 }
 
 /// <summary>What copying <paramref name="LineId"/> as <paramref name="NewCode"/> would make (#140), for the review.</summary>
-public sealed record GetLineCopyPlanQuery(Guid LineId, string? NewCode, string? NewName) : IQuery<LineCopyPlanDto>;
+public sealed record GetLineCopyPlanQuery(Guid LineId, string? NewCode, string? NewName, Guid? ParentId = null) : IQuery<LineCopyPlanDto>;
 
 /// <summary>Copies a line and what comes with it (#140, D-132), in one transaction; the caller's permissions decide which parts may come.</summary>
 public sealed record CopyLineCommand(UserAccess Caller, Guid LineId, CopyLineRequest Request) : ICommand<CreatedResponse>;
@@ -70,14 +79,20 @@ internal sealed class GetLineCopyPlanHandler(IUnitOfWork unitOfWork, ILineCopyRe
             Code = p.Id == line.LineId ? newCode : LineCopyRules.ChildCode(line.Code, newCode, p.Code),
             Name = p.Id == line.LineId ? newName : p.Name,
         }).ToList();
+        var target = query.ParentId is { } parent
+            ? await copies.LockParentAsync(parent, cancellationToken) ?? throw new DomainRuleException($"A copied line goes under a site or an area.")
+            : line.SiteId;
         var problems = LineCopyRules.Problems([.. items.Select(i => new LineCopyItem(i.SourceId, i.SourceParentId, i.Depth, i.Code, i.Name))],
-            await copies.CodesAsync(line.SiteId, cancellationToken));
+            await copies.CodesAsync(target, cancellationToken));
+        var unmatched = target == line.SiteId ? [] : await copies.UnmatchedAsync(line.LineId, target, cancellationToken);
         return new LineCopyPlanDto
         {
             SourceLineId = line.LineId,
             SourceCode = line.Code,
             SiteId = line.SiteId,
-            ParentId = line.ParentId,
+            ParentId = query.ParentId ?? line.ParentId,
+            TargetSiteId = target,
+            Unmatched = [.. unmatched.Select(u => Notes.Of($"{UserMessage.Code(u.Kind)} {u.Code} isn't at that site, so the copy goes without it."))],
             Items = items,
             Capabilities = line.Capabilities,
             ChangeoverRules = line.ChangeoverRules,
@@ -105,21 +120,19 @@ internal sealed class CopyLineHandler(IUnitOfWork unitOfWork, ILineCopyRepositor
             throw new DomainRuleException($"Only a line that runs jobs can be copied.");
         }
 
-        var caller = command.Caller;
-        if (!caller.Can(Permissions.Equipment, line.SiteId))
-        {
-            throw new ForbiddenException($"Copying a line needs permission to manage equipment at its site.");
-        }
-
-        if (request.Capabilities && !caller.Can(Permissions.Processes, line.SiteId))
-        {
-            throw new ForbiddenException($"Copying capabilities needs permission to maintain processes and capabilities at the site.");
-        }
-
         var parentId = request.ParentId ?? line.ParentId ?? throw new DomainRuleException($"Choose where the copy goes.");
-        if (!await copies.LockParentAsync(parentId, line.SiteId, cancellationToken))
+        var target = await copies.LockParentAsync(parentId, cancellationToken) ?? throw new DomainRuleException($"A copied line goes under a site or an area.");
+
+        // The copy is made at the target site, so the caller's permissions there decide (#140c); seeing the original is enough of it.
+        var caller = command.Caller;
+        if (!caller.Can(Permissions.Equipment, target) || !caller.CanAny([Permissions.EquipmentView, Permissions.Equipment], line.SiteId))
         {
-            throw new DomainRuleException($"A copied line goes under its own site or an area of it.");
+            throw new ForbiddenException($"Copying a line needs permission to manage equipment where the copy goes.");
+        }
+
+        if (request.Capabilities && !caller.Can(Permissions.Processes, target))
+        {
+            throw new ForbiddenException($"Copying capabilities needs permission to maintain processes and capabilities where the copy goes.");
         }
 
         // The pieces to make, parents first; without the equipment part, only the line itself.
@@ -130,7 +143,7 @@ internal sealed class CopyLineHandler(IUnitOfWork unitOfWork, ILineCopyRepositor
             p.Id, newIds[p.Id], p.Id == line.LineId ? parentId : newIds[p.ParentId!.Value],
             (names.GetValueOrDefault(p.Id)?.Code ?? (p.Id == line.LineId ? "" : p.Code)).Trim(),
             (names.GetValueOrDefault(p.Id)?.Name ?? p.Name).Trim())).ToList();
-        var problems = LineCopyRules.Problems([.. rows.Select(r => new LineCopyItem(r.SourceId, null, 0, r.Code, r.Name))], await copies.CodesAsync(line.SiteId, cancellationToken));
+        var problems = LineCopyRules.Problems([.. rows.Select(r => new LineCopyItem(r.SourceId, null, 0, r.Code, r.Name))], await copies.CodesAsync(target, cancellationToken));
         if (problems.Count > 0)
         {
             throw new DomainRuleException(problems[0]);
@@ -140,13 +153,15 @@ internal sealed class CopyLineHandler(IUnitOfWork unitOfWork, ILineCopyRepositor
         {
             From = line.LineId,
             FromCode = line.Code,
+            FromSite = line.SiteId,
+            ToSite = target,
             Pieces = rows.Select(r => new { r.SourceId, r.NewId, r.Code }),
             request.Equipment,
             request.Capabilities,
             request.MachineSettings,
             request.Requirements,
         });
-        await copies.CopyEquipmentAsync(rows, request.MachineSettings, ids.NewId, envelope.OccurredAt, cancellationToken);
+        await copies.CopyEquipmentAsync(rows, target, request.MachineSettings, ids.NewId, envelope.OccurredAt, cancellationToken);
         foreach (var row in rows)
         {
             await eventLog.AppendAsync(events.Create(EventTypes.EquipmentCreated, "equipment", row.NewId, new { row.Code, row.Name, CopiedFrom = row.SourceId }), cancellationToken);
@@ -154,7 +169,7 @@ internal sealed class CopyLineHandler(IUnitOfWork unitOfWork, ILineCopyRepositor
 
         if (request.Capabilities)
         {
-            foreach (var capability in await copies.CopyCapabilitiesAsync(rows, ids.NewId, envelope.OccurredAt, cancellationToken))
+            foreach (var capability in await copies.CopyCapabilitiesAsync(rows, target, ids.NewId, envelope.OccurredAt, cancellationToken))
             {
                 await eventLog.AppendAsync(events.Create(EventTypes.CapabilityAdded, "equipment_capability", capability, new { CopiedWith = newIds[line.LineId] }), cancellationToken);
             }
@@ -162,12 +177,12 @@ internal sealed class CopyLineHandler(IUnitOfWork unitOfWork, ILineCopyRepositor
 
         if (request.MachineSettings)
         {
-            await copies.CopyStopCodesAsync(rows, cancellationToken);
+            await copies.CopyStopCodesAsync(rows, target, cancellationToken);
         }
 
         if (request.Requirements)
         {
-            await copies.CopyRequirementsAsync(rows, ids.NewId, envelope.OccurredAt, envelope.ActorId, cancellationToken);
+            await copies.CopyRequirementsAsync(rows, target, ids.NewId, envelope.OccurredAt, envelope.ActorId, cancellationToken);
         }
 
         await eventLog.AppendAsync(envelope, cancellationToken);

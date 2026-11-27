@@ -85,8 +85,8 @@ internal static class EquipmentEndpoints
 
         // Copying a line (#140, D-132): what it would make, for the review, then the copy in one step.
         group.MapGet("/{id:guid}/copy-plan", async Task<Ok<LineCopyPlanDto>> (
-            Guid id, string? code, string? name, IQueryHandler<GetLineCopyPlanQuery, LineCopyPlanDto> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new GetLineCopyPlanQuery(id, code, name), ct)))
+            Guid id, string? code, string? name, Guid? parentId, IQueryHandler<GetLineCopyPlanQuery, LineCopyPlanDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetLineCopyPlanQuery(id, code, name, parentId), ct)))
         .RequireAny(Site.Of(Application.Security.SiteOf.Equipment), Permissions.EquipmentView);
 
         group.MapPost("/{id:guid}/copy", async Task<Ok<CreatedResponse>> (

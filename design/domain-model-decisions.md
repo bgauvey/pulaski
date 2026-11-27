@@ -3509,7 +3509,11 @@ optional: shift schedules (without their one-day overrides) and calendar excepti
 machine profiles with their state, code and reason maps pointing at the copied reasons (`ISiteCopyRepository`); crews, qualifications, andon
 types; the settings rows (scheduling, execution, rate refresh, allocation, release approval), site OEE targets from today and lot attributes
 with their classes. Not label settings (SSCC serials are a site's own), people, devices or history. Event `equipment.site_copied`.
-(c) copying a line into another site.
+(c) **A line into another site**: the parent may be a site or area of any site; the caller's permissions at the target count. Site-owned
+references are found at the target site by code (machine profile, shift schedule, else the copy inherits its calendar; label printer; an
+output location outside the line; qualifications; a site's own stop-code reasons by kind and code; work instructions); what isn't there is left
+off and listed in the review (`ILineCopyRepository.UnmatchedAsync`, plan `Unmatched`). Changeover rules, OEE targets and maintenance plans take
+the target site. Within the same site the same matching finds the same rows. D-132 complete.
 
 ## Application architecture
 

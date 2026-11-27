@@ -24,10 +24,10 @@
     {
         <div class="mt-3">
             <label class="form-label small fw-semibold" for="copy-parent">@L["It goes under"]</label>
-            <select id="copy-parent" class="form-select form-select-sm w-auto" @bind="_parentId">
+            <select id="copy-parent" class="form-select form-select-sm w-auto" @bind="_parentId" @bind:after="ReviewAsync">
                 @foreach (var p in Parents)
                 {
-                    <option value="@p.Id">@p.Code · @p.Name</option>
+                    <option value="@p.Id">@(SiteCode(p))@p.Code · @p.Name</option>
                 }
             </select>
         </div>
@@ -67,6 +67,13 @@
             </table>
         </div>
 
+        @if (plan.Unmatched.Count > 0)
+        {
+            @* Into another site (#140c): what that site has nothing of by code, so the copy goes without it. *@
+            <div class="drawer-alert is-warning mt-2" role="status"><Icon Name="info" Size="18" />
+                <span>@L["Another site: what it uses is found there by its code."] @string.Join(" ", L.Notes(plan.Unmatched))</span>
+            </div>
+        }
         @if (plan.Problems.Count > 0)
         {
             <div class="drawer-alert is-warning mt-2" role="status"><Icon Name="alert" Size="18" /><span>@string.Join(" ", L.Notes(plan.Problems))</span></div>
@@ -100,10 +107,18 @@
     private bool _busy;
     private ApiException? _error;
 
-    private bool MayCapabilities => User.Can(PermissionCodes.Processes, Line.SiteId);
+    // Where the copy goes decides the permissions that count (#140c).
+    private Guid? TargetSite => Equipment.FirstOrDefault(e => e.Id == _parentId)?.SiteId ?? Line.SiteId;
 
+    private bool MayCapabilities => User.Can(PermissionCodes.Processes, TargetSite);
+
+    // A site or an area of any site where the user manages equipment: the line's own first.
     private IEnumerable<EquipmentDto> Parents =>
-        Equipment.Where(e => e.SiteId == Line.SiteId && e.IsActive && e.Level is "site" or "area").OrderBy(e => e.Level != "site").ThenBy(e => e.Code, StringComparer.Ordinal);
+        Equipment.Where(e => e.IsActive && e.Level is "site" or "area" && User.Can(PermissionCodes.Equipment, e.SiteId))
+            .OrderBy(e => e.SiteId != Line.SiteId).ThenBy(e => SiteCode(e), StringComparer.Ordinal).ThenBy(e => e.Level != "site").ThenBy(e => e.Code, StringComparer.Ordinal);
+
+    private string SiteCode(EquipmentDto e) =>
+        e.Level == "site" || e.SiteId == Line.SiteId ? "" : $"{Equipment.FirstOrDefault(s => s.Id == e.SiteId)?.Code} › ";
 
     private async Task ReviewAsync()
     {
@@ -111,7 +126,7 @@
         _error = null;
         try
         {
-            _plan = await Api.GetLineCopyPlanAsync(Line.Id, _code, _name);
+            _plan = await Api.GetLineCopyPlanAsync(Line.Id, _code, _name, _parentId);
             _codes = _plan.Items.ToDictionary(i => i.SourceId, i => i.Code);
             _names = _plan.Items.ToDictionary(i => i.SourceId, i => i.Name);
             _parentId ??= _plan.ParentId;

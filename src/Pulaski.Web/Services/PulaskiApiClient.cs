@@ -86,8 +86,9 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<MeDto> GetMeAsync(CancellationToken ct = default) => GetAsync<MeDto>("api/me", ct);
 
     /// <summary>What copying a line would make (#140), and the copy.</summary>
-    public Task<LineCopyPlanDto> GetLineCopyPlanAsync(Guid lineId, string? code, string? name, CancellationToken ct = default) =>
-        GetAsync<LineCopyPlanDto>($"api/equipment/{lineId}/copy-plan?code={Uri.EscapeDataString(code ?? "")}&name={Uri.EscapeDataString(name ?? "")}", ct);
+    public Task<LineCopyPlanDto> GetLineCopyPlanAsync(Guid lineId, string? code, string? name, Guid? parentId = null, CancellationToken ct = default) =>
+        GetAsync<LineCopyPlanDto>(
+            $"api/equipment/{lineId}/copy-plan?code={Uri.EscapeDataString(code ?? "")}&name={Uri.EscapeDataString(name ?? "")}{(parentId is { } p ? $"&parentId={p}" : "")}", ct);
 
     public Task<CreatedResponse> CopyLineAsync(Guid lineId, CopyLineRequest request, CancellationToken ct = default) =>
         SendAsync<CreatedResponse>(HttpMethod.Post, $"api/equipment/{lineId}/copy", request, ct);

@@ -9,6 +9,12 @@ public sealed record LineCopyPlanDto
     public required string SourceCode { get; init; }
     public required Guid SiteId { get; init; }
     public Guid? ParentId { get; init; }
+
+    /// <summary>The site the copy goes to: the original's, or another's (#140c).</summary>
+    public Guid TargetSiteId { get; init; }
+
+    /// <summary>Into another site: what the line uses that isn't at that site by its code, and so is left off the copy.</summary>
+    public IReadOnlyList<MessageDto> Unmatched { get; init; } = [];
     public IReadOnlyList<LineCopyItemDto> Items { get; init; } = [];
     public int Capabilities { get; init; }
     public int ChangeoverRules { get; init; }

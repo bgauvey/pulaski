@@ -484,7 +484,8 @@ A new line much like one you have doesn't need setting up from nothing.
      location, label printer and stop-code overrides.
    - **Qualifications** required, **OEE targets** of its own (from today), **maintenance plans** (counting from now) and **work instructions**
      aimed at the line.
-3. Choose where it goes (**It goes under**: the site or one of its areas; the same as the original to start with), and check every copy's
+3. Choose where it goes (**It goes under**: a site or an area, at this site or another where you manage equipment; the same as the
+   original to start with), and check every copy's
    **Code** and **Name**: a child whose code starts with the line's gets the new line's code instead (EXT-01-SAW → EXT-03-SAW), any other the
    new code in front. A code already used at the site is flagged.
 4. Click **Copy the line**. The tree shows the new line, selected.
@@ -493,9 +494,14 @@ In detail:
 
 - **Not copied:** machine tags (the addresses an edge node reads; bind the new machines on **Edge nodes**), stops, history and anything that
   happened; processes keep naming the original line, so move or assign a job to the copy, or add it to a process, for orders to reach it.
-- The copy stays at the same site. It is one change: everything is copied or nothing is, and each new piece of equipment and capability is in
-  the audit trail, with the copy itself (`pulaski.equipment.line_copied.v1`).
-- Copying needs permission to manage equipment at the site.
+- **Into another site**, what belongs to a site is found there by its code: machine profile, shift schedule, label printer, an output location
+  outside the line, qualifications, the site's own stop-code reasons (by kind and code) and work instructions. The review lists what that site
+  has nothing of; the copy goes without it (a shift schedule not found: the line follows the equipment above it). Copy the site's reference
+  data first ([Start a new site from another](#start-a-new-site-from-another)) and most of it matches. Changeover rules, OEE targets and
+  maintenance plans move to the new site.
+- It is one change: everything is copied or nothing is, and each new piece of equipment and capability is in the audit trail, with the copy
+  itself (`pulaski.equipment.line_copied.v1`).
+- Copying needs permission to manage equipment where the copy goes (and to maintain processes and capabilities there, for capabilities).
 
 ### Start a new site from another
 
@@ -511,7 +517,7 @@ A new plant set up like one you have can start with that one's lists and setting
      targets** (from today) and **lot attributes**.
 3. Click **Make the new site**. It goes under the same enterprise, and the tree shows it, selected.
 
-In detail: areas and lines aren't copied: add areas, then copy each line into the new site (one at a time, after this piece's follow-up). Nor
+In detail: areas and lines aren't copied: add areas, then copy each line into the new site with [Copy a line](#copy-a-line). Nor
 are people, badges, terminals, printers, label settings (the SSCC serial numbers belong to one site), materials and processes (shared across
 the enterprise anyway), or anything that happened. It needs permission to manage equipment everywhere (administrators). One change: all or
 nothing, in the audit trail as `pulaski.equipment.site_copied.v1`.

@@ -209,7 +209,7 @@ A connection's code is fixed once made: it names its credentials in the configur
 A connection's kind is fixed once made ({0}); add another connection instead.
 A control chart signalled (SPC alert)
 A conversion needs two different units.
-A copied line goes under its own site or an area of it.
+A copied line goes under a site or an area.
 A count can't be negative.
 A count can't go below zero, so neither can its lower limit.
 A crew belongs to a site; choose one.
@@ -512,6 +512,7 @@ Another count was started at the same moment. Try again.
 Another material already has that external key.
 Another material already has the code {0} ({1} key {2}).
 Another material already has the code {0}.
+Another site: what it uses is found there by its code.
 Another version of this process was released at the same time. Reload and try again.
 Answer
 Answer andon calls: acknowledge them on arrival and resolve them
@@ -1109,8 +1110,8 @@ Copied from
 Copies
 Copy the line
 Copy this line
-Copying a line needs permission to manage equipment at its site.
-Copying capabilities needs permission to maintain processes and capabilities at the site.
+Copying a line needs permission to manage equipment where the copy goes.
+Copying capabilities needs permission to maintain processes and capabilities where the copy goes.
 Correct
 Correct details
 Correct inventory: write up, write off, correct, reverse, split and merge lots
@@ -5898,6 +5899,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} {1} is {2} batches of {3} {4}: planned {5} {6}, rounded up to whole batches.
 {0} {1} isn't a batch: a batch is {2} to {3} {4} ({5} ± {6}%). A short batch is reported as a partial batch when the line stops.
 {0} {1} isn't a batch: every batch is exactly {2} {3}. A short batch is reported as a partial batch when the line stops.
+{0} {1} isn't at that site, so the copy goes without it.
 {0} {1} of a {2} {3} batch
 {0} {1} of {2}
 {0} {1} of {2} consumed into {3}.

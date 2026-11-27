@@ -365,7 +365,8 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `CopyLineCommand` (one transaction through `ILineCopyRepository`: equipment + closure, references inside remapped, capabilities from now with
   ideal-rate run standards, changeover rules, stop codes, qualifications, targets, plans, instruction targets; never tags); `/api/equipment/{id}/copy[-plan]`;
   `LineCopyPanel` on the Equipment page. (b) `CopySiteCommand` → new site with its reference data (`ISiteCopyRepository`: shifts, reasons +
-  profiles remapped, crews/qualifications/andon types, settings rows, OEE targets, lot attributes; not label settings), `SiteCopyPanel`. (c) cross-site line copy.
+  profiles remapped, crews/qualifications/andon types, settings rows, OEE targets, lot attributes; not label settings), `SiteCopyPanel`. (c) a line
+  into another site: site-owned references found there by code (`UnmatchedAsync` lists the rest); permissions at the target.
 - User settings (D-131, proposed, in pieces, #131): `sec.user_setting` (`home`, `favorites`, `filters:<page>`; no events) via `PUT /api/me/settings`
   and `MeDto.Settings`; web `CurrentUser.Setting<T>`/`SetSettingAsync`, `UserViews` (keys, favourites), `FavoriteStar` (header), Favourites in
   `NavMenu`, home in `UserMenu` + `MainLayout`; a list page keeps its filters as a private `Filters` record through `SavedFilters.Load/SaveAsync`

@@ -172,6 +172,65 @@ public sealed class CapabilityAndImportTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_line_copied_into_another_site_takes_that_sites_own_by_code_and_goes_without_what_it_lacks()
+    {
+        var (line, _) = await PlantAsync();
+        Guid site;
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            site = await admin.ExecuteScalarAsync<Guid>("SELECT site_id FROM core.equipment WHERE id = @Line", new { Line = line });
+            await admin.ExecuteAsync(
+                """
+                INSERT INTO core.machine_profile (id, site_id, code, name) VALUES (uuidv7(), @Site, 'PX-' || @S, 'Extruder');
+                INSERT INTO core.qualification (id, site_id, code, name) VALUES (uuidv7(), @Site, 'QX-' || @S, 'Extruder operator');
+                INSERT INTO core.label_printer (id, site_id, code, name, method, drop_folder, template_set) VALUES (uuidv7(), @Site, 'LP' || @S, 'Line printer', 'drop_folder', 'line', 'default');
+                UPDATE core.equipment SET machine_profile_id = (SELECT id FROM core.machine_profile WHERE code = 'PX-' || @S),
+                                          label_printer_id = (SELECT id FROM core.label_printer WHERE code = 'LP' || @S) WHERE id = @Line;
+                INSERT INTO core.equipment_qualification (equipment_id, qualification_id, is_required, updated_at)
+                SELECT @Line, id, true, now() FROM core.qualification WHERE code = 'QX-' || @S;
+                """, new { Site = site, S = _s, Line = line });
+        }
+
+        var admin2 = new Domain.Security.UserAccess(Guid.CreateVersion7(), "test-user", "Test", "test-user", true,
+            [new Domain.Security.RoleGrant(Guid.CreateVersion7(), Domain.Security.Roles.Administrator, "Administrator", null, [])]);
+        // A second site with the first's lists (its profile and qualification, by code), but not its printer.
+        var second = await db.SendAsync(new CopySiteCommand(admin2, site, new Contracts.EquipmentModel.CopySiteRequest
+        {
+            Code = "SITE3-" + _s,
+            Name = "Third plant",
+            TimeZone = "America/Chicago",
+        }));
+
+        Contracts.EquipmentModel.LineCopyPlanDto plan;
+        await using (var scope = db.Services.CreateAsyncScope())
+        {
+            plan = await scope.ServiceProvider.GetRequiredService<Application.Abstractions.IQueryHandler<GetLineCopyPlanQuery, Contracts.EquipmentModel.LineCopyPlanDto>>()
+                .HandleAsync(new GetLineCopyPlanQuery(line, "LN-" + _s, "Line", second.Id), CancellationToken.None);
+        }
+
+        // The same code is free at the other site; only the printer has no match there.
+        Assert.Equal((second.Id, 0), (plan.TargetSiteId, plan.Problems.Count));
+        Assert.Contains("LP" + _s, Assert.Single(plan.Unmatched).Text, StringComparison.Ordinal);
+
+        var copied = await db.SendAsync(new CopyLineCommand(admin2, line, new Contracts.EquipmentModel.CopyLineRequest
+        {
+            ParentId = second.Id,
+            Items = [.. plan.Items.Select(i => new Contracts.EquipmentModel.LineCopyNameDto(i.SourceId, i.Code, i.Name))],
+        }));
+
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            var (siteId, profileSite, printer) = await admin.QuerySingleAsync<(Guid, Guid?, Guid?)>(
+                """
+                SELECT e.site_id, p.site_id, e.label_printer_id FROM core.equipment e LEFT JOIN core.machine_profile p ON p.id = e.machine_profile_id WHERE e.id = @Id
+                """, new { Id = copied.Id });
+            Assert.Equal((second.Id, (Guid?)second.Id, (Guid?)null), (siteId, profileSite, printer));
+            Assert.Equal(second.Id, await admin.ExecuteScalarAsync<Guid>(
+                "SELECT q.site_id FROM core.equipment_qualification eq JOIN core.qualification q ON q.id = eq.qualification_id WHERE eq.equipment_id = @Id", new { Id = copied.Id }));
+        }
+    }
+
+    [Fact]
     public async Task The_audit_trail_says_who_changed_a_capability_and_what_changed()
     {
         var (line, _) = await PlantAsync();

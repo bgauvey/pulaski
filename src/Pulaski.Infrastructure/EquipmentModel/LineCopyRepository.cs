@@ -52,12 +52,38 @@ internal sealed class LineCopyRepository(DbSession session) : ILineCopyRepositor
         new HashSet<string>(await session.QueryAsync<string>("SELECT code FROM core.equipment WHERE site_id = @SiteId", new { SiteId = siteId }, cancellationToken),
             StringComparer.OrdinalIgnoreCase);
 
-    public async Task<bool> LockParentAsync(Guid parentId, Guid siteId, CancellationToken cancellationToken) =>
-        await session.QuerySingleOrDefaultAsync<Guid?>(
-            "SELECT id FROM core.equipment WHERE id = @Id AND site_id = @SiteId AND level IN ('site', 'area') AND is_active FOR SHARE",
-            new { Id = parentId, SiteId = siteId }, cancellationToken) is not null;
+    public Task<Guid?> LockParentAsync(Guid parentId, CancellationToken cancellationToken) =>
+        session.QuerySingleOrDefaultAsync<Guid?>(
+            "SELECT site_id FROM core.equipment WHERE id = @Id AND level IN ('site', 'area') AND is_active FOR SHARE", new { Id = parentId }, cancellationToken);
 
-    public async Task CopyEquipmentAsync(IReadOnlyList<LineCopyRow> rows, bool machineSettings, Func<Guid> newId, DateTimeOffset at, CancellationToken cancellationToken)
+    // What the line's pieces use that the target site has nothing of by code (#140c).
+    private const string UnmatchedSql = """
+        WITH s AS (SELECT e.* FROM core.equipment_closure c JOIN core.equipment e ON e.id = c.descendant_id WHERE c.ancestor_id = @Id AND e.is_active)
+        SELECT DISTINCT 'machine_profile' AS kind, p.code FROM s JOIN core.machine_profile p ON p.id = s.machine_profile_id
+        WHERE NOT EXISTS (SELECT 1 FROM core.machine_profile t WHERE t.site_id = @Target AND t.code = p.code AND t.is_active)
+        UNION SELECT DISTINCT 'shift_schedule', x.code FROM s JOIN core.shift_schedule x ON x.id = s.shift_schedule_id
+        WHERE NOT EXISTS (SELECT 1 FROM core.shift_schedule t WHERE t.site_id = @Target AND t.code = x.code AND t.is_active)
+        UNION SELECT DISTINCT 'label_printer', x.code FROM s JOIN core.label_printer x ON x.id = s.label_printer_id
+        WHERE NOT EXISTS (SELECT 1 FROM core.label_printer t WHERE t.site_id = @Target AND t.code = x.code AND t.is_active)
+        UNION SELECT DISTINCT 'location', x.code FROM s JOIN core.equipment x ON x.id = s.output_location_id
+        WHERE x.id NOT IN (SELECT id FROM s) AND NOT EXISTS (SELECT 1 FROM core.equipment t WHERE t.site_id = @Target AND t.code = x.code AND t.is_active AND t.holds_inventory)
+        UNION SELECT DISTINCT 'qualification', q.code FROM s JOIN core.equipment_qualification eq ON eq.equipment_id = s.id AND eq.is_required
+        JOIN core.qualification q ON q.id = eq.qualification_id
+        WHERE NOT EXISTS (SELECT 1 FROM core.qualification t WHERE t.site_id = @Target AND t.code = q.code AND t.is_active)
+        UNION SELECT DISTINCT 'reason', r.code FROM s JOIN core.equipment_stop_reason_map m ON m.equipment_id = s.id AND m.is_active
+        JOIN core.reason_code r ON r.id = m.reason_code_id
+        WHERE r.site_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.reason_code t WHERE t.site_id = @Target AND t.reason_kind = r.reason_kind AND t.code = r.code AND t.is_active)
+        UNION SELECT DISTINCT 'work_instruction', w.code FROM s JOIN core.work_instruction_target wt ON wt.equipment_id = s.id AND wt.is_active
+        JOIN core.work_instruction w ON w.id = wt.instruction_id
+        WHERE NOT EXISTS (SELECT 1 FROM core.work_instruction t WHERE t.site_id = @Target AND t.code = w.code AND t.is_active)
+        ORDER BY 1, 2
+        """;
+
+    public async Task<IReadOnlyList<(string Kind, string Code)>> UnmatchedAsync(Guid lineId, Guid targetSiteId, CancellationToken cancellationToken) =>
+        [.. await session.QueryAsync<(string, string)>(UnmatchedSql, new { Id = lineId, Target = targetSiteId }, cancellationToken)];
+
+    public async Task CopyEquipmentAsync(
+        IReadOnlyList<LineCopyRow> rows, Guid targetSiteId, bool machineSettings, Func<Guid> newId, DateTimeOffset at, CancellationToken cancellationToken)
     {
         foreach (var row in rows)
         {
@@ -67,17 +93,21 @@ internal sealed class LineCopyRepository(DbSession session) : ILineCopyRepositor
                     holds_inventory, commingles_lots, flow_model, min_residence, empty_level, level_tolerance, single_material, state_derivation,
                     micro_stop_threshold, calendar_mode, shift_schedule_id, machine_profile_id, label_printer_id, output_location_id,
                     constraint_equipment_id, production_counter_equipment_id, is_active, created_at, updated_at)
-                SELECT @NewId, @ParentId, site_id, @Code, @Name, description, level, equipment_role, tracks_state, is_schedulable, can_run_job,
-                    holds_inventory, commingles_lots, flow_model, min_residence, empty_level, level_tolerance, single_material,
+                SELECT @NewId, @ParentId, @Target, @Code, @Name, o.description, o.level, o.equipment_role, o.tracks_state, o.is_schedulable, o.can_run_job,
+                    o.holds_inventory, o.commingles_lots, o.flow_model, o.min_residence, o.empty_level, o.level_tolerance, o.single_material,
                     -- A constraint machine is named once its copy exists (below); until then the line derives its state from its own tags.
-                    CASE WHEN state_derivation = 'constraint_machine' THEN 'own_tags' ELSE state_derivation END,
-                    micro_stop_threshold, calendar_mode, shift_schedule_id, machine_profile_id, label_printer_id, output_location_id,
-                    NULL, NULL, true, @At, @At
-                FROM core.equipment WHERE id = @SourceId;
+                    CASE WHEN o.state_derivation = 'constraint_machine' THEN 'own_tags' ELSE o.state_derivation END,
+                    -- Its shift schedule is the target site's of the same code; without one it follows the equipment above it.
+                    o.micro_stop_threshold, CASE WHEN o.calendar_mode = 'schedule' AND sch.id IS NULL THEN 'inherit' ELSE o.calendar_mode END, sch.id,
+                    NULL, NULL, NULL, NULL, NULL, true, @At, @At
+                FROM core.equipment o
+                LEFT JOIN core.shift_schedule src ON src.id = o.shift_schedule_id
+                LEFT JOIN core.shift_schedule sch ON sch.site_id = @Target AND sch.code = src.code AND sch.is_active
+                WHERE o.id = @SourceId;
                 INSERT INTO core.equipment_closure (ancestor_id, descendant_id, depth)
                 SELECT c.ancestor_id, @NewId, c.depth + 1 FROM core.equipment_closure c WHERE c.descendant_id = @ParentId
                 UNION ALL SELECT @NewId, @NewId, 0;
-                """, new { row.NewId, ParentId = row.NewParentId, row.Code, row.Name, row.SourceId, At = at }, cancellationToken);
+                """, new { row.NewId, ParentId = row.NewParentId, row.Code, row.Name, row.SourceId, At = at, Target = targetSiteId }, cancellationToken);
         }
 
         var args = Args(rows);
@@ -90,12 +120,16 @@ internal sealed class LineCopyRepository(DbSession session) : ILineCopyRepositor
                 state_derivation = CASE WHEN @Settings AND (SELECT dst FROM map WHERE src = o.constraint_equipment_id) IS NOT NULL THEN o.state_derivation
                                         WHEN o.state_derivation = 'constraint_machine' THEN 'own_tags' ELSE o.state_derivation END,
                 production_counter_equipment_id = CASE WHEN @Settings THEN (SELECT dst FROM map WHERE src = o.production_counter_equipment_id) END,
-                output_location_id = CASE WHEN @Settings THEN coalesce((SELECT dst FROM map WHERE src = o.output_location_id), o.output_location_id) END,
-                machine_profile_id = CASE WHEN @Settings THEN o.machine_profile_id END,
-                label_printer_id = CASE WHEN @Settings THEN o.label_printer_id END
+                output_location_id = CASE WHEN @Settings THEN coalesce((SELECT dst FROM map WHERE src = o.output_location_id),
+                    (SELECT t.id FROM core.equipment l JOIN core.equipment t ON t.site_id = @Target AND t.code = l.code AND t.is_active AND t.holds_inventory
+                     WHERE l.id = o.output_location_id)) END,
+                machine_profile_id = CASE WHEN @Settings THEN (SELECT t.id FROM core.machine_profile p JOIN core.machine_profile t
+                    ON t.site_id = @Target AND t.code = p.code AND t.is_active WHERE p.id = o.machine_profile_id) END,
+                label_printer_id = CASE WHEN @Settings THEN (SELECT t.id FROM core.label_printer p JOIN core.label_printer t
+                    ON t.site_id = @Target AND t.code = p.code AND t.is_active WHERE p.id = o.label_printer_id) END
             FROM map JOIN core.equipment o ON o.id = map.src
             WHERE n.id = map.dst
-            """, new { args.Src, args.Dst, Settings = machineSettings }, cancellationToken);
+            """, new { args.Src, args.Dst, Settings = machineSettings, Target = targetSiteId }, cancellationToken);
 
         // Material flow between the copied pieces.
         var links = await session.QueryAsync<(Guid From, Guid To, string Kind)>(
@@ -112,7 +146,8 @@ internal sealed class LineCopyRepository(DbSession session) : ILineCopyRepositor
         }
     }
 
-    public async Task<IReadOnlyList<Guid>> CopyCapabilitiesAsync(IReadOnlyList<LineCopyRow> rows, Func<Guid> newId, DateTimeOffset at, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<Guid>> CopyCapabilitiesAsync(
+        IReadOnlyList<LineCopyRow> rows, Guid targetSiteId, Func<Guid> newId, DateTimeOffset at, CancellationToken cancellationToken)
     {
         var args = Args(rows);
         var capabilities = (await session.QueryAsync<(Guid Id, Guid To)>(
@@ -151,34 +186,43 @@ internal sealed class LineCopyRepository(DbSession session) : ILineCopyRepositor
                 """
                 INSERT INTO core.changeover_rule (id, site_id, equipment_id, from_material_id, from_material_class_id, to_material_id, to_material_class_id,
                     duration, note, is_active, created_at, updated_at)
-                SELECT @Id, site_id, @To, from_material_id, from_material_class_id, to_material_id, to_material_class_id, duration, note, true, @At, @At
+                SELECT @Id, @Target, @To, from_material_id, from_material_class_id, to_material_id, to_material_class_id, duration, note, true, @At, @At
                 FROM core.changeover_rule WHERE id = @SourceId
-                """, new { Id = newId(), To = to, SourceId = sourceId, At = at }, cancellationToken);
+                """, new { Id = newId(), To = to, SourceId = sourceId, At = at, Target = targetSiteId }, cancellationToken);
         }
 
         return created;
     }
 
-    public Task CopyStopCodesAsync(IReadOnlyList<LineCopyRow> rows, CancellationToken cancellationToken)
+    public Task CopyStopCodesAsync(IReadOnlyList<LineCopyRow> rows, Guid targetSiteId, CancellationToken cancellationToken)
     {
         var args = Args(rows);
+        // An enterprise-wide reason as it is; a site's own, the target site's of the same kind and code, else the override is left out.
         return session.ExecuteAsync(
             $"""
             WITH {Map}
             INSERT INTO core.equipment_stop_reason_map (equipment_id, plc_reason_value, reason_code_id, is_active)
-            SELECT map.dst, x.plc_reason_value, x.reason_code_id, true FROM core.equipment_stop_reason_map x JOIN map ON map.src = x.equipment_id WHERE x.is_active
-            """, new { args.Src, args.Dst }, cancellationToken);
+            SELECT map.dst, x.plc_reason_value, CASE WHEN r.site_id IS NULL THEN r.id ELSE t.id END, true
+            FROM core.equipment_stop_reason_map x JOIN map ON map.src = x.equipment_id JOIN core.reason_code r ON r.id = x.reason_code_id
+            LEFT JOIN core.reason_code t ON t.site_id = @Target AND t.reason_kind = r.reason_kind AND t.code = r.code AND t.is_active
+            WHERE x.is_active AND (r.site_id IS NULL OR t.id IS NOT NULL)
+            """, new { args.Src, args.Dst, Target = targetSiteId }, cancellationToken);
     }
 
-    public async Task CopyRequirementsAsync(IReadOnlyList<LineCopyRow> rows, Func<Guid> newId, DateTimeOffset at, string by, CancellationToken cancellationToken)
+    public async Task CopyRequirementsAsync(
+        IReadOnlyList<LineCopyRow> rows, Guid targetSiteId, Func<Guid> newId, DateTimeOffset at, string by, CancellationToken cancellationToken)
     {
         var args = Args(rows);
+        // Qualifications are a site's own: the target site's of the same code, else left out.
         await session.ExecuteAsync(
             $"""
             WITH {Map}
             INSERT INTO core.equipment_qualification (equipment_id, qualification_id, is_required, updated_at)
-            SELECT map.dst, x.qualification_id, true, @At FROM core.equipment_qualification x JOIN map ON map.src = x.equipment_id WHERE x.is_required
-            """, new { args.Src, args.Dst, At = at }, cancellationToken);
+            SELECT map.dst, t.id, true, @At
+            FROM core.equipment_qualification x JOIN map ON map.src = x.equipment_id JOIN core.qualification q ON q.id = x.qualification_id
+            JOIN core.qualification t ON t.site_id = @Target AND t.code = q.code AND t.is_active
+            WHERE x.is_required
+            """, new { args.Src, args.Dst, At = at, Target = targetSiteId }, cancellationToken);
 
         var targets = (await session.QueryAsync<(Guid Id, Guid To)>(
             $"WITH {Map} SELECT x.id, map.dst FROM core.oee_target x JOIN map ON map.src = x.equipment_id WHERE x.effective_to IS NULL",
@@ -188,9 +232,10 @@ internal sealed class LineCopyRepository(DbSession session) : ILineCopyRepositor
             await session.ExecuteAsync(
                 """
                 INSERT INTO core.oee_target (id, site_id, equipment_id, effective_from, effective_to, availability_pct, performance_pct, quality_pct, oee_pct, created_at, updated_at)
-                SELECT @Id, site_id, @To, greatest(effective_from, @Today), NULL, availability_pct, performance_pct, quality_pct, oee_pct, @At, @At
+                SELECT @Id, @Target, @To, greatest(effective_from, @Today), NULL, availability_pct, performance_pct, quality_pct, oee_pct, @At, @At
                 FROM core.oee_target WHERE id = @SourceId
-                """, new { Id = newId(), To = to, SourceId = sourceId, At = at, Today = DateOnly.FromDateTime(at.UtcDateTime).ToDateTime(TimeOnly.MinValue) }, cancellationToken);
+                """, new { Id = newId(), To = to, SourceId = sourceId, At = at, Today = DateOnly.FromDateTime(at.UtcDateTime).ToDateTime(TimeOnly.MinValue), Target = targetSiteId },
+                cancellationToken);
         }
 
         var plans = (await session.QueryAsync<(Guid Id, Guid To)>(
@@ -201,20 +246,25 @@ internal sealed class LineCopyRepository(DbSession session) : ILineCopyRepositor
             await session.ExecuteAsync(
                 """
                 INSERT INTO core.maintenance_plan (id, site_id, equipment_id, name, meter, interval_value, priority, is_active, started_at, created_at, created_by, updated_at)
-                SELECT @Id, site_id, @To, name, meter, interval_value, priority, true, @At, @At, @By, @At FROM core.maintenance_plan WHERE id = @SourceId
-                """, new { Id = newId(), To = to, SourceId = sourceId, At = at, By = by }, cancellationToken);
+                SELECT @Id, @Target, @To, name, meter, interval_value, priority, true, @At, @At, @By, @At FROM core.maintenance_plan WHERE id = @SourceId
+                """, new { Id = newId(), To = to, SourceId = sourceId, At = at, By = by, Target = targetSiteId }, cancellationToken);
         }
 
-        var instructions = (await session.QueryAsync<(Guid Id, Guid To)>(
-            $"WITH {Map} SELECT x.id, map.dst FROM core.work_instruction_target x JOIN map ON map.src = x.equipment_id WHERE x.is_active",
-            new { args.Src, args.Dst }, cancellationToken)).ToList();
-        foreach (var (sourceId, to) in instructions)
+        // Instructions are a site's own: aimed at the target site's instruction of the same code, else left out.
+        var instructions = (await session.QueryAsync<(Guid Id, Guid To, Guid Instruction)>(
+            $"""
+            WITH {Map}
+            SELECT x.id, map.dst, t.id FROM core.work_instruction_target x JOIN map ON map.src = x.equipment_id
+            JOIN core.work_instruction w ON w.id = x.instruction_id JOIN core.work_instruction t ON t.site_id = @Target AND t.code = w.code AND t.is_active
+            WHERE x.is_active
+            """, new { args.Src, args.Dst, Target = targetSiteId }, cancellationToken)).ToList();
+        foreach (var (sourceId, to, instruction) in instructions)
         {
             await session.ExecuteAsync(
                 """
                 INSERT INTO core.work_instruction_target (id, instruction_id, kind, process_id, operation_number, material_id, equipment_id, is_active, created_at, updated_at)
-                SELECT @Id, instruction_id, kind, process_id, operation_number, material_id, @To, true, @At, @At FROM core.work_instruction_target WHERE id = @SourceId
-                """, new { Id = newId(), To = to, SourceId = sourceId, At = at }, cancellationToken);
+                SELECT @Id, @Instruction, kind, process_id, operation_number, material_id, @To, true, @At, @At FROM core.work_instruction_target WHERE id = @SourceId
+                """, new { Id = newId(), To = to, SourceId = sourceId, Instruction = instruction, At = at }, cancellationToken);
         }
     }
 
