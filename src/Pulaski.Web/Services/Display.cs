@@ -27,7 +27,7 @@ public static class Display
     public static string ReasonLabel(Pulaski.Contracts.Inventory.ReasonCodeDto reason) =>
         reason.GroupPath is { } path ? $"{path} › {reason.Name}" : reason.Name;
 
-    /// <summary>'in_progress' → 'In progress'.</summary>
+    /// <summary>'in_progress' → 'In progress'; 'cancelled' → 'Canceled'.</summary>
     public static string Label(string? code)
     {
         if (string.IsNullOrEmpty(code))
@@ -35,7 +35,8 @@ public static class Display
             return "";
         }
 
-        var text = code.Replace('_', ' ');
+        // Stored codes keep their spelling (a contract); screens show the US one.
+        var text = code.Replace('_', ' ').Replace("cancelled", "canceled", StringComparison.Ordinal);
         return char.ToUpperInvariant(text[0]) + text[1..];
     }
 

@@ -162,13 +162,13 @@
 6 in a row rising or falling
 6 to 12 digits, as GS1 issued it.
 8 in a row beyond 1 sigma, either side
-9 in a row on one side of the centre line
+9 in a row on one side of the center line
 : the lines this terminal offers, read only.
 ; any they aren't already granted are granted (an import never revokes one). Nothing is saved until every row is valid.
 ; good output in lot {0}
 ; good output in lots {0}
 ; to give roles to people,
-; {0} centre {1}, up to {2}
+; {0} center {1}, up to {2}
 A BTXML script's root element is XMLScript.
 A BarTender document ends in .btw.
 A ControlLogix needs its CIP path, such as 1,0 (backplane, slot 0).
@@ -207,7 +207,7 @@ A code, number or name
 A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's configuration, never here.
 A connection's code is fixed once made: it names its credentials in the configuration ({0}).
 A connection's kind is fixed once made ({0}); add another connection instead.
-A control chart signalled (SPC alert)
+A control chart signaled (SPC alert)
 A conversion needs two different units.
 A copied line goes under a site or an area.
 A count can't be negative.
@@ -228,7 +228,7 @@ A handover entry is a note or an open item.
 A hold
 A job cannot be placed before itself.
 A job has a schedule warning or overlaps other work.
-A job of {0} has started, so it can't be cancelled as a whole.
+A job of {0} has started, so it can't be canceled as a whole.
 A job of {0} has started; change its jobs on the schedule instead.
 A job overlaps other work on its line.
 A job planned to a group needs a finish-by time: its window must have an end.
@@ -406,7 +406,7 @@ Add shift
 Add someone
 Add state
 Add the
-Add this page to your favourites
+Add this page to your favorites
 Add {0}
 Add {0} group
 Add {0} reason
@@ -558,7 +558,7 @@ Around the clock: no shift schedule is set here or above
 Arrange
 As it was
 As recorded
-Ask a supervisor to enrol it.
+Ask a supervisor to enroll it.
 Ask for a new one.
 Ask on each report
 Ask why at most {0} times.
@@ -657,7 +657,7 @@ Badge in to give their reasons.
 Badge in to record a sample.
 Badge in to request maintenance.
 Badge in to sign it off.
-Badge not recognised. Try again, or ask a supervisor.
+Badge not recognized. Try again, or ask a supervisor.
 Badge of {0}
 Badge plus pin
 Badge to switch person
@@ -790,9 +790,9 @@ Cancel the action
 Cancel this work order?
 Cancel {0}
 Cancel {0} work orders?
-Cancelled
-Cancelled in the ERP before Pulaski had it; nothing to do.
-Cancelled, with its jobs.
+Canceled
+Canceled in the ERP before Pulaski had it; nothing to do.
+Canceled, with its jobs.
 Cancel…
 Cap
 Capabilities
@@ -809,8 +809,8 @@ Categorized
 Category
 Category of {0}
 Cause
-Centre
-Centre line
+Center
+Center line
 Certificate files
 Certificate of analysis
 Certificates and documents
@@ -1008,7 +1008,7 @@ Close it with a note of what was done, at most {0} characters.
 Close the lot being filled, so the next report starts a new one
 Close {0} on {1}
 Closed
-Closed and cancelled
+Closed and canceled
 Closed by {0}: {1}
 Closed in the last 7 days
 Closed lot {0}; the next report starts a new lot.
@@ -1032,7 +1032,7 @@ Codes starting PUL1 are Pulaski's barcodes.
 Collapse
 Collapse all
 Collects PackML machine state, so downtime and OEE are recorded for it.
-Colour theme
+Color theme
 Column 'lot_number' appears twice.
 Column 'material_code' appears twice.
 Column '{0}' appears twice.
@@ -1097,8 +1097,8 @@ Containers · Inventory
 Contains
 Control chart
 Control charts
-Control charts that signalled (beyond their limits, or a run rule) and wait for someone to record the cause and what was done.
-Control charts that signalled: a result beyond its limits, or completing a run rule. Find the cause, then close the alert with it and what was done.
+Control charts that signaled (beyond their limits, or a run rule) and wait for someone to record the cause and what was done.
+Control charts that signaled: a result beyond its limits, or completing a run rule. Find the cause, then close the alert with it and what was done.
 Control limits
 Control limits {0} not found.
 Control limits{0}
@@ -1132,7 +1132,7 @@ Couldn't send the labels to {0} through BarTender: {1}.
 Count
 Count a location, then post the differences as write-ups and write-offs.
 Count again
-Count cancelled. Nothing was adjusted.
+Count canceled. Nothing was adjusted.
 Count {0} can't be posted yet. {1}
 Count {0} is {1}; it can't be changed.
 Count {0} not found.
@@ -1350,13 +1350,13 @@ Endpoint
 Ends on
 English
 English is the language the screens are written in; add another language to translate into.
-Enrol
-Enrol it
-Enrol it as a terminal, then open this page again.
-Enrol terminal
-Enrol this terminal
+Enroll
+Enroll it
+Enroll it as a terminal, then open this page again.
+Enroll terminal
+Enroll this terminal
 Enrolled
-Enrolment code
+Enrollment code
 Enter a percentage.
 Enter a stop
 Enter at least one value.
@@ -1364,7 +1364,7 @@ Enter by hand instead
 Enter how many were inspected (at least 1).
 Enter limits by hand
 Enter machine stops by hand, and split or merge stops
-Enter the lower, centre and upper limits.
+Enter the lower, center and upper limits.
 Enter your user name and password.
 Entered
 Entered after the run ended; counted at the run's end
@@ -1406,7 +1406,7 @@ Every (hours)
 Every 1 to 168 hours.
 Every 1 to {0:0} counts.
 Every 1 to {0:0} run hours.
-Every action has to be done or cancelled first.
+Every action has to be done or canceled first.
 Every change Pulaski recorded: what, by whom and when. Open one to see what changed.
 Every characteristic
 Every class and material as B2MML, which the B2MML import reads back
@@ -1483,7 +1483,7 @@ Failed to rejoin.
 Failed to resume the session.
 Failing
 False
-Favourites
+Favorites
 Feed
 Feed point
 Feed points
@@ -1580,7 +1580,7 @@ From the {0} barcode
 From today on, it follows the site's
 From today on, the site has no targets
 From {0}
-From {0} results: centre {1}, limits {2} to {3}
+From {0} results: center {1}, limits {2} to {3}
 From {0}, key {1}: its name and whether they are active change there
 GS1 DataMatrix
 GS1 barcodes are always read. For a supplier's own barcodes, add a pattern (a regular expression) naming its parts:
@@ -1774,7 +1774,7 @@ In
 In BOM of
 In a container (one move fetches it)
 In force
-In force now: centre {0}, limits {1} to {2}. Approving ends them where the new ones start.
+In force now: center {0}, limits {1} to {2}. Approving ends them where the new ones start.
 In production
 In progress
 In progress · {0}
@@ -1788,7 +1788,7 @@ In use, so its code and base unit are fixed.
 In use. Its code, name, base unit and type come from {0}.
 In {0}'s specification (version {1})
 Inactive
-Inactive equipment stays in the hierarchy and its history, greyed out.
+Inactive equipment stays in the hierarchy and its history, grayed out.
 Inbox
 Inbox: what waits for you to decide
 Incoming
@@ -1920,7 +1920,7 @@ Job {0} is planned on another line; move it there on the schedule first.
 Job {0} is waiting on its department; choose the line it runs on.
 Job {0} is waiting on its group; choose the line it runs on.
 Job {0} is {1}; dispatch its work order before starting it.
-Job {0} is {1}; it can no longer be cancelled.
+Job {0} is {1}; it can no longer be canceled.
 Job {0} is {1}; it can no longer be moved.
 Job {0} is {1}; it can no longer be pinned.
 Job {0} is {1}; it can no longer be started.
@@ -2597,7 +2597,7 @@ No run standard for this material on this line; duration unknown.
 No samples to rate.
 No schedulable lines
 No scheduled time in this period.
-No secret is set in the API's configuration, so messages aren't signed and acknowledgements can't be posted back.
+No secret is set in the API's configuration, so messages aren't signed and acknowledgments can't be posted back.
 No shift
 No shift calendar covers this line; times assume it runs around the clock.
 No shift now
@@ -2809,7 +2809,7 @@ Older changes
 Oldest
 On
 On a break {0}.
-On a signed-in screen, open Configure → Terminals, click Enrolment code on this terminal's row and type the code here.
+On a signed-in screen, open Configure → Terminals, click Enrollment code on this terminal's row and type the code here.
 On break since {0}
 On demand
 On hand
@@ -3328,7 +3328,7 @@ Refuse the order
 Refuse the order: the ERP must send whole batches
 Region
 Register a terminal
-Register and enrol shop-floor terminals
+Register and enroll shop-floor terminals
 Register terminal
 Reject
 Reject and write off
@@ -3364,7 +3364,7 @@ Remove line
 Remove shift
 Remove shift {0}
 Remove stop
-Remove this page from your favourites
+Remove this page from your favorites
 Remove {0}
 Removed
 Removed by {0}
@@ -3378,7 +3378,7 @@ Reopen a completed job
 Repeats
 Repeats every (days)
 Replace
-Replace a cancelled job with exactly what is left, even when that isn't whole batches
+Replace a canceled job with exactly what is left, even when that isn't whole batches
 Replace exactly what is left, or round it down, not both.
 Replace it with a job for the quantity not yet made
 Replaced
@@ -3814,7 +3814,7 @@ Show on the schedule
 Show only those in force today
 Show past and removed ones too
 Show properties
-Show received and cancelled
+Show received and canceled
 Show replaced stops
 Show retired
 Show rules for line
@@ -3832,7 +3832,7 @@ Sign it off
 Sign off
 Sign on
 Sign out
-Signalled
+Signaled
 Signed
 Signed in through an identity provider; give them a role to let them in
 Signed off
@@ -3892,7 +3892,7 @@ Stale since {0}
 Standard
 Standard = run hours × the line's standard crew size for the material. Efficiency = standard ÷ direct hours: under 100% took more people than the standard.
 Standard changeover (min)
-Standard units convert within their dimension for every material. A material's own conversions link the rest: weight per metre, pieces per box, kilograms per bag.
+Standard units convert within their dimension for every material. A material's own conversions link the rest: weight per meter, pieces per box, kilograms per bag.
 Stands for characteristic
 Start
 Start a count
@@ -4143,7 +4143,7 @@ The NCR is closed.
 The Pulaski API is not reachable.
 The SSCC's company prefix, extension digit or serial is out of range.
 The action is added.
-The action is cancelled.
+The action is canceled.
 The action is done.
 The address must be a full https:// URL.
 The audit trail covers every site, so it needs permission to browse it everywhere.
@@ -4250,7 +4250,7 @@ The language's usual
 The languages Pulaski's screens can show, and their translations. Where a term has none, it shows in English.
 The last e-mail couldn't be sent: {0}
 The last valid day; empty for no expiry
-The limits must be numbers with the lower limit at most the centre line, and the centre line at most the upper limit.
+The limits must be numbers with the lower limit at most the center line, and the center line at most the upper limit.
 The line has no capability in effect for the material, so there is no ideal rate to go back to.
 The line has no ideal rate for this material, so the rate isn't checked.
 The line isn't an active line of this site that runs jobs.
@@ -4262,7 +4262,7 @@ The lot and job must be at the site the result is recorded for.
 The lot comes out of the container (back into any it was in before, and back to where it was if packing moved it).
 The lot goes back into the container, which must still be where the lot is.
 The lot goes back to how it was before it. A reversal counts when the movement did, so stock at every time is as if it never happened.
-The lot goes back to how it was before it: empty, so it is cancelled.
+The lot goes back to how it was before it: empty, so it is canceled.
 The lot goes back to the status it had. Only while this is its latest status change.
 The lot goes back to where it was. Only while this is its latest move: a later move is reversed first.
 The lot has been shipped.
@@ -4387,7 +4387,7 @@ The site's planning rate settings were changed by someone else. Reload and try a
 The site's reporting tolerances were changed by someone else. Reload and try again.
 The site's rule
 The specification gives no limits for it.
-The split comes apart: the new lot is cancelled and its quantity goes back to the lot it came from. The new lot must be just as it was split off.
+The split comes apart: the new lot is canceled and its quantity goes back to the lot it came from. The new lot must be just as it was split off.
 The standard changeover must be between 0 and 7 days.
 The standard crew is {0}
 The station can't be shown
@@ -4485,7 +4485,7 @@ This badge has no PIN yet; ask a supervisor to set one.
 This call is resolved already.
 This capability has already ended.
 This capability hasn't started yet; change its dates instead.
-This chart has a dispersion chart: give its centre line and upper limit (and a lower limit from 0 to the centre).
+This chart has a dispersion chart: give its center line and upper limit (and a lower limit from 0 to the center).
 This chart is set up as X̄-R: its standard deviation limits come from the same sigma as its range limits.
 This chart is set up as X̄-S: its range limits come from the same sigma as its standard deviation limits.
 This device is enrolled already; enrolling again replaces that.
@@ -4955,9 +4955,9 @@ You can only end your own break.
 You can view the schedule, but planning needs permission to plan jobs at this site.
 You can view this, but changing it needs permission to {0} at this site. Ask an administrator if you should have it.
 You can view this, but changing it needs permission to {0}. Ask an administrator if you should have it.
-You can view work orders, but dispatching, firming or cancelling them needs permission to manage work orders at this site.
+You can view work orders, but dispatching, firming or canceling them needs permission to manage work orders at this site.
 You can view {0}, but changing its status needs permission to manage work orders at this site.
-You can view {0}, but moving, pinning or cancelling it needs permission to plan jobs at this site.
+You can view {0}, but moving, pinning or canceling it needs permission to plan jobs at this site.
 You can't change the capabilities of {0} at its site.
 You can't change the capabilities of {0} at {1}.
 You can't manage work orders at {0}.
@@ -5095,7 +5095,7 @@ e.g. es-MX
 e.g. j.smith
 e.g. line_lead
 e.g. pulaski
-each time a production job's totals change (it starts, pauses, completes, is reopened, closed or cancelled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML
+each time a production job's totals change (it starts, pauses, completes, is reopened, closed or canceled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML
 effective_to must be after effective_from.
 employeeNumber (enterprise extension) is missing; it is the person's employee number.
 every {0} h
@@ -5213,7 +5213,7 @@ of {0}
 of {0} {1}
 of {0} {1} good
 off
-on the device and type its enrolment code. Badges are issued on
+on the device and type its enrollment code. Badges are issued on
 on the device and type this code before {0}.
 one-off changes on Shifts
 ongoing
@@ -5414,14 +5414,14 @@ you measure or inspect first, then a specification for a material with their lim
 {0} can't record time at {1}.
 {0} can't run jobs; pick a line.
 {0} can't start yet. {1}
-{0} cancelled
-{0} cancelled and replaced for exactly the rest of its quantity.
-{0} cancelled and replaced for the rest of its quantity.
-{0} cancelled and replaced for the whole batches left; the order may end short.
-{0} cancelled.
-{0} centre
+{0} canceled
+{0} canceled and replaced for exactly the rest of its quantity.
+{0} canceled and replaced for the rest of its quantity.
+{0} canceled and replaced for the whole batches left; the order may end short.
+{0} canceled.
+{0} center
 {0} changed after it was counted; count it again.
-{0} closed and {1} cancelled.
+{0} closed and {1} canceled.
 {0} code
 {0} comes from {1} (key {2}); give its external_system and external_key to import it, or change it there.
 {0} comes from {1}: change their name and whether they are active there, and import again.
@@ -5660,7 +5660,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} is {1} in Pulaski; the ERP's change comes too late and is left out.
 {0} is {1} now, not {2}; reverse what changed it first.
 {0} is {1}, so it wasn't put on hold.
-{0} is {1}; it can't be cancelled.
+{0} is {1}; it can't be canceled.
 {0} is {1}; it can't be changed.
 {0} is {1}; it can't be closed.
 {0} is {1}; it can't be consumed.
@@ -5786,7 +5786,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} on {1} is no longer sampled.
 {0} on {1} is now sampled {2}.
 {0} on {1} is sampled again from now on.
-{0} on {1} signalled
+{0} on {1} signaled
 {0} on {1}, {2} – {3}
 {0} open jobs for {1} on {2} stay there, but can't be moved to it or dispatched on it until it has a capability again.
 {0} open sessions were ended at the end of the shift.
@@ -5894,7 +5894,7 @@ you measure or inspect first, then a specification for a material with their lim
 {0} {1} good, {2} scrap
 {0} {1} here. It joins the balance at the new location.
 {0} {1} in {2} is more than {3} can make: its ideal rate is {4} {5}/h, allowing {6} {7} with the site's {8}% tolerance. At most {9} {10} more can be reported into this run.
-{0} {1} is cancelled and Pulaski hasn't seen it; there is nothing to cancel.
+{0} {1} is canceled and Pulaski hasn't seen it; there is nothing to cancel.
 {0} {1} is for another site or material in Pulaski; send it as a new key.
 {0} {1} is {2} batches of {3} {4}: held until a planner sets a whole-batch quantity.
 {0} {1} is {2} batches of {3} {4}: planned {5} {6}, rounded down to whole batches.
@@ -5919,8 +5919,8 @@ you measure or inspect first, then a specification for a material with their lim
 {0}% of the planned quantity
 {0}% slower than the rate in force.
 {0}% slower than {1} then
-{0}'s control chart signalled (rule {1}): added to its open SPC alert.
-{0}'s control chart signalled (rule {1}): an SPC alert was raised.
+{0}'s control chart signaled (rule {1}): added to its open SPC alert.
+{0}'s control chart signaled (rule {1}): an SPC alert was raised.
 {0}'s details have been corrected again since; reverse that correction first.
 {0}'s drop folder '{1}' isn't configured in Labels:DropFolders, or doesn't exist.
 {0}'s results weren't judged against limits.

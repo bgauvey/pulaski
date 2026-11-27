@@ -107,7 +107,7 @@ public sealed record JobAllocationsDto
     /// <summary>When the job needs its components: its planned start, or now once it is due or running. Lots expiring by then are left out.</summary>
     public DateTimeOffset NeededBy { get; init; }
 
-    /// <summary>False for a job that is completed, closed or cancelled.</summary>
+    /// <summary>False for a job that is completed, closed or canceled.</summary>
     public bool CanAllocate { get; init; }
     public IReadOnlyList<ComponentAllocationDto> Components { get; init; } = [];
 }

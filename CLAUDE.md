@@ -77,7 +77,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - A job may be planned to a group (schedulable, not `can_run_job`, e.g. a department) in a window; the floor
   assigns it to a line below that can run it (D-022). Pulaski checks the window and never picks the line.
 - Process routes (D-023): versioned templates of numbered operations, each on lines or departments with
-  shares totalling 100%, linked after start / after end. Drafts are one `jsonb` document; release writes
+  shares totaling 100%, linked after start / after end. Drafts are one `jsonb` document; release writes
   fixed rows for jobs to reference.
 - Work orders are made from a released process (D-024, proposed): each operation's equipment gets a planned job
   for its share, at the end of its line, held until the order's start. The order keeps the version and a note.
@@ -368,7 +368,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   profiles remapped, crews/qualifications/andon types, settings rows, OEE targets, lot attributes; not label settings), `SiteCopyPanel`. (c) a line
   into another site: site-owned references found there by code (`UnmatchedAsync` lists the rest); permissions at the target.
 - User settings (D-131, proposed, in pieces, #131): `sec.user_setting` (`home`, `favorites`, `filters:<page>`; no events) via `PUT /api/me/settings`
-  and `MeDto.Settings`; web `CurrentUser.Setting<T>`/`SetSettingAsync`, `UserViews` (keys, favourites), `FavoriteStar` (header), Favourites in
+  and `MeDto.Settings`; web `CurrentUser.Setting<T>`/`SetSettingAsync`, `UserViews` (keys, favorites), `FavoriteStar` (header), Favorites in
   `NavMenu`, home in `UserMenu` + `MainLayout`; a list page keeps its filters as a private `Filters` record through `SavedFilters.Load/SaveAsync`
   (`const string Page`; `SavedFiltersTests` checks the keys); never save on opening, only on a search or change.
 - Help (D-130, proposed, #130): `design/user_guide.md` ships with the web app (csproj link, web image) and is rendered by `UserGuide` (Markdig,
@@ -382,7 +382,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   `AuditCursor`), `AuditChanges` (pure: before/after diff by value, fields, label, action); `audit.view` held everywhere (`CanEverywhere`);
   `/audit` page, `HistoryLink` on record pages; `AuditAreas.All` (Contracts) checked against `events.Create` subject types by a test.
 - Accessibility (D-127, proposed, in pieces, #142): WCAG 2.2 AA for the main flows. Build checks in `Tests/Pulaski.Web.Tests/Accessibility`
-  (`RazorMarkup` scanner: labels, names, alt, titles, tabindex, skip link; `ContrastTests`: tokens + colour/background rules, both themes);
+  (`RazorMarkup` scanner: labels, names, alt, titles, tabindex, skip link; `ContrastTests`: tokens + color/background rules, both themes);
   findings and the screen-reader script in `design/accessibility.md`; `tools/a11y-audit` (axe, keyboard, reflow) reruns the demo audit. New
   markup must pass them.
 - Setup checklist (D-126, proposed, #139): `SetupSteps` (guide order, required = path to a first job) + `SetupChecklist.Evaluate` (pure) over
@@ -425,10 +425,10 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
   through `LotAttributeWriter`, shared with the lot page). Export `values.csv` is the import format. Webhook feeds `erp` and `documents`
   (`WebhookFeedOptions`, one `WebhookDeliveryService` each, `/api/integrations/{feed}`); `IncludeFiles` puts a certificate's file base64 in
   `data.file` of `lot_document.attached` at send time (`DeliveryRelay.GetDocumentFileAsync`).
-- Delivery settings and acknowledgements (D-087, proposed): `core.delivery_feed` per feed (all but the secret, saved from Configure → Integrations,
+- Delivery settings and acknowledgments (D-087, proposed): `core.delivery_feed` per feed (all but the secret, saved from Configure → Integrations,
   `integrations.manage`, audited) over configuration (`WebhookFeedOptions.Apply`, read each round; `DeliveryFeeds.Effective`). Event kinds
-  (`DeliveryKinds`) name prefix sets. Acks in the 2xx answer body (`Acknowledgement.FromResponse`) or by signed callback
-  (`POST /api/integrations/{feed}/acknowledgements`, `AcknowledgementSignature`, actor `receiver:{feed}`); a rejection fails the delivery and holds
+  (`DeliveryKinds`) name prefix sets. Acks in the 2xx answer body (`Acknowledgment.FromResponse`) or by signed callback
+  (`POST /api/integrations/{feed}/acknowledgements`, `AcknowledgmentSignature`, actor `receiver:{feed}`); a rejection fails the delivery and holds
   the subject, a callback acceptance delivers it. Columns `evt.delivery.ack_*`.
 - More feeds, MQTT, search, retention (D-088, proposed): feeds are `core.delivery_feed` rows (code + kind fixed; sink `kind:code`; built-in erp/
   documents keep their sinks) added on Configure → Integrations (`CreateDeliveryFeedCommand`); secrets under `Integrations:Feeds:{code}`. One

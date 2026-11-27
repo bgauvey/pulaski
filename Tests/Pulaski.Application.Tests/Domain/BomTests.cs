@@ -7,7 +7,7 @@ namespace Pulaski.Application.Tests.Domain;
 /// <summary>Bills of materials (D-025), using PRF-5100-BR per 1000 m: blend and capstock at Extrude (10), end caps at Pack (30).</summary>
 public class BomTests
 {
-    private static readonly Guid Metre = Guid.CreateVersion7();
+    private static readonly Guid Meter = Guid.CreateVersion7();
     private static readonly Guid Kg = Guid.CreateVersion7();
     private static readonly Guid Each = Guid.CreateVersion7();
     private static readonly Guid Blend = Guid.CreateVersion7();
@@ -17,7 +17,7 @@ public class BomTests
     private static BomItem Item(int line, Guid component, decimal qty, Guid uom, int? op = null, decimal scrap = 0m) =>
         new(Guid.CreateVersion7(), line, component, qty, uom, scrap, ConsumptionMethod.Backflush, op);
 
-    private static BomDefinition ProfileBom() => new(1000m, Metre,
+    private static BomDefinition ProfileBom() => new(1000m, Meter,
     [
         Item(10, Blend, 1450m, Kg, op: 10, scrap: 0.02m),
         Item(20, Cap, 90m, Kg, op: 10),
@@ -48,7 +48,7 @@ public class BomTests
     [Fact]
     public void An_item_without_an_operation_goes_to_the_first_operation()
     {
-        var bom = new BomDefinition(1000m, Metre, [Item(10, Blend, 1000m, Kg)]);
+        var bom = new BomDefinition(1000m, Meter, [Item(10, Blend, 1000m, Kg)]);
 
         var components = BomExplosion.For(bom, 1000m, Jobs(1000m));
 
@@ -59,7 +59,7 @@ public class BomTests
     [Fact]
     public void Shares_round_down_and_the_last_job_takes_the_remainder()
     {
-        var bom = new BomDefinition(3m, Metre, [Item(10, Blend, 1m, Kg, op: 10)]);
+        var bom = new BomDefinition(3m, Meter, [Item(10, Blend, 1m, Kg, op: 10)]);
 
         var components = BomExplosion.For(bom, 1m, Jobs(1m));
 
@@ -70,7 +70,7 @@ public class BomTests
     [Fact]
     public void Items_must_name_operations_the_process_has()
     {
-        var wrongOperation = new BomDefinition(1m, Metre, [Item(10, Blend, 1m, Kg, op: 20)]);
+        var wrongOperation = new BomDefinition(1m, Meter, [Item(10, Blend, 1m, Kg, op: 20)]);
         var refused = Assert.Throws<DomainRuleException>(() => BomExplosion.For(wrongOperation, 10m, Jobs(10m)));
         Assert.Contains("operation 20", refused.Message, StringComparison.Ordinal);
     }
@@ -78,10 +78,10 @@ public class BomTests
     [Fact]
     public void A_draft_may_be_incomplete_but_not_malformed()
     {
-        var draft = BomVersion.FirstDraft(Guid.CreateVersion7(), Guid.CreateVersion7(), Metre);
+        var draft = BomVersion.FirstDraft(Guid.CreateVersion7(), Guid.CreateVersion7(), Meter);
         Assert.Equal(["no_items"], draft.Definition.ReleaseProblems().Select(p => p.Code));
 
-        var malformed = new BomDefinition(0m, Metre, [Item(10, Blend, 0m, Kg, scrap: 1m), Item(10, Cap, 1m, Kg) with { ConsumptionMethod = "magic" }]);
+        var malformed = new BomDefinition(0m, Meter, [Item(10, Blend, 0m, Kg, scrap: 1m), Item(10, Cap, 1m, Kg) with { ConsumptionMethod = "magic" }]);
         Assert.Equal(
             ["base_qty", "qty_per", "scrap_factor", "consumption_method", "duplicate_line"],
             malformed.StructuralProblems().Select(p => p.Code));
@@ -91,7 +91,7 @@ public class BomTests
     [Fact]
     public void A_released_version_is_fixed_and_the_next_draft_copies_it_with_new_item_ids()
     {
-        var draft = BomVersion.FirstDraft(Guid.CreateVersion7(), Guid.CreateVersion7(), Metre).SaveDraft(ProfileBom());
+        var draft = BomVersion.FirstDraft(Guid.CreateVersion7(), Guid.CreateVersion7(), Meter).SaveDraft(ProfileBom());
         var released = draft.Release(DateTimeOffset.UnixEpoch, "First cut");
 
         Assert.Throws<DomainRuleException>(() => released.SaveDraft(ProfileBom()));
@@ -108,7 +108,7 @@ public class BomTests
     {
         var other = Guid.CreateVersion7();
         BomItem With(params BomItemAlternate[] alternates) => Item(10, Blend, 1450m, Kg) with { Alternates = alternates };
-        string[] Codes(BomItem item) => [.. new BomDefinition(1000m, Metre, [item]).StructuralProblems().Select(p => p.Code)];
+        string[] Codes(BomItem item) => [.. new BomDefinition(1000m, Meter, [item]).StructuralProblems().Select(p => p.Code)];
 
         Assert.Empty(Codes(With(new BomItemAlternate(other, 1.05m, 1))));
         Assert.Equal(["alternate_self"], Codes(With(new BomItemAlternate(Blend, 1m, 1))));

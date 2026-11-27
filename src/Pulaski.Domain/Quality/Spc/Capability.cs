@@ -74,7 +74,7 @@ public static class ProcessCapability
         };
 
         return new(usable.Count, mean, within, overall,
-            Spread(lsl, usl, within), Centred(mean, lsl, usl, within), Spread(lsl, usl, overall), Centred(mean, lsl, usl, overall), null);
+            Spread(lsl, usl, within), Centered(mean, lsl, usl, within), Spread(lsl, usl, overall), Centered(mean, lsl, usl, overall), null);
     }
 
     /// <summary>The rate of an inspected characteristic over its samples.</summary>
@@ -89,7 +89,7 @@ public static class ProcessCapability
     private static double? Spread(double? lsl, double? usl, double? sigma) =>
         lsl is { } l && usl is { } u && sigma is > 0 ? (u - l) / (6 * sigma.Value) : null;
 
-    private static double? Centred(double mean, double? lsl, double? usl, double? sigma)
+    private static double? Centered(double mean, double? lsl, double? usl, double? sigma)
     {
         if (sigma is not > 0)
         {

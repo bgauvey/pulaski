@@ -82,27 +82,27 @@ internal static class IntegrationEndpoints
                 request.PollSeconds, request.StartFromNow, request.Name, request.Topic), ct)))
         .RequirePermission(Permissions.Integrations);
 
-        // A receiver's acknowledgement (#73): no sign-in; signed with the feed's secret like Pulaski's own messages, and fresh (5 minutes).
-        integrations.MapPost("/acknowledgements", [AllowSignedOut] async Task<Results<Ok<AcknowledgementResponse>, UnauthorizedHttpResult>> (
+        // A receiver's acknowledgment (#73): no sign-in; signed with the feed's secret like Pulaski's own messages, and fresh (5 minutes).
+        integrations.MapPost("/acknowledgements", [AllowSignedOut] async Task<Results<Ok<AcknowledgmentResponse>, UnauthorizedHttpResult>> (
             string feed, HttpContext http, IConfiguration configuration, TimeProvider time,
-            ICommandHandler<AcknowledgeDeliveryCommand, AcknowledgementResponse> handler, CancellationToken ct) =>
+            ICommandHandler<AcknowledgeDeliveryCommand, AcknowledgmentResponse> handler, CancellationToken ct) =>
         {
             using var reader = new StreamReader(http.Request.Body);
             var body = http.Request.ContentLength is > 64 * 1024 ? "" : await reader.ReadToEndAsync(ct);
             var secret = Integrations.WebhookFeedOptions.From(configuration, feed).Secret;
             if (string.IsNullOrEmpty(secret)
-                || !Integrations.AcknowledgementSignature.IsValid(secret, http.Request.Headers["X-Pulaski-Timestamp"], http.Request.Headers["X-Pulaski-Signature"], body, time.GetUtcNow()))
+                || !Integrations.AcknowledgmentSignature.IsValid(secret, http.Request.Headers["X-Pulaski-Timestamp"], http.Request.Headers["X-Pulaski-Signature"], body, time.GetUtcNow()))
             {
                 return TypedResults.Unauthorized();
             }
 
-            var request = System.Text.Json.JsonSerializer.Deserialize<AcknowledgementRequest>(body, Json)
-                ?? new AcknowledgementRequest();
+            var request = System.Text.Json.JsonSerializer.Deserialize<AcknowledgmentRequest>(body, Json)
+                ?? new AcknowledgmentRequest();
             http.Items[Infrastructure.HttpRequestContext.ActorItem] = $"receiver:{feed}";
             return TypedResults.Ok(await handler.HandleAsync(new AcknowledgeDeliveryCommand(feed, request.EventId, request.Status, request.Reference, request.Message), ct));
         });
 
-        // A CMMS's answer about a maintenance request (#127c): signed with the feed's secret and fresh, as acknowledgements are.
+        // A CMMS's answer about a maintenance request (#127c): signed with the feed's secret and fresh, as acknowledgments are.
         integrations.MapPost("/maintenance-requests", [AllowSignedOut] async Task<Results<Ok<MaintenanceRequestResponse>, UnauthorizedHttpResult>> (
             string feed, HttpContext http, IConfiguration configuration, TimeProvider time,
             ICommandHandler<UpdateMaintenanceFromCmmsCommand, MaintenanceRequestResponse> handler, CancellationToken ct) =>
@@ -111,7 +111,7 @@ internal static class IntegrationEndpoints
             var body = http.Request.ContentLength is > 64 * 1024 ? "" : await reader.ReadToEndAsync(ct);
             var secret = Integrations.WebhookFeedOptions.From(configuration, feed).Secret;
             if (string.IsNullOrEmpty(secret)
-                || !Integrations.AcknowledgementSignature.IsValid(secret, http.Request.Headers["X-Pulaski-Timestamp"], http.Request.Headers["X-Pulaski-Signature"], body, time.GetUtcNow()))
+                || !Integrations.AcknowledgmentSignature.IsValid(secret, http.Request.Headers["X-Pulaski-Timestamp"], http.Request.Headers["X-Pulaski-Signature"], body, time.GetUtcNow()))
             {
                 return TypedResults.Unauthorized();
             }

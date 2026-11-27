@@ -32,7 +32,7 @@ public sealed record MeDto
     public string? Language { get; init; }
     public string? Region { get; init; }
 
-    /// <summary>The user's own view settings (#131): last-used filters per page, favourites, home page; JSON by key.</summary>
+    /// <summary>The user's own view settings (#131): last-used filters per page, favorites, home page; JSON by key.</summary>
     public IReadOnlyDictionary<string, string> Settings { get; init; } = new Dictionary<string, string>();
     public IReadOnlyList<RoleGrantDto> Roles { get; init; } = [];
 

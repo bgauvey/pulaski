@@ -9,7 +9,7 @@ public class FeedLoadsTests
     private static readonly Guid Hopper = Guid.CreateVersion7();
     private static readonly Guid Stores = Guid.CreateVersion7();
     private static readonly Guid Resin = Guid.CreateVersion7();
-    private static readonly Guid Colour = Guid.CreateVersion7();
+    private static readonly Guid Color = Guid.CreateVersion7();
     private static readonly Guid A = Guid.CreateVersion7();
     private static readonly Guid B = Guid.CreateVersion7();
     private static readonly Guid C = Guid.CreateVersion7();
@@ -29,7 +29,7 @@ public class FeedLoadsTests
         var loads = FeedLoads.From(Hopper,
         [
             Moved(A, 0, Stores, Hopper),
-            Moved(C, 0.5, Stores, Hopper, Colour),   // another material: loaded alongside, ends nothing
+            Moved(C, 0.5, Stores, Hopper, Color),   // another material: loaded alongside, ends nothing
             Moved(B, 2, Stores, Hopper),             // B ends A
             Used(B, 3, 100m, 0m),                    // B runs out
             Loaded(A, 4),                            // A, still there, feeds again
@@ -50,6 +50,6 @@ public class FeedLoadsTests
         Assert.Equal([(A, 25m), (B, 75m)], shares.Select(s => (s.LotId, s.Quantity)));
 
         Assert.Equal((B, 10m), FeedLoads.ShareByTime(loads, Resin, T0.AddHours(6), T0.AddHours(6), 10m).Select(s => (s.LotId, s.Quantity)).Single());
-        Assert.Empty(FeedLoads.ShareByTime(loads, Colour, T0, T0.AddHours(6), 10m));
+        Assert.Empty(FeedLoads.ShareByTime(loads, Color, T0, T0.AddHours(6), 10m));
     }
 }

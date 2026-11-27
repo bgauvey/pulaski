@@ -18,7 +18,7 @@ public sealed record SpcSubgroup(Guid SampleId, DateTimeOffset At, IReadOnlyList
 public sealed record SpcPoint(Guid SampleId, DateTimeOffset At, double Value, double? Dispersion, int Size);
 
 /// <summary>
-/// A chart's limits: the centre line and 3-sigma limits of the statistic, and of its dispersion where there is one. For p and u charts, whose
+/// A chart's limits: the center line and 3-sigma limits of the statistic, and of its dispersion where there is one. For p and u charts, whose
 /// limits change with each sample's size, <see cref="Ucl"/> and <see cref="Lcl"/> are those of the baseline's average size; use
 /// <see cref="ControlLimits.At"/> for a point's own.
 /// </summary>

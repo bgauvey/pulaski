@@ -48,7 +48,7 @@ public sealed record CompleteExpectedReceiptCommand(Guid Id, long ExpectedVersio
 /// <summary>One expected receipt from the ERP, matched on its system and key (D-058); see <see cref="ImportExpectedReceiptRequest"/>.</summary>
 public sealed record ImportExpectedReceiptCommand(
     Guid SiteId, string ExternalSystem, string ExternalKey, string MaterialCode, decimal Quantity, string UomCode, DateTimeOffset ExpectedAt,
-    string? Reference, string? Supplier, bool Cancelled) : ICommand<ImportExpectedReceiptResponse>;
+    string? Reference, string? Supplier, bool Canceled) : ICommand<ImportExpectedReceiptResponse>;
 
 internal static class ExpectedReceiptRules
 {
@@ -179,9 +179,9 @@ internal sealed class CancelExpectedReceiptHandler(
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var current = await ExpectedReceiptRules.GetAsync(receipts, command.Id, command.ExpectedVersion, cancellationToken);
-        var cancelled = current.Value.Cancel();
-        var envelope = events.Create(EventTypes.ExpectedReceiptCancelled, "expected_receipt", cancelled.Id, new { Before = current.Value, After = cancelled });
-        var version = await receipts.UpdateAsync(cancelled, envelope.OccurredAt, cancellationToken);
+        var canceled = current.Value.Cancel();
+        var envelope = events.Create(EventTypes.ExpectedReceiptCanceled, "expected_receipt", canceled.Id, new { Before = current.Value, After = canceled });
+        var version = await receipts.UpdateAsync(canceled, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new VersionResponse(version);
@@ -218,7 +218,7 @@ internal sealed class ImportExpectedReceiptHandler(
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var current = await receipts.FindByExternalKeyForUpdateAsync(system, key, cancellationToken);
 
-        // The ERP's word on a closed one comes too late: it was received or cancelled here, and stays so.
+        // The ERP's word on a closed one comes too late: it was received or canceled here, and stays so.
         if (current is { Value.IsOpen: false })
         {
             return new ImportExpectedReceiptResponse(current.Value.Id, current.Version, Created: false, Changed: false);
@@ -233,9 +233,9 @@ internal sealed class ImportExpectedReceiptHandler(
 
         if (current is null)
         {
-            if (command.Cancelled)
+            if (command.Canceled)
             {
-                throw new DomainRuleException($"{system} {key} is cancelled and Pulaski hasn't seen it; there is nothing to cancel.");
+                throw new DomainRuleException($"{system} {key} is canceled and Pulaski hasn't seen it; there is nothing to cancel.");
             }
 
             var receipt = new ExpectedReceipt(
@@ -253,11 +253,11 @@ internal sealed class ImportExpectedReceiptHandler(
             throw new DomainRuleException($"{system} {key} is for another site or material in Pulaski; send it as a new key.");
         }
 
-        // Part of it has arrived (#83): cancelling, or expecting no more than that, closes it as complete.
+        // Part of it has arrived (#83): canceling, or expecting no more than that, closes it as complete.
         var arrived = current.Value.ReceivedQty > 0;
-        var completes = arrived && (command.Cancelled || (uom == current.Value.UomId && command.Quantity <= current.Value.ReceivedQty));
+        var completes = arrived && (command.Canceled || (uom == current.Value.UomId && command.Quantity <= current.Value.ReceivedQty));
         var updated = completes ? current.Value.Complete()
-            : command.Cancelled ? current.Value.Cancel()
+            : command.Canceled ? current.Value.Cancel()
             : current.Value.Change(command.Quantity, uom, command.ExpectedAt, reference, supplier, current.Value.Note);
         if (updated == current.Value)
         {
@@ -265,7 +265,7 @@ internal sealed class ImportExpectedReceiptHandler(
         }
 
         var envelope = events.Create(
-            completes ? EventTypes.ExpectedReceiptReceived : command.Cancelled ? EventTypes.ExpectedReceiptCancelled : EventTypes.ExpectedReceiptUpdated,
+            completes ? EventTypes.ExpectedReceiptReceived : command.Canceled ? EventTypes.ExpectedReceiptCanceled : EventTypes.ExpectedReceiptUpdated,
             "expected_receipt", updated.Id, new { Before = current.Value, After = updated }, $"{system} import");
         var newVersion = await receipts.UpdateAsync(updated, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);

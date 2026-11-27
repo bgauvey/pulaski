@@ -24,8 +24,8 @@ public class WorkOrderPlanningHandlerTests : SchedulingHandlerTestBase
         var a = Line();
         var b = Line();
         var white = await WorkOrderAsync(White, qty: 300m);
-        var grey = await WorkOrderAsync(Grey);
-        var other = await CreateProductionAsync(a, grey, "G-1");       // stays planned; changes over from white first
+        var gray = await WorkOrderAsync(Gray);
+        var other = await CreateProductionAsync(a, gray, "G-1");       // stays planned; changes over from white first
         var onA = await CreateProductionAsync(a, white, "W-1");
         var onB = await CreateProductionAsync(b, white, "W-2", qty: 200m);
 
@@ -37,7 +37,7 @@ public class WorkOrderPlanningHandlerTests : SchedulingHandlerTestBase
         // A set, not a sort: .NET orders Guids differently from UUIDv7's time order.
         Assert.Equal(new HashSet<Guid> { onA, onB }, result.Jobs.Select(j => j.JobId).ToHashSet());
 
-        // On line A it follows the grey job (0.5 h changeover + 1 h); on line B it runs straight away.
+        // On line A it follows the gray job (0.5 h changeover + 1 h); on line B it runs straight away.
         Assert.Equal((Now.AddHours(1.5), Now.AddHours(2.5), JobStatus.Dispatched), (Job(onA).PlannedStart!.Value, Job(onA).PlannedEnd!.Value, Job(onA).Status));
         Assert.Equal((Now, Now.AddHours(2)), (Job(onB).PlannedStart!.Value, Job(onB).PlannedEnd!.Value));
         Assert.Equal(JobStatus.Planned, Job(other).Status);
@@ -67,7 +67,7 @@ public class WorkOrderPlanningHandlerTests : SchedulingHandlerTestBase
         var wo = await WorkOrderAsync(White);
         F.Stores.Scheduling.AddCapability(line.Id, White);
         var job = await CreateProductionAsync(line, wo, "W-1");
-        F.Stores.Scheduling.AddJob(Job(job) with { MaterialId = Grey }, Version(job));   // e.g. capability retired since
+        F.Stores.Scheduling.AddJob(Job(job) with { MaterialId = Gray }, Version(job));   // e.g. capability retired since
 
         await Assert.ThrowsAsync<DomainRuleException>(() =>
             Dispatch().HandleAsync(new DispatchWorkOrderCommand(empty.Id, WorkOrderVersion(empty)), CancellationToken.None));

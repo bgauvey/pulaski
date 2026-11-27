@@ -138,7 +138,7 @@ public class JobTests
     [Fact]
     public void Cancel_works_until_the_job_is_finished()
     {
-        Assert.Equal(JobStatus.Cancelled, Production(JobStatus.Running).Cancel().Status);
+        Assert.Equal(JobStatus.Canceled, Production(JobStatus.Running).Cancel().Status);
         Assert.Throws<DomainRuleException>(() => Production(JobStatus.Completed).Cancel());
     }
 

@@ -26,13 +26,13 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     public async Task Create_appends_a_production_job_with_the_work_order_material_and_unit()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
 
         var first = await CreateProductionAsync(line, wo, "J-1");
         var second = await CreateProductionAsync(line, wo, "J-2");
 
         var job = Job(second);
-        Assert.Equal((line.Id, Grey, Metre, wo.Id), (job.EquipmentId, job.MaterialId!.Value, job.UomId!.Value, job.WorkOrderId!.Value));
+        Assert.Equal((line.Id, Gray, Meter, wo.Id), (job.EquipmentId, job.MaterialId!.Value, job.UomId!.Value, job.WorkOrderId!.Value));
         Assert.Equal((1m, 2m), (Job(first).SequenceRank, job.SequenceRank));
         Assert.Equal(JobStatus.Planned, job.Status);
         Assert.Contains((second, (string?)null, JobStatus.Planned), F.Stores.Scheduling.StatusChanges);
@@ -44,7 +44,7 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     public async Task Create_before_a_job_takes_the_midpoint()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
         var first = await CreateProductionAsync(line, wo, "J-1");
         var second = await CreateProductionAsync(line, wo, "J-2");
 
@@ -86,14 +86,14 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     }
 
     [Fact]
-    public async Task Create_refuses_ineligible_or_unschedulable_lines_unplanned_orders_other_sites_and_unknown_neighbours()
+    public async Task Create_refuses_ineligible_or_unschedulable_lines_unplanned_orders_other_sites_and_unknown_neighbors()
     {
         var line = Line();
         var ineligible = Line(eligible: false);
         var unschedulable = F.Stores.Scheduling.AddLine(Site, schedulable: false);
-        var planned = await WorkOrderAsync(Grey);
-        var dispatched = await WorkOrderAsync(Grey, WorkOrderStatus.Dispatched);
-        var elsewhere = await WorkOrderAsync(Grey, site: Guid.CreateVersion7());
+        var planned = await WorkOrderAsync(Gray);
+        var dispatched = await WorkOrderAsync(Gray, WorkOrderStatus.Dispatched);
+        var elsewhere = await WorkOrderAsync(Gray, site: Guid.CreateVersion7());
 
         var notSetUp = await Assert.ThrowsAsync<DomainRuleException>(() => CreateProductionAsync(ineligible, planned, "J-0"));
         Assert.Contains("capability", notSetUp.Message, StringComparison.Ordinal);
@@ -108,7 +108,7 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     public async Task Sequence_moves_a_job_before_another_on_the_same_line()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
         var a = await CreateProductionAsync(line, wo, "J-1");
         var b = await CreateProductionAsync(line, wo, "J-2");
         var c = await CreateProductionAsync(line, wo, "J-3");
@@ -126,7 +126,7 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
         var from = Line();
         var to = Line();
         var ineligible = Line(eligible: false);
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
         var job = await CreateProductionAsync(from, wo, "J-1");
         var existing = await CreateProductionAsync(to, wo, "J-2");
 
@@ -142,7 +142,7 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     public async Task Sequence_renumbers_the_line_when_ranks_run_out()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
         var a = await CreateProductionAsync(line, wo, "J-1");
         var b = await CreateProductionAsync(line, wo, "J-2");
         var c = await CreateProductionAsync(line, wo, "J-3");
@@ -160,7 +160,7 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     {
         var line = Line();
         var otherSite = Line(site: Guid.CreateVersion7());
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
         var job = await CreateProductionAsync(line, wo, "J-1");
 
         await Assert.ThrowsAsync<ConflictException>(() =>
@@ -186,12 +186,12 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
         var from = Line();
         var to = Line();
         var white = await WorkOrderAsync(White);
-        var grey = await WorkOrderAsync(Grey);
+        var gray = await WorkOrderAsync(Gray);
         var early = await CreateProductionAsync(to, white, "T-1");       // 0-1 h on the target line
         var late = await CreateProductionAsync(to, white, "T-2", qty: 500m); // 1-6 h
-        var firmed = await CreateProductionAsync(from, grey, "F-1");
-        await Dispatch().HandleAsync(new DispatchWorkOrderCommand(grey.Id, WorkOrderVersion(grey)), CancellationToken.None);
-        await Firm().HandleAsync(new FirmWorkOrderCommand(grey.Id, WorkOrderVersion(grey)), CancellationToken.None);
+        var firmed = await CreateProductionAsync(from, gray, "F-1");
+        await Dispatch().HandleAsync(new DispatchWorkOrderCommand(gray.Id, WorkOrderVersion(gray)), CancellationToken.None);
+        await Firm().HandleAsync(new FirmWorkOrderCommand(gray.Id, WorkOrderVersion(gray)), CancellationToken.None);
         var anchor = Job(firmed).PlannedStart!.Value;   // after the 30-minute changeover from white
 
         await Assert.ThrowsAsync<DomainRuleException>(() =>
@@ -207,7 +207,7 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     public async Task Pin_sets_lock_and_earliest_start_with_before_and_after()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
         var job = await CreateProductionAsync(line, wo, "J-1");
 
         await Pin().HandleAsync(new PinJobCommand(job, Version(job), true, Now.AddHours(6)), CancellationToken.None);
@@ -220,23 +220,23 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     public async Task Cancel_a_planned_job_outright()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
         var job = await CreateProductionAsync(line, wo, "J-1");
 
         var result = await Cancel().HandleAsync(new CancelJobCommand(job, Version(job), "Not needed", false), CancellationToken.None);
 
         Assert.Null(result.ReplacementJobId);
-        Assert.Equal(JobStatus.Cancelled, Job(job).Status);
+        Assert.Equal(JobStatus.Canceled, Job(job).Status);
         Assert.Empty(F.Stores.Scheduling.JobsOn(line.Id));
         var evt = F.Stores.Events.Appended[^1];
-        Assert.Equal((EventTypes.JobCancelled, "Not needed"), (evt.Type, evt.Reason));
+        Assert.Equal((EventTypes.JobCanceled, "Not needed"), (evt.Type, evt.Reason));
     }
 
     [Fact]
     public async Task Cancel_and_replace_a_started_job_for_what_it_did_not_make()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
         var job = await CreateProductionAsync(line, wo, "J-1", qty: 100m);
         await Dispatch().HandleAsync(new DispatchWorkOrderCommand(wo.Id, WorkOrderVersion(wo)), CancellationToken.None);
         await Firm().HandleAsync(new FirmWorkOrderCommand(wo.Id, WorkOrderVersion(wo)), CancellationToken.None);
@@ -247,12 +247,12 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
         var result = await Cancel().HandleAsync(new CancelJobCommand(job, Version(job), "Die damage", true), CancellationToken.None);
 
         var replacement = Job(result.ReplacementJobId!.Value);
-        Assert.Equal(JobStatus.Cancelled, Job(job).Status);
+        Assert.Equal(JobStatus.Canceled, Job(job).Status);
         Assert.Contains(job, F.Stores.Scheduling.EndedRuns);
         Assert.Equal(("J-1-R", 40m, JobStatus.Firmed, (Guid?)job), (replacement.JobNumber, replacement.PlannedQty!.Value, replacement.Status, replacement.ReplacesJobId));
         Assert.Equal([replacement.Id], F.Stores.Scheduling.JobsOn(line.Id).Select(j => j.Id));
         Assert.Equal(
-            [EventTypes.JobCancelled, EventTypes.JobCreated],
+            [EventTypes.JobCanceled, EventTypes.JobCreated],
             F.Stores.Events.Appended.TakeLast(2).Select(e => e.Type));
     }
 
@@ -260,7 +260,7 @@ public class JobCommandHandlerTests : SchedulingHandlerTestBase
     public async Task Replace_refuses_a_job_with_nothing_left_to_make()
     {
         var line = Line();
-        var wo = await WorkOrderAsync(Grey);
+        var wo = await WorkOrderAsync(Gray);
         var job = await CreateProductionAsync(line, wo, "J-1", qty: 100m);
         F.Stores.Scheduling.SetGoodQty(job, 100m);
 

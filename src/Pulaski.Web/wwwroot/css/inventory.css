@@ -1,5 +1,5 @@
-/* Inventory (D-027): stock by class, lots, their history and genealogy. Colours come from
-   css/tokens.css; held stock and near expiry use the warning colour, nothing else is coloured. */
+/* Inventory (D-027): stock by class, lots, their history and genealogy. Colors come from
+   css/tokens.css; held stock and near expiry use the warning color, nothing else is colored. */
 
 .inv-head {
     display: flex;

@@ -6,7 +6,7 @@ namespace Pulaski.Application.Tests.Domain;
 /// <summary>Nelson's run rules (D-099), marked at the point that completes each pattern.</summary>
 public class RunRulesTests
 {
-    // Centre 0, sigma 1: a value is its own z.
+    // Center 0, sigma 1: a value is its own z.
     private static List<RulePoint> Points(params double[] values) => [.. values.Select(v => new RulePoint(v, 0, 1))];
 
     private static int[] Where(IReadOnlyList<IReadOnlyList<int>> found, int rule) =>
@@ -52,7 +52,7 @@ public class RunRulesTests
         run[4] = new RulePoint(0.5, null, null);
         Assert.Empty(Where(RunRules.Check(run, RunRules.All), 2));
 
-        // Each point's own centre and sigma: a run spans new limits.
+        // Each point's own center and sigma: a run spans new limits.
         var spanning = Enumerable.Range(0, 9).Select(i => i < 5 ? new RulePoint(10.5, 10, 1) : new RulePoint(20.4, 20, 2)).ToList();
         Assert.Equal([8], Where(RunRules.Check(spanning, RunRules.All), 2));
     }

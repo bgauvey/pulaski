@@ -301,7 +301,7 @@ internal sealed class ChangeWorkOrderStatusHandler(
         }
 
         var changed = current.Value.WithStatus(command.Status);
-        if (changed.Status == WorkOrderStatus.Cancelled && await workOrders.HasOpenJobsAsync(changed.Id, cancellationToken))
+        if (changed.Status == WorkOrderStatus.Canceled && await workOrders.HasOpenJobsAsync(changed.Id, cancellationToken))
         {
             throw new DomainRuleException($"Work order {changed.OrderNumber} still has open jobs; cancel them first.");
         }

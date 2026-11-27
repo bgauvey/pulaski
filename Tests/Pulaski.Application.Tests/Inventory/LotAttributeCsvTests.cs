@@ -24,7 +24,7 @@ public class LotAttributeCsvTests
     {
         Assert.Contains("The required column 'lot_number' is missing.", LotAttributeCsv.Parse("mfi\r\n1\r\n", Codes).Problems.Select(p => p.Text));
         Assert.Contains("Name at least one lot attribute in the header.", LotAttributeCsv.Parse("lot_number\r\nR-1\r\n", Codes).Problems.Select(p => p.Text));
-        Assert.Contains(LotAttributeCsv.Parse("lot_number,colour\r\nR-1,red\r\n", Codes).Problems, p => p.Text.StartsWith("'colour' isn't", StringComparison.Ordinal));
+        Assert.Contains(LotAttributeCsv.Parse("lot_number,color\r\nR-1,red\r\n", Codes).Problems, p => p.Text.StartsWith("'color' isn't", StringComparison.Ordinal));
         Assert.Contains("Column 'MFI' appears twice.", LotAttributeCsv.Parse("lot_number,mfi,MFI\r\nR-1,1,2\r\n", Codes).Problems.Select(p => p.Text));
         Assert.Contains("The file has a header but no rows.", LotAttributeCsv.Parse("lot_number,mfi\r\n", Codes).Problems.Select(p => p.Text));
         Assert.Equal("lot_number,material_code,MFI,GRADE\r\n", LotAttributeCsv.Template(["MFI", "GRADE"]));

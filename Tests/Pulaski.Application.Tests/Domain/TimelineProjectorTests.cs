@@ -6,7 +6,7 @@ public class TimelineProjectorTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 13, 8, 0, 0, TimeSpan.Zero);
     private static readonly Guid Line = Guid.CreateVersion7();
-    private static readonly Guid Metre = Guid.CreateVersion7();
+    private static readonly Guid Meter = Guid.CreateVersion7();
     private static readonly Guid Kilogram = Guid.CreateVersion7();
     private static readonly MaterialRef White = new(Guid.CreateVersion7(), null);
     private static readonly MaterialRef Black = new(Guid.CreateVersion7(), null);
@@ -14,8 +14,8 @@ public class TimelineProjectorTests
     // 1000 m/h on both materials; 45 min to go white -> black, 90 min back.
     private static readonly RunRate[] Rates =
     [
-        new(White.Id, Metre, 1000m, RateSource.Calculated),
-        new(Black.Id, Metre, 1000m, RateSource.Modified),
+        new(White.Id, Meter, 1000m, RateSource.Calculated),
+        new(Black.Id, Meter, 1000m, RateSource.Modified),
     ];
 
     private static readonly ChangeoverMatrix Matrix = new(Line,
@@ -33,7 +33,7 @@ public class TimelineProjectorTests
         DateTimeOffset? earliest = null,
         DateTimeOffset? due = null,
         Guid? uom = null) =>
-        new(Guid.CreateVersion7(), JobType.Production, status, material, qty, uom ?? Metre, good, startedAt, earliest, null, due);
+        new(Guid.CreateVersion7(), JobType.Production, status, material, qty, uom ?? Meter, good, startedAt, earliest, null, due);
 
     private static PlannedJob NonProduction(string type, TimeSpan? duration, string status = JobStatus.Planned, DateTimeOffset? startedAt = null) =>
         new(Guid.CreateVersion7(), type, status, null, null, null, 0m, startedAt, null, duration, null);
@@ -312,7 +312,7 @@ public class TimelineProjectorTests
     [Fact]
     public void Quantities_round_up_to_whole_seconds()
     {
-        var rates = new[] { new RunRate(White.Id, Metre, 7m, RateSource.Calculated) };
+        var rates = new[] { new RunRate(White.Id, Meter, 7m, RateSource.Calculated) };
 
         var segment = Project([Production(White, 1m)], previous: White, rates: rates).Segments.Single();
 

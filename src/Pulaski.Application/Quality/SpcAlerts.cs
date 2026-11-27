@@ -55,7 +55,7 @@ internal sealed class SpcSignals(IQualityRepository quality, IEventLog eventLog,
         var now = result.RecordedAt;
         var (alertId, isNew) = await quality.RaiseAlertAsync(signal, ids.NewId(), now, cancellationToken);
         await quality.InsertViolationAsync(signal, ids.NewId(), alertId, now, cancellationToken);
-        await eventLog.AppendAsync(events.Create(isNew ? EventTypes.SpcAlertRaised : EventTypes.SpcAlertSignalled, "spc_alert", alertId, new
+        await eventLog.AppendAsync(events.Create(isNew ? EventTypes.SpcAlertRaised : EventTypes.SpcAlertSignaled, "spc_alert", alertId, new
         {
             AlertId = alertId,
             result.SiteId,
@@ -76,8 +76,8 @@ internal sealed class SpcSignals(IQualityRepository quality, IEventLog eventLog,
 
     /// <summary>What the person recording sees.</summary>
     public static MessageDto Note(Characteristic characteristic, IReadOnlyList<int> rules, bool isNew) => isNew
-        ? Notes.Of($"{characteristic.Code}'s control chart signalled (rule {string.Join(", ", rules)}): an SPC alert was raised.")
-        : Notes.Of($"{characteristic.Code}'s control chart signalled (rule {string.Join(", ", rules)}): added to its open SPC alert.");
+        ? Notes.Of($"{characteristic.Code}'s control chart signaled (rule {string.Join(", ", rules)}): an SPC alert was raised.")
+        : Notes.Of($"{characteristic.Code}'s control chart signaled (rule {string.Join(", ", rules)}): added to its open SPC alert.");
 }
 
 internal sealed class ListSpcAlertsHandler(IQualityReadStore store, TimeProvider timeProvider) : IQueryHandler<ListSpcAlertsQuery, IReadOnlyList<SpcAlertDto>>

@@ -30,7 +30,7 @@ public class JobComponentsHandlerTests : SchedulingHandlerTestBase
         var route = new ProcessDefinition(
             [extrude, packing], [new ProcessDependency(Guid.CreateVersion7(), extrude.Id, packing.Id, DependencyType.AfterStart, TimeSpan.Zero)]);
         var process = F.Stores.Processes.AddReleased(Site, route);
-        var bom = F.Stores.Boms.AddReleased(White, process.Process.Id, new BomDefinition(1000m, Metre,
+        var bom = F.Stores.Boms.AddReleased(White, process.Process.Id, new BomDefinition(1000m, Meter,
         [
             new(Guid.CreateVersion7(), 10, _blend, 1450m, Guid.CreateVersion7(), 0m, ConsumptionMethod.TimeWindow, 10),
             new(Guid.CreateVersion7(), 20, _endCap, 84m, Guid.CreateVersion7(), 0m, ConsumptionMethod.Backflush, 30),

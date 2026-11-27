@@ -24,7 +24,7 @@ public sealed record AlertKind(string Code, string Name, string? MinutesMeans, i
         new(LongStop, Term.Mark("A machine stopped longer than"), Term.Mark("minutes stopped"), 15, Permissions.MachinesView, true),
         new(UncodedStop, Term.Mark("A stop still without a reason"), Term.Mark("minutes after it ended"), 30, Permissions.MachinesView, true),
         new(AndonEscalated, Term.Mark("An andon call escalated"), null, null, Permissions.FloorView, true),
-        new(SpcAlert, Term.Mark("A control chart signalled (SPC alert)"), null, null, Permissions.QualityView, true),
+        new(SpcAlert, Term.Mark("A control chart signaled (SPC alert)"), null, null, Permissions.QualityView, true),
         new(LotHold, Term.Mark("A lot put on hold"), null, null, Permissions.InventoryView, true),
         new(Shortage, Term.Mark("A job will be short of a component"), Term.Mark("minutes before it is needed"), 480, Permissions.InventoryView, true),
         new(NcrActionOverdue, Term.Mark("An NCR action is overdue"), null, null, Permissions.QualityView, true),

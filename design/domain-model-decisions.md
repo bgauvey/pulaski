@@ -16,7 +16,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-006 | All ID columns are UUIDv7 | Decided | 2026-10-12 |
 | D-007 | Hybrid persistence: event and relational state written in one transaction, not full event sourcing | Proposed | 2026-10-12 |
 | D-008 | CloudEvents as the event envelope; transactional outbox feeds adapters | Proposed | 2026-10-12 |
-| D-009 | Activities modelled as job types (production, changeover, cleaning, trial, maintenance) | Proposed | 2026-10-12 |
+| D-009 | Activities modeled as job types (production, changeover, cleaning, trial, maintenance) | Proposed | 2026-10-12 |
 | D-010 | History (state changes, samples, lot events, counts) is time-partitioned; current records such as lots and jobs stay relational | Decided | 2026-10-12 |
 | D-011 | UI: Blazor Web App (interactive server) that talks only to the API | Decided | 2026-10-12 |
 | D-012 | Data access: Dapper with parameterized SQL; reads are SELECTs (functions only for complex reused queries), writes run in the command handler's transaction; no procedures from the app | Decided | 2026-10-12 |
@@ -26,10 +26,10 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-016 | Run standards: one line/material row holds a calculated rate and an optional modified rate; a modified rate is the gold standard | Decided | 2026-10-13 |
 | D-017 | Scheduling writes lock the line row first, then the work order, then jobs; jobs are placed before a named job (or at the end) at a midpoint rank, renumbering the line only when ranks run out | Decided | 2026-10-13 |
 | D-018 | Work order lifecycle: plan, dispatch (publishes the baseline), firm, execute, complete. Only orders are dispatched and firmed; their jobs follow. Un-dispatch is allowed until the order is firmed | Decided | 2026-10-13 |
-| D-019 | Job rules: a locked job never moves; a planned job moves freely; a dispatched job moves only after un-dispatch; a firmed job may change machine but is anchored at its firmed start; a started job can only be cancelled, optionally replaced by a job for the remaining quantity | Decided | 2026-10-13 |
+| D-019 | Job rules: a locked job never moves; a planned job moves freely; a dispatched job moves only after un-dispatch; a firmed job may change machine but is anchored at its firmed start; a started job can only be canceled, optionally replaced by a job for the remaining quantity | Decided | 2026-10-13 |
 | D-020 | Eligibility: `core.equipment_capability` says which material can run on which equipment, with its ideal rate and crew size (labor estimate). Jobs can only be placed on, moved to or dispatched on an eligible line. The run standard stays the planning rate | Decided | 2026-10-13 |
 | D-022 | Group scheduling: equipment can be a planning target (`is_schedulable`) and runs jobs only with `can_run_job`. A job planned to a group (e.g. a department) waits there in a window until the floor assigns it to a line below the group that can run it; Pulaski checks the window, never picks the line | Decided | 2026-10-14 |
-| D-023 | Process routes: a process (ISA-95 operations definition) has numbered operations, each run by one or more lines or departments with shares totalling 100%, linked "after start" or "after end" with a lag. Versioned: drafts are edited, released versions are fixed and are what orders are made from. A process makes all materials, or chosen classes and materials; a material may name one of those as its default | Decided | 2026-10-14 |
+| D-023 | Process routes: a process (ISA-95 operations definition) has numbered operations, each run by one or more lines or departments with shares totaling 100%, linked "after start" or "after end" with a lag. Versioned: drafts are edited, released versions are fixed and are what orders are made from. A process makes all materials, or chosen classes and materials; a material may name one of those as its default | Decided | 2026-10-14 |
 | D-024 | Work orders are made from a process: the planner picks the material, a released process that makes it, the quantity, start, due date, priority and a note; each operation's equipment gets a planned job for its share, at the end of its line | Proposed | 2026-10-15 |
 | D-025 | Bills of materials: single level, one per material and optionally per process, whose items name the operation that consumes them; versioned like processes (draft, released, obsolete). A work order takes the released BOM and plans each job's components. Pulaski owns lots on the floor; the ERP stays the book of record for stock (inventory amended by D-027) | Proposed | 2026-10-15 |
 | D-026 | Units: standard units convert within a dimension by fixed factors for every material; a material's own conversions link dimensions and packaging units, and never give two routes. Orders, BOMs and run rates may each use any unit that converts | Proposed | 2026-10-15 |
@@ -63,7 +63,7 @@ This doc tracks every domain-model decision for Pulaski. **Decided** items are s
 | D-053 | Material source adapters: an adapter only turns a file in its format into source-neutral import rows; the bulk import applies the same rules to rows from any source, all or nothing. Adapters are registered services named in the URL (`POST /api/materials/import/{source}`). CSV and ISA-95 B2MML material information (`MaterialDefinition`) ship first; the external system a B2MML file's items belong to is named on import, and its `ID` is their key. Label printing and pushed ERP feeds stay later | Proposed | 2026-10-23 |
 | D-054 | People from HR and ERP sources: an imported person keeps its source system and key (unique together) and is matched on them by every import, so importing again never duplicates anyone; the first import links a hand-kept person with the same employee number. The source owns employee number, name and active; Pulaski owns crew, sign-in, badges and qualifications. Imports are files, all or nothing, through people source adapters (CSV, SCIM 2.0 users); every change is the usual person event with the source as its reason | Proposed | 2026-10-23 |
 | D-055 | Completing the materials import: capabilities load from their own CSV file (one row per material and line), changing the capability in effect now in place, adding one from now, or ending it, with the run standard following as on the material page; all lines are locked by code in id order first, and each line must be at a site where the caller may maintain processes. A missing class is created only when the import asks (`createClasses`), named from `class_name`. Every import format has a template to download | Proposed | 2026-10-23 |
-| D-056 | Lot attributes and certificates: typed attribute definitions per site (text, number, date, yes/no, choice), offered for every material or chosen classes, with values beside the lot (never changing `core.lot` or its movements) and every change an event. Certificates are stored files (PDF, PNG, JPEG ≤ 10 MB, recognised by content, written once) or references (number, URL), linked to lots and carried on by split and merge; never deleted, withdrawn with a reason. Two permissions: `lot_records.manage` and `lot_attributes.manage` | Proposed | 2026-10-24 |
+| D-056 | Lot attributes and certificates: typed attribute definitions per site (text, number, date, yes/no, choice), offered for every material or chosen classes, with values beside the lot (never changing `core.lot` or its movements) and every change an event. Certificates are stored files (PDF, PNG, JPEG ≤ 10 MB, recognized by content, written once) or references (number, URL), linked to lots and carried on by split and merge; never deleted, withdrawn with a reason. Two permissions: `lot_records.manage` and `lot_attributes.manage` | Proposed | 2026-10-24 |
 | D-057 | Back-dated inventory movements: a receipt, consumption, production, write-up or write-off may count from up to 31 days earlier (`effective_at`), with a comment and permission `inventory.backdate`; its record time (`occurred_at`) and append-only history stay. Stock at a time sums movements by effective time, so it is deterministic whatever the order of entry. A back-dated movement may not count before the lot had stock or before a posted count of it, nor take it below zero at any time; expiry and the run are taken at the effective time | Proposed | 2026-10-24 |
 | D-058 | Shortages with the live schedule and supply on its way: jobs are timed by the schedule's projection now by default (published times on request); `core.expected_receipt` records deliveries entered by people or sent by the ERP (idempotent by external key), counted beside stock only for jobs needing the material after they are due, and closed by receiving a lot against them. Still not MRP: no suggestions, lead times or ordering | Proposed | 2026-10-24 |
 | D-059 | Containers, labels and scanning: a container (pallet, tote, box, bin) holds whole lots that keep their own identity; packing, unpacking and moving with a container are ordinary lot movements linked to it, and a lot moved, split off or used up alone leaves it. Labels are 4 × 6 in PDFs with a Code 128 barcode of a short Pulaski code (`PUL1L`/`PUL1C` + a never-reused label number, `PUL1E:` + a location code); a scan resolves to exactly one thing at the site, or offers the matches when free text is ambiguous | Proposed | 2026-10-24 |
@@ -136,7 +136,7 @@ Every business change is recorded as an immutable event in PostgreSQL; the same 
 
 ## Machine state model (PackML)
 
-Machine states and events follow PackML closely, so controls engineers recognise the model and any PackML machine binds without translation (D-005).
+Machine states and events follow PackML closely, so controls engineers recognize the model and any PackML machine binds without translation (D-005).
 
 - **States:** the 17 PackML states as a fixed enum, unrenamed.
 - **Unit modes:** Production, Maintenance, Manual and user-defined modes, tracked alongside state. By default, non-Production time is treated as planned time and excluded from OEE.
@@ -209,11 +209,11 @@ A pure function in `Pulaski.Domain.Scheduling` takes one line's open jobs in seq
 
 The projection is not stored. **Publish** copies the projected times into `job.planned_start` and `planned_end` as the baseline, so schedule adherence (baseline against projection against actual) is a KPI next to OEE.
 
-**Boundary with the charter non-goal (D-014).** Pulaski never picks a line, never reorders jobs on its own and never optimises. The non-goal excludes finite-capacity optimisation. A forward pass over a sequence the planner chose is a calculator, not a scheduler.
+**Boundary with the charter non-goal (D-014).** Pulaski never picks a line, never reorders jobs on its own and never optimizes. The non-goal excludes finite-capacity optimization. A forward pass over a sequence the planner chose is a calculator, not a scheduler.
 
 **Changeovers (D-015).** `core.scheduling_policy.changeover_mode` is set per site:
 
-| Mode | Behaviour |
+| Mode | Behavior |
 | --- | --- |
 | `auto` (default) | The projection inserts a dynamic changeover placeholder wherever the material changes, sized from the matrix and recalculated on every read. When execution of the next production job starts, the placeholder becomes a real `changeover` job, so its runs and downtime attach somewhere (built with execution; amended 2026-10-13, it was at dispatch). A changeover job the planner placed explicitly suppresses the placeholder. |
 | `scheduler` | Planners place changeover jobs themselves. The projection sizes them from the matrix unless the job has its own `planned_duration`. It warns where the material changes with no changeover job in between. |
@@ -238,7 +238,7 @@ Only work orders are planned and dispatched. A job is a piece of a work order on
 | `dispatched` | `dispatched` | **Dispatch is publish.** Each line holding one of the order's jobs is projected inside the transaction, and each job's projected times become its baseline (`planned_start`, `planned_end`). The order goes to the floor. Un-dispatch returns the order and its jobs to planned and clears the baseline, as long as nothing has started. |
 | `firmed` | `firmed` | The plan is frozen: no un-dispatch, and each job is anchored at its baseline start (D-019). Adherence is measured against this baseline. |
 | `in_progress`, `completed`, `closed` | `running`, `paused`, `completed`, `closed` | Execution (D-035): the order follows its jobs once the first one starts. |
-| `cancelled` | `cancelled` | A work order with open jobs can't be cancelled; cancel its jobs first. |
+| `cancelled` | `cancelled` | A work order with open jobs can't be canceled; cancel its jobs first. |
 
 - Dispatch, un-dispatch and firm are their own commands (`POST /api/work-orders/{id}/dispatch`, `/undispatch`, `/firm`), because they change the jobs too. The plain status change refuses those three transitions.
 - Dispatch refuses an order with no jobs, or with a job whose line can no longer run its material. When the jobs don't add up to the order quantity, dispatch warns (`quantity_mismatch`) but goes ahead. For an order from a process, each operation is checked on its own, since every operation makes the whole quantity (amended 2026-10-16, D-024).
@@ -257,7 +257,7 @@ Only work orders are planned and dispatched. A job is a piece of a work order on
 
 - **Locked means locked.** A locked job can't be moved at all until it is unlocked.
 - **Firmed jobs are anchored.** The projection places a firmed job at its firmed start (or now, if that time has passed), whatever runs before it. Work that runs into the anchor gets a `firmed_conflict` warning; it is never pushed past the firmed job. A firmed job moved to another line is placed in that line's sequence by its time, not where it was dropped.
-- **Cancel and replace.** Cancelling ends the job's open run. With replace, a new production job (`<job number>-R`, `replaces_job_id` set) takes the same slot for the quantity not yet made (planned minus good). It takes its order's plan state, so under a firmed or in-progress order it is firmed and anchored at the time of the cancel. Runs, counts and lots stay with the cancelled job.
+- **Cancel and replace.** Canceling ends the job's open run. With replace, a new production job (`<job number>-R`, `replaces_job_id` set) takes the same slot for the quantity not yet made (planned minus good). It takes its order's plan state, so under a firmed or in-progress order it is firmed and anchored at the time of the cancel. Runs, counts and lots stay with the canceled job.
 
 **Eligibility (D-020)**
 
@@ -266,7 +266,7 @@ Only work orders are planned and dispatched. A job is a piece of a work order on
 **Planner commands (D-017)**
 
 - **Lock order.** Every scheduling write locks the affected lines' `core.equipment` rows first (`FOR UPDATE`, in id order), then the work order, then the jobs. Commands on the same line or order therefore serialize, and no two commands wait on each other in opposite order. Pinning changes no sequence and locks only the job. Dispatch, firm and the move of a firmed job read the plan inside the transaction, after the lock.
-- **Placement.** Create and move both take `beforeJobId`, or null for the end of the line. The new rank is the midpoint of its neighbours (`SequenceRank`). When ten decimal places leave no room, the line's open jobs are renumbered 1..n in their current order, once, and the move is retried. This is the only case where a move writes more than one row.
+- **Placement.** Create and move both take `beforeJobId`, or null for the end of the line. The new rank is the midpoint of its neighbors (`SequenceRank`). When ten decimal places leave no room, the line's open jobs are renumbered 1..n in their current order, once, and the move is retried. This is the only case where a move writes more than one row.
 - **History.** Every job status change is also appended to `ts.job_status_change` (D-010). Each work order planning step appends one event on the order.
 - **Run standards and policy.** A modified rate records the actor as `modified_by`, and clearing it takes an optional reason. A site with no `scheduling_policy` row reports the defaults at version 0, and setting the policy from version 0 creates the row.
 
@@ -279,7 +279,7 @@ Only work orders are planned and dispatched. A job is a piece of a work order on
 
 **Scheduling board (D-021, proposed)**
 
-The schedule page (`/schedule`) shows one board four ways. Every edit goes straight to the API, with no save step and no confirmation except for cancelling a job, and the board is re-read afterwards, because times are always the projector's (D-014).
+The schedule page (`/schedule`) shows one board four ways. Every edit goes straight to the API, with no save step and no confirmation except for canceling a job, and the board is re-read afterwards, because times are always the projector's (D-014).
 
 | View | Shows | Drag does |
 | --- | --- | --- |
@@ -304,13 +304,13 @@ A planner can plan to a department rather than a line: "Extrusion, this weekend,
 - **The floor assigns (amends D-019).** `POST /api/scheduling/jobs/{id}/assign` puts the job on a line below its group that can run it (before a job, or at the end), moves it to another such line, or sends it back to the group. This works whatever the job's plan status, because where it runs is the floor's call; a locked or started job doesn't move. `group_equipment_id` keeps the group after assignment. Sequencing never moves such a job. Assigning when execution starts is built with execution.
 - **On a line** the job is projected like any other job, and warns when it runs past its finish-by (`missed_finish_by`). A firmed job from a group is not anchored at a start, since it was firmed to a window.
 - **Dispatch** publishes a job waiting on a group with its window as the baseline (`planned_start` = window start, `planned_end` = finish-by).
-- **The board** shows a department row with each waiting job as a band over its window, labelled with the fastest line's estimate. Each line that could run it shows a faint ghost with the estimate on that line ("~14h here"). Dragging the band or a ghost onto a line assigns the job there; dragging an order from the tray onto the department opens the plan form with a suggested window.
+- **The board** shows a department row with each waiting job as a band over its window, labeled with the fastest line's estimate. Each line that could run it shows a faint ghost with the estimate on that line ("~14h here"). Dragging the band or a ghost onto a line assigns the job there; dragging an order from the tray onto the department opens the plan form with a suggested window.
 
 ## Process routes (D-023)
 
 A process describes how an order is made, as a template that order creation will copy: "Extrude and Pack" runs operation 10, Extrude, on EXT-01 and EXT-02, and operation 30, Pack, on PACK1, which starts once extrusion has started. Each operation becomes jobs on the order, one per line or department it names, for that one's share of the quantity. This decision covers the model and its editor; order creation is D-024.
 
-**Scope.** The charter's non-goal is the job-shop MES: discrete multi-step routings as the main use case. Process routes for continuous lines (a few operations on whole lines, often running at the same time as material flows between them) are within v1. The model has no work centres within a line, no queue or move times, and no alternative routings chosen by a solver.
+**Scope.** The charter's non-goal is the job-shop MES: discrete multi-step routings as the main use case. Process routes for continuous lines (a few operations on whole lines, often running at the same time as material flows between them) are within v1. The model has no work centers within a line, no queue or move times, and no alternative routings chosen by a solver.
 
 | ISA-95 term | Pulaski |
 | --- | --- |
@@ -351,14 +351,14 @@ A bill of materials says what one material is made from: "1000 m of PRF-5100-BR 
 - **Items.** Each item has a line number, a component material, a quantity per the BOM's base quantity (in a unit), a scrap factor (the extra share to plan, so 0.02 plans 2% more), how it is consumed (`time_window`, `declared`, `backflush` or `scan`) and, on a BOM for a process, the number of the operation that consumes it. An item with no operation, and every item of a BOM with no process, is consumed by the first operation in flow order. A material can't be its own component.
 - **Versions, as processes.** A BOM starts with an empty draft, version 1, holding the base quantity and unit and the items as one `jsonb` document. Releasing checks it is complete (items, real and active components, operation numbers that exist in the process's released version), makes the previous released version obsolete, and writes the items out as fixed `core.bom_item` rows that planned components reference. A released version never changes; changing a BOM starts a new draft, a copy with new item ids. A work order keeps the BOM version it was made with.
 - **Planned components.** Creating a work order (D-024) writes one `core.job_material` row (`consume`) per item and job of the consuming operation. An item's total is order quantity ÷ base quantity × quantity per × (1 + scrap factor), rounded to six places; the operation's jobs share it in proportion to their quantities, the last taking the remainder. The order quantity is first converted to the BOM's base unit (D-026).
-- **Jobs added later (amended 2026-10-16).** A production job added to an order after it was made (from the schedule, or as the replacement for a cancelled job) gets the same treatment. It takes an operation: a replacement keeps the cancelled job's; a new job takes the first operation in flow order that runs on its line or group, or else the first operation. It is then planned components from the order's BOM version: the items of its operation for its own quantity, with no sharing.
+- **Jobs added later (amended 2026-10-16).** A production job added to an order after it was made (from the schedule, or as the replacement for a canceled job) gets the same treatment. It takes an operation: a replacement keeps the canceled job's; a new job takes the first operation in flow order that runs on its line or group, or else the first operation. It is then planned components from the order's BOM version: the items of its operation for its own quantity, with no sharing.
 - **Process changes.** A released BOM keeps the operation numbers it was released with. When a process release leaves a BOM naming an operation the new version doesn't have, the release goes ahead but reports each such BOM. The BOMs page, the BOM editor and the order form flag it, and orders for the material made with that process are refused, naming the BOM, until a new BOM version is released.
 - **Inventory (amended by D-027).** Pulaski keeps lot balances at the site's stores, staging areas and feed points, receives lots into them, and reports every movement to the ERP as an event. The ERP stays the financial book of record; purchasing, valuation and stock outside the site stay there (charter: not an ERP).
 - **Build passes.** 1. BOMs and planned components *(built)*. 2. Lots in the plant: receive, adjust, move, hold, and declared consumption and production with job-level genealogy (D-027, *built*). 3. With execution: loading feed points (`core.material_load`), runs and counts, each item consumed by its method (time window, backflush, scan), and time-window genealogy (charter slice step 4).
 
 ## Units of measure and conversions (D-026, proposed)
 
-Quantities are entered in the unit that suits the person entering them: a planner orders in feet, a BOM is written per 1000 m, a rate is in metres per hour, resin arrives in 25 kg bags. Pulaski converts between them in one place.
+Quantities are entered in the unit that suits the person entering them: a planner orders in feet, a BOM is written per 1000 m, a rate is in meters per hour, resin arrives in 25 kg bags. Pulaski converts between them in one place.
 
 - **Standard units.** Each unit has a dimension (mass, length, area, volume, count, time) and a factor to that dimension's base unit (kg, m, m², L, ea, s): 1 lb = 0.45359237 kg. Units of one dimension convert for every material. `db/seed-units.sql` loads the metric and US units with their exact factors. A unit's code, dimension and factor never change once created, because quantities are stored in it; it can be renamed or switched off.
 - **Packaging units.** Box, bag, pallet, roll and similar have dimension `other` and no factor: how much a box holds depends on what is in it.
@@ -399,7 +399,7 @@ Inventory answers "what do we have, where, and what happened to it": 1,200 kg of
 
 **Consumption and production (declared against a job).** An operator declares what a job used and made. Since execution (D-035) each declaration goes into one of the job's runs and records its `run_id`, and production is a report of good output with the rate check.
 
-- The job must be a production job in the lot's site that isn't closed or cancelled, and has a run to declare into (amended by D-035).
+- The job must be a production job in the lot's site that isn't closed or canceled, and has a run to declare into (amended by D-035).
 - Consuming a material the job has no planned component for (`core.job_material`) is allowed, as a substitution, with a `not_planned` warning in the response.
 - Production makes the job's material. A blank lot number is generated as `<job number>-<nn>`, counting the job's lots. Producing into an existing lot number adds to it only when that lot was made by the same job at the same location; otherwise it is refused.
 - **Job-level genealogy.** Every lot consumed into a job is a parent of every lot the job produced, whichever came first: consuming links the lot to the job's outputs so far, and producing links the job's inputs so far to the new lot (`link_basis` `declared`, with the job). Edges are never duplicated. This over-links on purpose: it is the safe superset until time-window genealogy narrows it with execution.
@@ -476,7 +476,7 @@ What a plant needs to keep floor stock right without the ERP, beyond receiving a
 
 - A count is of one location. Starting it takes a snapshot of every on-hand lot there (`core.stock_count_line.expected_qty`). People record what they count, as often as they like, until it is posted.
 - **Posting** writes, for each counted lot whose count differs from its quantity now, a write-up (`adjusted`) or write-off (`scrapped`) for the chosen reason (normally *Count correction*), referencing the count number. Every line must be counted first (enter 0 for a lot that isn't there). A lot that moved after its line was counted is refused, named, until it is recounted; one that moved between the snapshot and the count is fine, because the count is what is there.
-- Stock found that isn't in the count is received separately. A count can be cancelled until posted. Count numbers are `CNT-<yyyyMMdd>-<n>` per site.
+- Stock found that isn't in the count is received separately. A count can be canceled until posted. Count numbers are `CNT-<yyyyMMdd>-<n>` per site.
 
 **Reason codes.** A screen lists, adds and changes reasons for inventory (and the other kinds), enterprise-wide or for a site. A code and its kind never change once created, since history refers to them; the name, whether a comment is required, the order and the active flag can. Reason trees (`parent_id`) are edited since D-062.
 
@@ -531,7 +531,7 @@ Materials are the items everything else refers to: BOMs, processes, capabilities
 **Rules that keep references valid.**
 
 - **Base unit.** Quantities in lots, BOMs, orders, jobs and run standards are stored in or against it, so it can't change once anything refers to the material. That applies to the ERP too: an import changing the base unit of a material in use is refused.
-- **Code.** A local material's code is fixed once the material is used, as a business key people and other systems recognise. The ERP may rename its own items: it is the master, and Pulaski refers to materials by id.
+- **Code.** A local material's code is fixed once the material is used, as a business key people and other systems recognize. The ERP may rename its own items: it is the master, and Pulaski refers to materials by id.
 - **Lot tracking** can change only while nothing is on hand, since lots would have to become balances or the other way round (D-027, D-031).
 - **Deactivating** is always allowed and stops new use: receipts, new orders, new BOM components and process scope pick only active materials. Whatever already uses it carries on; the change reports what still uses it (stock on hand, open work orders and jobs, released BOMs, capabilities).
 - **In use** means referenced by any lot, BOM, BOM item, work order, job, planned component, capability, run standard, process scope or changeover rule.
@@ -565,7 +565,7 @@ The material page also sets and clears the modified rate, through the existing r
 
 **Bulk import.** `POST /api/materials/import/csv` (one of the D-053 source adapters) takes a CSV file (`text/csv`, at most 5 MB and 5,000 rows); `?dryRun=true` checks it and saves nothing.
 
-- **The file.** The header names the columns, in any order or case, with a few common alternative names; comma or semicolon separators; RFC 4180 quotes. `code`, `name`, `type` and `base_unit` are required. A column left out keeps what each material has; a blank cell clears an optional field (class, description, shelf life). An unknown column is a problem with the file, so a misspelt header can't be silently ignored.
+- **The file.** The header names the columns, in any order or case, with a few common alternative names; comma or semicolon separators; RFC 4180 quotes. `code`, `name`, `type` and `base_unit` are required. A column left out keeps what each material has; a blank cell clears an optional field (class, description, shelf life). An unknown column is a problem with the file, so a misspelled header can't be silently ignored.
 - **Matching.** A row with `external_system` and `external_key` is the ERP's item, matched on them as in the single import (D-033); its Pulaski-owned columns are applied too, because the person loading the file is a Pulaski user. A row without them is a Pulaski material matched on its code; a code that belongs to an ERP material is an error.
 - **All or nothing.** Every row goes through the same rules as a single change, in one transaction, so later rows see earlier ones. Any error, or a dry run, rolls the whole file back; the answer lists each row as *create*, *update* (with the fields that change), *unchanged* or *error* (with why). A code or key twice in a file is an error. Each saved row records its usual event, with the reason `CSV import`.
 - **The adapter seam.** `MaterialCsv` only turns text into `MaterialImportRow`s (source-neutral; a field the source didn't supply is null). `ImportMaterialsCommand` applies the rules to rows from any source. The adapter interface is D-053.
@@ -591,7 +591,7 @@ What happens on the floor, recorded by people until the edge connectors bring ma
 - **Changeovers (D-015).** In `auto` mode, when the last job that ran on the line was a production job of another material, starting the next production job creates a changeover job (`<job>-CO`) in front of it and starts that instead. Completing it lets the job start; a start with `skipChangeover` skips it. In `scheduler` mode the planner's own changeover jobs run like any other.
 - **Locks (D-017).** Start, complete and reopen lock all the order's lines, then the order, then its jobs, because they may firm or roll up the order. Pause locks the job's line and the job. Reports lock the job, then the run, then lots, as declarations did (D-027), and never a line, so the two can't deadlock.
 
-**Readiness, not automation.** The process links (D-023) gate the start: an *after start* link is met once any job of the upstream operation of the same order has started, an *after end* link once all of them are completed (cancelled ones don't count), each plus its lag. A start before then is refused with what it waits for. Starting or completing a job notes which downstream jobs can start now, or in how long. Pulaski never starts a job itself: the floor does (D-014).
+**Readiness, not automation.** The process links (D-023) gate the start: an *after start* link is met once any job of the upstream operation of the same order has started, an *after end* link once all of them are completed (canceled ones don't count), each plus its lag. A start before then is refused with what it waits for. Starting or completing a job notes which downstream jobs can start now, or in how long. Pulaski never starts a job itself: the floor does (D-014).
 
 **Production reports.** `POST /api/jobs/{id}/production` takes good and scrap in the job's unit (or one that converts), a `scrap` reason when there is scrap, and a location (and optional lot number) for good output.
 
@@ -618,7 +618,7 @@ Some materials are made a fixed amount at a time: a 50 kg mix, a 200 l tank. Pul
 
 `PUT /api/materials/{id}/batching` sets them; open orders keep their quantity, and the answer names those that are no longer whole batches.
 
-**Planning in whole batches.** A work order's quantity, converted to the base unit, must be a whole number of batches; the refusal names the two nearest. Shares between equipment (D-024) are whole batches each, largest remainders first, at least one batch per share. A job added by hand is whole batches. A cancelled job's replacement (D-019) rounds what is left **up** to whole batches, to meet the order. Lines may have their own batch size (D-065).
+**Planning in whole batches.** A work order's quantity, converted to the base unit, must be a whole number of batches; the refusal names the two nearest. Shares between equipment (D-024) are whole batches each, largest remainders first, at least one batch per share. A job added by hand is whole batches. A canceled job's replacement (D-019) rounds what is left **up** to whole batches, to meet the order. Lines may have their own batch size (D-065).
 
 **Reporting batch by batch (amends D-035).** For a batch material a report carries `goodBatches` and `scrapBatches` (each batch's weight in the base unit) instead of quantities; each must be a batch under the rule. Each good batch is its own lot. The rate check and counts work on the total, as before.
 
@@ -743,7 +743,7 @@ Users, roles and permissions stay behind `security.manage`.
 
 **Site pickers follow the screen** (issue #43). The layout hands the page's `[RequiresView]` views to `SiteSelection` on every navigation, and a screen's site picker offers only the sites where the user holds one of them (`SiteSelection.Sites`, `ForScreen` for screens with lists of their own: Overview, Schedule). The chosen site is kept for the session; a screen that can't show it opens on its own first site and leaves the choice for the next screen that can. Pickers that choose where something is created follow that change permission instead (new work order: `work_orders.manage`; new process: `processes.manage`), and choosing where a role applies lists every site. The API's checks are unchanged.
 
-**Actions the user may not take** (issue #47). One action among others in a panel (a drawer's *Move*, a status button, *Import CSV*) is left out, with a lock note where the panel would otherwise look incomplete; a form the user may look at but not change is shown switched off (`fieldset.view-only-scope`) under a `ViewOnlyNote`. Either way the check is the permission at the site shown, not anywhere. On the Schedule, `ScheduleController.ReadOnly` is `schedule.plan` at its site and `OrdersReadOnly` is `work_orders.manage` there (status changes need it, D-018); nothing drags that the user couldn't drop, and an edit that gets through anyway is stopped with a message before the API. Every switched-off button looks the same (greyed, `not-allowed`) and keeps the pointer so its title shows. Native `disabled` is kept, so keyboards skip it and screen readers announce it as unavailable. The API stays the authority.
+**Actions the user may not take** (issue #47). One action among others in a panel (a drawer's *Move*, a status button, *Import CSV*) is left out, with a lock note where the panel would otherwise look incomplete; a form the user may look at but not change is shown switched off (`fieldset.view-only-scope`) under a `ViewOnlyNote`. Either way the check is the permission at the site shown, not anywhere. On the Schedule, `ScheduleController.ReadOnly` is `schedule.plan` at its site and `OrdersReadOnly` is `work_orders.manage` there (status changes need it, D-018); nothing drags that the user couldn't drop, and an edit that gets through anyway is stopped with a message before the API. Every switched-off button looks the same (grayed, `not-allowed`) and keeps the pointer so its title shows. Native `disabled` is kept, so keyboards skip it and screen readers announce it as unavailable. The API stays the authority.
 
 ## Labor (D-040, proposed)
 
@@ -784,7 +784,7 @@ Amends D-038. A plant changes its shifts for a day without changing its schedule
 
 **Kept with the schedule.** Overrides are a second `jsonb` array on `core.shift_schedule` (`overrides`), one entry per day and code, saved whole like the shifts, so removing one never deletes a row and the schedule's version covers both. At most 1000 per schedule.
 
-**Applied wherever shifts are worked out.** `ShiftSchedule.Expand` applies them, so the projection (D-014), labor's shift of a session (D-040), labor approval and reports by shift all see the same shifts. An override's shifts may not overlap their neighbours on that day or the days either side (checked on clock time, like the cycle); changing the cycle is checked with the overrides too. Shifts from an override are marked (`isOverride`) in the preview.
+**Applied wherever shifts are worked out.** `ShiftSchedule.Expand` applies them, so the projection (D-014), labor's shift of a session (D-040), labor approval and reports by shift all see the same shifts. An override's shifts may not overlap their neighbors on that day or the days either side (checked on clock time, like the cycle); changing the cycle is checked with the overrides too. Shifts from an override are marked (`isOverride`) in the preview.
 
 **Locked by approved labor.** An override can't be set or removed for a shift on a day whose labor is approved (D-040), so approved hours never move under a changed shift.
 
@@ -844,7 +844,7 @@ Amends D-016 and its build pass 3, which planned a worker. The calculated rate c
 
 Amends D-014, D-019 and D-024. On the floor a job can't start until its process links are met (D-035); the projection now plans it that way, so a Pack job is never projected before the Extrude job it follows.
 
-**The rule, as on the floor** (`JobReadiness`). For each link into a job's operation, the jobs of the same work order on the link's earlier operation (not cancelled) decide: `after_start`, the first of them to start; `after_end`, the last of them to end; then the link's lag, as elapsed time. A job with several links waits for the latest. The times are the projected ones for jobs on a line, actual ones once a job has started or ended, and a group job's window (start; finish-by for `after_end`) while it waits on a department (D-022). The result is the job's `LinkReadyAt`, which works like a hold: an unstarted, unfirmed job starts no earlier.
+**The rule, as on the floor** (`JobReadiness`). For each link into a job's operation, the jobs of the same work order on the link's earlier operation (not canceled) decide: `after_start`, the first of them to start; `after_end`, the last of them to end; then the link's lag, as elapsed time. A job with several links waits for the latest. The times are the projected ones for jobs on a line, actual ones once a job has started or ended, and a group job's window (start; finish-by for `after_end`) while it waits on a department (D-022). The result is the job's `LinkReadyAt`, which works like a hold: an unstarted, unfirmed job starts no earlier.
 
 **Linked lines are projected together** (`LinkedProjection` in `Pulaski.Domain.Scheduling`, pure). A line's plan is loaded with the lines its jobs follow, and theirs in turn (upstream only, at most 40 lines); every caller of the projection (the line timeline, the board, the Overview, work order progress, shop orders, the placement preview, the move of a firmed job and dispatch) goes through it, so all agree and the published baseline matches the board. The projector runs on every line, the holds from that pass feed the next, and it stops when nothing moves. Holds only move later, so it settles unless jobs wait on each other in a circle.
 
@@ -893,13 +893,13 @@ Amends D-040 ("qualifications, not yet") and replaces the planned `core.qualific
 
 Amends D-037 and D-040. Many operators never sign in; at the start of a shift they walk past a shared tablet or panel PC with a badge reader. The terminal must know who they are reliably, record exactly what they would record themselves, and be impossible to use as a back door into the rest of Pulaski.
 
-**A terminal is a device, not a user** (`sec.terminal`). A manager (`terminals.manage`, new; Manager has it to start with) registers it on Configure → Terminals for a site, area or line (its scope: it offers the active lines that run jobs at or below it), a first line to offer, and how people identify: badge, or badge and PIN. Then they issue a **one-time enrolment code** (ten characters, 15 minutes) and type it on the device at `/terminal/enrol`. Enrolling gives the terminal a 256-bit random secret, returned once and kept in an HttpOnly cookie on that device; the API keeps only SHA-256 hashes of codes and secrets. Enrolling again (with a new code) replaces the secret, and switching the terminal off refuses it at once.
+**A terminal is a device, not a user** (`sec.terminal`). A manager (`terminals.manage`, new; Manager has it to start with) registers it on Configure → Terminals for a site, area or line (its scope: it offers the active lines that run jobs at or below it), a first line to offer, and how people identify: badge, or badge and PIN. Then they issue a **one-time enrollment code** (ten characters, 15 minutes) and type it on the device at `/terminal/enrol`. Enrolling gives the terminal a 256-bit random secret, returned once and kept in an HttpOnly cookie on that device; the API keeps only SHA-256 hashes of codes and secrets. Enrolling again (with a new code) replaces the secret, and switching the terminal off refuses it at once.
 
 **Its own door.** A terminal calls `/api/terminal/*` with `Authorization: Terminal <secret>`; those endpoints accept nothing else, and every other endpoint refuses a terminal (it is not a bearer token). What a terminal records is attributed to it: events and `recorded_by` carry `terminal:<code>`, and sessions and breaks get the new source `terminal`.
 
 **Badges** (`sec.badge`), issued on Configure → People (`people.manage`) by scanning or typing the value: stored as HMAC-SHA256 with a key derived from the API's signing key (badge values are short and readable, so a plain hash could be guessed), never the value. A person has one active badge; a new one revokes the old; a value is unique among active badges. A PIN of 4 to 8 digits, for `badge_plus_pin` terminals, is hashed like a password. Five wrong PINs in a row lock the badge for 5 minutes (`pulaski.badge.pin_failed.v1` each).
 
-**Identifying.** `POST /api/terminal/identify` with the badge (and PIN): an unknown, revoked or other-site badge, or a switched-off person, is "not recognised", saying nothing more; at a PIN terminal, a badge alone only answers that a PIN is needed. A recognised badge returns the person's open time and break and a **ticket**: a JWT for another audience (`pulaski-terminal`), naming the person and the terminal, valid for 2 minutes. The badge value isn't sent again: the next action presents the ticket, and a ticket from another terminal, expired or forged, is refused.
+**Identifying.** `POST /api/terminal/identify` with the badge (and PIN): an unknown, revoked or other-site badge, or a switched-off person, is "not recognized", saying nothing more; at a PIN terminal, a badge alone only answers that a PIN is needed. A recognized badge returns the person's open time and break and a **ticket**: a JWT for another audience (`pulaski-terminal`), naming the person and the terminal, valid for 2 minutes. The badge value isn't sent again: the next action presents the ticket, and a ticket from another terminal, expired or forged, is refused.
 
 **Actions, under the existing rules.** `POST /api/terminal/clock-on` (direct time from now, on a line the terminal offers), `/clock-off` (one of the person's own open sessions), `/breaks/start` (paid or unpaid) and `/breaks/end`, each with the ticket. They go through the same writers as clocking on oneself (D-040) and breaks (D-047): one line at a time per person, at most 100% of their time, the shift's approval locking it, qualification warnings (D-048), breaks ending with the last line. Nothing a terminal does is a correction or an approval; those stay with supervisors.
 
@@ -1016,7 +1016,7 @@ Closes the D-033 / D-034 next step: material master data from sources other than
 | `MaterialDefinitionProperty` whose `ID` names a field (`MaterialType`, `BaseUnit`/`BaseUoM`, `LotTracked`, `ShelfLifeDays`, `Active`, `Description`, `Class`, `ExternalVersion`, any alias) | that field, from `Value/ValueString`; for the base unit, `Value/UnitOfMeasure` when the string is empty |
 
 - Every `MaterialDefinition` in the document is one row, whatever the root (`MaterialInformation`, a verb wrapper such as `SyncMaterialInformation`, or a bare definition). Elements are matched by local name, so any B2MML namespace version, or none, works.
-- Property IDs are compared without case, spaces or punctuation. A property that names no field is the source's own (density, colour…) and is skipped; this differs from CSV, where an unknown column is an error, because B2MML files routinely carry properties Pulaski has no field for. A field given twice (say a class by `MaterialClassID` and by property) is a problem on the row. Code and name come only from `ID` and `Description`, and the external key and system never come from properties.
+- Property IDs are compared without case, spaces or punctuation. A property that names no field is the source's own (density, color…) and is skipped; this differs from CSV, where an unknown column is an error, because B2MML files routinely carry properties Pulaski has no field for. A field given twice (say a class by `MaterialClassID` and by property) is a problem on the row. Code and name come only from `ID` and `Description`, and the external key and system never come from properties.
 - **External system.** The file doesn't say which system mastered its items, so the import names it (`?externalSystem=ERP1`). With it, every row is that system's item keyed by its `ID` (D-033 matching). Without it, the rows are Pulaski materials matched on their code.
 - A row's line is where its `MaterialDefinition` starts. DTDs are refused, so no entity expansion or external fetches happen. A file that isn't well-formed XML is a problem with the file.
 - Pulaski keeps one class per material, so further `MaterialClassID`s are ignored, as are further `Description`s (other languages).
@@ -1093,7 +1093,7 @@ Issue #20: the CSV import (D-034) couldn't take capabilities, create classes, or
 - recorded with `material_class.created` and the import's reason
 - listed in `ImportMaterialsResponse.CreatedClasses`, also on a dry run
 
-It stays opt-in so a misspelt class can't create a new one unnoticed. An inactive class is never switched back on.
+It stays opt-in so a misspelled class can't create a new one unnoticed. An inactive class is never switched back on.
 
 **Templates.** Each `IMaterialSourceAdapter` has a `Template` and a `TemplateFileName`:
 
@@ -1135,7 +1135,7 @@ The handler parses the bounds in the attribute's type, so `1,5` is a validation 
 
 **Documents.** A `core.lot_document` is a stored file, a reference (document number or http(s) URL), or both. It has a kind (`coa`, `coc`, `test_report`, `sds`, `other`), a title, an issuer and an issue date.
 
-- **Files:** PDF, PNG or JPEG of at most 10 MB, recognised by their first bytes (`LotDocumentFiles.Sniff`), never by name or declared type.
+- **Files:** PDF, PNG or JPEG of at most 10 MB, recognized by their first bytes (`LotDocumentFiles.Sniff`), never by name or declared type.
   - The SHA-256 is stored.
   - The bytes go in `core.lot_document_content`, apart, so lists never read them.
   - `db/app-role.sql` revokes UPDATE on that table, and the app role has no DELETE: a stored file is written once.
@@ -1201,18 +1201,18 @@ Issue #35. Movements counted when they were entered (D-027), so a receipt or con
 
 Issue #36. The check (D-029) used published times and ignored deliveries.
 
-**Timing.** `GetShortagesQuery(…, LiveTiming = true)` projects each line its jobs are on, as the Schedule screen does (`TimelineMapping.Project`, with process links, D-046). A job's need time is the start of its `job` segment. Jobs planned to a department (D-022), and jobs the projection doesn't place, keep their published start or hold-until. With live timing the horizon is applied after projecting, not in SQL. Each line says where its time came from (`TimeSource`: live, published, window, none) and carries the published start. `LiveTiming = false` gives the D-029 behaviour.
+**Timing.** `GetShortagesQuery(…, LiveTiming = true)` projects each line its jobs are on, as the Schedule screen does (`TimelineMapping.Project`, with process links, D-046). A job's need time is the start of its `job` segment. Jobs planned to a department (D-022), and jobs the projection doesn't place, keep their published start or hold-until. With live timing the horizon is applied after projecting, not in SQL. Each line says where its time came from (`TimeSource`: live, published, window, none) and carries the published start. `LiveTiming = false` gives the D-029 behavior.
 
 **Incoming supply.** `core.expected_receipt` holds:
 
 - **Fields:** material, quantity and unit, expected time, reference, supplier and note.
-- **Status:** open, received or cancelled.
+- **Status:** open, received or canceled.
 - **ERP identity:** an optional ERP system and key.
 
 People with `lot.receive` enter and change open ones on Inventory → Incoming. The ERP sends one at a time to `POST /api/inventory/expected-receipts/import`, matched on system and key:
 
 - Sending it again changes nothing.
-- A change updates the open one, and `Cancelled` cancels it.
+- A change updates the open one, and `Canceled` cancels it.
 - Once closed in Pulaski it stays closed: a late update from the ERP is ignored.
 
 `ReceiveLotCommand.ExpectedReceiptId` closes one in the receipt's transaction (lot first, then the receipt) and links the lot. Whatever quantity arrived, nothing more is expected; there are no partial receipts. (Since D-083, receipts count toward it and it stays open for the rest.) Events are `expected_receipt.created/updated/cancelled/received`.
@@ -1329,7 +1329,7 @@ An outage only delays: rows stay pending.
 
 Each appends `pulaski.delivery.retried.v1` or `pulaski.delivery.skipped.v1`. Routes: `GET /api/integrations/erp`, `GET /api/integrations/erp/deliveries?status=`, `POST …/deliveries/{id}/retry`, `…/{id}/skip`, `…/retry-failed`.
 
-**Not done.** No reconciliation from the ERP, no ERP-specific adapters, no Kafka. A second sink, for a document system, came with D-086; a settings screen, more event kinds and acknowledgements with D-087; feeds added on the screen, MQTT, search and retention with D-088.
+**Not done.** No reconciliation from the ERP, no ERP-specific adapters, no Kafka. A second sink, for a document system, came with D-086; a settings screen, more event kinds and acknowledgments with D-087; feeds added on the screen, MQTT, search and retention with D-088.
 
 ## Reason trees (D-062, proposed)
 
@@ -1381,7 +1381,7 @@ Issue #41. Only a lot's latest single-lot movement could be reversed (D-030); co
 
 **Production reports (`ReverseProductionReportCommand`, `POST /api/jobs/{id}/production/{reportId}/reverse`, new `production.correct`: Supervisor, Auditor).** A report now has an id: its processed count row's id, stored as `report_id` on its counts and on the lot rows it produced (0031). Reversing it locks the job (refusing closed jobs), then the run, then the lots, and then:
 
-- each produced lot gives its quantity back; one that only held it is cancelled;
+- each produced lot gives its quantity back; one that only held it is canceled;
 - output that joined a commingling balance is taken out of the balance first: the balance gives it back, the lot is restored and then taken back, and the merge edge is superseded;
 - a partial batch from the report becomes `reversed` (a rejected one can't be, since its lot was written off), freeing the run's one partial batch (now a partial unique index);
 - each count row is offset by a `correction` row (`corrects_id`) at the same `occurred_at`;
@@ -1425,7 +1425,7 @@ Events: `pulaski.lot.allocated.v1`, `…allocation_released.v1`, `…allocation_
 
 ## Batch sizes per line (D-065, proposed)
 
-Issue #29. A material had one batch size, so a 200 kg mixer beside 50 kg ones couldn't be modelled.
+Issue #29. A material had one batch size, so a 200 kg mixer beside 50 kg ones couldn't be modeled.
 
 **Where.** `core.equipment_capability.batch_size`: the line's own batch size for the material in its base unit, null for the material's. It is versioned with the capability's period, edited on the material page and in the capabilities CSV (`batch_size`). It is allowed only for a material made in batches. Only the size changes: the rule and tolerance stay the material's (`Batching.OnLine`), because they describe the product.
 
@@ -1433,7 +1433,7 @@ Issue #29. A material had one batch size, so a 200 kg mixer beside 50 kg ones co
 
 **Planning.**
 - **Order creation.** Each operation's equipment shares the order in whole batches of its own size (`Batching.ShareBySize`): it searches counts near each share's target, at least one each, for an exact sum, taking the closest to the shares. With one size for all, it is `Share` as before. When nothing adds up, the order is refused naming the nearest quantities below and above. The sizes are read again under the lines' lock, and a change in between is a conflict.
-- **Jobs.** A job added by hand is whole batches of its line's size. Moving a job (`SequenceJobCommand`), assigning a department job (`AssignJobCommand`) or starting one on a line (`StartJobCommand`) is refused unless it is whole batches of the new line's size. A cancelled job's replacement rounds up to whole batches of its line's size.
+- **Jobs.** A job added by hand is whole batches of its line's size. Moving a job (`SequenceJobCommand`), assigning a department job (`AssignJobCommand`) or starting one on a line (`StartJobCommand`) is refused unless it is whole batches of the new line's size. A canceled job's replacement rounds up to whole batches of its line's size.
 
 **Execution.** Reports check each batch against the run's line size, and a partial batch is less than one of those; `core.partial_batch.batch_size` stores the size it was measured against. The floor board and job page show the line's size.
 
@@ -1459,7 +1459,7 @@ The ERP's own quantity is kept in `erp_qty`/`erp_uom_id` with `batch_adjustment`
 - **While the order is planned**, a change applies at once (`ErpOrderWriter.ApplyAsync`). Jobs are re-planned in place (`ReplanAsync`): each operation's jobs are shared again like `ProcessJobPlan`, in whole batches of each job's line size (`ShareBySize`), with components scaled linearly (`ScaleJobMaterialsAsync`). A moved start shifts every hold-until; a new due date ends department windows. This is refused once a job has started, or when an operation's jobs no longer match the process (changed by hand).
 - **Once dispatched**, the change is stored in `erp_pending_change` (`erp_change_pending`). `AcceptErpChangeCommand` applies it the same way; `RejectErpChangeCommand` drops it with a reason.
 - **Cancellations** follow the same split: applied while planned (the order and its unstarted jobs), pending after.
-- **The product can't change.** An order already completed, closed or cancelled ignores the change.
+- **The product can't change.** An order already completed, closed or canceled ignores the change.
 
 Locks are lines, then the order, then its jobs (D-017). Events: `…erp_changed.v1`, `…erp_change_pending.v1`, `…erp_change_accepted.v1`, `…erp_change_rejected.v1`, `…quantity_set.v1`, `pulaski.job.replanned.v1`, `pulaski.erp_batch_rule.set.v1`.
 
@@ -1467,9 +1467,9 @@ Locks are lines, then the order, then its jobs (D-017). Events: `…erp_changed.
 
 ## Replacement jobs for a partial batch (D-067, proposed)
 
-Issue #31. A cancelled job's replacement was always rounded up to whole batches (D-036), so a planner had to cancel without one when less than a batch was left.
+Issue #31. A canceled job's replacement was always rounded up to whole batches (D-036), so a planner had to cancel without one when less than a batch was left.
 
-**Exact replacement.** `CancelJobCommand.ReplaceExact` (with `Replace`) plans exactly what is left: the cancelled job's quantity less its good output, unrounded. When that isn't whole batches of the job's line size (D-065), the replacement is `core.job.partial_batch_planned`, and the response notes its batches (*1 batch of 50 kg and a partial batch of 25 kg*, and whether it waits for approval). A whole remainder is an ordinary replacement. Job totals stay right: the order's good output across the cancelled job and its replacement adds up to what was planned, and genealogy is unchanged (lots belong to the jobs that made them).
+**Exact replacement.** `CancelJobCommand.ReplaceExact` (with `Replace`) plans exactly what is left: the canceled job's quantity less its good output, unrounded. When that isn't whole batches of the job's line size (D-065), the replacement is `core.job.partial_batch_planned`, and the response notes its batches (*1 batch of 50 kg and a partial batch of 25 kg*, and whether it waits for approval). A whole remainder is an ordinary replacement. Job totals stay right: the order's good output across the canceled job and its replacement adds up to what was planned, and genealogy is unchanged (lots belong to the jobs that made them).
 
 **Permission.** The new `schedule.plan_partial` (Planner by default) is required only when `ReplaceExact` is set: `RequireWhen<CancelJobRequest>` is a conditional endpoint filter, like back-dating's. Rounding up still needs only `schedule.plan`.
 
@@ -1654,7 +1654,7 @@ with `site_settings.view` or `machines.view`. Set on Configure → Site settings
 day's (`Target`). Targets are read when the report is, never kept in rollups (D-072), so a change shows at once.
 
 **Trend.** The OEE tab charts one figure for one piece of equipment, by shift or by day (by day only beyond 31 days), as inline SVG
-(`OeeTrendChart`, no JavaScript): the line, each point's target as a dashed step, points below target in the danger color and labelled so.
+(`OeeTrendChart`, no JavaScript): the line, each point's target as a dashed step, points below target in the danger color and labeled so.
 The points are the report's own shift (or day) rows (`OeeTrend.Points`); a day of shifts adds their hours up (`OeeTrend.Combine`), so the
 chart can't disagree with the tables. The stop Pareto stays a table (#21).
 
@@ -2182,7 +2182,7 @@ unchanged. `GET /api/lot-attributes/values` lists the same as JSON, and the Lots
 - events for documents carried to other lots by split or merge;
 - an import from other sources (B2MML, an API).
 
-## Delivery settings screen, event kinds and acknowledgements (D-087, proposed)
+## Delivery settings screen, event kinds and acknowledgments (D-087, proposed)
 
 Issue #73. Feeds (D-061, D-086) were configured in the API's settings only, sent inventory movements only, and read nothing back.
 
@@ -2215,12 +2215,12 @@ enabled, URL, event kinds, include files, attempts, timeout, poll and start-from
 
 The screen saves kinds. Configured prefixes that no kind covers are shown until the first save.
 
-**Acknowledgements, both ways** (the user's choice).
+**Acknowledgments, both ways** (the user's choice).
 - **In the answer:** a 2xx answer whose body is `{"status":"accepted"|"rejected","reference":…,"message":…}` is recorded on the delivery with
-  source `response` (`Acknowledgement.FromResponse`). Any other body is no acknowledgement.
+  source `response` (`Acknowledgment.FromResponse`). Any other body is no acknowledgment.
 - **By callback:** `POST /api/integrations/{feed}/acknowledgements` with `{eventId, status, reference, message}`.
   - No sign-in. It is signed like Pulaski's own messages: HMAC-SHA256 with the feed's secret of `"{timestamp}.{body}"`, and the timestamp must be
-    within 5 minutes (`AcknowledgementSignature`).
+    within 5 minutes (`AcknowledgmentSignature`).
   - The actor is `receiver:{feed}`. It is recorded with source `callback` and appends `pulaski.delivery.acknowledged.v1`.
   - An unknown event is 404, and a bad or stale signature 401.
 - Stored on `evt.delivery` as `ack_status`, `ack_reference`, `ack_message`, `ack_source` and `ack_at`.
@@ -2228,7 +2228,7 @@ The screen saves kinds. Configured prefixes that no kind covers are shown until 
 **A rejection fails the delivery** (the user's choice). A rejection, in the answer or later by callback, makes the delivery `failed` with
 "Rejected by the receiver: …" as its last error. That holds the subject's later events (D-061) until someone retries or skips it.
 - An acceptance by callback delivers a pending or failed delivery, so a receiver that fixed things can release the subject.
-- A skipped delivery only records the acknowledgement.
+- A skipped delivery only records the acknowledgment.
 - At-least-once delivery and per-subject ordering are unchanged.
 
 **Not done:**
@@ -2249,7 +2249,7 @@ since the sink (`kind:code`) names its queue and checkpoint.
 - Every feed has its own checkpoint, event kinds and settings (D-087) under `/api/integrations/{code}/…`.
 - Built-in feeds keep their configured sink whatever is saved, and run on their configuration until first saved. An added feed must have its row
   (`DeliveryFeeds.ResolveAsync`, else 404).
-- Secrets stay in configuration under `Integrations:Feeds:{code}`: `Secret` for signing and acknowledgements, and a broker's `Username` and
+- Secrets stay in configuration under `Integrations:Feeds:{code}`: `Secret` for signing and acknowledgments, and a broker's `Username` and
   `Password`.
 
 **One relay for every feed.** `WebhookDeliveryService` lists the feeds every second. It runs a round for each that is ready and due (its own
@@ -2262,8 +2262,8 @@ uses) publishes over MQTT 5:
 - with the event id as the `Idempotency-Key` user property, and with a secret the timestamp and signature as user properties.
 
 It keeps one connection per feed, made again when the address or sign-in changes. The broker's answer maps onto the delivery policy
-(`MqttFeedSender.Code`): published or no subscribers is delivered; not authorised and an invalid topic or payload fail at once; quota exceeded
-and anything else are retried. A broker gives no acknowledgement in its answer; a receiver behind it can post one back (D-087).
+(`MqttFeedSender.Code`): published or no subscribers is delivered; not authorized and an invalid topic or payload fail at once; quota exceeded
+and anything else are retried. A broker gives no acknowledgment in its answer; a receiver behind it can post one back (D-087).
 `DeliveryFeedSettings.Problems` checks an `mqtt://` or `mqtts://` address, and a topic without wildcards that doesn't start with `/`.
 
 **Search.** `ListDeliveriesQuery` takes:
@@ -2518,7 +2518,7 @@ Issue #80. A wrong report could only be reversed whole and entered again, two ac
 the report back whole, then `ProductionReporter.ReportAsync` reports the new figures into the same run, at the report's own time (back-dated when
 that is more than a minute ago, so the 31-day limit applies), in its unit, to where its lots were (or the given location when it made none). Every
 report rule applies again: the rate cap, whole batches, partial batch, backflush, automated consumption put back and taken again. If anything
-fails, nothing changes. The good output goes into new lots; the old ones are cancelled. One `job.production_corrected` event names the old and the
+fails, nothing changes. The good output goes into new lots; the old ones are canceled. One `job.production_corrected` event names the old and the
 new report, the figures before and after, the lots taken back and made, and the reason.
 
 **What may change** (the user's choice): good, scrap, the scrap reason and batch weights (and a partial batch). Not the run or the time;
@@ -2634,16 +2634,16 @@ results left out, note, period and approver.
 latest 500), plots them with `ControlLimits.Points`, and gives each point the limits in force at its time for its line (`ControlLimitPeriods.InForce`;
 only limits for the characteristic's current chart and size), its own p/u limits (`At`), and whether it or its dispersion is beyond them. Results
 before any limits have none: limits start when approved and never rewrite history. Operate → Quality → Control charts (`/quality/charts`) draws
-it in SVG (`ControlChartPlot`): limits as dashed steps per point, beyond-limits points as diamonds in the danger colour, a dispersion plot for
+it in SVG (`ControlChartPlot`): limits as dashed steps per point, beyond-limits points as diamonds in the danger color, a dispersion plot for
 measured charts, hover text and a table view.
 
 **Run rules (piece 4).** `core.quality_characteristic.run_rules` (smallint[], default `{1,2,5,6}`, rule 1 always; `RunRules.Normalize`) replaces
 the drafted `core.characteristic_rule` (the app role can't delete rows, so a link table can't be edited; dropped by migration 0065).
-`RunRules.Check` (pure) marks each rule at the point that completes it, measuring each point against its own centre line and sigma
+`RunRules.Check` (pure) marks each rule at the point that completes it, measuring each point against its own center line and sigma
 (`ControlLimits.Sigma`: a third of the upper half-width, per point for p and u), so a run spans a change of limits; a point without limits breaks
 zone runs. Trend (3) and alternation (4) look at values alone. Rules run on the plotted statistic only; the dispersion plot keeps rule 1. The
-chart query and the baseline review return each point's `Rules`; the chart marks a point breaking rule 2–8 as a square in the warning colour,
-labelled with the rules' numbers. Characteristics → Change picks the rules.
+chart query and the baseline review return each point's `Rules`; the chart marks a point breaking rule 2–8 as a square in the warning color,
+labeled with the rules' numbers. Characteristics → Change picks the rules.
 
 **Alerts (piece 5a).** Decided (the user's choices): **one open alert per chart** (site + characteristic + material + line), later breaks added to
 it; **closed in one step with a cause and the action**, by anyone with `quality.record` at the site; **never a lot hold** (holds stay with the
@@ -2686,7 +2686,7 @@ material's released specification now; **fixed bands** (Cpk/Ppk ≥ 1.33 capable
 **defective rate for inspected characteristics**. `ProcessCapability.Measured` (pure): Cp/Cpk from the within-subgroup sigma (MR-bar ÷ d2(2),
 R-bar ÷ d2(n), S-bar ÷ c4(n)), Pp/Ppk from the overall sample standard deviation of every value; Cp and Pp need both limits, Cpk and Ppk take the
 nearer. `ProcessCapability.Counted`: defects ÷ inspected, and ppm. The chart query returns it as `ControlChartDto.Capability`, with
-`IsUnstable` when any point breaks a rule or its dispersion is beyond its limits; the chart page shows it with banded, labelled chips.
+`IsUnstable` when any point breaks a rule or its dispersion is beyond its limits; the chart page shows it with banded, labeled chips.
 
 **Live refresh (piece 8).** The control chart and SPC alert screens reload every 30 seconds, as the Overview does (D-070), through the shared
 `LiveStatus` component (timer, "Live, updated" pill, stale after a minute without a successful load, refresh button; text from `LiveRefresh`).
@@ -2771,7 +2771,7 @@ checks both process values are recorded. A demo set up before keeps its tags (th
 **A live control chart (step 3b).** `SpcSetup` in the demo setup, as the administrator during the round trip, through the API: characteristics
 `MELT-TEMP` (no unit: units have no temperature dimension) and `PROFILE-WIDTH` (mm), I-MR with the default rules; a released specification for
 PRF-4410-WH (209–221 °C, Cpk 1.67; 41.85–42.15 mm, Cpk 1.25, so the capability panel shows both bands); manual control limits from the
-simulator's design (`DemoPlan.Characteristic.Limits`: centre = target, ±E2 × d2(2) × sigma = ±3 sigma, MR-bar = d2 × sigma, MR UCL = D4 × MR-bar,
+simulator's design (`DemoPlan.Characteristic.Limits`: center = target, ±E2 × d2(2) × sigma = ±3 sigma, MR-bar = d2 × sigma, MR UCL = D4 × MR-bar,
 from `ChartConstants`), material-wide; tag bindings every minute. Auto results need a running job on the line, so it also releases process
 `DEMO-EXTRUDE` (operation 10 on EXT-01 for PRF-4410-WH) and creates, dispatches and starts work order `DEMO-0001` (50,000 m). Results go through
 `QualityRecorder`, so they are checked against the specification and raise SPC alerts like any result: a run with a 12-minute shift cycle
@@ -2791,7 +2791,7 @@ namespace, whatever wraps it, into `ErpWorkOrderRequest`s for the unchanged ERP 
 `ID` = order number and external key; site from `HierarchyScope/EquipmentID` (request, else schedule, else the import's `siteCode`); produced
 material from `SegmentRequirement/MaterialProducedRequirement` (before V0600) or a `MaterialRequirement` with `MaterialUse` `Produced`, one per
 order; `StartTime`/`EndTime` else the segment's `EarliestStartTime`/`LatestEndTime` (no offset = UTC); `ProductProductionRuleID` else
-`ProductSegmentID`/`ProcessSegmentID` as the process code; `RequestState` Cancelled/Canceled/Aborted cancels; `Description` the note; no
+`ProductSegmentID`/`ProcessSegmentID` as the process code; `RequestState` Canceled/Canceled/Aborted cancels; `Description` the note; no
 external version (every import compares). A request it can't read, or an `ID` repeated in the file, is refused in place with why; file problems
 (not XML, DTDs prohibited, no requests, over 500) come back as `FileProblems`. `ImportWorkOrdersCommand.DryRun` (also `?dryRun=` on the JSON
 import) runs each order's transaction and doesn't commit, so it answers as the import would and saves nothing (no id for an order it would
@@ -2804,7 +2804,7 @@ order's ERP key, operation number, and each lot's standing produced/consumed qua
 the performance, response and segment `ID`; `ProductionRequestID` the order's `external_key`, else its number; `HierarchyScope` the site,
 `ProcessSegmentID` the operation number, an `EquipmentActual` per line run on. Start = first run's start; end = `completed_at`, else the last
 run's end once none is open and the job isn't running. State Ready / Running / Held (paused) / Completed (completed, closed) / Aborted
-(cancelled). Good and scrap in the job's unit are `SegmentData` `GoodQuantity`/`ScrapQuantity` (not `MaterialActual`s, so summing material
+(canceled). Good and scrap in the job's unit are `SegmentData` `GoodQuantity`/`ScrapQuantity` (not `MaterialActual`s, so summing material
 actuals never counts output twice); each lot a `MaterialActual` `Produced`/`Consumed` in the base unit, a balance by `StorageLocation`. Times UTC
 to the microsecond. Production jobs only (422 otherwise). `GET /api/jobs/{id}/production-performance` (`floor.view` or `integrations.view` at the
 job's site), **Production performance (B2MML)** on the job page. Labor, machine time and per-lot genealogy aren't in it yet.
@@ -2864,7 +2864,7 @@ keeps each part, a blank size or age clears it.
 The floor screens were built for a desk and a mouse; operators at a line use tablets and touch panels (#119, from the gap analysis of
 2026-11-19). Decided: **one app with a touch layout**, not a separate set of pages, so every floor action keeps one implementation.
 - `data-touch` on `<html>` (`js/theme.js`) turns it on: by itself where `(pointer: coarse)`, and switched per device, since many industrial
-  panels report a mouse: Preferences in the header's user menu (`UserMenu`, a native popover; its dialog also holds the colour theme and
+  panels report a mouse: Preferences in the header's user menu (`UserMenu`, a native popover; its dialog also holds the color theme and
   language and region), stored as `pulaski.touch` auto|on|off (`pulaski.setTouch`; the theme `pulaski.theme` system|light|dark).
 - `css/touch.css` holds every rule, under `:root[data-touch]`: targets at least `--touch-target` (44 px), fields 48 px, quantities larger,
   `.form-actions` sticky at the foot, `.floor-actions` filling the card, a card with a form open spanning the board, a page's primary
@@ -2882,7 +2882,7 @@ A TV on the floor shows its lines (#120). Decided (the user's choice): **a board
 sits in the device's cookie, and `sec.terminal.scope_equipment_id` decides the lines. `GET /api/terminal/board?line=` (`TerminalFilter`) →
 `GetLineDisplayQuery` builds each line from the Overview (D-070), the floor board (D-035) and the current shift's OEE row (D-052), so it can't
 disagree with them; `LineDisplayStatus.Of` maps state to running / down / waiting / no_signal / idle. Web: static SSR `/terminal/board`
-(`BoardLayout`, `css/board.css`, its own dark palette, colour only for the abnormal), reloaded every 15 s by a meta refresh. Live push is #143.
+(`BoardLayout`, `css/board.css`, its own dark palette, color only for the abnormal), reloaded every 15 s by a meta refresh. Live push is #143.
 
 ## Operator station (D-107, proposed, in pieces)
 
@@ -2936,7 +2936,7 @@ waiting too long and how fast they are answered.
   moment. One not resolved per line and type: calling again returns the same call (`AlreadyOpen`), recording nothing. Raising locks the line
   first (`FOR NO KEY UPDATE`, as ingest). Each step is an event (`pulaski.andon.call_raised/acknowledged/resolved.v1`).
 - **Escalation is worked out on read**, never stored: a call still open past its type's time is escalated (`AndonRules.IsEscalated`); waiting time
-  runs to the acknowledgement (`AndonRules.Waited`). E-mail and other notifications come with alert subscriptions (#121), so there is one way to
+  runs to the acknowledgment (`AndonRules.Waited`). E-mail and other notifications come with alert subscriptions (#121), so there is one way to
   subscribe; no background job.
 - **Permissions** `andon.call` (Operator, Supervisor) and `andon.respond` (Supervisor, Quality), both implying `floor.view`; lists need
   `floor.view`. `/api/andon/types`, `/api/andon/calls` (open by default, or `open=false` with a period), `/calls/{id}/acknowledge|resolve`.
@@ -3156,11 +3156,11 @@ CMMS (maintenance system); Pulaski shouldn't become one, but a plant without one
   Working requests stays on Machines. The Inbox kind `maintenance` (`maintenance.work`) lists requests not started, titled by number and
   equipment code with the asker's words, so nothing in it needs translating; it opens `machines?tab=maintenance`.
 - **A CMMS (c).** Delivery kind `maintenance` (`pulaski.maintenance.`; kind labels are now terms) lets any feed send requests raised, started,
-  closed and linked. The CMMS answers on `POST /api/integrations/{feed}/maintenance-requests`, signed with the feed's secret like acknowledgements
-  (`AcknowledgementSignature`), actor `receiver:{feed}`: `{number, action, reference?, resolution?}` with action `accepted` (records
+  closed and linked. The CMMS answers on `POST /api/integrations/{feed}/maintenance-requests`, signed with the feed's secret like acknowledgments
+  (`AcknowledgmentSignature`), actor `receiver:{feed}`: `{number, action, reference?, resolution?}` with action `accepted` (records
   `external_system` = the feed and `external_reference` = its number, `MaintenanceRequest.LinkExternal`; migration 0077), `started` or `closed`
   (`UpdateMaintenanceFromCmmsCommand`). An answer already applied changes nothing, so retries are safe; a new number replaces the old. A
-  separate answer rather than the delivery acknowledgement, which is per event and says only whether it was booked. No adapter for a
+  separate answer rather than the delivery acknowledgment, which is per event and says only whether it was booked. No adapter for a
   particular CMMS; events the CMMS caused go back to it like others.
 - **Preventive plans (d).** `core.maintenance_plan` (migration 0078) for equipment below an area: what is done (the requests' description),
   meter `run_hours` (Execute time from `ts.equipment_state_change`, the state in effect at the start included) or `counts` (processed machine
@@ -3360,7 +3360,7 @@ table of the data plotted (open, newest first). Computed on read; no schema chan
 
 **Decision.** `GetCertificateQuery` works a lot's certificate out now, against its material's released specification: one line per spec
 item (`Certificates.Summarize`, pure) from the lot's results not excluded, else (per item) its making job's results recorded with no lot,
-summarised as count, mean, lowest and highest value (measured) or units inspected and defects (inspected), outcome `pass` / `fail` /
+summarized as count, mean, lowest and highest value (measured) or units inspected and defects (inspected), outcome `pass` / `fail` /
 `no_result` / `not_judged`. User's choices: one summary line per item; on request and optionally at shipping; **warn, never block** (a held or
 quarantined lot, a failed, missing or unjudged item are warnings, printed on the certificate). Refused only without a released
 specification. `IssueCertificateCommand` renders it (`ICertificateRenderer`, the API's `CertificatePdfRenderer`, PdfSharp, English) and
@@ -3378,7 +3378,7 @@ about it, or carried that to closure.
 the site and links its lots and runs (`core.nonconformance_lot`, `_run`); workflow **open → investigating → acting → closed**
 (`Nonconformance.Investigate`: root cause + up to five whys, moving on to acting needs the root cause; `Close`: acting, at least one action,
 none open, a disposition use as is / rework / scrap / return to supplier / not applicable, a note); corrective and preventive actions
-(`core.nonconformance_action`, owner + due day, overdue after it, finished by its owner or a manager with a note, or cancelled); **two
+(`core.nonconformance_action`, owner + due day, overdue after it, finished by its owner or a manager with a note, or canceled); **two
 permissions**, `ncr.raise` (Quality, Supervisor, Operator) and `ncr.manage` (Quality), both implying `quality.view`. Owners are active users
 with a role at the site. Every change locks the NCR; edits, investigation and close carry the xmin version. `/api/ncrs`; Quality →
 Nonconformances, the NCR page, the lot page's panel (found from the lot), **Raise an NCR** on failing results and SPC alerts.
@@ -3423,9 +3423,9 @@ shown on Configure → Setup checklist (`site_settings.view`, `/api/setup?siteId
 **Context.** Unavailable actions and labels were handled well (D-094), but the app had never been audited.
 
 **Decision.** Aim at WCAG 2.2 AA for the main flows (sign in, Overview and menu; Floor and the job page; Inventory and Scan; the station and
-boards: the user's choice). What markup and stylesheets show is checked on every build (`Tests/Pulaski.Web.Tests/Accessibility`): labelled
+boards: the user's choice). What markup and stylesheets show is checked on every build (`Tests/Pulaski.Web.Tests/Accessibility`): labeled
 controls, named buttons and links, labels pointing at controls, images' alternatives, page titles, no positive tabindex, language and skip link;
-contrast of the tokens and of every rule setting both colour and background, in both themes. The running app is audited once with axe-core,
+contrast of the tokens and of every rule setting both color and background, in both themes. The running app is audited once with axe-core,
 and a screen-reader script is kept for people to run (user's choices). Findings, fixes and the script live in `design/accessibility.md`.
 (a) the build checks and their fixes; (b) the audit of the running demo (`tools/a11y-audit`: axe-core on 37 page checks in both themes, a
 keyboard walk, reflow at 320 px), its four fixes (OEE bars named as images, the user menu named by what it shows, unavailable-action tips out
@@ -3474,7 +3474,7 @@ the guide lands on a heading (one broken link was found and fixed). User's choic
 **side panel** (`HelpPanel`, the header's ?), showing the screen's section and following navigation, with the whole guide at `/help` (static,
 open to anyone: it holds only the guide). Static pages without the panel (sign-in, terminal, station) carry a `HelpLink`. English only.
 
-### D-131 · Remembered filters, favourites and a home page (#131) · *Proposed, in pieces*
+### D-131 · Remembered filters, favorites and a home page (#131) · *Proposed, in pieces*
 
 **Context.** Everyone got the same pages, and filters were set again each visit.
 
@@ -3483,9 +3483,9 @@ open to anyone: it holds only the guide). Static pages without the panel (sign-i
 anywhere and survive signing out. Like language and region they are personal view state, not plant records: **no events**, and not in the
 audit trail. The web reads and writes them through `CurrentUser.Setting`/`SetSettingAsync` (seen at once, saved in the background).
 User's choices: filters remembered **automatically, last used** (a link naming its own wins; **Clear filters** resets), on every list page
-with filters; a **star** in the header adds the page to **Favourites** at the top of the menu (≤ 20, as the page was titled); **Make this page
+with filters; a **star** in the header adds the page to **Favorites** at the top of the menu (≤ 20, as the page was titled); **Make this page
 my home page** in the user menu sets where a visit starts (the first arrival at the start goes there) and where the logo leads.
-(a) the store, favourites, the home page, and filters on Lots, Work orders and Quality results; (b) the other list pages through
+(a) the store, favorites, the home page, and filters on Lots, Work orders and Quality results; (b) the other list pages through
 `SavedFilters` (stock, journal, containers, shortages, materials, the schedule's view, NCRs, the OEE report, deliveries, audit trail):
 dates aren't kept (a window stays recent: the OEE report keeps its length), nor words typed as you go; a test checks each page's key.
 

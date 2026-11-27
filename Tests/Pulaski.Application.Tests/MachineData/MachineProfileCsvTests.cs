@@ -22,10 +22,10 @@ public class MachineProfileCsvTests
     [Fact]
     public void Kind_value_and_name_are_required_and_unknown_columns_are_named()
     {
-        var source = MachineProfileCsv.Parse("kind,value,colour\nstate,1,red\n");
+        var source = MachineProfileCsv.Parse("kind,value,color\nstate,1,red\n");
 
         Assert.Empty(source.Rows);
-        Assert.Contains(source.Problems, p => p.Text.Contains("'colour'", StringComparison.Ordinal));
+        Assert.Contains(source.Problems, p => p.Text.Contains("'color'", StringComparison.Ordinal));
         Assert.Contains(source.Problems, p => p.Text.Contains("'name'", StringComparison.Ordinal));
     }
 

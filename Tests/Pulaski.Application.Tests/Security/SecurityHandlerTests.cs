@@ -72,7 +72,7 @@ public class SecurityHandlerTests
         await Create().HandleAsync(new CreateUserCommand("planner1", "P", null, "Temporary-pass-1", Roles.Planner, _site), CancellationToken.None);
         var edge = await Create().HandleAsync(new CreateUserCommand("edge1", "Edge", null, "Temporary-pass-1", Roles.EdgeNode, _site), CancellationToken.None);
 
-        Assert.Contains("organisation's sign-in", (await Assert.ThrowsAsync<UnauthorizedException>(() =>
+        Assert.Contains("organization's sign-in", (await Assert.ThrowsAsync<UnauthorizedException>(() =>
             SignIn().HandleAsync(new SignInCommand("planner1", "Temporary-pass-1", AdministratorsOnly: true), CancellationToken.None))).Message, StringComparison.Ordinal);
         await SignIn().HandleAsync(new SignInCommand("admin", Password, AdministratorsOnly: true), CancellationToken.None);
         Assert.True((await Security.GetUserForUpdateAsync(edge.Id, CancellationToken.None))!.Value.IsServiceAccount);

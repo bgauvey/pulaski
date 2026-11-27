@@ -26,7 +26,7 @@ public sealed record CertificateResult(IReadOnlyList<decimal> Values, int? Inspe
 public sealed record CertificateLine(
     int Results, decimal? Mean, decimal? Min, decimal? Max, int? Inspected, int? Defects, string Outcome);
 
-/// <summary>Summarises a lot's results for its certificate (#137): one line per spec item, never hiding a failure. Pure.</summary>
+/// <summary>Summarizes a lot's results for its certificate (#137): one line per spec item, never hiding a failure. Pure.</summary>
 public static class Certificates
 {
     public static CertificateLine Summarize(bool measured, IReadOnlyList<CertificateResult> results)

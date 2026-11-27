@@ -60,7 +60,7 @@ public static class ErpOrderAction
     public const string Updated = "updated";
     public const string Unchanged = "unchanged";
     public const string Pending = "pending";
-    public const string Cancelled = "cancelled";
+    public const string Canceled = "cancelled";
     public const string Refused = "refused";
 }
 
@@ -196,19 +196,19 @@ internal sealed class ErpOrderWriter(
     {
         if (jobs.Any(j => !NotStarted.Contains(j.Status)))
         {
-            throw new DomainRuleException($"A job of {order.OrderNumber} has started, so it can't be cancelled as a whole.");
+            throw new DomainRuleException($"A job of {order.OrderNumber} has started, so it can't be canceled as a whole.");
         }
 
         foreach (var job in jobs)
         {
-            var cancelled = job.Cancel();
-            var jobEnvelope = events.Create(EventTypes.JobCancelled, "job", job.Id, new { Before = new { job.Status }, After = new { cancelled.Status } }, reason);
-            await scheduling.UpdateJobAsync(cancelled, jobEnvelope.OccurredAt, cancellationToken);
-            await scheduling.AppendStatusChangeAsync(job.Id, job.Status, cancelled.Status, jobEnvelope.OccurredAt, cancellationToken);
+            var canceled = job.Cancel();
+            var jobEnvelope = events.Create(EventTypes.JobCanceled, "job", job.Id, new { Before = new { job.Status }, After = new { canceled.Status } }, reason);
+            await scheduling.UpdateJobAsync(canceled, jobEnvelope.OccurredAt, cancellationToken);
+            await scheduling.AppendStatusChangeAsync(job.Id, job.Status, canceled.Status, jobEnvelope.OccurredAt, cancellationToken);
             await eventLog.AppendAsync(jobEnvelope, cancellationToken);
         }
 
-        var after = order.WithStatus(WorkOrderStatus.Cancelled);
+        var after = order.WithStatus(WorkOrderStatus.Canceled);
         var envelope = events.Create(EventTypes.WorkOrderStatusChanged, "work_order", order.Id, new { Before = new { order.Status }, After = new { after.Status } }, reason);
         var version = await workOrders.UpdateStatusAsync(order.Id, after.Status, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
@@ -221,7 +221,7 @@ internal sealed class ErpOrderWriter(
     {
         if (change.Cancelled)
         {
-            return (await CancelAsync(order, jobs, reason ?? "Cancelled in the ERP", cancellationToken), [Notes.Of("Cancelled, with its jobs.")]);
+            return (await CancelAsync(order, jobs, reason ?? "Canceled in the ERP", cancellationToken), [Notes.Of("Canceled, with its jobs.")]);
         }
 
         if (change.UomId != order.UomId)
@@ -343,7 +343,7 @@ internal sealed class ImportWorkOrdersHandler(
             ?? throw new DomainRuleException($"There is no active material {row.MaterialCode.Trim()}.");
         var uomId = await workOrders.FindUomAsync(row.UomCode.Trim(), cancellationToken) ?? throw new DomainRuleException($"There is no unit '{row.UomCode.Trim()}'.");
         var now = timeProvider.GetUtcNow();
-        var change = new ErpOrderChange(row.Quantity, uomId, row.PlannedStart, row.DueAt, row.Priority ?? 0, version, row.Cancelled, now);
+        var change = new ErpOrderChange(row.Quantity, uomId, row.PlannedStart, row.DueAt, row.Priority ?? 0, version, row.Canceled, now);
         var writer = new ErpOrderWriter(workOrders, processes, boms, units, scheduling, eventLog, events, lineBatches);
 
         var existingId = await workOrders.FindByExternalKeyAsync(system, key, cancellationToken);
@@ -358,7 +358,7 @@ internal sealed class ImportWorkOrdersHandler(
     {
         if (change.Cancelled)
         {
-            return new ErpOrderResultDto { ExternalKey = key, OrderNumber = number, Action = ErpOrderAction.Unchanged, Messages = [Notes.Of("Cancelled in the ERP before Pulaski had it; nothing to do.")] };
+            return new ErpOrderResultDto { ExternalKey = key, OrderNumber = number, Action = ErpOrderAction.Unchanged, Messages = [Notes.Of("Canceled in the ERP before Pulaski had it; nothing to do.")] };
         }
 
         if (await workOrders.NumberExistsAsync(siteId, number, cancellationToken))
@@ -414,7 +414,7 @@ internal sealed class ImportWorkOrdersHandler(
             return Result(ErpOrderAction.Unchanged, Notes.Of($"Version {change.Version} was applied already."));
         }
 
-        if (order.Status is WorkOrderStatus.Closed or WorkOrderStatus.Cancelled or WorkOrderStatus.Completed)
+        if (order.Status is WorkOrderStatus.Closed or WorkOrderStatus.Canceled or WorkOrderStatus.Completed)
         {
             return Result(ErpOrderAction.Unchanged, Notes.Of($"{order.OrderNumber} is {UserMessage.Code(order.Status)} in Pulaski; the ERP's change comes too late and is left out."));
         }
@@ -441,7 +441,7 @@ internal sealed class ImportWorkOrdersHandler(
         if (order.Status == WorkOrderStatus.Planned)
         {
             var (_, notes) = await writer.ApplyAsync(order, jobs, change, EventTypes.WorkOrderErpChanged, row.ExternalSystem.Trim(), now, cancellationToken);
-            return Result(change.Cancelled ? ErpOrderAction.Cancelled : ErpOrderAction.Updated, [.. notes]);
+            return Result(change.Cancelled ? ErpOrderAction.Canceled : ErpOrderAction.Updated, [.. notes]);
         }
 
         var pending = order with { PendingChange = change, ImportedAt = change.ReceivedAt };

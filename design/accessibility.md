@@ -23,8 +23,8 @@ The flows audited, as agreed:
 | Every page has a title | 2.4.2 | same | CI |
 | No positive `tabindex` | 2.4.3 | same | CI |
 | The page says its language; a skip link comes first | 3.1.1, 2.4.1 | same | CI |
-| Design tokens' contrast, both themes: text 4.5:1, control borders, state colours and focus ring 3:1 | 1.4.3, 1.4.11 | `ContrastTests.cs`, from `tokens.css` | CI |
-| Every CSS rule setting both a text colour and a background, both themes (`var()` and `color-mix` resolved) | 1.4.3 | same | CI |
+| Design tokens' contrast, both themes: text 4.5:1, control borders, state colors and focus ring 3:1 | 1.4.3, 1.4.11 | `ContrastTests.cs`, from `tokens.css` | CI |
+| Every CSS rule setting both a text color and a background, both themes (`var()` and `color-mix` resolved) | 1.4.3 | same | CI |
 | The running app, page by page, with axe-core; keyboard walk; reflow at 320 px | all automatable AA rules, 2.1.1, 2.1.2, 2.4.3, 2.4.7, 1.4.10 | `tools/a11y-audit`, against the demo | Once (2026-11-26), recorded below; rerun before a release |
 | A screen reader through the main flows | 1.3.1, 2.4.3, 4.1.2, 4.1.3 and the rest automation can't judge | the script below | By hand |
 
@@ -41,13 +41,13 @@ checks what the browser builds from it.
 | A2 | Specification editor rows: the characteristic select had no label | 1.3.1, 4.1.2 | `aria-label` |
 | A3 | Warning chips (light theme): warning text on its tint was 4.29:1 | 1.4.3 | Tint 16% → 10% (4.66:1) |
 | A4 | Danger chips (dark theme): danger text on its tint was 4.37:1 | 1.4.3 | Tint 14% → 8% (4.72:1) |
-| A5 | Station status badge *down* (dark): white on danger 3.34:1 | 1.4.3 | Text in the surface colour (5.14:1 dark, 6.54:1 light) |
-| A6 | Station status badge *waiting* (light): dark text on warning 3.46:1 | 1.4.3 | Surface colour (5.33:1 light, 7.70:1 dark) |
-| A7 | Station status badge *no signal* (dark): white on purple 3.09:1 | 1.4.3 | Surface colour (5.57:1 dark, 6.39:1 light) |
+| A5 | Station status badge *down* (dark): white on danger 3.34:1 | 1.4.3 | Text in the surface color (5.14:1 dark, 6.54:1 light) |
+| A6 | Station status badge *waiting* (light): dark text on warning 3.46:1 | 1.4.3 | Surface color (5.33:1 light, 7.70:1 dark) |
+| A7 | Station status badge *no signal* (dark): white on purple 3.09:1 | 1.4.3 | Surface color (5.57:1 dark, 6.39:1 light) |
 | A8 | No way past the header and menu to the page with the keyboard | 2.4.1 | **Skip to content** first on every page, to the main region |
 
 Checked and fine: the design tokens themselves (every pair above passes in both themes); focus is visible everywhere (`:focus-visible`
-outline in the accent colour; the equipment tree draws its own); `<html lang>` follows the user's language; icons are hidden from screen
+outline in the accent color; the equipment tree draws its own); `<html lang>` follows the user's language; icons are hidden from screen
 readers; no positive `tabindex`; every page has a title.
 
 ### Piece (b): the running app
@@ -57,7 +57,7 @@ enrolled for the station and boards, in the light and the dark theme, with the s
 
 - **axe-core 4** with the `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` and `wcag22aa` rules on every page of the main flows: sign-in; Overview,
   with the user menu open; Inbox; Setup checklist; Floor, with the pause and report forms open; a job page; Stock; Lots; a lot page, with the
-  certificate panel prepared; Scan, empty and with a lot scanned at a line (its actions offered); terminal enrolment; the station signed out
+  certificate panel prepared; Scan, empty and with a lot scanned at a line (its actions offered); terminal enrollment; the station signed out
   and signed on; a line board. 37 checks.
 - **Keyboard** (2.1.1, 2.1.2, 2.4.3, 2.4.7): the first Tab reaches **Skip to content** and Enter moves focus to the page; a Tab walk of up to
   80 stops on the Overview, Floor, Scan and the station, failing when focus sticks (a trap), lands on something invisible or isn't shown; the user
@@ -105,13 +105,13 @@ each theme. For each step, note what is announced and anything wrong in the tabl
 11. Job page: sections are headings; the components and runs tables read their column headers with each cell.
 
 **3. Inventory and Scan**
-12. Lots: the filters are labelled; the result count changes are announced or reachable; each lot is a link.
+12. Lots: the filters are labeled; the result count changes are announced or reachable; each lot is a link.
 13. A lot's page: its facts read as name, value; **Certificate of analysis** → **Prepare** announces the result table and any warnings.
 14. Scan: choose **Working at**, scan or type a lot number and Enter: the offered action is announced ("Consume … into …"), its warning read,
-    the quantity labelled with its unit; **Confirm** announces what was done.
+    the quantity labeled with its unit; **Confirm** announces what was done.
 
 **4. Station and boards** (enrolled terminal; ideally a touch screen with a screen reader, or a keyboard)
-15. Station signed out: the badge field is labelled and focused; badging in announces the person's name.
+15. Station signed out: the badge field is labeled and focused; badging in announces the person's name.
 16. Signed on: the running job's heading, the **Scan** box ("Scan a lot, container or shop order"), and every action's button name; a stop to
     code lists its reasons as buttons; confirming announces the note at the top.
 17. Line board: the line's state and job are read in order; it refreshes without the screen reader jumping back to the top mid-sentence.

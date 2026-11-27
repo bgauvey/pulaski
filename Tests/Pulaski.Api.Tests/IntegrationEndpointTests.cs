@@ -74,7 +74,7 @@ public sealed class IntegrationEndpointTests(ApiFactory factory) : IClassFixture
     }
 
     [Fact]
-    public async Task A_signed_acknowledgement_rejecting_a_delivered_event_fails_it_and_a_bad_signature_is_refused()
+    public async Task A_signed_acknowledgment_rejecting_a_delivered_event_fails_it_and_a_bad_signature_is_refused()
     {
         var delivered = factory.Stores.Deliveries.Add(WebhookFeedOptions.SinkName, DeliveryStatuses.Delivered);
         var client = factory.CreateSignedOutClient();

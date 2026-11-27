@@ -22,7 +22,7 @@ public static class MaintenanceRequestView
         _ => l["Closed"],
     };
 
-    /// <summary>The chip's colour: high priority waiting is a warning, waiting a notice, in progress fine.</summary>
+    /// <summary>The chip's color: high priority waiting is a warning, waiting a notice, in progress fine.</summary>
     public static string Chip(MaintenanceRequestDto r) => r.Status switch
     {
         "open" when r.Priority == "high" => "chip-danger",

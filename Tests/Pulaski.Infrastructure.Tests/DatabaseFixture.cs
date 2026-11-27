@@ -80,7 +80,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         MaterialId = Guid.CreateVersion7();
         await ExecuteAsync(
             $"""
-            INSERT INTO core.uom (id, code, name, dimension, to_base_factor) VALUES ('{UomId}', 'm', 'Metre', 'length', 1);
+            INSERT INTO core.uom (id, code, name, dimension, to_base_factor) VALUES ('{UomId}', 'm', 'Meter', 'length', 1);
             INSERT INTO core.material (id, code, name, material_type, base_uom_id)
             VALUES ('{MaterialId}', 'PRF-1', 'Profile 1', 'finished', '{UomId}');
             """);

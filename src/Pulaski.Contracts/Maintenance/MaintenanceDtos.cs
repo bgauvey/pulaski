@@ -74,7 +74,7 @@ public sealed record CloseMaintenanceRequestRequest
 }
 
 /// <summary>
-/// A CMMS's answer about a request (#127c), signed as acknowledgements are: <c>accepted</c> (taken on, with its number in
+/// A CMMS's answer about a request (#127c), signed as acknowledgments are: <c>accepted</c> (taken on, with its number in
 /// <see cref="Reference"/>), <c>started</c>, or <c>closed</c> (with <see cref="Resolution"/>). Repeating an answer changes nothing.
 /// </summary>
 public sealed record CmmsMaintenanceUpdateRequest

@@ -1,4 +1,4 @@
--- 0004 · Completing inventory (D-030): cancelled lots, corrections and reversals, shipment
+-- 0004 · Completing inventory (D-030): canceled lots, corrections and reversals, shipment
 -- references, and stock counts. Re-runnable. Runs in one transaction under db/migrate.sh.
 
 ALTER TABLE core.lot DROP CONSTRAINT IF EXISTS lot_status_check;

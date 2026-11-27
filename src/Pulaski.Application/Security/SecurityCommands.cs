@@ -139,7 +139,7 @@ internal sealed class SignInHandler(
         // With an identity provider in charge (D-091), a password stays only for recovery and machines.
         if (command.AdministratorsOnly && !user.Value.IsServiceAccount && !assignments.Any(a => a.RoleCode == Roles.Administrator))
         {
-            throw new UnauthorizedException("Sign in through your organisation's sign-in instead; Pulaski passwords are for administrators and machines only.");
+            throw new UnauthorizedException("Sign in through your organization's sign-in instead; Pulaski passwords are for administrators and machines only.");
         }
 
         await security.UpsertCredentialAsync(credential with { FailedAttempts = 0, LockedUntil = null }, now, cancellationToken);

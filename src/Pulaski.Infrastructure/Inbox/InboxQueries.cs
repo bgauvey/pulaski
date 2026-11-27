@@ -53,7 +53,7 @@ internal sealed class InboxQueries(NpgsqlDataSource dataSource) : IInboxReadStor
         WHERE w.erp_change_pending AND w.site_id = ANY(@SiteIds)
         """;
 
-    // Control charts that signalled and wait to be closed with a cause (D-099).
+    // Control charts that signaled and wait to be closed with a cause (D-099).
     private const string SpcAlerts = """
         SELECT 'spc_alert' AS kind, 'spc_alert:' || a.id AS key,
                'SPC alert: ' || q.code || ' on ' || m.code || coalesce(' (' || l.code || ')', '') AS title,

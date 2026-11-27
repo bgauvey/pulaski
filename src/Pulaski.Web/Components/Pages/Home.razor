@@ -390,7 +390,7 @@
             }
         </ol>
         <p class="ov-foot">
-            @L["{0} closed and {1} cancelled.", _orders.Count(o => o.Status == "closed"), _orders.Count(o => o.Status == "cancelled")]
+            @L["{0} closed and {1} canceled.", _orders.Count(o => o.Status == "closed"), _orders.Count(o => o.Status == "cancelled")]
             @if (User.Can(PermissionCodes.WorkOrderManage))
             {
                 <a href="schedule/work-orders/new">@L["New work order"]</a>
@@ -505,7 +505,7 @@
             var alerts = _overview?.OpenSpcAlerts ?? 0;
             yield return new("spc", L["Open SPC alerts"], alerts, alerts == 0 ? L["None"] : L["Find the cause"], "danger",
                 User.Can(PermissionCodes.QualityView, _siteId) ? "quality/alerts" : null,
-                L["Control charts that signalled (beyond their limits, or a run rule) and wait for someone to record the cause and what was done."]);
+                L["Control charts that signaled (beyond their limits, or a run rule) and wait for someone to record the cause and what was done."]);
             yield return new("clock", L["Orders behind"], behind, behind == 0 ? L["All on time"] : L["Late or slipping"], "danger", "work-orders",
                 L["Open orders projected to finish after their due date, or to start more than 15 minutes after their published baseline."]);
             var (onHold, quarantine) = (_overview?.LotsOnHold ?? 0, _overview?.LotsInQuarantine ?? 0);

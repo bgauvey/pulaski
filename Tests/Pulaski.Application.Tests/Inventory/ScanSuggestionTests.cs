@@ -29,7 +29,7 @@ public class ScanSuggestionTests
         var small = ScanSuggestions.ForLot(Running(), Lot(qty: 50m, at: Feed), [new ScanComponent(Resin, 300m, Kg, 120m)], 1m);
         Assert.Equal(50m, Assert.Single(small).Quantity);
 
-        // Planned in tonnes: converted to the lot's unit.
+        // Planned in metric tons: converted to the lot's unit.
         Assert.Equal(500m, ScanSuggestions.ForLot(Running(), Lot(), [new ScanComponent(Resin, 2m, Guid.CreateVersion7(), 0m)], 1000m)[0].Quantity);
     }
 

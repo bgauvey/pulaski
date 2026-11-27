@@ -11,14 +11,14 @@ public class GroupJobTests
     private static readonly DateTimeOffset Monday = Saturday.AddDays(2);
     private static readonly Guid Department = Guid.CreateVersion7();
     private static readonly Guid Line1 = Guid.CreateVersion7();
-    private static readonly Guid Metre = Guid.CreateVersion7();
+    private static readonly Guid Meter = Guid.CreateVersion7();
     private static readonly Guid White = Guid.CreateVersion7();
 
     private static Job WeekendJob(string status = JobStatus.Planned)
     {
         var job = Job.CreateForGroup(
             Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "WO-1-01", Department,
-            White, 10_000m, Metre, 1m, Saturday, Monday);
+            White, 10_000m, Meter, 1m, Saturday, Monday);
         return job with { Status = status };
     }
 
@@ -36,9 +36,9 @@ public class GroupJobTests
     public void A_group_job_needs_a_window_that_ends_after_it_starts()
     {
         Assert.Throws<DomainRuleException>(() => Job.CreateForGroup(
-            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "J", Department, White, 1m, Metre, 1m, Saturday, null));
+            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "J", Department, White, 1m, Meter, 1m, Saturday, null));
         Assert.Throws<DomainRuleException>(() => Job.CreateForGroup(
-            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "J", Department, White, 1m, Metre, 1m, Monday, Saturday));
+            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "J", Department, White, 1m, Meter, 1m, Monday, Saturday));
         Assert.Throws<DomainRuleException>(() => WeekendJob().Pin(false, Saturday, null));
     }
 
@@ -61,7 +61,7 @@ public class GroupJobTests
         Assert.Throws<DomainRuleException>(() => WeekendJob(JobStatus.Running).Assign(Line1, false, 1m));
         Assert.Throws<DomainRuleException>(() => WeekendJob().Assign(Guid.CreateVersion7(), targetIsGroup: true, 1m));
         var linePlanned = Job.CreateProduction(
-            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "J", Line1, White, 1m, Metre, 1m, null);
+            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "J", Line1, White, 1m, Meter, 1m, null);
         Assert.Throws<DomainRuleException>(() => linePlanned.Assign(Line1, false, 1m));
     }
 
@@ -70,11 +70,11 @@ public class GroupJobTests
         Assert.Throws<DomainRuleException>(() => WeekendJob().Assign(Line1, false, 1m).MoveTo(Line1, 2m));
 
     private static PlannedJob Planned(decimal qty, DateTimeOffset? start, DateTimeOffset end, DateTimeOffset? due = null) =>
-        new(Guid.CreateVersion7(), JobType.Production, JobStatus.Planned, new MaterialRef(White, null), qty, Metre, 0m,
+        new(Guid.CreateVersion7(), JobType.Production, JobStatus.Planned, new MaterialRef(White, null), qty, Meter, 0m,
             null, start, null, due, LatestEnd: end);
 
     private static Runner Runner(string code, decimal? rate) =>
-        new(Guid.CreateVersion7(), code, rate is { } r ? new RunRate(White, Metre, r, RateSource.Calculated) : null);
+        new(Guid.CreateVersion7(), code, rate is { } r ? new RunRate(White, Meter, r, RateSource.Calculated) : null);
 
     [Fact]
     public void Each_line_gets_an_estimate_and_the_fastest_is_picked_for_the_window_check()
@@ -115,10 +115,10 @@ public class GroupJobTests
     public void Once_on_a_line_a_job_that_runs_past_its_finish_by_is_flagged()
     {
         var job = new PlannedJob(Guid.CreateVersion7(), JobType.Production, JobStatus.Planned, new MaterialRef(White, null),
-            2000m, Metre, 0m, null, null, null, null, LatestEnd: Now.AddHours(1));
+            2000m, Meter, 0m, null, null, null, null, LatestEnd: Now.AddHours(1));
         var timeline = TimelineProjector.Project(new LinePlan(
             Line1, Now, ChangeoverMode.Auto, new MaterialRef(White, null), [job],
-            [new RunRate(White, Metre, 1000m, RateSource.Calculated)], new ChangeoverMatrix(Line1, []), WorkCalendar.AlwaysOpen));
+            [new RunRate(White, Meter, 1000m, RateSource.Calculated)], new ChangeoverMatrix(Line1, []), WorkCalendar.AlwaysOpen));
 
         Assert.Equal(ScheduleWarningCode.MissedFinishBy, Assert.Single(timeline.Segments[0].Warnings).Code);
     }

@@ -229,7 +229,7 @@ internal sealed class FinishNcrActionHandler(IUnitOfWork unitOfWork, INcrReposit
             throw new ForbiddenException($"Only its owner, or someone who manages NCRs, finishes an action.");
         }
 
-        var envelope = events.Create(command.Cancel ? EventTypes.NcrActionCancelled : EventTypes.NcrActionDone, "nonconformance", ncr.Id, new { command.ActionId, command.Note });
+        var envelope = events.Create(command.Cancel ? EventTypes.NcrActionCanceled : EventTypes.NcrActionDone, "nonconformance", ncr.Id, new { command.ActionId, command.Note });
         var after = command.Cancel ? action.Cancel(command.Note, envelope.ActorId, envelope.OccurredAt) : action.Complete(command.Note, envelope.ActorId, envelope.OccurredAt);
         await ncrs.UpdateActionAsync(after, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);

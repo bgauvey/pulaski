@@ -21,7 +21,7 @@ public class SequenceRankTests
         Assert.Null(SequenceRank.Between(1.0000000001m, 1.0000000002m));
 
     [Fact]
-    public void Equal_neighbours_leave_no_room() => Assert.Null(SequenceRank.Between(2m, 2m));
+    public void Equal_neighbors_leave_no_room() => Assert.Null(SequenceRank.Between(2m, 2m));
 
     [Fact]
     public void Repeated_halving_runs_out_after_about_thirty_moves()

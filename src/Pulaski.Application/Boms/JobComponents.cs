@@ -10,7 +10,7 @@ namespace Pulaski.Application.Boms;
 
 /// <summary>
 /// Gives a production job added to an order after it was made (from the schedule, or as the
-/// replacement for a cancelled job) its operation and its planned components, as creating the
+/// replacement for a canceled job) its operation and its planned components, as creating the
 /// order does for the jobs it makes (D-024, D-025).
 /// </summary>
 internal sealed class JobComponents(IProcessRepository processes, IBomRepository boms, IUnitRepository units, IIdGenerator ids)

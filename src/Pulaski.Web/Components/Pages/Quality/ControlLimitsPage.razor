@@ -44,7 +44,7 @@ else
         <table class="table table-sm align-middle mb-0">
             <thead>
                 <tr>
-                    <th>@L["Material"]</th><th>@L["Line"]</th><th class="inv-num">@L["Lower"]</th><th class="inv-num">@L["Centre"]</th><th class="inv-num">@L["Upper"]</th>
+                    <th>@L["Material"]</th><th>@L["Line"]</th><th class="inv-num">@L["Lower"]</th><th class="inv-num">@L["Center"]</th><th class="inv-num">@L["Upper"]</th>
                     <th class="inv-num">@L["Dispersion"]</th><th>@L["How"]</th><th>@L["Period"]</th><th></th>
                 </tr>
             </thead>
@@ -149,12 +149,12 @@ else
                     else
                     {
                         <p class="mb-1">
-                            @L["From {0} results: centre {1}, limits {2} to {3}", r.Subgroups, ControlChartView.Number(r.CenterLine, decimals), ControlChartView.Number(r.Lcl, decimals), ControlChartView.Number(r.Ucl, decimals)]@(dispersion is not null ? L["; {0} centre {1}, up to {2}", dispersion.ToLowerInvariant(), ControlChartView.Number(r.DispersionCenter, decimals), ControlChartView.Number(r.DispersionUcl, decimals)] : "").
+                            @L["From {0} results: center {1}, limits {2} to {3}", r.Subgroups, ControlChartView.Number(r.CenterLine, decimals), ControlChartView.Number(r.Lcl, decimals), ControlChartView.Number(r.Ucl, decimals)]@(dispersion is not null ? L["; {0} center {1}, up to {2}", dispersion.ToLowerInvariant(), ControlChartView.Number(r.DispersionCenter, decimals), ControlChartView.Number(r.DispersionUcl, decimals)] : "").
                         </p>
                         @if (r.Current is { } current)
                         {
                             <p class="small text-muted mb-1">
-                                @L["In force now: centre {0}, limits {1} to {2}. Approving ends them where the new ones start.", ControlChartView.Number(current.CenterLine, decimals), ControlChartView.Number(current.Lcl, decimals), ControlChartView.Number(current.Ucl, decimals)]
+                                @L["In force now: center {0}, limits {1} to {2}. Approving ends them where the new ones start.", ControlChartView.Number(current.CenterLine, decimals), ControlChartView.Number(current.Lcl, decimals), ControlChartView.Number(current.Ucl, decimals)]
                             </p>
                         }
                     }
@@ -246,7 +246,7 @@ else
                     <input id="ml-lcl" type="number" step="any" class="form-control form-control-sm" @bind="_manual.Lcl" />
                 </div>
                 <div class="col-4 col-md-2">
-                    <label class="form-label small fw-semibold" for="ml-cl">@L["Centre"]</label>
+                    <label class="form-label small fw-semibold" for="ml-cl">@L["Center"]</label>
                     <input id="ml-cl" type="number" step="any" class="form-control form-control-sm" @bind="_manual.CenterLine" />
                 </div>
                 <div class="col-4 col-md-2">
@@ -256,7 +256,7 @@ else
                 @if (dispersion is not null)
                 {
                     <div class="col-4 col-md-2">
-                        <label class="form-label small fw-semibold" for="ml-dc">@L["{0} centre", dispersion]</label>
+                        <label class="form-label small fw-semibold" for="ml-dc">@L["{0} center", dispersion]</label>
                         <input id="ml-dc" type="number" step="any" min="0" class="form-control form-control-sm" @bind="_manual.DispersionCenter" />
                     </div>
                     <div class="col-4 col-md-2">
@@ -439,7 +439,7 @@ else
 
     private string? ManualReason =>
         _materialId is null ? L["Choose a material above first."]
-        : _manual.CenterLine is null || _manual.Ucl is null || _manual.Lcl is null ? L["Enter the lower, centre and upper limits."]
+        : _manual.CenterLine is null || _manual.Ucl is null || _manual.Lcl is null ? L["Enter the lower, center and upper limits."]
         : string.IsNullOrWhiteSpace(_manual.Note) ? L["Say why they are entered by hand."] : null;
 
     private sealed class ManualForm

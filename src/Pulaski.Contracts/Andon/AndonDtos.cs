@@ -50,7 +50,7 @@ public sealed record AndonCallDto
     /// <summary>Still open past its type's escalation time.</summary>
     public bool IsEscalated { get; init; }
 
-    /// <summary>How long it waited for someone: to its acknowledgement, or to now while open.</summary>
+    /// <summary>How long it waited for someone: to its acknowledgment, or to now while open.</summary>
     public int WaitedSeconds { get; init; }
 }
 

@@ -2,8 +2,8 @@
 @using Pulaski.Web.Services.Quality
 
 @* One plot of a control chart (D-099): the statistic in time order, evenly spaced, against the limits in force for each point as dashed steps
-   (the centre line solid), so a change of limits shows where it happened. A point beyond its limits is a diamond in the danger colour, not
-   only a different colour; a point breaking another run rule is a square in the warning colour, labelled with the rules' numbers. Hovering a point says when, its value against its limits and where it came from; the table below holds the same. *@
+   (the center line solid), so a change of limits shows where it happened. A point beyond its limits is a diamond in the danger color, not
+   only a different color; a point breaking another run rule is a square in the warning color, labeled with the rules' numbers. Hovering a point says when, its value against its limits and where it came from; the table below holds the same. *@
 @if (Points.Count == 0)
 {
     <p class="text-muted small mb-0">@L["Nothing to chart."]</p>

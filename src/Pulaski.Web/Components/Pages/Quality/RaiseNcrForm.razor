@@ -47,7 +47,7 @@
     </div>
     <div class="form-actions mt-2">
         <ActionButton Type="submit" Class="btn btn-sm btn-primary" Busy="_busy" Reason="@(string.IsNullOrWhiteSpace(_title) ? L["Say what was found."] : null)">@L["Raise NCR"]</ActionButton>
-        <button type="button" class="btn btn-sm btn-link" @onclick="Cancelled">@L["Cancel"]</button>
+        <button type="button" class="btn btn-sm btn-link" @onclick="Canceled">@L["Cancel"]</button>
     </div>
 </form>
 
@@ -65,7 +65,7 @@
 
     [Parameter] public string? Title { get; set; }
 
-    [Parameter] public EventCallback Cancelled { get; set; }
+    [Parameter] public EventCallback Canceled { get; set; }
 
     private bool Standalone => SourceKind is "manual" or "complaint";
 

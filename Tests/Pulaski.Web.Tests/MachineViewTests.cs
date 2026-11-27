@@ -34,7 +34,7 @@ public class MachineViewTests
     }
 
     [Fact]
-    public void Categories_have_labels_and_tile_colours()
+    public void Categories_have_labels_and_tile_colors()
     {
         Assert.Equal(("Stopped", "is-stopped"), (MachineView.CategoryLabel("stopped_faulted"), MachineView.CategoryClass("stopped_faulted")));
         Assert.Equal(("Not reporting", "is-nosignal"), (MachineView.CategoryLabel(null), MachineView.CategoryClass(null)));

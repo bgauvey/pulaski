@@ -31,7 +31,7 @@ public class WorkOrderViewTests
         var change = new ErpPendingChangeDto { Quantity = 1200m, UomCode = "m", PlannedStart = Start, Priority = 2 };
         var summary = WorkOrderView.PendingSummary(Order, change, null);
         Assert.StartsWith("Quantity 1,100 → 1,200 m; priority 0 → 2.", summary, StringComparison.Ordinal);
-        Assert.StartsWith("Cancelled in the ERP", WorkOrderView.PendingSummary(Order, change with { Cancelled = true }, null), StringComparison.Ordinal);
+        Assert.StartsWith("Canceled in the ERP", WorkOrderView.PendingSummary(Order, change with { Canceled = true }, null), StringComparison.Ordinal);
         Assert.Equal("rounded up to whole batches.", WorkOrderView.Adjustment("rounded_up"));
         Assert.Equal("planned as sent.", WorkOrderView.Adjustment(null));
     }

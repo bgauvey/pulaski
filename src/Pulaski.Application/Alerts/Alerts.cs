@@ -315,7 +315,7 @@ public static class AlertMessages
                 $"SPC alert: {alert.What} on {alert.Note}{(alert.EquipmentCode is { } line ? $" ({line})" : "")}",
                 new[]
                 {
-                    $"The control chart of {alert.What} for {alert.Note}{(alert.EquipmentCode is { } on ? $" on {on}" : "")} at {alert.SiteCode} signalled at {Time(alert.Start)}.",
+                    $"The control chart of {alert.What} for {alert.Note}{(alert.EquipmentCode is { } on ? $" on {on}" : "")} at {alert.SiteCode} signaled at {Time(alert.Start)}.",
                     "Find the cause, then close the alert with it and what was done.",
                 },
                 "quality/alerts"),

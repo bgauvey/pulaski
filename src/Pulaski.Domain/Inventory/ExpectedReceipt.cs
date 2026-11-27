@@ -25,7 +25,7 @@ public sealed record ExpectedReceipt(
 {
     public const string Open = "open";
     public const string Received = "received";
-    public const string Cancelled = "cancelled";
+    public const string Canceled = "cancelled";
 
     public bool IsOpen => Status == Open;
 
@@ -59,7 +59,7 @@ public sealed record ExpectedReceipt(
         EnsureOpen("cancelled");
         return ReceivedQty > 0
             ? throw new DomainRuleException("Part of it has arrived; close it as complete instead.")
-            : this with { Status = Cancelled };
+            : this with { Status = Canceled };
     }
 
     /// <summary>
@@ -98,7 +98,7 @@ public sealed record ExpectedReceipt(
             var status = UserMessage.Code(Status);
             throw what switch
             {
-                "cancelled" => new DomainRuleException($"{name} is {status}; it can't be cancelled."),
+                "cancelled" => new DomainRuleException($"{name} is {status}; it can't be canceled."),
                 "received against" => new DomainRuleException($"{name} is {status}; it can't be received against."),
                 "closed" => new DomainRuleException($"{name} is {status}; it can't be closed."),
                 _ => new DomainRuleException($"{name} is {status}; it can't be changed."),

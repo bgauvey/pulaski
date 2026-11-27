@@ -104,7 +104,7 @@ public static class DemoPlan
     /// <summary>One charted process value: its characteristic, the tag it is sampled from, the simulator's design and the specification.</summary>
     public sealed record Characteristic(string Code, string Name, string? UomCode, int Decimals, string TagAddress, double Target, double Sigma, decimal Lsl, decimal Usl)
     {
-        /// <summary>Individuals and moving-range limits from the design: centre at the target, ±3 sigma, the moving range's expected d2 × sigma.</summary>
+        /// <summary>Individuals and moving-range limits from the design: center at the target, ±3 sigma, the moving range's expected d2 × sigma.</summary>
         public IndividualsLimits Limits()
         {
             var movingRange = Pulaski.Domain.Quality.Spc.ChartConstants.RangeBias(2) * Sigma;

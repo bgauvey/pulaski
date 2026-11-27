@@ -30,7 +30,7 @@ INSERT INTO core.reason_code (site_id, reason_kind, code, name, requires_comment
     (NULL, 'scrap', 'STARTUP',   'Start-up scrap',           false, 10),
     (NULL, 'scrap', 'DIMENSION', 'Out of dimension',         false, 20),
     (NULL, 'scrap', 'SURFACE',   'Surface defect',           false, 30),
-    (NULL, 'scrap', 'COLOUR',    'Colour off',               false, 40),
+    (NULL, 'scrap', 'COLOUR',   'Color off',               false, 40),
     (NULL, 'scrap', 'CHANGEOVER','Changeover scrap',         false, 50),
     (NULL, 'scrap', 'QUALITY',   'Rejected on quality',      false, 60),
     (NULL, 'scrap', 'OTHER',     'Other',                    true,  90),

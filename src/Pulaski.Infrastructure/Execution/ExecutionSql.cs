@@ -15,7 +15,7 @@ internal static class ExecutionSql
         id, job_id, equipment_id, run_no, started_at, ended_at, status, end_reason_code_id, good_qty, scrap_qty, uom_id
         """;
 
-    // The process links into the job's operation (D-023), labelled "operation 10 Extrude".
+    // The process links into the job's operation (D-023), labeled "operation 10 Extrude".
     public const string UpstreamLinks = """
         SELECT d.from_operation_id, 'operation ' || o.operation_number || ' ' || o.name AS from_operation_label,
                d.dependency_type, d.lag

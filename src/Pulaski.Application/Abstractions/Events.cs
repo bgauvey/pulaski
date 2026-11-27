@@ -130,7 +130,7 @@ public static class EventTypes
     public const string EquipmentQualificationSet = "pulaski.equipment.qualification_set.v1";
     public const string TerminalCreated = "pulaski.terminal.created.v1";
     public const string TerminalUpdated = "pulaski.terminal.updated.v1";
-    public const string TerminalEnrolmentCodeIssued = "pulaski.terminal.enrolment_code_issued.v1";
+    public const string TerminalEnrollmentCodeIssued = "pulaski.terminal.enrolment_code_issued.v1";
     public const string TerminalEnrolled = "pulaski.terminal.enrolled.v1";
     public const string BadgeIssued = "pulaski.badge.issued.v1";
     public const string BadgeRevoked = "pulaski.badge.revoked.v1";
@@ -149,7 +149,7 @@ public static class EventTypes
     public const string JobSequenced = "pulaski.job.sequenced.v1";
     public const string JobPinned = "pulaski.job.pinned.v1";
     public const string JobAssigned = "pulaski.job.assigned.v1";
-    public const string JobCancelled = "pulaski.job.cancelled.v1";
+    public const string JobCanceled = "pulaski.job.cancelled.v1";
     public const string JobStarted = "pulaski.job.started.v1";
     public const string JobPaused = "pulaski.job.paused.v1";
     public const string JobCompleted = "pulaski.job.completed.v1";
@@ -221,7 +221,7 @@ public static class EventTypes
     public const string ControlLimitsApproved = "pulaski.control_limit.approved.v1";
     public const string ControlLimitsEnded = "pulaski.control_limit.ended.v1";
     public const string SpcAlertRaised = "pulaski.spc_alert.raised.v1";
-    public const string SpcAlertSignalled = "pulaski.spc_alert.signalled.v1";
+    public const string SpcAlertSignaled = "pulaski.spc_alert.signalled.v1";
     public const string SpcAlertClosed = "pulaski.spc_alert.closed.v1";
 
     /// <summary>Languages (#128): added, changed, and translations set.</summary>
@@ -279,13 +279,13 @@ public static class EventTypes
     public const string ReleaseReturned = "pulaski.release.returned.v1";
     public const string ReleaseWithdrawn = "pulaski.release.withdrawn.v1";
 
-    /// <summary>Nonconformance reports (#133, D-124): raised, changed, investigated, actions added, done or cancelled, closed.</summary>
+    /// <summary>Nonconformance reports (#133, D-124): raised, changed, investigated, actions added, done or canceled, closed.</summary>
     public const string NcrRaised = "pulaski.ncr.raised.v1";
     public const string NcrChanged = "pulaski.ncr.changed.v1";
     public const string NcrInvestigated = "pulaski.ncr.investigated.v1";
     public const string NcrActionAdded = "pulaski.ncr.action_added.v1";
     public const string NcrActionDone = "pulaski.ncr.action_done.v1";
-    public const string NcrActionCancelled = "pulaski.ncr.action_cancelled.v1";
+    public const string NcrActionCanceled = "pulaski.ncr.action_cancelled.v1";
     public const string NcrClosed = "pulaski.ncr.closed.v1";
 
     /// <summary>An optional setup step marked not needed at a site, or needed after all (#139).</summary>
@@ -317,7 +317,7 @@ public static class EventTypes
     public const string LotAttributeSet = "pulaski.lot.attribute_set.v1";
     public const string ExpectedReceiptCreated = "pulaski.expected_receipt.created.v1";
     public const string ExpectedReceiptUpdated = "pulaski.expected_receipt.updated.v1";
-    public const string ExpectedReceiptCancelled = "pulaski.expected_receipt.cancelled.v1";
+    public const string ExpectedReceiptCanceled = "pulaski.expected_receipt.cancelled.v1";
     public const string ExpectedReceiptReceived = "pulaski.expected_receipt.received.v1";
     public const string LotAttributeCreated = "pulaski.lot_attribute.created.v1";
     public const string LotAttributeUpdated = "pulaski.lot_attribute.updated.v1";
@@ -326,7 +326,7 @@ public static class EventTypes
     public const string StockCountStarted = "pulaski.stock_count.started.v1";
     public const string StockCountRecorded = "pulaski.stock_count.recorded.v1";
     public const string StockCountPosted = "pulaski.stock_count.posted.v1";
-    public const string StockCountCancelled = "pulaski.stock_count.cancelled.v1";
+    public const string StockCountCanceled = "pulaski.stock_count.cancelled.v1";
     public const string ReasonCodeCreated = "pulaski.reason_code.created.v1";
     public const string ReasonCodeUpdated = "pulaski.reason_code.updated.v1";
     public const string ReasonCodeMoved = "pulaski.reason_code.moved.v1";

@@ -16,7 +16,7 @@
     @if (_raising)
     {
         <RaiseNcrForm SiteId="Lot.SiteId" SourceKind="@(Lot.Status == "on_hold" ? "lot_hold" : "manual")" SourceId="@(Lot.Status == "on_hold" ? Lot.Id : null)"
-                      LotIds="[Lot.Id]" Title="@L["Lot {0}", Label]" Cancelled="() => _raising = false" />
+                      LotIds="[Lot.Id]" Title="@L["Lot {0}", Label]" Canceled="() => _raising = false" />
     }
     @if (_ncrs is { Count: > 0 } ncrs)
     {

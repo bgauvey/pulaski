@@ -806,7 +806,7 @@ CREATE TABLE sec.app_user (
 CREATE UNIQUE INDEX app_user_username_uq ON sec.app_user (lower(username)) WHERE username IS NOT NULL;
 
 -- A local user's password (D-037), until IT's identity provider takes over: a salted PBKDF2 hash, never the password.
--- A user's own view settings (#131, D-131): last-used filters per page, favourites, home page. No events.
+-- A user's own view settings (#131, D-131): last-used filters per page, favorites, home page. No events.
 CREATE TABLE sec.user_setting (
     app_user_id     uuid NOT NULL REFERENCES sec.app_user(id),
     key             text NOT NULL CONSTRAINT user_setting_key_ck CHECK (key ~ '^(home|favorites|filters:[a-z0-9/_-]{1,80})$'),
@@ -1114,7 +1114,7 @@ CREATE TABLE core.job (
                             'planned','dispatched','firmed','running','paused','completed','closed','cancelled')),
     dispatched_at       timestamptz,
     firmed_at           timestamptz,                            -- planned_start is frozen from here on (D-019)
-    replaces_job_id     uuid REFERENCES core.job(id),           -- set on the replacement for a cancelled, started job
+    replaces_job_id     uuid REFERENCES core.job(id),           -- set on the replacement for a canceled, started job
     partial_batch_planned boolean NOT NULL DEFAULT false,       -- planned with a partial last batch (D-067): a replacement for the exact remainder
     completed_at        timestamptz,                            -- when it was last completed (D-035); downstream "after end" links count from it
     created_at          timestamptz NOT NULL DEFAULT now(),
@@ -1400,7 +1400,7 @@ CREATE TABLE core.lot (
     material_id             uuid NOT NULL REFERENCES core.material(id),
     status                  text NOT NULL CHECK (status IN (
                                 'planned','in_production','available','on_hold','quarantine',
-                                'consumed','scrapped','shipped','cancelled')),   -- cancelled: its receipt was reversed (D-030)
+                                'consumed','scrapped','shipped','cancelled')),   -- canceled: its receipt was reversed (D-030)
     quantity                core.qty NOT NULL DEFAULT 0 CHECK (quantity >= 0),
     uom_id                  uuid NOT NULL REFERENCES core.uom(id),
     location_equipment_id   uuid REFERENCES core.equipment(id),
@@ -2397,7 +2397,7 @@ CREATE TABLE evt.delivery (
     delivered_at        timestamptz,
     resolved_by         text,                                       -- who retried or skipped it
     resolve_note        text,
-    ack_status          text CHECK (ack_status IN ('accepted','rejected')),  -- the receiver's acknowledgement (#73)
+    ack_status          text CHECK (ack_status IN ('accepted','rejected')),  -- the receiver's acknowledgment (#73)
     ack_reference       text,                                       -- its own id for what it booked
     ack_message         text,
     ack_source          text CHECK (ack_source IN ('response','callback')),
@@ -3379,7 +3379,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('integrations.view', 'See outbound deliveries to the ERP and how they went'),
     ('site_settings.view', 'See a site''s settings: changeover mode, reporting tolerances, OEE targets and calendar exceptions'),
     ('schedule.plan', 'Plan jobs: create, sequence, pin, assign to lines and cancel them'),
-    ('schedule.plan_partial', 'Replace a cancelled job with exactly what is left, even when that isn''t whole batches'),
+    ('schedule.plan_partial', 'Replace a canceled job with exactly what is left, even when that isn''t whole batches'),
     ('work_order.manage', 'Create work orders, dispatch, un-dispatch and firm them'),
     ('work_order.close', 'Cancel and close work orders'),
     ('rate.modify', 'Set and clear the modified planning rate'),
@@ -3411,7 +3411,7 @@ INSERT INTO sec.permission (code, description) VALUES
     ('shifts.manage', 'Maintain shift schedules and choose which one equipment follows'),
     ('changeovers.manage', 'Maintain changeover rules: how long each change of material takes on a line'),
     ('people.manage', 'Maintain people and crews'),
-    ('terminals.manage', 'Register and enrol shop-floor terminals'),
+    ('terminals.manage', 'Register and enroll shop-floor terminals'),
     ('lot_attributes.manage', 'Maintain lot attribute definitions'),
     ('security.manage', 'Maintain users, roles and what each role may do'),
     ('integrations.manage', 'Retry or skip failed deliveries to the ERP'),

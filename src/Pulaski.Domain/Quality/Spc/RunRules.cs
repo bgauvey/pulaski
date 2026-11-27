@@ -9,7 +9,7 @@ public static class RunRules
     /// <summary>One point beyond 3 sigma (beyond the control limits). Always checked.</summary>
     public const int BeyondLimits = 1;
 
-    /// <summary>Nine points in a row on one side of the centre line.</summary>
+    /// <summary>Nine points in a row on one side of the center line.</summary>
     public const int RunOfNine = 2;
 
     /// <summary>Six points in a row steadily increasing or decreasing.</summary>
@@ -24,7 +24,7 @@ public static class RunRules
     /// <summary>Four of five points in a row beyond 1 sigma on the same side.</summary>
     public const int FourOfFive = 6;
 
-    /// <summary>Fifteen points in a row within 1 sigma of the centre line (stratification).</summary>
+    /// <summary>Fifteen points in a row within 1 sigma of the center line (stratification).</summary>
     public const int Hugging = 7;
 
     /// <summary>Eight points in a row beyond 1 sigma, on either side (mixture).</summary>
@@ -50,7 +50,7 @@ public static class RunRules
     }
 
     /// <summary>
-    /// The rules each point breaks, by index, marked at the point that completes the pattern. Zone rules measure each point against its own centre
+    /// The rules each point breaks, by index, marked at the point that completes the pattern. Zone rules measure each point against its own center
     /// line and sigma, so a run can span a change of limits; a point without limits (or without a value) breaks every run.
     /// </summary>
     public static IReadOnlyList<IReadOnlyList<int>> Check(IReadOnlyList<RulePoint> points, IReadOnlyCollection<int> rules)
@@ -181,5 +181,5 @@ public static class RunRules
     }
 }
 
-/// <summary>A point as the rules see it: its value, and its centre line and sigma (null without limits).</summary>
+/// <summary>A point as the rules see it: its value, and its center line and sigma (null without limits).</summary>
 public sealed record RulePoint(double? Value, double? Center, double? Sigma);

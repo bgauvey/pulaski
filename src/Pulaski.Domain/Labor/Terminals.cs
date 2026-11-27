@@ -15,14 +15,14 @@ public static class TerminalAuthModes
 }
 
 /// <summary>
-/// Rules for badges, PINs and terminal secrets (D-049). Secrets and enrolment codes are random and only their SHA-256 is
+/// Rules for badges, PINs and terminal secrets (D-049). Secrets and enrollment codes are random and only their SHA-256 is
 /// kept; badge values are hashed with a server key (they are short and guessable) and PINs like passwords.
 /// </summary>
 public static class TerminalRules
 {
     public const int MaxFailedPins = 5;
     public static readonly TimeSpan PinLockout = TimeSpan.FromMinutes(5);
-    public static readonly TimeSpan EnrolmentCodeLifetime = TimeSpan.FromMinutes(15);
+    public static readonly TimeSpan EnrollmentCodeLifetime = TimeSpan.FromMinutes(15);
 
     /// <summary>How long a badge scan identifies its person at the terminal: long enough to choose what to do.</summary>
     public static readonly TimeSpan TicketLifetime = TimeSpan.FromMinutes(2);
@@ -46,8 +46,8 @@ public static class TerminalRules
     /// <summary>The badge value as stored for matching: trimmed, upper case, so readers that differ in case agree.</summary>
     public static string NormalizeBadge(string value) => value.Trim().ToUpperInvariant();
 
-    /// <summary>A one-time enrolment code such as <c>K7QM2-XW9PD</c>: ten characters with no 0/O or 1/I to misread.</summary>
-    public static string NewEnrolmentCode()
+    /// <summary>A one-time enrollment code such as <c>K7QM2-XW9PD</c>: ten characters with no 0/O or 1/I to misread.</summary>
+    public static string NewEnrollmentCode()
     {
         var chars = Enumerable.Range(0, 10).Select(_ => CodeAlphabet[RandomNumberGenerator.GetInt32(CodeAlphabet.Length)]).ToArray();
         return $"{new string(chars, 0, 5)}-{new string(chars, 5, 5)}";

@@ -1097,7 +1097,7 @@ public sealed class ExecutionTests(DatabaseFixture db)
         }
 
         var extrude = await ReleasedAsync("A-OP", "1. Heat the zones", ("operation", processId, 10, null, null));
-        await ReleasedAsync("B-MAT", "Check the colour", ("material", null, null, db.MaterialId, null), ("operation", processId, 10, null, null));
+        await ReleasedAsync("B-MAT", "Check the color", ("material", null, null, db.MaterialId, null), ("operation", processId, 10, null, null));
         var packer = await ReleasedAsync("C-LINE", "Load the cartons", ("line", null, null, null, plant.Packer));
         await ReleasedAsync("D-DRAFT", "", ("material", null, null, db.MaterialId, null));
         var off = await ReleasedAsync("E-OFF", "Old way", ("line", null, null, null, plant.Extruder));
@@ -1440,8 +1440,8 @@ public sealed class ExecutionTests(DatabaseFixture db)
 
         await StartAndBackdateAsync(job);
         await db.SendAsync(new ReportProductionCommand(job, null, 0m, 0m, null, null, staging.Id) { GoodBatches = [50m, 50m] });
-        var cancelled = await db.SendAsync(new CancelJobCommand(job, await VersionAsync(job), "Mixer down", Replace: true, ReplaceExact: true));
-        var replacement = cancelled.ReplacementJobId!.Value;
+        var canceled = await db.SendAsync(new CancelJobCommand(job, await VersionAsync(job), "Mixer down", Replace: true, ReplaceExact: true));
+        var replacement = canceled.ReplacementJobId!.Value;
         await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
         {
             // The first run, ended by the cancel, moved earlier so the replacement's run can start an hour ago.

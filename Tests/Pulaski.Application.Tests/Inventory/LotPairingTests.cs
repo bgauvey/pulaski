@@ -10,7 +10,7 @@ public class LotPairingTests
     private static readonly DateTimeOffset T0 = HandlerFixture.Now;
     private static readonly Guid Job = Guid.CreateVersion7();
     private static readonly Guid Resin = Guid.CreateVersion7();
-    private static readonly Guid Colour = Guid.CreateVersion7();
+    private static readonly Guid Color = Guid.CreateVersion7();
     private static readonly Guid R1 = Guid.CreateVersion7();
     private static readonly Guid R2 = Guid.CreateVersion7();
     private static readonly Guid R3 = Guid.CreateVersion7();
@@ -23,9 +23,9 @@ public class LotPairingTests
 
     private static JobDeclaration Made(Guid lot, double hours) => new(Job, lot, Guid.Empty, true, T0.AddHours(hours), T0.AddHours(hours));
 
-    // R1 and the only colour lot at 0 h, P1 made at 1 h, R2 at 2 h, P2 at 3 h, P3 at 4 h, R3 used after everything at 5 h.
+    // R1 and the only color lot at 0 h, P1 made at 1 h, R2 at 2 h, P2 at 3 h, P3 at 4 h, R3 used after everything at 5 h.
     private static readonly JobDeclaration[] Run =
-        [Used(R1, Resin, 0), Used(C1, Colour, 0), Made(P1, 1), Used(R2, Resin, 2), Made(P2, 3), Made(P3, 4), Used(R3, Resin, 5)];
+        [Used(R1, Resin, 0), Used(C1, Color, 0), Made(P1, 1), Used(R2, Resin, 2), Made(P2, 3), Made(P3, 4), Used(R3, Resin, 5)];
 
     [Fact]
     public void A_made_lot_pairs_with_the_lot_in_use_when_the_previous_output_was_declared_and_those_used_since()

@@ -28,7 +28,7 @@ public class PartialReceiptTests
     }
 
     [Fact]
-    public void A_partly_received_one_is_closed_as_complete_not_cancelled_and_never_expects_less_than_arrived()
+    public void A_partly_received_one_is_closed_as_complete_not_canceled_and_never_expects_less_than_arrived()
     {
         var part = Expected(100m).Receive(Guid.CreateVersion7(), 40m);
 

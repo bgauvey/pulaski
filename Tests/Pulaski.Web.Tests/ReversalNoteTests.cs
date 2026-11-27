@@ -28,7 +28,7 @@ public class ReversalNoteTests
     public void Each_kind_of_reversal_says_what_it_puts_back()
     {
         Assert.StartsWith("The 30 kg goes back to the lot", InventoryView.ReversalNote(Text.English, E("consumed", -30m), Lot), StringComparison.Ordinal);
-        Assert.Contains("new lot is cancelled", InventoryView.ReversalNote(Text.English, E("split", 5m), Lot), StringComparison.Ordinal);
+        Assert.Contains("new lot is canceled", InventoryView.ReversalNote(Text.English, E("split", 5m), Lot), StringComparison.Ordinal);
         Assert.Contains("merge comes apart", InventoryView.ReversalNote(Text.English, E("merged", 5m), Lot), StringComparison.Ordinal);
         Assert.Contains("balance it came from", InventoryView.ReversalNote(Text.English, E("moved", -5m, Guid.CreateVersion7()), Lot), StringComparison.Ordinal);
         Assert.Contains("reported output stays", InventoryView.ReversalNote(Text.English, E("produced", 5m), Lot), StringComparison.Ordinal);

@@ -60,7 +60,7 @@ public class EdgeHandlerTests
         await Assert.ThrowsAsync<ConflictException>(() => new CreateEdgeNodeHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events, _f.Ids)
             .HandleAsync(new CreateEdgeNodeCommand(_site, "GW-1", "Again", null), Ct));
 
-        var bad = new Dictionary<string, string> { ["port"] = "99999", ["tls"] = "maybe", ["colour"] = "red" };
+        var bad = new Dictionary<string, string> { ["port"] = "99999", ["tls"] = "maybe", ["color"] = "red" };
         var error = await Assert.ThrowsAsync<ValidationException>(() => new CreateEdgeConnectionHandler(_f.Stores.UnitOfWork, Edge, _f.Stores.Events, _f.Events, _f.Ids)
             .HandleAsync(new CreateEdgeConnectionCommand(node, "B2", "Bad", EdgeProtocols.SparkplugB, bad), Ct));
         Assert.Equal(4, error.Errors["Settings"].Length);

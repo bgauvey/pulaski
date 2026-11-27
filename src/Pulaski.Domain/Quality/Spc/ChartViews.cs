@@ -19,7 +19,7 @@ public static class ChartViews
     };
 }
 
-/// <summary>A centre line and its control limits.</summary>
+/// <summary>A center line and its control limits.</summary>
 public sealed record LimitLine(double Center, double Ucl, double Lcl);
 
 /// <summary>

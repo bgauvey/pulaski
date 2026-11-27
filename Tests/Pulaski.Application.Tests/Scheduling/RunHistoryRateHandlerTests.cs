@@ -12,18 +12,18 @@ public class RunHistoryRateHandlerTests
     private readonly HandlerFixture _f = new();
     private readonly Guid _line = Guid.CreateVersion7();
     private readonly Guid _material = Guid.CreateVersion7();
-    private readonly Guid _metres;
+    private readonly Guid _meters;
     private readonly RunStandard _standard;
 
     public RunHistoryRateHandlerTests()
     {
-        _metres = _f.Stores.Units.AddUnit("m", "length", 1m).Id;
+        _meters = _f.Stores.Units.AddUnit("m", "length", 1m).Id;
         _f.Stores.Units.AddMaterial(_material);
         _standard = _f.Stores.Scheduling.AddRunStandard(
-            RunStandard.Create(Guid.CreateVersion7(), _line, _material, _metres, 120m, CalculationBasis.IdealRate, HandlerFixture.Now.AddDays(-30)), version: 3);
-        _f.Stores.RunHistory.IdealRates[(_line, _material)] = (120m, _metres);
+            RunStandard.Create(Guid.CreateVersion7(), _line, _material, _meters, 120m, CalculationBasis.IdealRate, HandlerFixture.Now.AddDays(-30)), version: 3);
+        _f.Stores.RunHistory.IdealRates[(_line, _material)] = (120m, _meters);
         _f.Stores.RunHistory.Runs[(_line, _material)] = [.. Enumerable.Range(1, 6).Select(d => new RunHistoryRow(
-            Guid.CreateVersion7(), $"J-{d}", 1, HandlerFixture.Now.AddDays(-d).AddHours(-2), HandlerFixture.Now.AddDays(-d), 190m + d, _metres))];
+            Guid.CreateVersion7(), $"J-{d}", 1, HandlerFixture.Now.AddDays(-d).AddHours(-2), HandlerFixture.Now.AddDays(-d), 190m + d, _meters))];
     }
 
     private GetRunHistoryRateHandler Review() => new(_f.Stores.RunHistory, _f.Stores.Units, _f.Stores.RateRefresh, _f.Time);
@@ -57,7 +57,7 @@ public class RunHistoryRateHandlerTests
         var review = await Review().HandleAsync(new GetRunHistoryRateQuery(_standard.Id, 90), CancellationToken.None);
 
         // A new run lands before the planner accepts.
-        _f.Stores.RunHistory.Runs[(_line, _material)].Add(new RunHistoryRow(Guid.CreateVersion7(), "J-NEW", 1, HandlerFixture.Now.AddHours(-3), HandlerFixture.Now.AddHours(-1), 200m, _metres));
+        _f.Stores.RunHistory.Runs[(_line, _material)].Add(new RunHistoryRow(Guid.CreateVersion7(), "J-NEW", 1, HandlerFixture.Now.AddHours(-3), HandlerFixture.Now.AddHours(-1), 200m, _meters));
         await Assert.ThrowsAsync<ConflictException>(() =>
             Adopt().HandleAsync(new AdoptHistoryRateCommand(_standard.Id, Version, 90, review.SuggestedRatePerHour!.Value), CancellationToken.None));
 
@@ -75,7 +75,7 @@ public class RunHistoryRateHandlerTests
         var review = await Review().HandleAsync(new GetRunHistoryRateQuery(_standard.Id, 90), CancellationToken.None);
         await Adopt().HandleAsync(new AdoptHistoryRateCommand(_standard.Id, Version, 90, review.SuggestedRatePerHour!.Value), CancellationToken.None);
 
-        _f.Stores.RunHistory.IdealRates[(_line, _material)] = (130m, _metres);
+        _f.Stores.RunHistory.IdealRates[(_line, _material)] = (130m, _meters);
         await Ideal().HandleAsync(new UseIdealRateCommand(_standard.Id, Version), CancellationToken.None);
 
         var saved = _f.Stores.Scheduling.FindRunStandard(_standard.Id)!.Value;
@@ -145,7 +145,7 @@ public class RunHistoryRateHandlerTests
         Assert.Equal("The site reviews every proposal.", first.ReviewReason);
 
         // Opted in: about 97 is within 10% of 90, so the newer proposal replaces the pending one and is accepted as the system.
-        _f.Stores.RunHistory.Runs[(_line, _material)].Add(new RunHistoryRow(Guid.CreateVersion7(), "J-7", 1, HandlerFixture.Now.AddDays(-8).AddHours(-2), HandlerFixture.Now.AddDays(-8), 196m, _metres));
+        _f.Stores.RunHistory.Runs[(_line, _material)].Add(new RunHistoryRow(Guid.CreateVersion7(), "J-7", 1, HandlerFixture.Now.AddDays(-8).AddHours(-2), HandlerFixture.Now.AddDays(-8), 196m, _meters));
         await Runner().RefreshSiteAsync(Scheduled(autoAccept: true), CancellationToken.None);
         Assert.Equal([ProposalStatus.Superseded, ProposalStatus.AutoAccepted], _f.Stores.RateRefresh.Proposals.Select(p => p.Status));
 

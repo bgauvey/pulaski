@@ -29,11 +29,11 @@ public class ProcessCapabilityTests
     public void Cpk_takes_the_nearer_limit_and_one_sided_specs_have_no_cp()
     {
         var subgroups = Measured(25, _ => [1, 2, 3, 4, 5]);
-        var centred = ProcessCapability.Measured(ChartTypes.XbarR, subgroups, 5, 0, 6);
+        var centered = ProcessCapability.Measured(ChartTypes.XbarR, subgroups, 5, 0, 6);
         var within = 4 / 2.326;
-        Assert.Equal(6 / (6 * within), centred.Cp!.Value, 1e-9);
-        Assert.Equal(3 / (3 * within), centred.Cpk!.Value, 1e-9);
-        Assert.Equal(CapabilityBands.NotCapable, centred.Band);
+        Assert.Equal(6 / (6 * within), centered.Cp!.Value, 1e-9);
+        Assert.Equal(3 / (3 * within), centered.Cpk!.Value, 1e-9);
+        Assert.Equal(CapabilityBands.NotCapable, centered.Band);
 
         var upperOnly = ProcessCapability.Measured(ChartTypes.XbarR, subgroups, 5, null, 8);
         Assert.Null(upperOnly.Cp);

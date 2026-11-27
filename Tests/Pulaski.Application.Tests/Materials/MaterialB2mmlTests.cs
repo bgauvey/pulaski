@@ -77,12 +77,12 @@ public class MaterialB2mmlTests
               <ID>CAP-1</ID><Description>End cap</Description>
               <MaterialDefinitionProperty><ID>type</ID><Value><ValueString>packaging</ValueString></Value></MaterialDefinitionProperty>
               <MaterialDefinitionProperty><ID>base_unit</ID><Value><ValueString>ea</ValueString></Value></MaterialDefinitionProperty>
-              <MaterialDefinitionProperty><ID>Description</ID><Value><ValueString>Grey</ValueString></Value></MaterialDefinitionProperty>
+              <MaterialDefinitionProperty><ID>Description</ID><Value><ValueString>Gray</ValueString></Value></MaterialDefinitionProperty>
               <MaterialDefinitionProperty><ID>ShelfLifeDays</ID></MaterialDefinitionProperty>
             </MaterialDefinition>
             """;
         var row = Assert.Single(MaterialB2mml.Parse(bare, null).Rows);
-        Assert.Equal(("CAP-1", "End cap", "packaging", "ea", "Grey"), (row.Code, row.Name, row.MaterialType, row.BaseUomCode, row.Description!.Value));
+        Assert.Equal(("CAP-1", "End cap", "packaging", "ea", "Gray"), (row.Code, row.Name, row.MaterialType, row.BaseUomCode, row.Description!.Value));
 
         // A property with no value clears the field, as a blank CSV cell does.
         Assert.Null(row.ShelfLifeDays!.Value);

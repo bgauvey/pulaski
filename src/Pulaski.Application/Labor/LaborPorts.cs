@@ -258,6 +258,6 @@ public interface ILaborReadStore
     /// <summary>The site's active, selectable indirect labor reasons (#84), for the terminal.</summary>
     Task<IReadOnlyList<TerminalReasonDto>> ListIndirectReasonsAsync(Guid siteId, CancellationToken cancellationToken);
 
-    /// <summary>The line's jobs, newest first, cancelled ones left out (#84): what a session's time can be for.</summary>
+    /// <summary>The line's jobs, newest first, canceled ones left out (#84): what a session's time can be for.</summary>
     Task<IReadOnlyList<LineJobDto>> ListLineJobsAsync(Guid equipmentId, CancellationToken cancellationToken);
 }

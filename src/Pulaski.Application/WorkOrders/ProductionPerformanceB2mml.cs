@@ -82,7 +82,7 @@ internal sealed class GetJobProductionPerformanceHandler(
 /// <c>EquipmentActual</c>.</item>
 /// <item>Times: the first run's start; the end once the job is completed (else its last run's end, while it isn't running). The state is
 /// the job's: <c>Ready</c> before it starts, <c>Running</c>, <c>Held</c> (paused), <c>Completed</c> (completed or closed), <c>Aborted</c>
-/// (cancelled).</item>
+/// (canceled).</item>
 /// <item>Good and scrap totals in the job's unit are <c>SegmentData</c> <c>GoodQuantity</c> and <c>ScrapQuantity</c>; reversed reports are
 /// out of them.</item>
 /// <item>Each lot produced or consumed is a <c>MaterialActual</c> (<c>Produced</c> / <c>Consumed</c>) with its standing quantity in the

@@ -127,6 +127,6 @@ public static class AndonRules
     public static bool IsEscalated(AndonCall call, AndonType type, DateTimeOffset now) =>
         call.Status == AndonStatuses.Open && now - call.RaisedAt >= TimeSpan.FromMinutes(type.EscalateAfterMinutes);
 
-    /// <summary>How long it waited for someone: to its acknowledgement, or to now while open.</summary>
+    /// <summary>How long it waited for someone: to its acknowledgment, or to now while open.</summary>
     public static TimeSpan Waited(AndonCall call, DateTimeOffset now) => (call.AcknowledgedAt ?? now) - call.RaisedAt;
 }

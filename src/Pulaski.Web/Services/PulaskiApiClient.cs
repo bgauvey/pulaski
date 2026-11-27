@@ -1881,8 +1881,8 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
     public Task<VersionResponse> UpdateTerminalAsync(Guid id, UpdateTerminalRequest request, CancellationToken ct = default) =>
         SendAsync<VersionResponse>(HttpMethod.Put, $"api/terminals/{id}", request, ct);
 
-    public Task<EnrolmentCodeResponse> IssueEnrolmentCodeAsync(Guid id, CancellationToken ct = default) =>
-        SendAsync<EnrolmentCodeResponse>(HttpMethod.Post, $"api/terminals/{id}/enrolment-code", new { }, ct);
+    public Task<EnrollmentCodeResponse> IssueEnrollmentCodeAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<EnrollmentCodeResponse>(HttpMethod.Post, $"api/terminals/{id}/enrolment-code", new { }, ct);
 
     public Task<IReadOnlyList<BadgeDto>> ListBadgesAsync(Guid siteId, CancellationToken ct = default) =>
         GetAsync<IReadOnlyList<BadgeDto>>($"api/badges?siteId={siteId}", ct);
@@ -1895,7 +1895,7 @@ public sealed class PulaskiApiClient(HttpClient http, ApiSession session)
 
     // At a terminal (D-049): no user signs in; the terminal's secret, from its cookie, is its credential.
 
-    public Task<TerminalEnrolledResponse> EnrolTerminalAsync(EnrolTerminalRequest request, CancellationToken ct = default) =>
+    public Task<TerminalEnrolledResponse> EnrollTerminalAsync(EnrollTerminalRequest request, CancellationToken ct = default) =>
         TerminalSendAsync<TerminalEnrolledResponse>(null, HttpMethod.Post, "api/terminal/enrol", request, ct);
 
     /// <summary>The operator station (#146) for whoever <paramref name="ticket"/> signs on (none: waiting).</summary>

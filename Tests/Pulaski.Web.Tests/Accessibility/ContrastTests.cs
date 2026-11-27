@@ -4,8 +4,8 @@ using System.Text.RegularExpressions;
 namespace Pulaski.Web.Tests.Accessibility;
 
 /// <summary>
-/// Colour contrast (#142, D-127), worked out from the stylesheets in both themes: text 4.5:1 (WCAG 1.4.3), controls' borders, state colours and
-/// the focus ring 3:1 against what they sit on (1.4.11). Every CSS rule that sets both a text colour and a background is checked too.
+/// Color contrast (#142, D-127), worked out from the stylesheets in both themes: text 4.5:1 (WCAG 1.4.3), controls' borders, state colors and
+/// the focus ring 3:1 against what they sit on (1.4.11). Every CSS rule that sets both a text color and a background is checked too.
 /// </summary>
 public partial class ContrastTests
 {
@@ -46,7 +46,7 @@ public partial class ContrastTests
     [Theory]
     [InlineData("light")]
     [InlineData("dark")]
-    public void Every_rule_with_a_colour_and_a_background_keeps_text_readable(string theme)
+    public void Every_rule_with_a_color_and_a_background_keeps_text_readable(string theme)
     {
         var tokens = Themes()[theme];
         var failures = new List<string>();

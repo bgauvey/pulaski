@@ -59,7 +59,7 @@ public class ControlChartPlotTests
         var main = ControlChartView.Plot(Text.English, chart, false, "UTC");
         Assert.Equal([2, 5], main[0].Rules);
         Assert.Empty(main[1].Rules);
-        Assert.EndsWith(". Rule 2: 9 in a row on one side of the centre line. Rule 5: 2 of 3 beyond 2 sigma on one side", main[0].Tip, StringComparison.Ordinal);
+        Assert.EndsWith(". Rule 2: 9 in a row on one side of the center line. Rule 5: 2 of 3 beyond 2 sigma on one side", main[0].Tip, StringComparison.Ordinal);
         Assert.Empty(ControlChartView.Plot(Text.English, chart, true, "UTC")[0].Rules);
         Assert.Equal("2 results; 1 beyond the limits, 1 breaking a run rule.", ControlChartView.Summary(Text.English, chart));
         Assert.Equal("Rules 2, 5", ControlChartView.RuleList(Text.English, [2, 5]));

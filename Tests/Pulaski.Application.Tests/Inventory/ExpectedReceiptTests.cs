@@ -37,9 +37,9 @@ public class ExpectedReceiptTests
         new CreateExpectedReceiptHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, Receipts, _f.Stores.Events, _f.Events, _f.Ids, new FixedRequestContext("buyer"), _f.Time)
             .HandleAsync(new CreateExpectedReceiptCommand(_site, _resin.Id, qty, uom ?? _kg.Id, at, "PO-4711", "Acme", null), CancellationToken.None);
 
-    private Task<Contracts.Inventory.ImportExpectedReceiptResponse> ImportAsync(decimal qty, bool cancelled = false) =>
+    private Task<Contracts.Inventory.ImportExpectedReceiptResponse> ImportAsync(decimal qty, bool canceled = false) =>
         new ImportExpectedReceiptHandler(_f.Stores.UnitOfWork, Inventory, _f.Stores.Units, Receipts, _f.Stores.Events, _f.Events, _f.Ids, new FixedRequestContext("erp"), _f.Time)
-            .HandleAsync(new ImportExpectedReceiptCommand(_site, "ERP1", "PO-1/10", "PVC-K67", qty, "kg", Now.AddDays(2), "PO-1", "Acme", cancelled), CancellationToken.None);
+            .HandleAsync(new ImportExpectedReceiptCommand(_site, "ERP1", "PO-1/10", "PVC-K67", qty, "kg", Now.AddDays(2), "PO-1", "Acme", canceled), CancellationToken.None);
 
     [Fact]
     public void Supply_due_by_a_jobs_time_covers_it_after_stock_and_supply_arriving_later_doesnt()
@@ -64,7 +64,7 @@ public class ExpectedReceiptTests
     }
 
     [Fact]
-    public async Task An_expected_receipt_is_changed_or_cancelled_while_open_and_closed_once_all_of_it_is_received()
+    public async Task An_expected_receipt_is_changed_or_canceled_while_open_and_closed_once_all_of_it_is_received()
     {
         var created = await CreateAsync(1000m, Now.AddDays(3), _lb.Id);
         Assert.Equal(("buyer", ExpectedReceipt.Open), (Receipts.Get(created.Id).CreatedBy, Receipts.Get(created.Id).Status));
@@ -96,12 +96,12 @@ public class ExpectedReceiptTests
 
         var changed = await ImportAsync(750m);
         Assert.Equal((false, true, 750m), (changed.Created, changed.Changed, Receipts.Get(first.Id).Quantity));
-        await ImportAsync(750m, cancelled: true);
-        Assert.Equal(ExpectedReceipt.Cancelled, Receipts.Get(first.Id).Status);
+        await ImportAsync(750m, canceled: true);
+        Assert.Equal(ExpectedReceipt.Canceled, Receipts.Get(first.Id).Status);
 
         // Once closed in Pulaski, the ERP's later word changes nothing.
         Assert.False((await ImportAsync(900m)).Changed);
-        Assert.Equal(ExpectedReceipt.Cancelled, Receipts.Get(first.Id).Status);
+        Assert.Equal(ExpectedReceipt.Canceled, Receipts.Get(first.Id).Status);
     }
 
     [Fact]

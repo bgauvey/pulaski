@@ -74,7 +74,7 @@ public static class ControlChartView
     /// <summary>A capability index to two decimals, or a dash.</summary>
     public static string Index(double? value) => value is { } v && double.IsFinite(v) ? v.ToString("0.00", CultureInfo.InvariantCulture) : "—";
 
-    /// <summary>The band in words, for a label next to its colour.</summary>
+    /// <summary>The band in words, for a label next to its color.</summary>
     public static string? BandName(string? band) => band switch
     {
         "capable" => Term.Mark("Capable"),
@@ -152,7 +152,7 @@ public static class ControlChartView
     public static IReadOnlyList<(int Number, string Name)> Rules { get; } =
     [
         (1, Term.Mark("Beyond the control limits")),
-        (2, Term.Mark("9 in a row on one side of the centre line")),
+        (2, Term.Mark("9 in a row on one side of the center line")),
         (3, Term.Mark("6 in a row rising or falling")),
         (4, Term.Mark("14 in a row alternating up and down")),
         (5, Term.Mark("2 of 3 beyond 2 sigma on one side")),
@@ -259,6 +259,6 @@ public static class ControlChartView
 /// <summary>One point of a plot, with the limits in force for it (null: none) and whether it is beyond them.</summary>
 public sealed record PlotPoint(DateTimeOffset At, double? Value, double? Center, double? Ucl, double? Lcl, bool IsBeyond, string Tip)
 {
-    /// <summary>Run rules other than rule 1 it completes a break of; marked and labelled with their numbers.</summary>
+    /// <summary>Run rules other than rule 1 it completes a break of; marked and labeled with their numbers.</summary>
     public IReadOnlyList<int> Rules { get; init; } = [];
 }

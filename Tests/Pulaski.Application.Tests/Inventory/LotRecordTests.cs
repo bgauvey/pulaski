@@ -63,7 +63,7 @@ public class LotRecordTests
 
         Assert.Throws<DomainRuleException>(() => LotAttributeDefinition.Create(Guid.CreateVersion7(), _site, "C", "C", "choice", null, [], true, [], 0));
         Assert.Throws<DomainRuleException>(() => LotAttributeDefinition.Create(Guid.CreateVersion7(), _site, "T", "T", "text", Guid.CreateVersion7(), [], true, [], 0));
-        Assert.Throws<DomainRuleException>(() => LotAttributeDefinition.Create(Guid.CreateVersion7(), _site, "T", "T", "colour", null, [], true, [], 0));
+        Assert.Throws<DomainRuleException>(() => LotAttributeDefinition.Create(Guid.CreateVersion7(), _site, "T", "T", "color", null, [], true, [], 0));
         Assert.Throws<DomainRuleException>(() => LotAttributeDefinition.Create(Guid.CreateVersion7(), _site, "T", "T", "text", null, [], false, [], 0));
     }
 
@@ -109,7 +109,7 @@ public class LotRecordTests
     }
 
     [Fact]
-    public async Task A_document_is_a_recognised_file_or_a_reference_and_is_withdrawn_not_deleted()
+    public async Task A_document_is_a_recognized_file_or_a_reference_and_is_withdrawn_not_deleted()
     {
         byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2];
         var file = await AttachAsync("../../etc/scan.png", png);
@@ -133,7 +133,7 @@ public class LotRecordTests
     }
 
     [Fact]
-    public void Files_are_recognised_by_their_first_bytes_not_their_names()
+    public void Files_are_recognized_by_their_first_bytes_not_their_names()
     {
         Assert.Equal("application/pdf", LotDocumentFiles.Sniff("%PDF-1.7"u8));
         Assert.Equal("image/jpeg", LotDocumentFiles.Sniff([0xFF, 0xD8, 0xFF, 0xE0]));

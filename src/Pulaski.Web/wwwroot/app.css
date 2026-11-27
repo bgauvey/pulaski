@@ -1,4 +1,4 @@
-/* Pulaski styles on top of Bootstrap 5.3. Colours, type and spacing come from css/tokens.css;
+/* Pulaski styles on top of Bootstrap 5.3. Colors, type and spacing come from css/tokens.css;
    Bootstrap's own variables are pointed at those tokens so its components follow both themes. */
 
 /* ---- Bootstrap variables → Pulaski tokens ---- */
@@ -188,7 +188,7 @@ small, .small {
 }
 
 /*
-   Switched off (#47): every kind of button greys out the same way, so one that can't be used never looks like one that
+   Switched off (#47): every kind of button grays out the same way, so one that can't be used never looks like one that
    can. It still takes the pointer, so its title (why it is off) shows on hover; a disabled button never fires a click.
 */
 .btn:disabled,
@@ -429,7 +429,7 @@ a.card {
     background: transparent;
 }
 
-/* A running item: a dot in the success colour, always next to its label. */
+/* A running item: a dot in the success color, always next to its label. */
 .chip-live::before {
     content: "";
     width: 8px;
@@ -438,7 +438,7 @@ a.card {
     background: var(--success);
 }
 
-/* A quality result (#65): in or out of specification, a dot in the status colour beside its label. */
+/* A quality result (#65): in or out of specification, a dot in the status color beside its label. */
 .chip-ok::before,
 .chip-warn::before {
     content: "";
@@ -599,7 +599,7 @@ fieldset.view-only-scope {
     gap: 2px var(--space-3);
 }
 
-/* OEE trend chart (#67): one series in the accent, the target dashed in muted ink, points below target in the danger color (also labelled
+/* OEE trend chart (#67): one series in the accent, the target dashed in muted ink, points below target in the danger color (also labeled
    "below" in their tooltip and counted under the chart). Hovering a point's column shows a crosshair and enlarges its marker. */
 .oee-trend { width: 100%; height: auto; display: block; }
 .oee-trend .grid { stroke: var(--border); stroke-width: 1; }

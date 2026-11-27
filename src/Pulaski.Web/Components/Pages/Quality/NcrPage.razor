@@ -334,7 +334,7 @@ else if (_error is null)
     private string? CloseReason(NcrDto n) =>
         n.Status != "acting" ? L["Find the root cause and act on it first."]
         : n.Actions.Count == 0 ? L["Add at least one action first."]
-        : n.Actions.Any(a => a.Status == "open") ? L["Every action has to be done or cancelled first."]
+        : n.Actions.Any(a => a.Status == "open") ? L["Every action has to be done or canceled first."]
         : string.IsNullOrEmpty(_disposition) ? L["Say what becomes of the lots."]
         : string.IsNullOrWhiteSpace(_closingNote) ? L["Add a closing note."]
         : null;
@@ -384,7 +384,7 @@ else if (_error is null)
     {
         await Api.FinishNcrActionAsync(Id, actionId, new FinishNcrActionRequest { Note = _finishNote, Cancel = cancel });
         _finishing = null;
-        return cancel ? L["The action is cancelled."] : L["The action is done."];
+        return cancel ? L["The action is canceled."] : L["The action is done."];
     });
 
     private Task CloseAsync() => RunAsync(async () =>

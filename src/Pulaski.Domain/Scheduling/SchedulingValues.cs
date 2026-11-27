@@ -25,12 +25,12 @@ public static class JobStatus
     public const string Paused = "paused";
     public const string Completed = "completed";
     public const string Closed = "closed";
-    public const string Cancelled = "cancelled";
+    public const string Canceled = "cancelled";
 
     /// <summary>Statuses with work still ahead of them; these are the jobs on a line's timeline.</summary>
     public static IReadOnlyList<string> Open { get; } = [Planned, Dispatched, Firmed, Running, Paused];
 
-    /// <summary>Execution has begun; the job can only be cancelled and replaced (D-019).</summary>
+    /// <summary>Execution has begun; the job can only be canceled and replaced (D-019).</summary>
     public static IReadOnlyList<string> Started { get; } = [Running, Paused];
 }
 

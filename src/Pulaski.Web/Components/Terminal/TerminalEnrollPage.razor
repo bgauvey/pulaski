@@ -7,11 +7,11 @@
 
 @* Enrolling a shop-floor terminal (D-049) with the one-time code a manager issued on Configure → Terminals. The terminal's
    secret comes back once and is kept in this device's cookie. A plain form: setting the cookie needs a real request. *@
-<PageTitle>@L["Enrol terminal"] · Pulaski</PageTitle>
+<PageTitle>@L["Enroll terminal"] · Pulaski</PageTitle>
 
-<h1 class="h3 mb-2">@L["Enrol this terminal"]</h1>
+<h1 class="h3 mb-2">@L["Enroll this terminal"]</h1>
 <p class="text-muted">
-    @L["On a signed-in screen, open Configure → Terminals, click Enrolment code on this terminal's row and type the code here."]
+    @L["On a signed-in screen, open Configure → Terminals, click Enrollment code on this terminal's row and type the code here."]
     @L["It works once, within 15 minutes."]
     @if (TerminalCookie.Get(HttpContext) is not null)
     {
@@ -24,10 +24,10 @@
     <div class="alert alert-danger" role="alert">@_error</div>
 }
 
-<EditForm Model="Input" FormName="enrol" OnSubmit="EnrolAsync" method="post">
-    <label class="form-label" for="code">@L["Enrolment code"]</label>
+<EditForm Model="Input" FormName="enroll" OnSubmit="EnrollAsync" method="post">
+    <label class="form-label" for="code">@L["Enrollment code"]</label>
     <InputText id="code" class="form-control form-control-lg terminal-badge mb-3" autocomplete="off" autofocus placeholder="K7QM2-XW9PD" @bind-Value="Input.Code" />
-    <button type="submit" class="btn btn-primary btn-lg w-100">@L["Enrol"]</button>
+    <button type="submit" class="btn btn-primary btn-lg w-100">@L["Enroll"]</button>
 </EditForm>
 
 @code {
@@ -35,15 +35,15 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private EnrolForm Input { get; set; } = new();
+    private EnrollForm Input { get; set; } = new();
 
     private string? _error;
 
-    private async Task EnrolAsync()
+    private async Task EnrollAsync()
     {
         try
         {
-            var enrolled = await Api.EnrolTerminalAsync(new EnrolTerminalRequest { Code = Input.Code });
+            var enrolled = await Api.EnrollTerminalAsync(new EnrollTerminalRequest { Code = Input.Code });
             TerminalCookie.Set(HttpContext, enrolled.Secret);
         }
         catch (ApiException ex)
@@ -55,7 +55,7 @@
         Navigation.NavigateTo(TerminalCookie.HomePath, forceLoad: true);
     }
 
-    private sealed class EnrolForm
+    private sealed class EnrollForm
     {
         public string Code { get; set; } = "";
     }

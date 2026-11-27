@@ -90,7 +90,7 @@
     {
         var cancelCount = SelectedOrders.Count(o => o.Order.NextStatuses.Contains(pending) && MayMove(o.Order, pending));
         <div class="wo-confirm" role="alert">
-            <span>@(cancelCount == 1 ? L["Cancel this work order?"] : L["Cancel {0} work orders?", cancelCount]) Their open jobs must be cancelled first.</span>
+            <span>@(cancelCount == 1 ? L["Cancel this work order?"] : L["Cancel {0} work orders?", cancelCount]) Their open jobs must be canceled first.</span>
             <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RunBulkAsync(pending)">@L["Confirm cancellation"]</button>
             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _pendingBulk = null">@L["Keep them"]</button>
         </div>
@@ -412,7 +412,7 @@
 </div>
 
 @code {
-    // Dispatching, un-dispatching and firming is managing an order; cancelling and closing it is its own permission (D-037).
+    // Dispatching, un-dispatching and firming is managing an order; canceling and closing it is its own permission (D-037).
     private bool CanSelectAny => User.CanAny([
         PermissionCodes.WorkOrderManage,
         PermissionCodes.WorkOrderClose,
@@ -701,7 +701,7 @@
         _selected.Clear();
     }
 
-    /// <summary>Cancelling asks once more; other actions run for one or many selected orders.</summary>
+    /// <summary>Canceling asks once more; other actions run for one or many selected orders.</summary>
     private Task StartSelectedStatus(string status)
     {
         _actionsOpen = false;

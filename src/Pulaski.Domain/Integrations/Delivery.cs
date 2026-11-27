@@ -98,7 +98,7 @@ public static class DeliveryKinds
 }
 
 /// <summary>What a receiver said it did with an event (#73). Values match <c>evt.delivery.ack_status</c>.</summary>
-public static class AcknowledgementStatuses
+public static class AcknowledgmentStatuses
 {
     public const string Accepted = "accepted";
     public const string Rejected = "rejected";
@@ -106,8 +106,8 @@ public static class AcknowledgementStatuses
     public static IReadOnlyList<string> All { get; } = [Accepted, Rejected];
 }
 
-/// <summary>Where an acknowledgement came from. Values match <c>evt.delivery.ack_source</c>.</summary>
-public static class AcknowledgementSources
+/// <summary>Where an acknowledgment came from. Values match <c>evt.delivery.ack_source</c>.</summary>
+public static class AcknowledgmentSources
 {
     /// <summary>In the body of the webhook's own 2xx answer.</summary>
     public const string Response = "response";
@@ -120,15 +120,15 @@ public static class AcknowledgementSources
 /// A receiver's answer about one event (#73): accepted or rejected, its own reference for what it booked, and a message. Rejected after
 /// the HTTP delivery succeeded, the delivery fails and holds the subject's later events, as a refused delivery does.
 /// </summary>
-public sealed record Acknowledgement(string Status, string? Reference, string? Message)
+public sealed record Acknowledgment(string Status, string? Reference, string? Message)
 {
     public const int MaxText = 500;
 
     /// <summary>
-    /// An acknowledgement in a webhook's answer body: a JSON object with <c>status</c> <c>accepted</c> or <c>rejected</c>, and optional
-    /// <c>reference</c> and <c>message</c>. Anything else (no body, not JSON, no or another status) is no acknowledgement.
+    /// An acknowledgment in a webhook's answer body: a JSON object with <c>status</c> <c>accepted</c> or <c>rejected</c>, and optional
+    /// <c>reference</c> and <c>message</c>. Anything else (no body, not JSON, no or another status) is no acknowledgment.
     /// </summary>
-    public static Acknowledgement? FromResponse(string? body)
+    public static Acknowledgment? FromResponse(string? body)
     {
         if (string.IsNullOrWhiteSpace(body) || body.TrimStart()[0] != '{')
         {
@@ -141,7 +141,7 @@ public sealed record Acknowledgement(string Status, string? Reference, string? M
             string? Text(string name) =>
                 json.RootElement.TryGetProperty(name, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String ? Trim(value.GetString()) : null;
             var status = Text("status")?.ToLowerInvariant();
-            return status is not null && AcknowledgementStatuses.All.Contains(status) ? new Acknowledgement(status, Text("reference"), Text("message")) : null;
+            return status is not null && AcknowledgmentStatuses.All.Contains(status) ? new Acknowledgment(status, Text("reference"), Text("message")) : null;
         }
         catch (System.Text.Json.JsonException)
         {
@@ -149,7 +149,7 @@ public sealed record Acknowledgement(string Status, string? Reference, string? M
         }
     }
 
-    public bool IsRejected => Status == AcknowledgementStatuses.Rejected;
+    public bool IsRejected => Status == AcknowledgmentStatuses.Rejected;
 
     /// <summary>Why a rejected delivery failed, for its last error.</summary>
     public string RejectionText => $"Rejected by the receiver{(Message is { } m ? $": {m}" : ".")}";

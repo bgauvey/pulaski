@@ -20,7 +20,7 @@ public class LineDisplayViewTests
     }
 
     [Fact]
-    public void Only_the_abnormal_is_coloured_and_oee_below_target_is_a_caution()
+    public void Only_the_abnormal_is_colored_and_oee_below_target_is_a_caution()
     {
         Assert.Equal(("Down", "is-down"), (LineDisplayView.StatusLabel("down"), LineDisplayView.StatusClass("down")));
         Assert.Equal(("No signal", "is-nosignal"), (LineDisplayView.StatusLabel("no_signal"), LineDisplayView.StatusClass("no_signal")));

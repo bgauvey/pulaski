@@ -30,7 +30,7 @@ internal sealed class HttpRequestContext(IHttpContextAccessor accessor, IIdGener
                 return terminal.ActorId;
             }
 
-            // A machine caller verified by its own means, such as a receiver's signed acknowledgement (#73), names itself.
+            // A machine caller verified by its own means, such as a receiver's signed acknowledgment (#73), names itself.
             if (accessor.HttpContext?.Items[ActorItem] is string actor)
             {
                 return actor;

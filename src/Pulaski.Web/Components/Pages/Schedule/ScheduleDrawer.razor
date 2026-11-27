@@ -89,7 +89,7 @@
 
                 @if (Controller.ReadOnly && (item.CanChangeLine || item.CanPin || item.CanCancel))
                 {
-                    @Locked(L["You can view {0}, but moving, pinning or cancelling it needs permission to plan jobs at this site.", s.JobNumber])
+                    @Locked(L["You can view {0}, but moving, pinning or canceling it needs permission to plan jobs at this site.", s.JobNumber])
                 }
 
                 @if (item.IsWindow)

@@ -33,7 +33,7 @@ Pulaski targets mid-market process and semi-continuous plants (roughly 50 to 500
 
 ## V1 scope
 
-Version 1 covers ten capabilities, all centred on running lines rather than discrete routings.
+Version 1 covers ten capabilities, all centered on running lines rather than discrete routings.
 
 1. **Equipment model:** ISA-95 hierarchy (enterprise, site, area, line, work unit) with machine tags mapped to each unit.
 2. **Machine data ingestion:** MQTT Sparkplug B and OPC UA as first-party connectors, with store-and-forward at the edge.

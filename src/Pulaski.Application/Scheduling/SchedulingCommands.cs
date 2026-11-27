@@ -391,7 +391,7 @@ internal sealed class CancelJobHandler(
             scheduling, command.Id, command.ExpectedVersion, null, cancellationToken);
         var job = current.Value;
         var at = timeProvider.GetUtcNow();
-        var cancelled = job.Cancel();
+        var canceled = job.Cancel();
 
         Job? replacement = null;
         WorkOrder? workOrder = null;
@@ -440,14 +440,14 @@ internal sealed class CancelJobHandler(
         }
 
         var envelope = events.Create(
-            EventTypes.JobCancelled,
+            EventTypes.JobCanceled,
             "job",
-            cancelled.Id,
-            new { Before = new { job.Status }, After = new { cancelled.Status }, ReplacementJobId = replacement?.Id },
+            canceled.Id,
+            new { Before = new { job.Status }, After = new { canceled.Status }, ReplacementJobId = replacement?.Id },
             command.Reason);
         await scheduling.EndOpenRunsAsync(job.Id, envelope.OccurredAt, cancellationToken);
-        var version = await scheduling.UpdateJobAsync(cancelled, envelope.OccurredAt, cancellationToken);
-        await scheduling.AppendStatusChangeAsync(job.Id, job.Status, cancelled.Status, envelope.OccurredAt, cancellationToken);
+        var version = await scheduling.UpdateJobAsync(canceled, envelope.OccurredAt, cancellationToken);
+        await scheduling.AppendStatusChangeAsync(job.Id, job.Status, canceled.Status, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
 
         if (replacement is not null)
@@ -456,7 +456,7 @@ internal sealed class CancelJobHandler(
             await scheduling.InsertJobAsync(replacement, created.OccurredAt, cancellationToken);
             await scheduling.AppendStatusChangeAsync(replacement.Id, null, replacement.Status, created.OccurredAt, cancellationToken);
 
-            // The replacement keeps the cancelled job's operation and plans components for the quantity it takes over (D-025).
+            // The replacement keeps the canceled job's operation and plans components for the quantity it takes over (D-025).
             if (workOrder is not null)
             {
                 await new JobComponents(processes, boms, units, ids).PlanAsync(replacement, workOrder, cancellationToken);

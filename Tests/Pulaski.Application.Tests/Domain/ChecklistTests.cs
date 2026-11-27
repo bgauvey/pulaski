@@ -10,7 +10,7 @@ public class ChecklistTests
     [
         new ChecklistItem(" Guard in place? ", "yes_no", true, Expected: true),
         new ChecklistItem("Die temperature", "number", true, Min: 180, Max: 220, Unit: " °C "),
-        new ChecklistItem("Colour", "choice", false, Choices: ["Black", " Grey ", "Black", ""]),
+        new ChecklistItem("Color", "choice", false, Choices: ["Black", " Gray ", "Black", ""]),
         new ChecklistItem("Remarks", "text", false),
     ])])[0];
 
@@ -18,7 +18,7 @@ public class ChecklistTests
     public void Checklists_are_cleaned_up_one_per_phase_setup_first_and_empty_ones_left_out()
     {
         Assert.Equal(("Guard in place?", "°C"), (Setup.Items[0].Prompt, Setup.Items[1].Unit));
-        Assert.Equal(["Black", "Grey"], Setup.Items[2].Choices);
+        Assert.Equal(["Black", "Gray"], Setup.Items[2].Choices);
 
         var both = Checklists.Check([new Checklist("first_article", [new ChecklistItem("Look", "text", true)]), new Checklist("setup", [new ChecklistItem("Clean", "yes_no", true)])]);
         Assert.Equal(["setup", "first_article"], both.Select(c => c.Phase));
@@ -43,9 +43,9 @@ public class ChecklistTests
     [Fact]
     public void Answers_within_what_each_item_allows_pass_and_others_fail_the_checklist()
     {
-        var ok = Checklists.Evaluate(Setup, new Dictionary<int, string?> { [1] = "Yes", [2] = "200", [3] = "Grey", [4] = " " });
+        var ok = Checklists.Evaluate(Setup, new Dictionary<int, string?> { [1] = "Yes", [2] = "200", [3] = "Gray", [4] = " " });
         Assert.True(ok.Passed);
-        Assert.Equal([(1, "yes"), (2, "200"), (3, "Grey")], ok.Answers.Select(a => (a.Item, a.Value!)));
+        Assert.Equal([(1, "yes"), (2, "200"), (3, "Gray")], ok.Answers.Select(a => (a.Item, a.Value!)));
 
         var bad = Checklists.Evaluate(Setup, new Dictionary<int, string?> { [1] = "no", [2] = "221" });
         Assert.False(bad.Passed);

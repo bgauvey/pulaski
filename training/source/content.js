@@ -13,7 +13,7 @@ m("basics", "Getting started", "Signing in, finding your way, and how Pulaski be
         steps: [
             "Open Pulaski in a current Chrome, Edge, Firefox or Safari, at the address your administrator gives you.",
             "Type your **user name** and **password**. The first time, Pulaski asks you to choose your own password.",
-            "If your organisation's sign-in is set up, click **Sign in with …** instead.",
+            "If your organization's sign-in is set up, click **Sign in with …** instead.",
             "You land on the **Overview**, or on the first screen your roles let you see (or the home page you chose).",
             "Click your name at the top right and **Sign out** when you leave a shared computer.",
         ],
@@ -29,8 +29,8 @@ m("basics", "Getting started", "Signing in, finding your way, and how Pulaski be
         cards: [
             { icon: "MdMenu", title: "The menu", text: "**Operate** holds the day-to-day pages; **Configure** the setup. You see only the pages your roles open. The ☰ button collapses it to icons." },
             { icon: "MdHelpOutline", title: "Help (?)", text: "Opens this guide's section for the screen you're on, beside it, and follows you as you move. **Open the whole guide** opens all of it." },
-            { icon: "MdStarBorder", title: "Favourites (☆)", text: "Click the star to add the page you're on to **Favourites** at the top of the menu; up to 20, kept on any device." },
-            { icon: "MdPerson", title: "Your menu", text: "Your name at the top right: **Preferences…** (language, region, colour theme, touch layout), **Make this page my home page**, **My alerts**, **Change your password**, **Sign out**." },
+            { icon: "MdStarBorder", title: "Favorites (☆)", text: "Click the star to add the page you're on to **Favorites** at the top of the menu; up to 20, kept on any device." },
+            { icon: "MdPerson", title: "Your menu", text: "Your name at the top right: **Preferences…** (language, region, color theme, touch layout), **Make this page my home page**, **My alerts**, **Change your password**, **Sign out**." },
             { icon: "MdFilterList", title: "Filters are remembered", text: "List pages open with the filters you last used, on any device. A link that names its own filters wins." },
             { icon: "MdKeyboard", title: "With the keyboard", text: "The first Tab shows **Skip to content**. Tab and Shift+Tab reach everything; the control with focus is outlined." },
         ],
@@ -44,7 +44,7 @@ m("basics", "Getting started", "Signing in, finding your way, and how Pulaski be
             { icon: "MdSchedule", title: "Site time", text: "Every time you see or type is in the **site's time zone**, not your computer's. Forms say which zone they use." },
             { icon: "MdPeople", title: "Changed by someone else", text: "If someone saved first, Pulaski refuses your change and says so. Nothing is lost: reload, look, and make your change again." },
             { icon: "MdErrorOutline", title: "Messages", text: "Red or yellow boxes say why something was refused, in plain words. Fix what it says and try again." },
-            { icon: "MdBlock", title: "A greyed-out button", text: "Point at it, or Tab to it: a note says why it is off now (a lot on hold, a shift not ended). A button you may never use is left out." },
+            { icon: "MdBlock", title: "A grayed-out button", text: "Point at it, or Tab to it: a note says why it is off now (a lot on hold, a shift not ended). A button you may never use is left out." },
         ],
     },
     {
@@ -87,9 +87,9 @@ m("overview", "The Overview", "The plant at a glance: what runs, what doesn't, a
             { icon: "MdWarningAmber", title: "Needs attention", text: "Counts what needs a person, most urgent first: uncoded stops, open SPC alerts, orders behind, lots on hold, schedule conflicts, lines with no signal, labor to approve. Click a count to go to its list." },
             { icon: "MdInsights", title: "This shift", text: "OEE with availability, performance and quality; good output against the plan; scrap; downtime with its biggest reason. A dash means not measured; 0 means measured and none." },
             { icon: "MdViewTimeline", title: "Lines", text: "One row per line: its state now and why, the job now or next, a strip of the shift (green running, dark red down, hatched no signal), its OEE and any flags." },
-            { icon: "MdTexture", title: "Hatching means no data", text: "A part with nothing to show yet is hatched and greyed, with a plug symbol saying what will fill it, so the page doesn't move when data arrives." },
+            { icon: "MdTexture", title: "Hatching means no data", text: "A part with nothing to show yet is hatched and grayed, with a plug symbol saying what will fill it, so the page doesn't move when data arrives." },
         ],
-        notes: "The Overview updates by itself within seconds of a change, and every 30 seconds. The pill at the top right says when it last updated, and turns grey with a warning if Pulaski can't reach the server for over a minute. With several sites, pick one at the top.",
+        notes: "The Overview updates by itself within seconds of a change, and every 30 seconds. The pill at the top right says when it last updated, and turns gray with a warning if Pulaski can't reach the server for over a minute. With several sites, pick one at the top.",
     },
 ]);
 
@@ -114,14 +114,14 @@ m("planningIdeas", "How planning works", "You decide where and in what order; Pu
             { label: "Completed", text: "Its last open job completed. It follows its jobs." },
             { label: "Closed", text: "Closed on the Work orders screen; its completed jobs close with it." },
         ],
-        note: "An order can be **cancelled** at most stages: cancel its open jobs first, then the order. **Un-dispatch** returns a dispatched order to planned and clears the baseline.",
+        note: "An order can be **canceled** at most stages: cancel its open jobs first, then the order. **Un-dispatch** returns a dispatched order to planned and clears the baseline.",
     },
     {
         type: "cards", title: "Words you'll meet",
         cards: [
             { icon: "MdFactory", title: "Line and department", text: "A **line** runs jobs and can be planned to. A **department** (an area) can be planned to but doesn't run jobs: the floor picks its line." },
             { icon: "MdBolt", title: "Capability", text: "Says a material can run on a line, and how fast (its **ideal rate**). Pulaski never puts a job on a line without one." },
-            { icon: "MdAltRoute", title: "Process", text: "A released route of numbered operations, each on lines or departments with shares totalling 100%. Every order is made from one." },
+            { icon: "MdAltRoute", title: "Process", text: "A released route of numbered operations, each on lines or departments with shares totaling 100%. Every order is made from one." },
             { icon: "MdListAlt", title: "BOM", text: "What one material is made from. An order uses the released BOM to plan each job's components." },
             { icon: "MdWork", title: "Order, job, run", text: "A **work order** asks for a quantity; a **job** is its piece on one line; a **run** is the job actually running." },
             { icon: "MdSpeed", title: "Planning rate", text: "The rate the schedule uses: calculated (from the ideal rate or run history) unless someone set a **modified** rate." },
@@ -134,7 +134,7 @@ m("createOrder", "Create a work order", "What, how much and when; the process de
         type: "steps", title: "Create a work order",
         steps: [
             "On the **Schedule**, click **New work order**. Choose the **Site** and type the **Order number** (unique within the site).",
-            "Choose the **Material produced**, then the **Process**: the material's default is picked; a greyed-out one says why it can't run it.",
+            "Choose the **Material produced**, then the **Process**: the material's default is picked; a grayed-out one says why it can't run it.",
             "Type the **Planned quantity** in any unit that converts. For a batch material it must be whole batches; the hint shows the size.",
             "Set **Start** (no job is planned before it) and **Due**. A process that uses a department needs a due date.",
             "Set **Priority** and **Notes** if needed, and check the preview: the **jobs** it will create and the BOM that plans the **components**.",
@@ -183,7 +183,7 @@ m("workOrders", "The Work orders screen", "How every order stands, and acting on
         type: "steps", title: "Print a shop order",
         steps: [
             "Find the work order and open its **Actions** menu.",
-            "Choose **Print shop order**. Pulaski downloads one PDF with a traveller sheet for each job.",
+            "Choose **Print shop order**. Pulaski downloads one PDF with a traveler sheet for each job.",
             "Print it for the floor. Check the schedule before running.",
         ],
         tips: [
@@ -202,7 +202,7 @@ m("erpOrders", "Orders from the ERP", "Held orders, changes to accept or reject,
             { icon: "MdCallReceived", title: "Made like yours", text: "An ERP order is made from its process with a job per operation. Its row says **ERP** under Origin. Sending it again never makes a second." },
             { icon: "MdPauseCircleOutline", title: "Not whole batches", text: "Follows the material's or site's rule: refuse, round up or down, or import it **held**. A held order can't be dispatched: open it, type a whole-batch quantity and click **Set quantity**." },
             { icon: "MdChangeCircle", title: "The ERP changes it", text: "While planned, the change applies and its jobs are re-planned. Once dispatched the row shows **ERP change**: open it and **Accept**, or give a reason and **Reject**." },
-            { icon: "MdCancel", title: "The ERP cancels it", text: "While planned, it is cancelled with its jobs. After that the cancellation waits for you like any change." },
+            { icon: "MdCancel", title: "The ERP cancels it", text: "While planned, it is canceled with its jobs. After that the cancellation waits for you like any change." },
         ],
         notes: "The ERP owns product, quantity, start, due date and priority. Pulaski owns the schedule, dispatch and status. Every step is recorded: imported, changed, change pending, accepted and rejected with your reason.",
     },
@@ -260,7 +260,7 @@ m("schedule", "The Schedule", "Four views of one plan; drag to change the sequen
             "Confirm, or **Keep it** to back out. The message says how much the order is short when it rounds down.",
         ],
         tips: [
-            "Cancelling is the only schedule action that asks you to confirm.",
+            "Canceling is the only schedule action that asks you to confirm.",
             "**Exactly what is left, even a partial batch** needs the planner's permission to plan partial batches.",
         ],
         tipsIcon: "MdCancel",
@@ -536,7 +536,7 @@ m("station", "The operator station", "One touch screen at the line, signed on wi
     },
 ]);
 
-m("labourOwn", "Your time", "Clocking on and off, and breaks", [
+m("laborOwn", "Your time", "Clocking on and off, and breaks", [
     {
         type: "steps", title: "Clock yourself on and off",
         steps: [
@@ -729,7 +729,7 @@ m("supervisorJobs", "Putting production right", "Late reports, reversals, correc
     },
 ]);
 
-m("supervisorLabour", "Labor", "Crews on lines, breaks, shift review and approval", [
+m("supervisorLabor", "Labor", "Crews on lines, breaks, shift review and approval", [
     {
         type: "steps", title: "Check a crew onto a line",
         steps: [
@@ -762,7 +762,7 @@ m("supervisorLabour", "Labor", "Crews on lines, breaks, shift review and approva
     },
 ]);
 
-m("labourApprove", "Approving labor", "Shift review, approval and labor reports", [
+m("laborApprove", "Approving labor", "Shift review, approval and labor reports", [
     {
         type: "steps", title: "Review and approve a shift",
         steps: [
@@ -995,7 +995,7 @@ m("ncr", "Nonconformance reports", "From what was found to closure", [
             { label: "Raise", text: "**Raise an NCR** on a lot, an out-of-spec result, an SPC alert, a run or a failed checklist, or on its own. Say what was found and how severe." },
             { label: "Investigate", text: "Ask why up to five times, write the **Root cause**, then **Root cause found: act on it**." },
             { label: "Act", text: "Add corrective and preventive actions, each with an owner and a due day. The owner clicks **Finish** and **Mark done**." },
-            { label: "Close", text: "Once every action is done or cancelled, choose **What becomes of the lots**, add a closing note and **Close NCR**." },
+            { label: "Close", text: "Once every action is done or canceled, choose **What becomes of the lots**, add a closing note and **Close NCR**." },
             { label: "Dispose", text: "The closed NCR lists its lots in stock with what to do to each: release, rework, scrap or return." },
         ],
         note: "NCRs are numbered NCR-000001. Raising one needs **ncr.raise** (Operator, Supervisor, Quality); working one needs **ncr.manage** (Quality). Owned and overdue actions appear in the Inbox.",
@@ -1192,13 +1192,13 @@ m("people", "People, badges and terminals", "Who works here, their qualification
         type: "steps", title: "Set up a terminal or line board",
         steps: [
             "Open **Configure → Terminals**. Type a **Code** and **Name**, choose **Offers the lines of** and the **First line offered**, and **Badge** or **Badge and PIN**.",
-            "Click **Enrolment code**: a ten-character code shows once, for 15 minutes.",
-            "On the device, open the address ending **/terminal/enrol**, type the code and press **Enrol**.",
+            "Click **Enrollment code**: a ten-character code shows once, for 15 minutes.",
+            "On the device, open the address ending **/terminal/enrol**, type the code and press **Enroll**.",
             "Leave it on the badge screen, or open **/terminal/station** (operator station) or **/terminal/board** (a TV line board).",
             "To stop one (lost, moved), **Change**, untick **Active** and save.",
         ],
         tips: [
-            "Moving it to another device: issue a new code and enrol the new one; the old one stops.",
+            "Moving it to another device: issue a new code and enroll the new one; the old one stops.",
             "Choose the terminal's **Language** so the floor reads its own.",
         ],
         tipsIcon: "MdTabletMac",
@@ -1267,7 +1267,7 @@ m("audit", "The audit trail", "Who changed what, and when", [
         tips: [
             "Every change is recorded as an event; nothing is edited afterwards.",
             "A subject's history covers all time; a search covers up to 92 days.",
-            "Personal settings (favourites, filters) aren't audited.",
+            "Personal settings (favorites, filters) aren't audited.",
         ],
         tipsIcon: "MdManageSearch",
     },
@@ -1319,7 +1319,7 @@ m("users", "Users and roles", "Who signs in, and what each role may do", [
             "Fill in **User name**, **Name**, an optional **E-mail** and a **Temporary password**; choose a **Role** and its **site**.",
             "Click **Create user**, and tell them the user name and password yourself: Pulaski sends nothing.",
             "To change someone, click **Change**: details, **Can sign in**, roles (**Add a role…**, **Take away**) or **Reset password**.",
-            "From your organisation's sign-in: they sign in once, show **Awaiting a role**; add one and ask them to sign in again.",
+            "From your organization's sign-in: they sign in once, show **Awaiting a role**; add one and ask them to sign in again.",
         ],
         tips: [
             "Every user keeps a role; a role someone holds can't be switched off.",
@@ -1451,14 +1451,14 @@ const roles = [
             { icon: "MdTabletAndroid", title: "At the station", text: "Badging in, running, reporting and coding stops at the line." },
             { icon: "MdInventory2", title: "Around the job", text: "Your time, stops, material, quality, calls for help." },
         ],
-        modules: ["basics", "floorIdeas", "runJobs", "station", "labourOwn", "machinesView", "inventoryBasics", "qualityFloor", "floorTools"],
+        modules: ["basics", "floorIdeas", "runJobs", "station", "laborOwn", "machinesView", "inventoryBasics", "qualityFloor", "floorTools"],
         quiz: [
             { q: "Can two jobs run on the same line at once?", short: "Two jobs on one line?", a: "No: one run per line. Pause or complete the running job first." },
             { q: "Your report is refused as more than the run can hold. Why?", short: "Report refused: more than the run holds", a: "The rate check: run length × ideal rate × the site's tolerance (110%). The message says how much more fits." },
             { q: "The line's counter counted 348 m. How do you report it without typing?", short: "Report what the machine counted", a: "Report → From the machine → Use these figures → check → Report. Don't report it by hand as well." },
             { q: "A machine stopped and nobody said why. Where do you code it?", short: "Code a stop", a: "At the station (Give the reason) or Operate → Machines → Stops → Code." },
             { q: "The red bar says *No connection to Pulaski*. Is your report saved?", short: "No connection bar", a: "No: nothing is saved. What you typed stays; send it again once the bar goes." },
-            { q: "**Start** is greyed out on a ready job. What might be missing?", short: "Start greyed out", a: "The line is busy, the order isn't on the floor, a process link isn't met, or the setup checklist hasn't passed." },
+            { q: "**Start** is grayed out on a ready job. What might be missing?", short: "Start grayed out", a: "The line is busy, the order isn't on the floor, a process link isn't met, or the setup checklist hasn't passed." },
         ],
         quickref: [
             ["Start, pause or complete a job", "Operate → **Floor**, the line's card"],
@@ -1490,7 +1490,7 @@ const roles = [
             { icon: "MdGroups", title: "People", text: "Crews, breaks, shift review and approval." },
             { icon: "MdPrecisionManufacturing", title: "Machines and stock", text: "Stops, andon, maintenance, counts and OEE." },
         ],
-        modules: ["basics", "overview", "floorIdeas", "runJobs", "supervisorJobs", "station", "supervisorLabour", "machinesView", "supervisorStops", "andonAnswer", "maintenanceWork", "inventoryBasics", "stockControl", "qualityFloor", "oeeReports", "floorTools", "alerts"],
+        modules: ["basics", "overview", "floorIdeas", "runJobs", "supervisorJobs", "station", "supervisorLabor", "machinesView", "supervisorStops", "andonAnswer", "maintenanceWork", "inventoryBasics", "stockControl", "qualityFloor", "oeeReports", "floorTools", "alerts"],
         quiz: [
             { q: "A report went into the wrong job. What do you do?", short: "Report on the wrong job", a: "Reverse it on the job's page (reason and comment), then report it on the right job." },
             { q: "Can you approve a partial batch you reported yourself?", short: "Approve your own partial batch?", a: "No: never the person who reported it. Another Supervisor or Quality user decides." },
@@ -1568,7 +1568,7 @@ const roles = [
             { icon: "MdEventNote", title: "Time and people", text: "Shift schedules, people, badges, terminals." },
             { icon: "MdTune", title: "The site", text: "Site settings, the setup checklist, reason codes." },
         ],
-        modules: ["basics", "overview", "oeeReports", "workOrders", "labourApprove", "shifts", "people", "siteSettings", "reasons", "alerts"],
+        modules: ["basics", "overview", "oeeReports", "workOrders", "laborApprove", "shifts", "people", "siteSettings", "reasons", "alerts"],
         quiz: [
             { q: "Monday is a holiday for the whole site. Where do you take the time out?", short: "A site holiday", a: "Site settings → Calendar exceptions, applying to the site, from and until." },
             { q: "One extra Saturday shift, without changing the schedule. How?", short: "An extra Saturday", a: "Configure → Shifts → One-off changes: the day, a new shift code, Runs, and save." },
@@ -1704,7 +1704,7 @@ const roles = [
         code: "administrator", name: "Administrator", icon: "MdAdminPanelSettings", tagline: "Set Pulaski up, and keep it running",
         summary: "You can do everything, at every site. Above all you look after who gets in and what they may do, the plant's equipment and how machine data reaches Pulaski, and how Pulaski itself is running. For each role's own tasks, use that role's course: this one covers what only administrators do.",
         day: [
-            { icon: "MdPersonAdd", title: "People in", text: "Users, roles and sign-in from your organisation." },
+            { icon: "MdPersonAdd", title: "People in", text: "Users, roles and sign-in from your organization." },
             { icon: "MdFactory", title: "The plant", text: "Equipment, copied lines and sites, the setup checklist." },
             { icon: "MdSensors", title: "Machine data", text: "Profiles, edge nodes and tags." },
             { icon: "MdMonitorHeart", title: "Health", text: "System health, integrations, languages, the audit trail." },

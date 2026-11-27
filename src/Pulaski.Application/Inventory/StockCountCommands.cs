@@ -182,7 +182,7 @@ internal sealed class CancelStockCountHandler(
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var count = await StockCountLocks.CountAsync(inventory, command.CountId, command.ExpectedVersion, cancellationToken);
-        var envelope = events.Create(EventTypes.StockCountCancelled, "stock_count", count.Id, new { count.Number });
+        var envelope = events.Create(EventTypes.StockCountCanceled, "stock_count", count.Id, new { count.Number });
         var version = await inventory.UpdateStockCountAsync(count.Cancel(), envelope.ActorId, envelope.OccurredAt, cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);

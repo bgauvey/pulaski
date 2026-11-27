@@ -1,5 +1,5 @@
--- 0054 · Delivery feed settings and acknowledgements (#73, D-087): a feed's settings kept from Configure → Integrations (all but the secret),
--- and the receiver's acknowledgement recorded on each delivery. Re-runnable; no BEGIN/COMMIT.
+-- 0054 · Delivery feed settings and acknowledgments (#73, D-087): a feed's settings kept from Configure → Integrations (all but the secret),
+-- and the receiver's acknowledgment recorded on each delivery. Re-runnable; no BEGIN/COMMIT.
 
 ALTER TABLE evt.delivery ADD COLUMN IF NOT EXISTS ack_status text CHECK (ack_status IN ('accepted','rejected'));
 ALTER TABLE evt.delivery ADD COLUMN IF NOT EXISTS ack_reference text;

@@ -7,18 +7,18 @@ namespace Pulaski.Application.Tests.Domain;
 public class LinkedProjectionTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 13, 8, 0, 0, TimeSpan.Zero);
-    private static readonly Guid Metre = Guid.CreateVersion7();
+    private static readonly Guid Meter = Guid.CreateVersion7();
     private static readonly MaterialRef Profile = new(Guid.CreateVersion7(), null);
     private static readonly Guid Extruder = Guid.CreateVersion7();
     private static readonly Guid Packer = Guid.CreateVersion7();
 
     // 1000 m an hour everywhere, and no changeovers: one material.
     private static LinePlan Plan(Guid line, params PlannedJob[] jobs) => new(
-        line, Now, ChangeoverMode.Auto, Profile, jobs, [new RunRate(Profile.Id, Metre, 1000m, RateSource.Calculated)],
+        line, Now, ChangeoverMode.Auto, Profile, jobs, [new RunRate(Profile.Id, Meter, 1000m, RateSource.Calculated)],
         new ChangeoverMatrix(line, []), WorkCalendar.AlwaysOpen);
 
-    private static PlannedJob Job(decimal metres, string status = JobStatus.Planned, DateTimeOffset? firmed = null, DateTimeOffset? startedAt = null) =>
-        new(Guid.CreateVersion7(), JobType.Production, status, Profile, metres, Metre, 0m, startedAt, null, null, null, firmed);
+    private static PlannedJob Job(decimal meters, string status = JobStatus.Planned, DateTimeOffset? firmed = null, DateTimeOffset? startedAt = null) =>
+        new(Guid.CreateVersion7(), JobType.Production, status, Profile, meters, Meter, 0m, startedAt, null, null, null, firmed);
 
     private static JobLink Link(PlannedJob job, PlannedJob from, string type = DependencyType.AfterEnd, double lagMinutes = 0, Guid? linkId = null) =>
         new(linkId ?? Guid.CreateVersion7(), job.JobId, from.JobId, type, TimeSpan.FromMinutes(lagMinutes), "10 Extrude");

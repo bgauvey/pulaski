@@ -23,7 +23,7 @@ internal sealed class WorkOrderQueries(NpgsqlDataSource dataSource) : IWorkOrder
                (w.erp_pending_change->>'Quantity')::numeric AS quantity, pu.code AS uom_code,
                (w.erp_pending_change->>'PlannedStart')::timestamptz AS planned_start, (w.erp_pending_change->>'DueAt')::timestamptz AS due_at,
                (w.erp_pending_change->>'Priority')::int AS priority, w.erp_pending_change->>'Version' AS version,
-               (w.erp_pending_change->>'Cancelled')::boolean AS cancelled, (w.erp_pending_change->>'ReceivedAt')::timestamptz AS received_at
+               (w.erp_pending_change->>'Cancelled')::boolean AS canceled, (w.erp_pending_change->>'ReceivedAt')::timestamptz AS received_at
         FROM core.work_order w
         LEFT JOIN core.uom eu ON eu.id = w.erp_uom_id
         LEFT JOIN core.uom pu ON pu.id = (w.erp_pending_change->>'UomId')::uuid

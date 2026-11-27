@@ -1,8 +1,8 @@
 # Prepares a freshly reset demo for the accessibility audit (#142, D-127), and puts it back afterwards.
 #
 #   WORKING=<a password> python3 setup-terminal.py         admin's temporary password -> WORKING (it allows nothing else); a terminal A11Y on
-#                                                          EXT-01; admin given a person and badge A11Y-BADGE-1. Prints the enrolment code.
-#   WORKING=<same> python3 setup-terminal.py code          a new enrolment code for A11Y (each is used once).
+#                                                          EXT-01; admin given a person and badge A11Y-BADGE-1. Prints the enrollment code.
+#   WORKING=<same> python3 setup-terminal.py code          a new enrollment code for A11Y (each is used once).
 #   WORKING=<same> python3 setup-terminal.py restore       admin back on the demo's temporary password, as the demo setup leaves it.
 import json, os, sys, urllib.request
 

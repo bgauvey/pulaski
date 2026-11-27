@@ -8,13 +8,13 @@
 
 <PageTitle>@L["SPC alerts"] · Pulaski</PageTitle>
 
-@* SPC alerts (D-099): a control chart that signalled, one open per chart; further breaks are added to it. Closed with what caused it and what
+@* SPC alerts (D-099): a control chart that signaled, one open per chart; further breaks are added to it. Closed with what caused it and what
    was done; the next break opens a new one. Alerts never hold a lot: that stays with the specification. *@
 <div class="inv-head">
     <div>
         <h1 class="mb-1">@L["SPC alerts"]</h1>
         <p class="text-muted mb-0">
-            @L["Control charts that signalled: a result beyond its limits, or completing a run rule. Find the cause, then close the alert with it and what was done."]
+            @L["Control charts that signaled: a result beyond its limits, or completing a run rule. Find the cause, then close the alert with it and what was done."]
         </p>
     </div>
     <div class="inv-head-tools">
@@ -57,7 +57,7 @@ else
 {
     <div class="table-panel mb-3">
         <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>@L["Chart"]</th><th>@L["Rules"]</th><th class="inv-num">@L["Results"]</th><th>@L["Signalled"]</th><th>@L["Status"]</th><th></th></tr></thead>
+            <thead><tr><th>@L["Chart"]</th><th>@L["Rules"]</th><th class="inv-num">@L["Results"]</th><th>@L["Signaled"]</th><th>@L["Status"]</th><th></th></tr></thead>
             <tbody>
                 @foreach (var a in _alerts)
                 {
@@ -121,7 +121,7 @@ else
                 @if (_raisingNcr)
                 {
                     <RaiseNcrForm @key="alert.Id" SiteId="Sites.SiteId!.Value" SourceKind="spc_alert" SourceId="alert.Id"
-                                  Title="@L["{0} on {1} signalled", alert.CharacteristicCode, alert.MaterialCode]" Cancelled="() => _raisingNcr = false" />
+                                  Title="@L["{0} on {1} signaled", alert.CharacteristicCode, alert.MaterialCode]" Canceled="() => _raisingNcr = false" />
                 }
                 else
                 {

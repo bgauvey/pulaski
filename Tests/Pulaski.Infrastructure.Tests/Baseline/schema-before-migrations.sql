@@ -699,7 +699,7 @@ CREATE TABLE core.job (
                             'planned','dispatched','firmed','running','paused','completed','closed','cancelled')),
     dispatched_at       timestamptz,
     firmed_at           timestamptz,                            -- planned_start is frozen from here on (D-019)
-    replaces_job_id     uuid REFERENCES core.job(id),           -- set on the replacement for a cancelled, started job
+    replaces_job_id     uuid REFERENCES core.job(id),           -- set on the replacement for a canceled, started job
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT job_number_uq UNIQUE (site_id, job_number),

@@ -7,10 +7,10 @@ namespace Pulaski.Web.Tests.Accessibility;
 public class MarkupAccessibilityTests
 {
     private static readonly HashSet<string> Controls = ["input", "select", "textarea", "InputText", "InputNumber", "InputSelect", "InputDate", "InputCheckbox", "InputTextArea"];
-    private static readonly HashSet<string> Unlabelled = ["hidden", "submit", "button", "reset", "image"];
+    private static readonly HashSet<string> Unlabeled = ["hidden", "submit", "button", "reset", "image"];
 
     [Fact]
-    public void Every_form_control_has_a_label() => AssertNone(Findings(UnlabelledControls));
+    public void Every_form_control_has_a_label() => AssertNone(Findings(UnlabeledControls));
 
     [Fact]
     public void Every_button_and_link_has_a_name() => AssertNone(Findings(UnnamedActions));
@@ -53,12 +53,12 @@ public class MarkupAccessibilityTests
         Assert.Contains("id=\"main-content\" tabindex=\"-1\"", layout, StringComparison.Ordinal);
     }
 
-    internal static IEnumerable<MarkupTag> UnlabelledControls(string text, IReadOnlyList<MarkupTag> tags)
+    internal static IEnumerable<MarkupTag> UnlabeledControls(string text, IReadOnlyList<MarkupTag> tags)
     {
         var labels = tags.Where(t => t.Name == "label").ToList();
         var forIds = labels.Select(l => l["for"]).OfType<string>().Select(Normalized).ToHashSet(StringComparer.Ordinal);
         return tags.Where(t => Controls.Contains(t.Name)
-            && !(t["type"] is { } type && Unlabelled.Contains(type))
+            && !(t["type"] is { } type && Unlabeled.Contains(type))
             && !t.Has("@attributes")
             && !Named(t)
             && !(t["id"] is { } id && forIds.Contains(Normalized(id)))

@@ -31,8 +31,8 @@ public sealed record JobPlacementPreviewDto
 
 public sealed record JobDelayDto(Guid JobId, string JobNumber, TimeSpan Delay);
 
-/// <summary>The cancelled job's new version, and its replacement if one was asked for.</summary>
-/// <param name="Version">The cancelled job's new version.</param>
+/// <summary>The canceled job's new version, and its replacement if one was asked for.</summary>
+/// <param name="Version">The canceled job's new version.</param>
 /// <param name="ReplacementJobId">The replacement, when one was made.</param>
 /// <param name="Note">For a replacement with a partial last batch (D-067): its batches, and what happens when the partial is reported.</param>
 public sealed record CancelJobResponse(long Version, Guid? ReplacementJobId, string? Note = null);

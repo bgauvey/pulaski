@@ -1,5 +1,5 @@
 /* Schedule board: Gantt, calendar, Kanban and table views, the editor drawer and toasts.
-   Colours come from css/tokens.css. Job status stays neutral-to-accent (it is not machine
+   Colors come from css/tokens.css. Job status stays neutral-to-accent (it is not machine
    state); danger is kept for overlaps and warning for lateness, so those two always stand out. */
 
 :root {

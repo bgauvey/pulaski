@@ -18,7 +18,7 @@ public class WorkCalendarTests
     }
 
     [Fact]
-    public void Around_the_clock_still_honours_exceptions()
+    public void Around_the_clock_still_honors_exceptions()
     {
         var calendar = WorkCalendar.AroundTheClock([W(10, 12)]);
 

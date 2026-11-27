@@ -39,7 +39,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         // Declare 60 kg of A into the job, then 400 m of profile out of it, then 10 kg of B.
         var consumed = await db.SendAsync(new ConsumeLotCommand(a.LotId, plant.Job, 60m, plant.Kg));
         Assert.Empty(consumed.Warnings);
-        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 400m, plant.Metre));
+        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 400m, plant.Meter));
         Assert.Equal($"{plant.JobNumber}-01", made.LotNumber);
         await db.SendAsync(new ConsumeLotCommand(b.LotId, plant.Job, 10m, plant.Kg));
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ConsumeLotCommand(a.LotId, plant.Job, 41m, plant.Kg)));
@@ -83,7 +83,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var plant = await CreatePlantAsync();
         var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "R-A-" + _suffix, 100m, plant.Kg));
         await db.SendAsync(new ConsumeLotCommand(a.LotId, plant.Job, 25m, plant.Kg));
-        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 300m, plant.Metre));
+        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 300m, plant.Meter));
 
         var stock = await QueryAsync<ListStockQuery, IReadOnlyList<MaterialStockDto>>(
             new ListStockQuery(new StockFilter(SiteId: plant.Site, InStockOnly: true)));
@@ -274,7 +274,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var balance = await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, "R-FA-" + _suffix, 600m, plant.Kg));
         await db.SendAsync(new ReceiveLotCommand(plant.Resin, silo.Id, "R-FB-" + _suffix, 300m, plant.Kg));
         await db.SendAsync(new ConsumeLotCommand(balance.LotId, plant.Job, 500m, plant.Kg));
-        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 100m, plant.Metre));
+        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 100m, plant.Meter));
 
         async Task<IReadOnlyList<LotTraceNodeDto>> BackAsync() =>
             await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(made.LotId, Forward: false));
@@ -425,7 +425,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.InRange(aging.OldestAt!.Value, Ago(10).AddSeconds(-1), Ago(10).AddSeconds(1));
 
         // Production and consumption go into the run going on then; their genealogy takes effect then too.
-        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 100m, plant.Metre, Comment: "Shift report", EffectiveAt: Ago(8)));
+        var made = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 100m, plant.Meter, Comment: "Shift report", EffectiveAt: Ago(8)));
         await db.SendAsync(new ConsumeLotCommand(lot.LotId, plant.Job, 5m, plant.Kg, "Shift report", EffectiveAt: Ago(7)));
         var detail = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(made.LotId));
         var parent = Assert.Single(detail.Parents);
@@ -552,8 +552,8 @@ public sealed class InventoryTests(DatabaseFixture db)
             db.SendAsync(new ReverseChainCommand(c.LotId, receipt, fix, "Wrong delivery", DryRun: false, ExpectedSteps: [.. check.Steps.Skip(1).Select(x => x.EventId)])));
         var done = await db.SendAsync(new ReverseChainCommand(c.LotId, receipt, fix, "Wrong delivery", DryRun: false, ExpectedSteps: [.. check.Steps.Select(x => x.EventId)]));
         Assert.True(done.Applied);
-        Assert.Equal((LotStatus.Cancelled, 0m), ((await Lot(c.LotId)).Lot.Status, (await Lot(c.LotId)).Lot.Quantity));
-        Assert.Equal(LotStatus.Cancelled, (await Lot(part.LotId)).Lot.Status);
+        Assert.Equal((LotStatus.Canceled, 0m), ((await Lot(c.LotId)).Lot.Status, (await Lot(c.LotId)).Lot.Quantity));
+        Assert.Equal(LotStatus.Canceled, (await Lot(part.LotId)).Lot.Status);
     }
 
     private async Task VersionThenAsync(Func<long, WriteOffLotCommand> command) =>
@@ -710,7 +710,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var count = await ReasonAsync("inventory_adjustment", "COUNT");
         var a = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "RV-A-" + _suffix, 100m, plant.Kg));
         var consumed = await db.SendAsync(new ConsumeLotCommand(a.LotId, plant.Job, 30m, plant.Kg));
-        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 200m, 0m, plant.Metre, null, plant.Staging, Comment: "First reel"));
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 200m, 0m, plant.Meter, null, plant.Staging, Comment: "First reel"));
         var made = report.Lots.Single();
 
         // Reversing the consumption gives the stock back and takes A out of what the job made from it.
@@ -730,16 +730,16 @@ public sealed class InventoryTests(DatabaseFixture db)
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new ReverseMovementCommand(made.LotId, made.Version, produced.Id, count, "x")));
 
         // While part of the reel has been used, the report can't take it back; once that is reversed, it can.
-        var split = await db.SendAsync(new SplitLotCommand(made.LotId, made.Version, 50m, plant.Metre));
+        var split = await db.SendAsync(new SplitLotCommand(made.LotId, made.Version, 50m, plant.Meter));
         var refused = await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(
             new ReverseProductionReportCommand(plant.Job, report.ReportId, count, "Reported on the wrong job")));
         Assert.Contains("split", refused.Message, StringComparison.Ordinal);
         var splitRow = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(split.LotId))).History.Single(h => h.Kind == LotEventKind.Split);
         await db.SendAsync(new ReverseMovementCommand(split.LotId, split.Version, splitRow.Id, count, "Split by mistake"));
-        Assert.Equal(LotStatus.Cancelled, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(split.LotId))).Lot.Status);
+        Assert.Equal(LotStatus.Canceled, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(split.LotId))).Lot.Status);
 
         var reversed = await db.SendAsync(new ReverseProductionReportCommand(plant.Job, report.ReportId, count, "Reported on the wrong job"));
-        Assert.Equal((0m, LotStatus.Cancelled), (reversed.Lots.Single().Quantity, reversed.Lots.Single().Status));
+        Assert.Equal((0m, LotStatus.Canceled), (reversed.Lots.Single().Quantity, reversed.Lots.Single().Status));
         var job = await QueryAsync<GetJobExecutionQuery, JobExecutionDto>(new GetJobExecutionQuery(plant.Job));
         Assert.Equal(0m, job.Runs.Sum(r => r.GoodQty));
         var listed = Assert.Single(job.Reports);
@@ -761,14 +761,14 @@ public sealed class InventoryTests(DatabaseFixture db)
     {
         var plant = await CreatePlantAsync();
         var count = await ReasonAsync("inventory_adjustment", "COUNT");
-        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 200m, 0m, plant.Metre, null, plant.Staging, Comment: "First reel"));
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 200m, 0m, plant.Meter, null, plant.Staging, Comment: "First reel"));
 
         // The same figures: nothing to correct.
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CorrectProductionReportCommand(plant.Job, report.ReportId, 200m, 0m, null, count, "Typo")));
 
         var corrected = await db.SendAsync(new CorrectProductionReportCommand(plant.Job, report.ReportId, 180m, 0m, null, count, "Counted 20 m twice"));
         Assert.Equal((report.ReportId, 180m), (corrected.CorrectsReportId, corrected.RunGoodQty));
-        Assert.Equal(LotStatus.Cancelled, Assert.Single(corrected.TakenBack).Status);
+        Assert.Equal(LotStatus.Canceled, Assert.Single(corrected.TakenBack).Status);
         var made = Assert.Single(corrected.Lots);
         Assert.Equal(180m, made.Quantity);
         Assert.NotEqual(report.Lot!.LotId, made.LotId);
@@ -814,7 +814,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(notBelow));
         var noCapability = await QueryAsync<GetMachineCountsQuery, MachineCountsDto>(new GetMachineCountsQuery(plant.Job, null));
         Assert.StartsWith("The line had no capability", noCapability.Unavailable, StringComparison.Ordinal);
-        await db.SendAsync(new AddCapabilityCommand(plant.Profile, plant.Line, 1000m, plant.Metre, null, null, false, TestTime.Now.AddDays(-2), null, UnitsPerCount: 2.4m));
+        await db.SendAsync(new AddCapabilityCommand(plant.Profile, plant.Line, 1000m, plant.Meter, null, null, false, TestTime.Now.AddDays(-2), null, UnitsPerCount: 2.4m));
 
         // The edge's counts at the saw (D-050): 100 cuts with 5 bad two hours ago, 50 more an hour ago.
         var now = TestTime.Now;
@@ -833,7 +833,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal("SAW-" + _suffix, counts.CounterCode);
         Assert.Equal(348m, counts.GoodQty);
         Assert.Equal(12m, counts.ScrapQty);
-        Assert.Equal(plant.Metre, counts.UomId);
+        Assert.Equal(plant.Meter, counts.UomId);
         Assert.Null(counts.Since);
 
         // Reported from the machine, once: the same counts again are refused.
@@ -983,7 +983,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(plant.JobNumber, beyond.JobNumber);
         Assert.Single(chart.Limits);
 
-        // Nine just above the centre line (11, sigma 1.77) complete a run on one side: rule 2, marked on the ninth.
+        // Nine just above the center line (11, sigma 1.77) complete a run on one side: rule 2, marked on the ninth.
         for (var i = 0; i < 9; i++)
         {
             await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, melt.Id, null, plant.Job, null, [11.5m], null, null, "manual", null));
@@ -1180,10 +1180,10 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(0m, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(outRow.RelatedLotId!.Value))).Lot.Quantity);
 
         // Output reported into a silo joined its balance; reversing the report takes it out of the balance again.
-        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 300m, 0m, plant.Metre, null, siloB.Id, "RV-OUT-" + _suffix));
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 300m, 0m, plant.Meter, null, siloB.Id, "RV-OUT-" + _suffix));
         var balance = report.Lot!;
         var reversed = await db.SendAsync(new ReverseProductionReportCommand(plant.Job, report.ReportId, count, "Wrong job"));
-        Assert.Equal(LotStatus.Cancelled, Assert.Single(reversed.Lots).Status);
+        Assert.Equal(LotStatus.Canceled, Assert.Single(reversed.Lots).Status);
         var silo = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(balance.LotId))).Lot;
         Assert.Equal(balance.Quantity - 300m, silo.Quantity);
     }
@@ -1197,10 +1197,10 @@ public sealed class InventoryTests(DatabaseFixture db)
         var r1 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "PR-1-" + _suffix, 100m, plant.Kg));
         var r2 = await db.SendAsync(new ReceiveLotCommand(plant.Resin, plant.Stores, "PR-2-" + _suffix, 100m, plant.Kg));
         await db.SendAsync(new ConsumeLotCommand(r1.LotId, plant.Job, 40m, plant.Kg));
-        await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Metre));
+        await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Meter));
         await db.SendAsync(new ConsumeLotCommand(r2.LotId, plant.Job, 40m, plant.Kg));
-        await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Metre));
-        var p3 = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Metre));
+        await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Meter));
+        var p3 = await db.SendAsync(new ProduceLotCommand(plant.Job, plant.Staging, 10m, plant.Meter));
 
         async Task<IReadOnlyList<LotTraceNodeDto>> BackAsync(Guid lotId) =>
             await QueryAsync<TraceLotQuery, IReadOnlyList<LotTraceNodeDto>>(new TraceLotQuery(lotId, Forward: false));
@@ -1222,7 +1222,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new SetMadeFromCommand(p3.LotId, [stray.LotId], null)));
 
         // A report can name them as it makes the lot; picking none goes back to pairing by time.
-        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 10m, 0m, plant.Metre, null, plant.Staging) { MadeFromLotIds = [r2.LotId] });
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 10m, 0m, plant.Meter, null, plant.Staging) { MadeFromLotIds = [r2.LotId] });
         Assert.Equal(r2.LotId, Assert.Single(await BackAsync(report.Lot!.LotId), n => n.Depth == 1).LotId);
         await db.SendAsync(new SetMadeFromCommand(p3.LotId, [], null));
         Assert.Equal(r2.LotId, Assert.Single(await BackAsync(p3.LotId), n => n.Depth == 1).LotId);
@@ -1294,7 +1294,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal((a1.LotId, r1.LotId), (Assert.Single(points[0].Loads).LotId, Assert.Single(points[1].Loads).LotId));
 
         // 100 m made: 1 kg of additive backflushed, 145 kg of resin by time from R1, which holds only 100.
-        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Meter, null, plant.Staging));
         Assert.Contains(report.Warnings, w => w.Code == "feed_shortfall");
         async Task<LotSummaryDto> LotAsync(Guid id) => (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(id))).Lot;
         Assert.Equal((0m, 49m), ((await LotAsync(r1.LotId)).Quantity, (await LotAsync(a1.LotId)).Quantity));
@@ -1329,7 +1329,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal(AutoSource.Counter, (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(r1.LotId))).History.First(h => h.Kind == LotEventKind.Consumed && !h.IsReversed).AutoSource);
 
         // With the counter, the hopper's resin isn't shared by time too; more counted than R1 holds is flagged, then dismissed.
-        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 10m, 0m, plant.Metre, null, plant.Staging));
+        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 10m, 0m, plant.Meter, null, plant.Staging));
         Assert.Equal(88m, (await LotAsync(r1.LotId)).Quantity);
         await db.SendAsync(new IngestEdgeSignalsCommand(node.Id, stream, "1.0.0", [S(3, 2, 1112)]));
         Assert.Equal(0m, (await LotAsync(r1.LotId)).Quantity);
@@ -1367,7 +1367,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         await db.SendAsync(new SetAllocationSettingsCommand(plant.Site, 0, false, true, []));
 
         // 100 m wants 40 kg backflushed: only the 20 kg no other job holds is taken, the rest is a shortfall; this job's allocation is used up.
-        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Meter, null, plant.Staging));
         Assert.Contains(report.Warnings, w => w.Code == "feed_shortfall");
         var detail = await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(lot.LotId));
         Assert.Equal(30m, detail.Lot.Quantity);
@@ -1556,7 +1556,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var resin = await ResinAsync();
         Assert.Equal((400m, 600m, 450m), (resin.Available, resin.Incoming, resin.Shortfall));
 
-        // Cancelling it now is refused; closing it as complete keeps what arrived and expects no more.
+        // Canceling it now is refused; closing it as complete keeps what arrived and expects no more.
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new CancelExpectedReceiptCommand(po.Id, part.Version)));
         await db.SendAsync(new CompleteExpectedReceiptCommand(po.Id, part.Version));
         Assert.Equal(("received", 0m), ((await ExpectedAsync(po.Id)).Status, (await ExpectedAsync(po.Id)).RemainingQty));
@@ -1741,7 +1741,7 @@ public sealed class InventoryTests(DatabaseFixture db)
 
         // 60 m reported: the 50 m sample falls due now. The result just taken is within its grace, so it counts for that one, and the late start
         // sample counts as missed. The site's list shows the line's job.
-        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 60m, 0m, plant.Metre, null, plant.Staging));
+        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 60m, 0m, plant.Meter, null, plant.Staging));
         var after = await DueAsync();
         Assert.Equal(("done", 40m, 1), (after.Status, after.NextAfterUnits!.Value, after.Missed));
         Assert.Contains(await QueryAsync<Application.Quality.GetDueSamplesQuery, IReadOnlyList<Contracts.Quality.DueSampleDto>>(
@@ -1754,7 +1754,7 @@ public sealed class InventoryTests(DatabaseFixture db)
             await connection.ExecuteAsync("UPDATE ts.quality_sample SET occurred_at = occurred_at - interval '1 hour' WHERE characteristic_id = @Id", new { wall.Id });
         }
 
-        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 50m, 0m, plant.Metre, null, plant.Staging));
+        await db.SendAsync(new ReportProductionCommand(plant.Job, null, 50m, 0m, plant.Meter, null, plant.Staging));
         var terminal = new Application.Labor.TerminalRecord(Guid.CreateVersion7(), plant.Site, "SS-" + s, "Station", plant.Site, plant.Line, "badge", true, TestTime.Now);
         var station = await QueryAsync<GetStationQuery, StationDto>(new GetStationQuery(terminal, null, null));
         var owed = Assert.Single(station.Samples);
@@ -1769,13 +1769,13 @@ public sealed class InventoryTests(DatabaseFixture db)
     }
 
     [Fact]
-    public async Task A_lots_certificate_summarises_its_results_against_the_released_specification_and_is_attached_as_a_coa()
+    public async Task A_lots_certificate_summarizes_its_results_against_the_released_specification_and_is_attached_as_a_coa()
     {
         var plant = await CreatePlantAsync();
         var s = _suffix.ToUpperInvariant();
         CreatedResponse wall = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("CW-" + s, "Wall thickness", null, "variable", plant.Kg, 2));
         CreatedResponse surface = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("CS-" + s, "Surface defects", null, "attribute", null, 0));
-        CreatedResponse colour = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("CC-" + s, "Colour", null, "variable", null, 1));
+        CreatedResponse color = await db.SendAsync(new Application.Quality.CreateCharacteristicCommand("CC-" + s, "Color", null, "variable", null, 1));
         CreatedResponse spec = await db.SendAsync(new Application.Quality.CreateSpecCommand(plant.Profile));
         var header = await QueryAsync<Application.Quality.GetSpecQuery, Contracts.Quality.SpecDto>(new Application.Quality.GetSpecQuery(spec.Id));
         var draft = await QueryAsync<Application.Quality.GetSpecVersionQuery, Contracts.Quality.SpecVersionDto>(
@@ -1786,13 +1786,13 @@ public sealed class InventoryTests(DatabaseFixture db)
             [
                 new() { Id = Guid.CreateVersion7(), CharacteristicId = wall.Id, Lsl = 3.2m, Usl = 3.4m, SortOrder = 10 },
                 new() { Id = Guid.CreateVersion7(), CharacteristicId = surface.Id, MaxDefects = 1, SortOrder = 20 },
-                new() { Id = Guid.CreateVersion7(), CharacteristicId = colour.Id, Lsl = 1m, Usl = 5m, SortOrder = 30 },
+                new() { Id = Guid.CreateVersion7(), CharacteristicId = color.Id, Lsl = 1m, Usl = 5m, SortOrder = 30 },
             ],
         }));
         await db.SendAsync(new Application.Quality.ReleaseSpecVersionCommand(spec.Id, draft.Id, saved.Version, null));
 
-        // A lot made in the job: wall thickness measured on the lot; surface inspected on the job (no lot named); colour never.
-        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        // A lot made in the job: wall thickness measured on the lot; surface inspected on the job (no lot named); color never.
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Meter, null, plant.Staging));
         var lotId = report.Lots.Single().LotId;
         await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, wall.Id, lotId, plant.Job, null, [3.30m, 3.34m], null, null, "manual", null));
         await db.SendAsync(new Application.Quality.RecordQualityResultCommand(plant.Site, wall.Id, lotId, plant.Job, null, [3.28m], null, null, "lab", null));
@@ -1823,7 +1823,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var s = _suffix.ToUpperInvariant();
         CreatedResponse owner = await db.SendAsync(new Application.Security.CreateUserCommand(
             "qa." + _suffix, "Quinn " + s, null, "Temporary-pass-1", Domain.Security.Roles.Quality, plant.Site));
-        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Meter, null, plant.Staging));
         var lotId = report.Lots.Single().LotId;
 
         // Raised from the lot: its site, the lot and the run that made it are linked; the owner must hold a role there.
@@ -1874,7 +1874,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var email = $"qb-{_suffix}@example.com";
         CreatedResponse owner = await db.SendAsync(new Application.Security.CreateUserCommand(
             username, "Quill " + s, email, "Temporary-pass-1", Domain.Security.Roles.Quality, plant.Site));
-        var first = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        var first = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Meter, null, plant.Staging));
         Guid runId;
         await using (var connection = await db.AdminDataSource.OpenConnectionAsync())
         {
@@ -2031,7 +2031,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         Assert.Equal((1, "3.2 – 3.4", "at most 1 defect"), (released.VersionNumber, released.Items[0].Limits, released.Items[1].Limits));
 
         // A lot made in the running job: a wall thickness out of limits holds it; a surface inspection within them doesn't.
-        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Metre, null, plant.Staging));
+        var report = await db.SendAsync(new ReportProductionCommand(plant.Job, null, 100m, 0m, plant.Meter, null, plant.Staging));
         var lotId = report.Lots.Single().LotId;
         var failed = await db.SendAsync(new Application.Quality.RecordQualityResultCommand(
             plant.Site, wall.Id, lotId, plant.Job, null, [3.31m, 3.45m], null, null, "manual", "Caliper"));
@@ -2085,7 +2085,7 @@ public sealed class InventoryTests(DatabaseFixture db)
 
         // A number lot attribute standing for the characteristic records a result when it is set, and holds the lot when it fails.
         CreatedResponse attribute = await db.SendAsync(new CreateLotAttributeCommand(plant.Site, "WALL", "Wall", "number", null, [], true, [], 1, wall.Id));
-        var second = (await db.SendAsync(new ReportProductionCommand(plant.Job, null, 50m, 0m, plant.Metre, null, plant.Staging))).Lots.Single().LotId;
+        var second = (await db.SendAsync(new ReportProductionCommand(plant.Job, null, 50m, 0m, plant.Meter, null, plant.Staging))).Lots.Single().LotId;
         await db.SendAsync(new SetLotAttributeCommand(second, attribute.Id, 0, "3.5"));
         var fromAttribute = Assert.Single(await QueryAsync<Application.Quality.ListQualityResultsQuery, IReadOnlyList<Contracts.Quality.QualityResultDto>>(
             new Application.Quality.ListQualityResultsQuery(new Application.Quality.QualityResultFilter(null, LotId: second))));
@@ -2125,8 +2125,8 @@ public sealed class InventoryTests(DatabaseFixture db)
             .ContinueWith(t => t.Result.Where(v => v.LotId == a.LotId).ToList()));
 
         // Unknown columns are refused before any row.
-        var unknown = await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, "lot_number,colour\r\nX,red\r\n", DryRun: true));
-        Assert.Contains(unknown.FileProblems, p => p.Text.Contains("colour", StringComparison.Ordinal));
+        var unknown = await db.SendAsync(new ImportLotAttributeValuesCommand(plant.Site, "lot_number,color\r\nX,red\r\n", DryRun: true));
+        Assert.Contains(unknown.FileProblems, p => p.Text.Contains("color", StringComparison.Ordinal));
 
         // A dry run reports and keeps nothing; the real run sets what is given, leaves blank cells alone and clears (clear).
         csv = $"lot_number,material_code,mfi,grade\r\nAV-A-{_suffix},RESIN-{_suffix},11.2,a\r\nAV-B-{_suffix},,9.5,(clear)\r\n";
@@ -2177,7 +2177,7 @@ public sealed class InventoryTests(DatabaseFixture db)
               <ExpirationTime>2027-06-30</ExpirationTime>
               <MaterialLotProperty><ID>SupplierLot</ID><Value><ValueString>S-1</ValueString></Value></MaterialLotProperty>
               <MaterialLotProperty><ID>mfi</ID><Value><ValueString>{mfi}</ValueString></Value></MaterialLotProperty>
-              <MaterialLotProperty><ID>Colour</ID><Value><ValueString>natural</ValueString></Value></MaterialLotProperty>
+              <MaterialLotProperty><ID>Color</ID><Value><ValueString>natural</ValueString></Value></MaterialLotProperty>
             </MaterialLot>
             """;
         string File(params string[] lots) => $"<MaterialInformation xmlns=\"http://www.mesa.org/xml/B2MML\">{string.Concat(lots)}</MaterialInformation>";
@@ -2198,7 +2198,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         var a = (await QueryAsync<GetLotQuery, LotDto>(new GetLotQuery(known.LotId))).Lot;
         Assert.Equal(100m, a.Quantity);
         Assert.Contains(applied.Rows[0].Notes, n => n.Text.Contains("quantity stays", StringComparison.Ordinal));
-        Assert.Contains(applied.Rows[0].Notes, n => n.Text.Contains("Colour", StringComparison.Ordinal));
+        Assert.Contains(applied.Rows[0].Notes, n => n.Text.Contains("Color", StringComparison.Ordinal));
 
         // The new lot is received with its supplier lot and expiry, and its attribute too.
         var values = await QueryAsync<ListLotAttributeValuesQuery, IReadOnlyList<LotAttributeExportDto>>(new ListLotAttributeValuesQuery(plant.Site));
@@ -2234,7 +2234,7 @@ public sealed class InventoryTests(DatabaseFixture db)
             StoresCode = "RM-" + _suffix,
             Staging = staging.Id,
             StagingCode = "FG-" + _suffix,
-            Metre = db.UomId,
+            Meter = db.UomId,
             JobNumber = "WO-" + _suffix + "-10",
         };
 
@@ -2299,7 +2299,7 @@ public sealed class InventoryTests(DatabaseFixture db)
         public required string StoresCode { get; init; }
         public required Guid Staging { get; init; }
         public required string StagingCode { get; init; }
-        public required Guid Metre { get; init; }
+        public required Guid Meter { get; init; }
         public required string JobNumber { get; init; }
         public Guid Kg { get; } = Guid.CreateVersion7();
         public Guid Gram { get; } = Guid.CreateVersion7();

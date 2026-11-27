@@ -21,10 +21,10 @@ public class ChangeWorkOrderStatusHandlerTests
         var wo = _f.Stores.WorkOrders.Add(WorkOrderStatus.Planned, version: 10);
 
         var result = await _handler.HandleAsync(
-            new ChangeWorkOrderStatusCommand(wo.Id, 10, WorkOrderStatus.Cancelled, "Customer withdrew"), CancellationToken.None);
+            new ChangeWorkOrderStatusCommand(wo.Id, 10, WorkOrderStatus.Canceled, "Customer withdrew"), CancellationToken.None);
 
         Assert.Equal(11, result.Version);
-        Assert.Equal(WorkOrderStatus.Cancelled, _f.Stores.WorkOrders.Find(wo.Id)!.Value.Status);
+        Assert.Equal(WorkOrderStatus.Canceled, _f.Stores.WorkOrders.Find(wo.Id)!.Value.Status);
         var evt = Assert.Single(_f.Stores.Events.Appended);
         Assert.Equal(EventTypes.WorkOrderStatusChanged, evt.Type);
         Assert.Equal("Customer withdrew", evt.Reason);
@@ -45,14 +45,14 @@ public class ChangeWorkOrderStatusHandlerTests
     }
 
     [Fact]
-    public async Task Cancelling_an_order_with_open_jobs_is_refused()
+    public async Task Canceling_an_order_with_open_jobs_is_refused()
     {
         var wo = _f.Stores.WorkOrders.Add(WorkOrderStatus.Planned, version: 10);
         _f.Stores.Scheduling.AddJob(Job.CreateProduction(
             Guid.CreateVersion7(), wo.SiteId, wo.Id, "J-1", Guid.CreateVersion7(), wo.MaterialId, 10m, wo.UomId, 1m, null));
 
         var ex = await Assert.ThrowsAsync<DomainRuleException>(() => _handler.HandleAsync(
-            new ChangeWorkOrderStatusCommand(wo.Id, 10, WorkOrderStatus.Cancelled, null), CancellationToken.None));
+            new ChangeWorkOrderStatusCommand(wo.Id, 10, WorkOrderStatus.Canceled, null), CancellationToken.None));
         Assert.Contains("open jobs", ex.Message, StringComparison.Ordinal);
     }
 
@@ -85,7 +85,7 @@ public class ChangeWorkOrderStatusHandlerTests
     [Fact]
     public async Task Missing_work_order_is_not_found() =>
         await Assert.ThrowsAsync<NotFoundException>(() => _handler.HandleAsync(
-            new ChangeWorkOrderStatusCommand(Guid.CreateVersion7(), 1, WorkOrderStatus.Cancelled, null), CancellationToken.None));
+            new ChangeWorkOrderStatusCommand(Guid.CreateVersion7(), 1, WorkOrderStatus.Canceled, null), CancellationToken.None));
 
     [Fact]
     public async Task List_fills_next_statuses()

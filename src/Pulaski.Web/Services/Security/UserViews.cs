@@ -3,7 +3,7 @@ namespace Pulaski.Web.Services.Security;
 /// <summary>A page the user starred (#131): where it is and what it was called.</summary>
 public sealed record FavoritePage(string Href, string Title);
 
-/// <summary>Favourites, home page and saved filters as the screens use them (#131). Pure.</summary>
+/// <summary>Favorites, home page and saved filters as the screens use them (#131). Pure.</summary>
 public static class UserViews
 {
     public const string HomeKey = "home";
@@ -13,7 +13,7 @@ public static class UserViews
     /// <summary>The key a list page keeps its filters under: <c>filters:inventory/lots</c>.</summary>
     public static string FiltersKey(string page) => $"filters:{page}";
 
-    /// <summary>A page's place without its query or fragment, as favourites and the home page keep it: <c>inventory/lots</c>.</summary>
+    /// <summary>A page's place without its query or fragment, as favorites and the home page keep it: <c>inventory/lots</c>.</summary>
     public static string PageOf(string relativePath) => relativePath.Split('?', '#')[0].Trim('/');
 
     /// <summary>The page's title as the browser shows it, without the app's name: "Lots · Inventory".</summary>

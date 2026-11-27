@@ -25,7 +25,7 @@ public sealed record WorkOrderB2mmlSource(IReadOnlyList<WorkOrderB2mmlRow> Rows,
 /// else <c>LatestEndTime</c>.</item>
 /// <item>The process is <c>ProductProductionRuleID</c>, else the segment's <c>ProductSegmentID</c> or <c>ProcessSegmentID</c>, as a Pulaski
 /// process code; none uses the material's default.</item>
-/// <item><c>RequestState</c> <c>Cancelled</c> (or <c>Canceled</c>, <c>Aborted</c>) cancels the order.</item>
+/// <item><c>RequestState</c> <c>Canceled</c> (or <c>Canceled</c>, <c>Aborted</c>) cancels the order.</item>
 /// </list>
 /// </summary>
 public static class WorkOrderB2mml
@@ -38,7 +38,7 @@ public static class WorkOrderB2mml
         IgnoreProcessingInstructions = true,
     };
 
-    private static readonly string[] CancelledStates = ["cancelled", "canceled", "aborted"];
+    private static readonly string[] CanceledStates = ["cancelled", "canceled", "aborted"];
 
     /// <summary>A document with one order and every part it reads, to start from.</summary>
     public const string Template = """
@@ -188,7 +188,7 @@ public static class WorkOrderB2mml
             Priority = priority,
             ProcessCode = process,
             Notes = First(request, "Description"),
-            Cancelled = First(request, "RequestState") is { } state && CancelledStates.Contains(state.ToLowerInvariant()),
+            Canceled = First(request, "RequestState") is { } state && CanceledStates.Contains(state.ToLowerInvariant()),
         }, []);
     }
 

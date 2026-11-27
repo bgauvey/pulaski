@@ -7,17 +7,17 @@ public static class StockCountStatus
 {
     public const string Open = "open";
     public const string Posted = "posted";
-    public const string Cancelled = "cancelled";
+    public const string Canceled = "cancelled";
 }
 
-/// <summary>A count of one location (D-030): open while people count, then posted or cancelled.</summary>
+/// <summary>A count of one location (D-030): open while people count, then posted or canceled.</summary>
 public sealed record StockCount(Guid Id, Guid SiteId, string Number, Guid LocationId, string Status, string? Note)
 {
     /// <summary>The count's number: <c>CNT-20261016-3</c> for the site's third count started that day (UTC).</summary>
     public static string NumberFor(DateTimeOffset day, int sequence) =>
         $"CNT-{day.UtcDateTime.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}-{sequence.ToString(CultureInfo.InvariantCulture)}";
 
-    /// <exception cref="DomainRuleException">The count is posted or cancelled.</exception>
+    /// <exception cref="DomainRuleException">The count is posted or canceled.</exception>
     public void EnsureOpen()
     {
         if (Status != StockCountStatus.Open)
@@ -35,7 +35,7 @@ public sealed record StockCount(Guid Id, Guid SiteId, string Number, Guid Locati
     public StockCount Cancel()
     {
         EnsureOpen();
-        return this with { Status = StockCountStatus.Cancelled };
+        return this with { Status = StockCountStatus.Canceled };
     }
 }
 

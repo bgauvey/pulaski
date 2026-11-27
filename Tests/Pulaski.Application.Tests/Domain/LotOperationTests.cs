@@ -90,9 +90,9 @@ public class LotOperationTests
     {
         var empty = Lot("R-1", 0m);
         var (received, receipt) = empty.Add(50m, LotEventKind.Received);
-        var (cancelled, undo) = received.Reverse(receipt);
-        Assert.Equal((0m, LotStatus.Cancelled), (cancelled.Quantity, cancelled.Status));
-        Assert.Equal((LotEventKind.Reversed, -50m, LotStatus.Cancelled), (undo.Kind, undo.QtyDelta!.Value, undo.ToStatus));
+        var (canceled, undo) = received.Reverse(receipt);
+        Assert.Equal((0m, LotStatus.Canceled), (canceled.Quantity, canceled.Status));
+        Assert.Equal((LotEventKind.Reversed, -50m, LotStatus.Canceled), (undo.Kind, undo.QtyDelta!.Value, undo.ToStatus));
 
         var (scrapped, writeOff) = received.Take(50m, LotEventKind.Scrapped, "kg");
         var (restored, _) = scrapped.Reverse(writeOff);
@@ -105,7 +105,7 @@ public class LotOperationTests
         var (held, hold) = received.ChangeStatus(LotStatus.OnHold);
         Assert.Equal(LotStatus.Available, held.Reverse(hold).Lot.Status);
 
-        Assert.Throws<DomainRuleException>(() => cancelled.Reverse(undo));
+        Assert.Throws<DomainRuleException>(() => canceled.Reverse(undo));
         var (used, consumption) = received.Take(5m, LotEventKind.Consumed, "kg");
         Assert.Throws<DomainRuleException>(() => used.Reverse(consumption));
     }

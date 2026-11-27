@@ -16,7 +16,7 @@ public class WorkOrderB2mmlTests
         Assert.Equal(("PRF-4410-WH", 12000m, "m"), (order.MaterialCode, order.Quantity, order.UomCode));
         Assert.Equal(new DateTimeOffset(2026, 11, 23, 6, 0, 0, TimeSpan.Zero), order.PlannedStart);
         Assert.Equal(new DateTimeOffset(2026, 11, 27, 18, 0, 0, TimeSpan.Zero), order.DueAt);
-        Assert.Equal((2, "EXTRUDE-PACK", "Customer order 778, white profile", false), (order.Priority, order.ProcessCode, order.Notes, order.Cancelled));
+        Assert.Equal((2, "EXTRUDE-PACK", "Customer order 778, white profile", false), (order.Priority, order.ProcessCode, order.Notes, order.Canceled));
         Assert.Null(order.ExternalVersion);
     }
 
@@ -116,7 +116,7 @@ public class WorkOrderB2mmlTests
     }
 
     [Fact]
-    public void Cancelled_requests_cancel_and_an_id_twice_is_one_order()
+    public void Canceled_requests_cancel_and_an_id_twice_is_one_order()
     {
         static string Request(string state) => $"""
             <ProductionRequest><ID>X-1</ID><StartTime>2026-12-01T06:00:00Z</StartTime><RequestState>{state}</RequestState>
@@ -125,8 +125,8 @@ public class WorkOrderB2mmlTests
             </ProductionRequest>
             """;
 
-        Assert.True(Assert.Single(WorkOrderB2mml.Parse($"<ProductionSchedule>{Request("Canceled")}</ProductionSchedule>", "ERP", "PLT1").Rows).Order!.Cancelled);
-        Assert.False(Assert.Single(WorkOrderB2mml.Parse($"<ProductionSchedule>{Request("Released")}</ProductionSchedule>", "ERP", "PLT1").Rows).Order!.Cancelled);
+        Assert.True(Assert.Single(WorkOrderB2mml.Parse($"<ProductionSchedule>{Request("Canceled")}</ProductionSchedule>", "ERP", "PLT1").Rows).Order!.Canceled);
+        Assert.False(Assert.Single(WorkOrderB2mml.Parse($"<ProductionSchedule>{Request("Released")}</ProductionSchedule>", "ERP", "PLT1").Rows).Order!.Canceled);
         var twice = WorkOrderB2mml.Parse($"<ProductionSchedule>{Request("Released")}{Request("Released")}</ProductionSchedule>", "ERP", "PLT1").Rows;
         Assert.NotNull(twice[0].Order);
         Assert.Null(twice[1].Order);

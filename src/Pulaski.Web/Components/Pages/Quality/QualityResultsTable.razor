@@ -86,7 +86,7 @@ else
                         <tr @key="@($"{r.Id}-ncr")">
                             <td colspan="7">
                                 <RaiseNcrForm SiteId="r.SiteId" SourceKind="quality_result" SourceId="r.Id" SourceAt="r.OccurredAt"
-                                              Title="@L["{0} out of specification", r.CharacteristicCode]" Cancelled="() => _raisingFor = null" />
+                                              Title="@L["{0} out of specification", r.CharacteristicCode]" Canceled="() => _raisingFor = null" />
                             </td>
                         </tr>
                     }

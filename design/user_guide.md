@@ -1,6 +1,6 @@
 # Pulaski User Guide
 
-*Last updated: 2026-11-26 · Pulaski is pre-alpha: screens and behaviour will change, and this guide changes with them.*
+*Last updated: 2026-11-27 · Pulaski is pre-alpha: screens and behavior will change, and this guide changes with them.*
 
 This guide explains how to use Pulaski to set up your plant, plan production and follow your orders. It is written for everyone who uses the application. If you are new to manufacturing software, start with [Getting started](#1-getting-started) and [Key ideas](#2-key-ideas) and follow the numbered steps in each section. If you already know MES and ERP systems, skim the key ideas, then jump to the section you need; the **In detail** parts and the [reference](#22-reference) tables give the exact rules.
 
@@ -38,7 +38,7 @@ This guide explains how to use Pulaski to set up your plant, plan production and
 
 ### What Pulaski is
 
-Pulaski is a manufacturing execution system (MES) for lines that run continuously or in long batches: extrusion, moulding, compounding and high-speed packaging. It sits between your business system (the ERP, which handles sales, purchasing and accounting) and the machines on the floor.
+Pulaski is a manufacturing execution system (MES) for lines that run continuously or in long batches: extrusion, molding, compounding and high-speed packaging. It sits between your business system (the ERP, which handles sales, purchasing and accounting) and the machines on the floor.
 
 Today you can use Pulaski to:
 
@@ -85,7 +85,7 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
   - the process **DEMO-PROFILE** (extrude on EXT-02, then bundle on PACK1 from 30 minutes after it starts), its BOMs (PVC-K67 and TIO2-MB), and EXT-02's own control limits for MELT-TEMP and PROFILE-WIDTH.
 
   Then the shifts are worked:
-  - **Orders:** work orders HIST-1001 (white, completed and closed), HIST-1002 (grey, from one shift into the next) and HIST-1003 run. HIST-1004 waits dispatched, HIST-1006 is planned and HIST-1005 is cancelled. EXT-02 runs a changeover job between colours, and its first job is paused for a breakdown.
+  - **Orders:** work orders HIST-1001 (white, completed and closed), HIST-1002 (gray, from one shift into the next) and HIST-1003 run. HIST-1004 waits dispatched, HIST-1006 is planned and HIST-1005 is canceled. EXT-02 runs a changeover job between colors, and its first job is paused for a breakdown.
   - **Production:** reports with scrap and its reasons; one report is corrected and one packer report is reversed.
   - **Inventory:** resin lots received, consumed, split into EXT-01's hopper and spilled. EXT-02's lots are packed on PACK1, two of them are held, one released and one rejected, and a packed lot is shipped.
   - **Machine data:** EXT-02's machine states, counts and alarms. Its stops include ones the machine named, a micro-stop, ones coded by operators, a split one and one still uncoded, plus a stop on PACK1 entered by hand.
@@ -121,10 +121,10 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
 - **Help (?, top right).** Opens this guide's section for the screen you're on, beside it; it follows you as you move to another screen.
   **Open the whole guide** opens all of it in a new tab, at that section. Esc or ✕ closes it. The sign-in page, terminals and operator
   stations have a **Help** link instead, which opens the guide in a new tab. The guide is in English.
-- **Favourites (☆, top right).** Click the star to add the page you're on to **Favourites** at the top of the menu, named as the page is;
+- **Favorites (☆, top right).** Click the star to add the page you're on to **Favorites** at the top of the menu, named as the page is;
   click the filled star to take it off. Up to 20, kept for you on any device.
 - **You (top right).** Your initials, name and roles. Click them for your menu:
-  - **Preferences…** opens a dialog with your [language and region](#your-language-and-region), the **colour theme** (*Like the device*,
+  - **Preferences…** opens a dialog with your [language and region](#your-language-and-region), the **color theme** (*Like the device*,
     *Light* or *Dark*) and the [touch layout](#use-a-touch-screen) (*Automatic*, *On* or *Off*).
   - **Make this page my home page**: where Pulaski opens for you when you sign in or come back to it (the Pulaski logo goes there too); the
     Overview is still in the menu. On your home page, **Start at the Overview again** undoes it.
@@ -134,7 +134,7 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
   **Nonconformances**, the **OEE report** on Machines, **deliveries** on Integrations and the **Audit trail**. Words you type as you go (a quick
   search box) and exact dates aren't kept: a date range stays a recent one (the journal's last week, the OEE report's same number of days up
   to today). A link that names its own filters (from the Overview, a lot's page) wins. **Clear filters** on the Lots list goes back to the
-  start. Favourites, your home page and filters are yours alone, and aren't part of the audit trail.
+  start. Favorites, your home page and filters are yours alone, and aren't part of the audit trail.
 
   Press Esc or click elsewhere to close the menu. Theme and touch layout are kept on that device; language and region on your user.
 - **Main area.** The page you picked.
@@ -219,7 +219,7 @@ Pulaski saves in two different ways, depending on the screen. Each section says 
 | Process editor | Straight away, after every change. The top of the editor says **Saving…** and then **All changes saved**. |
 | BOM editor | When you press **Save draft**. The button says **Saved** when there is nothing left to save. |
 | Forms (new work order, new process, new BOM) | When you press the form's button (**Create**, **Create and edit**). |
-| Schedule | Every drag and every button acts straight away. Only cancelling a job asks you to confirm. |
+| Schedule | Every drag and every button acts straight away. Only canceling a job asks you to confirm. |
 
 ### Times and time zones
 
@@ -265,13 +265,13 @@ A line is both. A **department** (for example the Extrusion area) is schedulable
 
 ### What you make: materials
 
-A **material** is anything you make or use: a finished profile, a resin, a dry blend, a pallet, an end cap. Each material has a code (its item number), a base unit (metres, kilograms, each) and usually a **material class** that groups similar materials, such as *Extruded profiles*. Materials are kept on the [Materials](#14-materials) page; those your ERP sends keep their code, name, base unit and type in the ERP.
+A **material** is anything you make or use: a finished profile, a resin, a dry blend, a pallet, an end cap. Each material has a code (its item number), a base unit (meters, kilograms, each) and usually a **material class** that groups similar materials, such as *Extruded profiles*. Materials are kept on the [Materials](#14-materials) page; those your ERP sends keep their code, name, base unit and type in the ERP.
 
 **Capabilities** say which material can run on which line, and how fast (its ideal rate). Pulaski never puts a material's job on a line without a capability for it. You add them on the material's page ([Where it can run](#where-it-can-run-capabilities-and-rates)).
 
 ### Units of measure
 
-Every quantity has a **unit**: kilograms, metres, each, boxes. Each material has a **base unit**, the one its stock is counted in. You don't have to use it everywhere: you can order a profile in feet even though it is stocked in metres. Pulaski converts:
+Every quantity has a **unit**: kilograms, meters, each, boxes. Each material has a **base unit**, the one its stock is counted in. You don't have to use it everywhere: you can order a profile in feet even though it is stocked in meters. Pulaski converts:
 
 - **Standard units** of the same kind convert for every material: kg ↔ lb, m ↔ ft, ea ↔ dozen.
 - **A material's own conversions** cover the rest: 1 m of a profile weighs 1.6 kg; 1 box holds 500 end caps; 1 bag holds 25 kg of resin.
@@ -311,7 +311,7 @@ A work order goes through three planning stages:
 2. **Dispatched:** you have published it to the floor. Pulaski records each job's projected times as the **baseline**, the plan you will be measured against.
 3. **Firmed:** the plan is frozen. Firmed jobs keep their start time.
 
-Then execution: **in progress**, **completed**, **closed**. An order can be **cancelled** at most stages. See [Work order statuses](#work-order-statuses).
+Then execution: **in progress**, **completed**, **closed**. An order can be **canceled** at most stages. See [Work order statuses](#work-order-statuses).
 
 ---
 
@@ -356,16 +356,16 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 
 ### The Overview page
 
-**Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It [updates by itself](#screens-that-update-themselves) within seconds of a change, and every 30 seconds; the pill at the top right says when it was last updated (and turns grey, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites whose Overview you may see, pick one at the top.
+**Operate → Overview** is the home page: a live board for the plant. In a few seconds it answers *which lines are running, which aren't and why, and what needs a person*. It [updates by itself](#screens-that-update-themselves) within seconds of a change, and every 30 seconds; the pill at the top right says when it was last updated (and turns gray, with a warning, if Pulaski can't reach the server for over a minute). The refresh button updates it at once. With several sites whose Overview you may see, pick one at the top.
 
-**Diagonal hatching means "no data".** A part of the board that has nothing to show yet (machine figures when no line reports its state, say) sits where it will be, hatched and greyed, with a plug symbol saying what will fill it, so the page won't move around when the data arrives. A dash or hatching means *not measured*; a 0 means measured and none.
+**Diagonal hatching means "no data".** A part of the board that has nothing to show yet (machine figures when no line reports its state, say) sits where it will be, hatched and grayed, with a plug symbol saying what will fill it, so the page won't move around when the data arrives. A dash or hatching means *not measured*; a 0 means measured and none.
 
-**Needs attention** (the grid at the top) counts what needs a person, most urgent first. A count above zero is marked with a coloured bar and icon; click it to go to the list behind it.
+**Needs attention** (the grid at the top) counts what needs a person, most urgent first. A count above zero is marked with a colored bar and icon; click it to go to the list behind it.
 
 | Cell | Counts | Today |
 | --- | --- | --- |
 | Uncoded stops | Stops in each line's current shift, longer than a micro-stop, with no reason yet | Live → Machines (needs a line that reports its state) |
-| Open SPC alerts | Control charts that signalled and wait for a cause | Live → Quality → SPC alerts |
+| Open SPC alerts | Control charts that signaled and wait for a cause | Live → Quality → SPC alerts |
 | Orders behind | Open orders projected late or slipping past their baseline | Live → Work orders |
 | Lots on hold | Lots with stock on hold or in quarantine | Live → Inventory → Lots |
 | Schedule conflicts | Open orders with a schedule warning or an overlap | Live → Schedule |
@@ -387,7 +387,7 @@ The demo data that comes with Pulaski already contains steps 1 to 4, and 9 (plan
 
 - **State:** what the line is doing now, as on **Operate → Machines** (Producing, Waiting, Held, Stopped, Ready, or No signal), with how long, why it stopped and how many of its stops this shift still need a reason. *Edge quiet* means the edge node it is read through has sent nothing for over 2 minutes. A line that doesn't report its state says **Not tracked**.
 - **Now or next:** the job the schedule has on the line now, or the next one and when it starts, with how much of it is made, and what the line has reported this shift (good and scrap).
-- **The strip** covers the current shift, with a black line at *now*; when lines are on different shifts it runs from the earliest one's start to the latest one's end, and when no line is on a shift it covers six hours back to eighteen ahead. The top lane shows what the line actually did up to now: green running, dark red down, blue a planned stop, grey not in production mode, hatched no signal (all hatched for a line that doesn't report its state). Point at a stretch to see it. The bottom lane shows the planned jobs: outlined for planned, solid for dispatched or firmed, hatched for changeovers. Hover over a job to see it; click it to open its order on the Schedule. If nothing is planned in the window, the lane says when the next work starts.
+- **The strip** covers the current shift, with a black line at *now*; when lines are on different shifts it runs from the earliest one's start to the latest one's end, and when no line is on a shift it covers six hours back to eighteen ahead. The top lane shows what the line actually did up to now: green running, dark red down, blue a planned stop, gray not in production mode, hatched no signal (all hatched for a line that doesn't report its state). Point at a stretch to see it. The bottom lane shows the planned jobs: outlined for planned, solid for dispatched or firmed, hatched for changeovers. Hover over a job to see it; click it to open its order on the Schedule. If nothing is planned in the window, the lane says when the next work starts.
 - **OEE** for the line's current shift, with small bars for availability, performance and quality. The value comes from the machine/OEE report and refreshes with the Overview. A dash means there is no rated production data for that shift.
 - **Flags** at the end: a red mark if work overlaps on the line, an amber clock if a job has a schedule warning (hover for the messages).
 
@@ -401,7 +401,7 @@ At the bottom, **Work orders** counts orders at each stage, Planned → Dispatch
 
 ### The screen
 
-- **Left: the tree.** Each row shows the code, name, level, role and chips for its settings: **State** (tracks machine state), **Schedulable** or **Plans for children** (a department), **Runs jobs**, **Inventory**, **Mixes lots** (lots are indistinguishable), **One material**, and **Inactive** in grey.
+- **Left: the tree.** Each row shows the code, name, level, role and chips for its settings: **State** (tracks machine state), **Schedulable** or **Plans for children** (a department), **Runs jobs**, **Inventory**, **Mixes lots** (lots are indistinguishable), **One material**, and **Inactive** in gray.
   - Click the arrow beside a row to open or close it, or use **Expand all** / **Collapse all**.
   - Type in **Filter by code or name** to find equipment; matching rows stay visible with their parents.
   - Arrow keys move through the tree when it has focus.
@@ -524,7 +524,7 @@ nothing, in the audit trail as `pulaski.equipment.site_copied.v1`.
 
 ### Deactivate equipment
 
-Set **Active** to *false*. Inactive equipment stays in the tree and in history, greyed out, but can no longer be used for new work. Pulaski never deletes equipment.
+Set **Active** to *false*. Inactive equipment stays in the tree and in history, grayed out, but can no longer be used for new work. Pulaski never deletes equipment.
 
 ### In detail
 
@@ -694,7 +694,7 @@ before its first production report there.
 
 ### Why it matters
 
-People work in different units. A customer orders 10,000 ft of profile, the BOM is written per 1000 m, the line's rate is in metres per hour, and the blend arrives in 25 kg bags. Pulaski converts between all of these, as long as it knows how. When it doesn't, you'll see a message such as *ft doesn't convert to kg for this material; add a conversion for it*, and this page is where you fix it.
+People work in different units. A customer orders 10,000 ft of profile, the BOM is written per 1000 m, the line's rate is in meters per hour, and the blend arrives in 25 kg bags. Pulaski converts between all of these, as long as it knows how. When it doesn't, you'll see a message such as *ft doesn't convert to kg for this material; add a conversion for it*, and this page is where you fix it.
 
 ### Two kinds of conversion
 
@@ -740,7 +740,7 @@ Under the conversions, **Try a conversion** works out any quantity: enter a **Qu
 | --- | --- |
 | [Creating a work order](#8-creating-a-work-order) | The order may be in any unit that converts to the material's base unit. It is converted to the BOM's unit to plan the components. |
 | [BOMs](#7-bills-of-materials-boms) | The BOM's unit must convert to the material's base unit, and each component's unit to that component's base unit, before the BOM can be released. |
-| [The Schedule](#10-the-schedule) | A job's length is worked out from the line's rate even when the job is in another unit (an order in feet on a line rated in metres per hour). The side panel shows the rate in the job's unit. |
+| [The Schedule](#10-the-schedule) | A job's length is worked out from the line's rate even when the job is in another unit (an order in feet on a line rated in meters per hour). The side panel shows the rate in the job's unit. |
 
 ### In detail
 
@@ -827,7 +827,7 @@ A 2,400 m order, extruded 50/50 on EXT-01 and EXT-02, plans:
 - Operation numbers must exist in the process's **released** version. A draft may name an operation that isn't released yet, but can't be released until it is.
 - Each component's total is rounded to six decimal places. The jobs of an operation share it in proportion to their quantities, and the last job takes any rounding remainder, so the jobs always add up to the total.
 - Planned components never change after the order is made, even if the BOM changes later.
-- A job added to the order later (from the Schedule, or the replacement when a job is cancelled and replaced) gets its components too: those of its operation, for its own quantity, from the BOM version the order was planned with.
+- A job added to the order later (from the Schedule, or the replacement when a job is canceled and replaced) gets its components too: those of its operation, for its own quantity, from the BOM version the order was planned with.
 
 ### When the process changes
 
@@ -835,7 +835,7 @@ A released BOM names operations by number. If the process is later released with
 
 - the process editor shows which BOMs the release broke;
 - the BOMs list and the BOM editor say which operation the BOM names that the process no longer has;
-- the new-order form greys out the process for that material, and creating the order is refused with the same reason.
+- the new-order form grays out the process for that material, and creating the order is refused with the same reason.
 
 To fix it, open the BOM, start a new draft, move those lines to operations the process has, and release it.
 
@@ -854,7 +854,7 @@ You choose *what*, *how much* and *when*. The process you choose decides *where*
 3. **Material produced:** what to make. The unit fills in with the material's base unit.
 4. **Process:** the processes at this site that make this material and have a released version.
    - The material's **default** process (marked *· default*) is picked automatically, or the only one if there is just one.
-   - A process whose lines can't run this material is **greyed out** with *can't run this material*, and the reason is listed underneath, for example *Operation 10 (Extrude): EXT-02 is not set up to run FLM-HDPE-20-BLK; add a capability for it first.*
+   - A process whose lines can't run this material is **grayed out** with *can't run this material*, and the reason is listed underneath, for example *Operation 10 (Extrude): EXT-02 is not set up to run FLM-HDPE-20-BLK; add a capability for it first.*
 5. **Planned quantity** and **Unit:** how much, in any unit that converts to the material's base unit (the hint under the field links to its conversions). For a material made in batches it must be a whole number of batches; the hint shows the batch size.
 6. **Start:** when the order may start. No job will be planned before it. It defaults to the next whole hour at the site.
 7. **Due:** when it must be finished (optional). Jobs projected to finish later are flagged **late**. If the process uses a department, the due date is **required** (the label says so): it is the department's finish-by time.
@@ -930,7 +930,7 @@ Your ERP can send work orders to Pulaski (whoever runs the integration sets this
 1. **The quantity isn't whole batches.** For a material made in batches, Pulaski follows the material's rule, or the site's (**Configure → Site settings**): refuse the order, round up or down to whole batches, or import it **held**. The ERP's own quantity is shown on the order beside Pulaski's (*The ERP sent 1,025 kg: rounded up to whole batches*).
 2. **A held order** shows *held* in the list and can't be dispatched. Open its row, type a whole-batch quantity, and click **Set quantity**; its jobs are re-planned.
 3. **The ERP changes an order.** While it is still planned, the change applies at once and its jobs are re-planned. Once dispatched, the row shows *ERP change*: open it to see what would change, then click **Accept** (the change applies and its jobs are re-planned) or type a reason and click **Reject** (the order stays as it is).
-4. **The ERP cancels an order.** While planned, it is cancelled with its jobs; after that the cancellation waits for you like any change.
+4. **The ERP cancels an order.** While planned, it is canceled with its jobs; after that the cancellation waits for you like any change.
 
 **From a B2MML file.** When the ERP exports its orders as an ISA-95 production schedule in B2MML XML:
 
@@ -949,7 +949,7 @@ Your ERP can send work orders to Pulaski (whoever runs the integration sets this
 - **What the ERP owns:** product, quantity, start, due date and priority. Pulaski owns the schedule, dispatch and status. The ERP can't change an order's product; cancel it and send a new one.
 - **Re-planning** changes each job's quantity in place, shared between the lines as when it was made (whole batches of each line's size), scales its components, and moves its hold-until by as much as the start moved. It is refused once a job has started, or when the order's jobs were changed by hand on the schedule; change them there instead.
 - **Every step is recorded:** imported, changed, change pending, accepted (with the ERP's values) and rejected (with your reason).
-- **What a B2MML file gives.** Each `ProductionRequest` is one order, wherever it is in the file (a `ProductionSchedule`, or one wrapped in `SyncProductionSchedule` or another verb). Its `ID` is the order number and the ERP's key; its `Description` the order's note; its `Priority` the priority. The material is what one of its `SegmentRequirement`s produces: a `MaterialProducedRequirement`, or a `MaterialRequirement` whose `MaterialUse` is `Produced`, with its `MaterialDefinitionID` and `Quantity` (`QuantityString` and `UnitOfMeasure`). One material per order. It runs from its `StartTime` (else the segment's `EarliestStartTime`) to its `EndTime` (else `LatestEndTime`); a time without an offset is UTC. The site is its `HierarchyScope`'s `EquipmentID`, else its schedule's, else the one you chose. `ProductProductionRuleID` (else a segment's `ProductSegmentID` or `ProcessSegmentID`) names the process by its code. `RequestState` `Cancelled` cancels the order. A B2MML request has no version, so every import compares the order with what Pulaski has, and the same order again changes nothing. An `ID` twice in one file is imported once.
+- **What a B2MML file gives.** Each `ProductionRequest` is one order, wherever it is in the file (a `ProductionSchedule`, or one wrapped in `SyncProductionSchedule` or another verb). Its `ID` is the order number and the ERP's key; its `Description` the order's note; its `Priority` the priority. The material is what one of its `SegmentRequirement`s produces: a `MaterialProducedRequirement`, or a `MaterialRequirement` whose `MaterialUse` is `Produced`, with its `MaterialDefinitionID` and `Quantity` (`QuantityString` and `UnitOfMeasure`). One material per order. It runs from its `StartTime` (else the segment's `EarliestStartTime`) to its `EndTime` (else `LatestEndTime`); a time without an offset is UTC. The site is its `HierarchyScope`'s `EquipmentID`, else its schedule's, else the one you chose. `ProductProductionRuleID` (else a segment's `ProductSegmentID` or `ProcessSegmentID`) names the process by its code. `RequestState` `Canceled` cancels the order. A B2MML request has no version, so every import compares the order with what Pulaski has, and the same order again changes nothing. An `ID` twice in one file is imported once.
 - **For the integration:** `POST /api/work-orders/import` with a list of orders (`externalSystem`, `externalKey`, `externalVersion`, `siteCode`, `orderNumber`, `materialCode`, `quantity`, `uomCode`, `plannedStart`, `dueAt`, `priority`, `processCode`, `notes`, `cancelled`). Each comes back `created`, `updated`, `unchanged`, `pending`, `cancelled` or `refused` with why, and each is saved on its own. `?dryRun=true` gives the same answers and saves nothing. A B2MML file goes to `POST /api/work-orders/import/b2mml?externalSystem=…&siteCode=…&dryRun=…` as the request body (at most 5 MB, 500 orders); `GET /api/work-orders/import/b2mml/template` is the template. The caller needs *work_order.manage* at the order's site.
 
 #### Production performance for the ERP
@@ -962,7 +962,7 @@ Pulaski can give the ERP what a production job made and used, as an ISA-95 produ
 In detail:
 
 - **What it holds.** `ProductionPerformance/ID` and the `ProductionResponse` and `SegmentResponse` IDs are the job number. `ProductionRequestID` is the ERP's key for the order (its `ID` when it came from B2MML); for an order made in Pulaski, the order number. The site is the `HierarchyScope`, the job's operation number the `ProcessSegmentID`, and each line it ran on an `EquipmentActual`.
-- **Times and state.** `StartTime` is when its first run started; `EndTime` when it was completed, or when its last run ended if it isn't running. The state is `Ready` before it starts, `Running`, `Held` while paused, `Completed` (completed or closed) or `Aborted` (cancelled). Times are UTC.
+- **Times and state.** `StartTime` is when its first run started; `EndTime` when it was completed, or when its last run ended if it isn't running. The state is `Ready` before it starts, `Running`, `Held` while paused, `Completed` (completed or closed) or `Aborted` (canceled). Times are UTC.
 - **Quantities.** `SegmentData` `GoodQuantity` and `ScrapQuantity` are the job's totals in its unit; reversed reports are left out. Each lot it produced or consumed is a `MaterialActual` (`MaterialUse` `Produced` or `Consumed`) with what still stands of it in the material's base unit; a balance has no `MaterialLotID`, only its `StorageLocation`.
 - **For scripts:** `GET /api/jobs/{id}/production-performance` (needs *floor.view* or *integrations.view* at the job's site). Only production jobs have one.
 
@@ -972,7 +972,7 @@ In detail:
 2. Choose **Print shop order**. Pulaski downloads one PDF with a traveler sheet for each job.
 3. Print the PDF for the floor. Check the schedule before running.
 
-**In detail.** Each sheet identifies the work order, job and process operation; shows the material, planned quantity, line or waiting department, scheduled time, run rate, work-order due date, status and priority, special instructions, operation description and that job's planned BOM components; and carries a Code 128 barcode containing `order-number|OP-number` (for example, `WO-1001|OP-10`). A currently projected schedule is labelled **Projected schedule**; jobs without a live projection show their published baseline. Orders without jobs get a summary page. Under **Specifications**, each sheet lists the material's released [specification](#13-quality-specifications-and-results): its version, each characteristic with its limits and unit, and which ones hold the lot on failure. When the material has none, the sheet says so and asks for the approved specification to be checked elsewhere.
+**In detail.** Each sheet identifies the work order, job and process operation; shows the material, planned quantity, line or waiting department, scheduled time, run rate, work-order due date, status and priority, special instructions, operation description and that job's planned BOM components; and carries a Code 128 barcode containing `order-number|OP-number` (for example, `WO-1001|OP-10`). A currently projected schedule is labeled **Projected schedule**; jobs without a live projection show their published baseline. Orders without jobs get a summary page. Under **Specifications**, each sheet lists the material's released [specification](#13-quality-specifications-and-results): its version, each characteristic with its limits and unit, and which ones hold the lot on failure. When the material has none, the sheet says so and asks for the approved specification to be checked elsewhere.
 
 ---
 
@@ -993,7 +993,7 @@ In detail:
 Lines down the left, time across.
 
 - **Move through time:** **Earlier**, **Today** and **Later**; zoom to **Day**, **3 days**, **Week** or **2 weeks**. The vertical line marks *now*.
-- **Bars** are jobs, coloured by status (see the legend under the chart). Changeovers between products appear as their own bars, in the changeover style, before the job that needs them. Late and overlapping work is marked too.
+- **Bars** are jobs, colored by status (see the legend under the chart). Changeovers between products appear as their own bars, in the changeover style, before the job that needs them. Late and overlapping work is marked too.
 - **Line labels** show the code, name and chips: the shift schedule the line follows, such as **2X8** (hover to see where it comes from), **24/7** (no shift schedule, or set to run around the clock) and **Plans for N lines** (a department).
 
 **Resequence or move a job:** drag its bar. A marker shows the slot it will go into: before the job under the pointer, or at the end of the line. Drop it on another line to move it there. Times then recalculate.
@@ -1011,7 +1011,7 @@ A month of work by day; a job that spans several days appears on each. The numbe
 
 ### Kanban view
 
-Work orders as cards in columns by status: Planned, Dispatched, Firmed, In progress and Completed. Turn on **Closed and cancelled** to show those columns too. Click a card to open the order.
+Work orders as cards in columns by status: Planned, Dispatched, Firmed, In progress and Completed. Turn on **Closed and canceled** to show those columns too. Click a card to open the order.
 
 - **Change an order's status:** drag its card to another column: **Dispatch**, **Un-dispatch**, **Firm** and so on. Columns it can't move to dim while you drag.
 
@@ -1033,7 +1033,7 @@ Every open job in one sortable list.
   - **Hold until:** it won't start before this time (for example, waiting for material). **Clear hold** removes it.
   - **Finish by:** Pulaski warns if it is projected to run past this. **Clear finish-by** removes it.
   - Click **Set** to apply.
-- **Cancel:** click **Cancel job…**, give a reason, and for a production job optionally tick **Replace it with a job for the quantity not yet made**, then confirm. **Keep it** backs out. For a material made in batches, choose how the replacement is sized: **Round up to whole batches, to meet the order** (the default), **Round down to whole batches; the order ends short**, or **Exactly what is left, even a partial batch** (see [Materials made in batches](#materials-made-in-batches)). The message after cancelling says how much the order is short when it rounds down.
+- **Cancel:** click **Cancel job…**, give a reason, and for a production job optionally tick **Replace it with a job for the quantity not yet made**, then confirm. **Keep it** backs out. For a material made in batches, choose how the replacement is sized: **Round up to whole batches, to meet the order** (the default), **Round down to whole batches; the order ends short**, or **Exactly what is left, even a partial batch** (see [Materials made in batches](#materials-made-in-batches)). The message after canceling says how much the order is short when it rounds down.
 
 For a job waiting on a **department**, the panel lists the **Lines that could run it**, each with an estimate and whether it **Fits the window** or **Won't fit**; **Run on …** puts it at the end of that line. For a job already taken from a department, **On the floor** lets you move it to another of the department's lines, or **Send back** to the department.
 
@@ -1105,7 +1105,7 @@ An operator station is a touch screen at one line: it shows the line's state, ru
 with their badge. (Starting, pausing, reporting and coding stops at the station come next.)
 
 1. On **Labor → Terminals**, register a terminal for the station and set **First line offered** to its line.
-2. Click **Enrolment code**, open `/terminal/enrol` on the station and type the code, then open `/terminal/station` and leave it there.
+2. Click **Enrollment code**, open `/terminal/enrol` on the station and type the code, then open `/terminal/station` and leave it there.
 3. To sign on, hold your badge to the reader (or type its number and press Enter), and your PIN if the terminal asks for one.
 4. Click **Sign off** when you leave. Badging with someone else's badge switches to them.
 
@@ -1212,12 +1212,12 @@ job, stop or clock before sending again, since it may have arrived.
 A TV on the floor can show each line's state, running job, output, down time and OEE for the shift, in large type, without anyone signing in.
 
 1. On **Labor → Terminals**, register a terminal for the TV; **Offers the lines of** decides which lines it shows (an area, or one line).
-2. Click **Enrolment code**, open `/terminal/enrol` in the TV's browser and type the code.
+2. Click **Enrollment code**, open `/terminal/enrol` in the TV's browser and type the code.
 3. Open `/terminal/board` on the TV (add `?line=EXT-01` to show one line full screen) and leave it running.
 
 In detail: the board reloads [within seconds](#screens-that-update-themselves) of a change at its site, and every 15 seconds, so it recovers by
 itself after a network drop (see [When the network drops](#use-an-operator-station)). Its figures are the Overview's: a line that tracks
-machine state but has no signal shows **No signal**, and down time counts no-signal time. Colour is kept for what needs attention: down, no
+machine state but has no signal shows **No signal**, and down time counts no-signal time. Color is kept for what needs attention: down, no
 signal, waiting, OEE below target, stops to code. Switching the terminal off stops the board at once. A line's calls for help that aren't
 resolved show under its name: amber while waiting, quiet once someone is on it, and red, with the line's frame, once escalated. Its
 maintenance requests that aren't closed, its machines' too, show under them with a dashed frame: up to three, the waiting ones first, with
@@ -1428,7 +1428,7 @@ A report entered on the wrong job, or with the wrong quantity, is reversed whole
 1. Open the job's page and find the report under **Production reports**.
 2. Click **Reverse…** on its row.
 3. Choose an adjustment **Reason**, write a **Comment** saying why, and click **Reverse report**.
-4. The report is marked *reversed*. Its good and scrap come off the run, and every lot it made gives its quantity back (a lot that only held that is *cancelled*).
+4. The report is marked *reversed*. Its good and scrap come off the run, and every lot it made gives its quantity back (a lot that only held that is *canceled*).
 
 **In detail**
 
@@ -1450,7 +1450,7 @@ A report with the wrong good or scrap quantity, or the wrong scrap reason, is co
 **In detail**
 
 - **It is a reversal and a new report in one.** Everything either would check is checked, and if any of it fails nothing changes: the old report's lots must still hold what it gave them, and the new figures must fit the run (its rate cap, whole batches, the partial-batch rules). Automated consumption from the line's feed points is put back and taken again for the new figures.
-- **New lots.** The good output goes into new lots with new numbers, where the old lots were; print their labels again. The old lots are *cancelled*.
+- **New lots.** The good output goes into new lots with new numbers, where the old lots were; print their labels again. The old lots are *canceled*.
 - **What can't change:** the run and the time it counts at. To move output to another job or run, reverse it and report it there. A report older than 31 days can't be corrected, as it can't be back-dated.
 - **History** shows both reports, and one *production corrected* event names them both with the figures before and after. Needs *production.correct*.
 
@@ -1495,7 +1495,7 @@ A batch cut short is an exception, so it is reported only as the line stops:
 
 The partial batch goes into a lot of its own. Under the near rule it is **accepted**: it will be used. Under the exact rule it goes **on hold until approved**, because a finished good can't be sold as a partial; the floor shows *A partial batch waits for approval*. Each run can have one partial batch. If you forgot it, open the job's page and report it into that run: the form offers **Partial batch** for a run that ended with a reason.
 
-**A replacement planned with a partial batch.** When a job is cancelled and replaced with exactly what is left (*Exactly what is left, even a partial batch* on the schedule), the replacement is whole batches and a partial last batch: 75 kg left of 50 kg batches is one batch and a partial batch of 25 kg. The floor reports its last batch under **Partial batch** on the report form as it is made, without stopping the line; it then follows the rule above (accepted, or on hold until approved). Its quantity needn't be whole batches on any line, so it can move between lines of different sizes. Planning one needs *schedule.plan_partial* (Planner to start with); rounding up or down needs only *schedule.plan*.
+**A replacement planned with a partial batch.** When a job is canceled and replaced with exactly what is left (*Exactly what is left, even a partial batch* on the schedule), the replacement is whole batches and a partial last batch: 75 kg left of 50 kg batches is one batch and a partial batch of 25 kg. The floor reports its last batch under **Partial batch** on the report form as it is made, without stopping the line; it then follows the rule above (accepted, or on hold until approved). Its quantity needn't be whole batches on any line, so it can move between lines of different sizes. Planning one needs *schedule.plan_partial* (Planner to start with); rounding up or down needs only *schedule.plan*.
 
 **A replacement rounded down.** *Round down to whole batches* plans only the whole batches that fit in what is left, of the line's size: 125 kg left of 50 kg batches is a replacement of 100 kg, and the order ends 25 kg short. With less than a batch left there is nothing to replace, and Pulaski says so: replace exactly what is left, round up, or cancel without a replacement.
 
@@ -1509,9 +1509,9 @@ The partial batch goes into a lot of its own. Under the near rule it is **accept
 - **When a report counts.** A report into the open run counts at the moment it is entered; one into an ended run counts at the end of that run. Both keep the time they were entered.
 - **Consumption** needs a run too: the job's open run, or the run chosen (see [Record what a job used and made](#record-what-a-job-used-and-made-the-jobs-tab)). Using more of a planned component than the plan allows is recorded with a warning. The plan's quantity is scaled up when the job makes more than planned, and gets the site's consumption tolerance (also 110% by default).
 - **The changeover check** compares the job's material with the last job that ran on the line. If that was a production job of another material, a changeover job is started first. In *scheduler* mode, and on a line that hasn't run anything yet, no changeover is added.
-- **Process links.** *After start* is met once any job of the upstream operation has started; *after end* once all of them are completed. Each is plus its lag. Cancelled upstream jobs don't count.
+- **Process links.** *After start* is met once any job of the upstream operation has started; *after end* once all of them are completed. Each is plus its lag. Canceled upstream jobs don't count.
 - **Events:** `pulaski.job.started.v1`, `…paused.v1`, `…completed.v1`, `…reopened.v1` and `…production_reported.v1`; the counts are kept in `ts.production_count`.
-- **Batches in detail.** Batch weights are in the material's base unit. A partial batch is more than 0 and less than a batch (under the near rule, less than the size minus the tolerance). The rate check counts it like any output. Under the exact rule a partial batch needs a location that keeps lots apart (not a silo or tank where lots mix). The lot is held with the reason *Partial batch awaiting approval*. When a job of a batch material is cancelled and replaced, what is left is rounded **up** to whole batches. Partial batches are recorded as `pulaski.partial_batch.reported.v1`, `…approved.v1` and `…rejected.v1`.
+- **Batches in detail.** Batch weights are in the material's base unit. A partial batch is more than 0 and less than a batch (under the near rule, less than the size minus the tolerance). The rate check counts it like any output. Under the exact rule a partial batch needs a location that keeps lots apart (not a silo or tank where lots mix). The lot is held with the reason *Partial batch awaiting approval*. When a job of a batch material is canceled and replaced, what is left is rounded **up** to whole batches. Partial batches are recorded as `pulaski.partial_batch.reported.v1`, `…approved.v1` and `…rejected.v1`.
 - **Concurrency.** Start, pause, complete and reopen check the job hasn't changed since the screen read it; reports don't, so several people can report into a busy line, protected by the rate check under a lock.
 
 ---
@@ -1601,13 +1601,13 @@ What can be reversed on a lot's page:
 
 | Movement | What the reversal does | When it can't |
 | --- | --- | --- |
-| A receipt, write-up, write-off or shipment | Puts back the quantity at the time it counted; a reversed receipt of a whole lot makes it *cancelled*, a reversed shipment of all of it makes it available again. | The lot's stock would go below zero at some time since, or a posted count came after it; a whole shipment, once the lot has changed status again. |
+| A receipt, write-up, write-off or shipment | Puts back the quantity at the time it counted; a reversed receipt of a whole lot makes it *canceled*, a reversed shipment of all of it makes it available again. | The lot's stock would go below zero at some time since, or a posted count came after it; a whole shipment, once the lot has changed status again. |
 | A **move** | The lot goes back to where it was. | The lot has moved since (reverse that move first), or it moved with its container (move the container back). |
 | A **hold or release** | The lot goes back to the status it had. | Its status has changed again since. |
 | **Packing** or **unpacking** | The lot comes out of the container (back into any it was in before, and back where it was if packing moved it), or goes back into it. | The lot has moved or changed container since, or the container isn't where the lot is any more. |
 | A **correction** | The lot number, supplier lot and expiry go back to what they were. | They have been corrected again since, the old number is taken by another lot, or the correction was made before Pulaski kept what it replaced. |
-| **Consumption** into a job | The quantity goes back to the lot; it stops being a parent of what the job made unless more of it went into that job. | The job is closed or cancelled, or the lot was shipped since. |
-| A **split** | The new lot is cancelled and its quantity goes back to the lot it came from. | Anything has happened to the new lot since. |
+| **Consumption** into a job | The quantity goes back to the lot; it stops being a parent of what the job made unless more of it went into that job. | The job is closed or canceled, or the lot was shipped since. |
+| A **split** | The new lot is canceled and its quantity goes back to the lot it came from. | Anything has happened to the new lot since. |
 | A **merge** | The lot that was merged gets its quantity and status back; the lot it joined goes down by that much. A lot that joined a balance where lots mix comes back out as itself, and the balance gives its quantity back. | The lot it joined no longer holds that much at some time since. |
 | A **transfer between balances** | The quantity goes back to the balance it came from. | The receiving balance no longer holds it. |
 | **Production** | Reversed with its production report, on the job's page (below). | — |
@@ -1632,7 +1632,7 @@ Below the facts, **Attributes and certificates** keeps what quality knows about 
 **In detail**
 
 - **Who:** anyone who can see inventory sees attributes and certificates; recording values and attaching or withdrawing documents needs permission to record lot attributes and certificates (the Quality role has it).
-- **Nothing is deleted.** A certificate is withdrawn, never removed, and a stored file can't be changed afterwards (the database refuses it). Pulaski keeps a fingerprint (SHA-256) of each file. A file is recognised by its contents, so a renamed file of another kind is refused.
+- **Nothing is deleted.** A certificate is withdrawn, never removed, and a stored file can't be changed afterwards (the database refuses it). Pulaski keeps a fingerprint (SHA-256) of each file. A file is recognized by its contents, so a renamed file of another kind is refused.
 - **Split and merge.** A lot split off takes its parent's certificates and attribute values with it. A merged lot, or a balance a lot joins where lots mix, takes the certificates of every lot that went into it, marked *Carried from …*; its own attribute values stay as they are.
 - **An attribute no longer offered** for the material (switched off, or its classes changed) still shows a value already recorded, which can only be cleared.
 - **Concurrency.** If someone else changed the same value since you opened the page, you'll see *"changed by someone else"*: reload and try again.
@@ -1693,7 +1693,7 @@ Allocating sets stock aside for a job before it runs, so the floor knows which l
 - **Approved alternates.** An alternate's lot is allocated in its own unit and covers the component at the BOM line's ratio: with a ratio of 1.25, 125 kg of it covers 100 kg of the component. The allocation says so under the lot. The **Shortages** tab counts it against the component's need, and takes it out of the alternate's own stock. A material that isn't the component or one of its approved alternates can't be allocated to the job.
 - **Hard reservation.** At a site that has it on, consuming stock allocated to another job is refused, naming that job: release or move its allocation first. Without it, the consumption goes through with a warning.
 - **Picking lists** leave out lots already at the job's line (or below it, such as its feed points), and list only what is still allocated, at most what the lot holds. The times are site time.
-- One allocation per lot and job: allocating more of the same lot adds to it. Only a job's planned components and their approved alternates are allocated, in the lot's base unit, and not to a job that is completed, closed or cancelled.
+- One allocation per lot and job: allocating more of the same lot adds to it. Only a job's planned components and their approved alternates are allocated, in the lot's base unit, and not to a job that is completed, closed or canceled.
 - **Who.** Allocating, releasing and refreshing need *lot.allocate* (Planner, Supervisor and Quality to start with). Anyone who can see inventory sees allocations and suggestions, and a lot's page lists the jobs it is allocated to. Each change is recorded as an event.
 
 ### Trace a lot
@@ -1784,7 +1784,7 @@ The **Incoming** tab lists purchases and transfers expected to arrive, for the s
 3. **Change** an open one when the date or quantity changes, or **Cancel** it if it won't come.
 4. When it arrives, **Receive** the lot as usual and choose it under **Against expected receipt** (the quantity still to come is filled in). What arrived counts toward it: once all of it has arrived it closes. Until then it stays open, *partly received*, showing what arrived and what is still to come, and the shortage check counts only the rest.
 5. When nothing more of a partly received delivery is coming, click **Close as complete**. (**Cancel** is only for one where nothing arrived.)
-6. Tick **Show received and cancelled** to see closed ones.
+6. Tick **Show received and canceled** to see closed ones.
 
 **Receive lots from a B2MML file**
 
@@ -1801,11 +1801,11 @@ An ERP or a supplier's system can send the lots that arrived as B2MML material l
 
 **In detail**
 
-- **Who:** anyone who can see inventory sees them; adding, changing and cancelling needs permission to receive lots.
-- **From the ERP:** `POST /api/inventory/expected-receipts/import` takes one delivery with the ERP's name and its key there, the site, the material and unit codes, the quantity and expected time, the reference and supplier, and whether it is cancelled. Sending the same one again changes nothing; a change updates it while it is open; once received or cancelled in Pulaski it stays so. It is listed with the ERP's name beside the reference.
+- **Who:** anyone who can see inventory sees them; adding, changing and canceling needs permission to receive lots.
+- **From the ERP:** `POST /api/inventory/expected-receipts/import` takes one delivery with the ERP's name and its key there, the site, the material and unit codes, the quantity and expected time, the reference and supplier, and whether it is canceled. Sending the same one again changes nothing; a change updates it while it is open; once received or canceled in Pulaski it stays so. It is listed with the ERP's name beside the reference.
 - The unit must convert to the material's base unit, so the shortage check can count it. What arrives is counted in the delivery's own unit, so 400 kg against a delivery expected in grams counts 400 000 g.
 - **Partly received.** Its unit can't change, and its quantity can only be changed to more than has arrived. From the ERP, a quantity no more than what arrived, or a cancellation, closes it as complete. More than expected closes it too. Each lot received against it is recorded; the row shows the latest and how many more.
-- **Events:** `pulaski.expected_receipt.created.v1`, `…updated.v1`, `…cancelled.v1` and `…received.v1`.
+- **Events:** `pulaski.expected_receipt.created.v1`, `…updated.v1`, `…canceled.v1` and `…received.v1`.
 
 ### The movement journal
 
@@ -2036,10 +2036,10 @@ The feed uses the new settings within seconds; nothing needs restarting. The sha
 
 Whoever runs Pulaski puts the feed's secret (and a broker's username and password) in the API's configuration under `Integrations:Feeds:<code>`. Each feed keeps its own queue and place in the event log, so feeds never hold each other up.
 
-**A production performance feed (B2MML)** gives the ERP each production job's totals, as [Production performance for the ERP](#production-performance-for-the-erp) describes, every time they change: when the job starts, pauses, completes, is reopened, closed or cancelled; when a report is entered, corrected or reversed; when a lot is produced or consumed for it, or such a movement is reversed; and when one of its partial batches is reported or decided. Its deliveries are listed by job (**Job** *number*, which opens the job), and a search by job number finds them. Planning changes, and jobs other than production, send nothing.
+**A production performance feed (B2MML)** gives the ERP each production job's totals, as [Production performance for the ERP](#production-performance-for-the-erp) describes, every time they change: when the job starts, pauses, completes, is reopened, closed or canceled; when a report is entered, corrected or reversed; when a lot is produced or consumed for it, or such a movement is reversed; and when one of its partial batches is reported or decided. Its deliveries are listed by job (**Job** *number*, which opens the job), and a search by job number finds them. Planning changes, and jobs other than production, send nothing.
 
 - **The message** is the job's `SyncProductionPerformance` as it stands when it is sent (not when the change happened), `application/xml`, with the change's event id as both the `Idempotency-Key` and the document's `BODID`, signed as an event is. Its `Sync` action is `Replace`: each document replaces the job's last one, so a document sent twice, or two in a row that say the same, do no harm.
-- **In order per job.** A job's documents wait behind its undelivered one, as a lot's events do; retry or skip it to let them go. The answer is treated as for any webhook or broker, acknowledgements included.
+- **In order per job.** A job's documents wait behind its undelivered one, as a lot's events do; retry or skip it to let them go. The answer is treated as for any webhook or broker, acknowledgments included.
 
 1. Open **Configure → Integrations** and choose the feed: **ERP** or **Document system**. The top panel says whether the ERP webhook is **On** and where it sends, how many movements are waiting, how many have **failed**, and how many were delivered in the last 24 hours.
 2. The list starts on **Failed**. Each row shows the movement, the lot, how many attempts were made and the ERP's last answer (its status code and message).
@@ -2054,7 +2054,7 @@ Whoever runs Pulaski puts the feed's secret (and a broker's username and passwor
 - **A refusal fails at once.** Any other 4xx answer (400, 401, 404, 422 …) means trying again won't help until something is fixed, so the delivery is marked failed straight away.
 - **A lot's movements arrive in order.** While one of a lot's movements is waiting or failed, that lot's later movements are **held** behind it (shown as *Held*); other lots carry on. Retrying or skipping the failed one lets the held ones go.
 - **Sent twice is safe.** Pulaski may send a movement again if it didn't hear the ERP's answer (at least once). Every message carries the movement's event id as its `Idempotency-Key`; the receiver should ignore an id it has already booked.
-- **Acknowledgements.** A receiver can say what it did with each event, and Pulaski records it on the delivery (*Accepted* or *Rejected*, with its reference) in the **Last answer** column:
+- **Acknowledgments.** A receiver can say what it did with each event, and Pulaski records it on the delivery (*Accepted* or *Rejected*, with its reference) in the **Last answer** column:
   - in its answer: a 2xx response whose body is `{"status":"accepted"}` or `{"status":"rejected"}`, optionally with `"reference"` (its own id for what it booked) and `"message"`;
   - or later: by posting `{"eventId": "…", "status": "…", "reference": "…", "message": "…"}` to `/api/integrations/erp/acknowledgements` (or `…/documents/…`), signed like Pulaski's messages with the same secret (`X-Pulaski-Timestamp` and `X-Pulaski-Signature`, within five minutes). A bad or old signature is refused.
 
@@ -2063,8 +2063,8 @@ Whoever runs Pulaski puts the feed's secret (and a broker's username and passwor
 - **The secret, and the configuration.** In the API's settings (or environment), section `Integrations:Erp` (or `Integrations:Documents`): `Secret`, shared with the receiver; keep it in a secret store or environment variable, not in a file in source control. Until **Save settings** is first used, the feed also takes the rest from there: `Enabled`, `Url`, `EventTypes` (type prefixes, default `pulaski.lot.`), `IncludeFiles`, `MaxAttempts` (12), `TimeoutSeconds` (15), `PollSeconds` (5) and `StartFromNow` (true: the first time it is switched on, only events from then on are sent; false sends the whole history). After that the screen's settings are used and only the secret comes from the configuration. Changing the secret needs an API restart.
 - **Settings are recorded.** Each save is an event (`pulaski.delivery_feed.settings_saved.v1`) with the settings before and after and who saved them. The full address is shown only to those who may change it; everyone else sees the receiver's host.
 - **The document feed.** Section `Integrations:Documents`, with the same settings as the ERP's. It sends `pulaski.lot_document.attached.v1` and `…withdrawn.v1` (default `EventTypes` `pulaski.lot_document.`), each holding the document's kind, title, number, issuer, issue date, URL, file name, type, size and SHA-256 and the lot it was attached to; a withdrawal has the reason. With `IncludeFiles` (on for this feed, off for the ERP's unless set), the attached event also carries the stored file in `data.file`: `fileName`, `contentType`, `sizeBytes`, `sha256` and `contentBase64`. The ERP feed can take certificates too: add `pulaski.lot_document.` to its `EventTypes`. A certificate's later events wait behind an undelivered earlier one, as a lot's do. Documents carried to other lots by a split or merge send nothing of their own.
-- **Maintenance requests to a CMMS** (#127). Tick *Maintenance requests* to send each request as it is raised (`pulaski.maintenance.request_raised.v1`, with its number such as MR-000042, the machine's code, priority, what needs looking at and the stop it came from), started and closed. The CMMS answers by posting to `/api/integrations/{feed}/maintenance-requests`, signed as acknowledgements are: `{"number": "MR-000042", "action": "accepted", "reference": "WO-1234"}` records its own work order number for the request (shown on the Maintenance tab as *CMMS WO-1234*); `"action": "started"` starts it and `"action": "closed"` with `"resolution": "…"` closes it, as the receiver (`receiver:{feed}`). Sending an answer again changes nothing, so a CMMS can repeat it safely. Requests started and closed by the CMMS are sent back to it like any others; a CMMS ignores what it did itself.
-- **An MQTT feed** publishes each event as the same CloudEvents JSON a webhook gets, with quality of service 1, on the topic from its template: `{type}` becomes the event type with slashes for dots (`pulaski/lot/received/v1`), and `{subjectType}` and `{subject}` are filled in too. It uses MQTT 5: the event id goes as the `Idempotency-Key` user property, and with a secret the timestamp and signature as `X-Pulaski-Timestamp` and `X-Pulaski-Signature`. An event counts as delivered when the broker accepts it; a broker that refuses it (not allowed, bad topic) fails it at once, and one that is busy or unreachable is retried. Whatever reads from the broker can post an acknowledgement back to the feed's address, as a webhook receiver can.
+- **Maintenance requests to a CMMS** (#127). Tick *Maintenance requests* to send each request as it is raised (`pulaski.maintenance.request_raised.v1`, with its number such as MR-000042, the machine's code, priority, what needs looking at and the stop it came from), started and closed. The CMMS answers by posting to `/api/integrations/{feed}/maintenance-requests`, signed as acknowledgments are: `{"number": "MR-000042", "action": "accepted", "reference": "WO-1234"}` records its own work order number for the request (shown on the Maintenance tab as *CMMS WO-1234*); `"action": "started"` starts it and `"action": "closed"` with `"resolution": "…"` closes it, as the receiver (`receiver:{feed}`). Sending an answer again changes nothing, so a CMMS can repeat it safely. Requests started and closed by the CMMS are sent back to it like any others; a CMMS ignores what it did itself.
+- **An MQTT feed** publishes each event as the same CloudEvents JSON a webhook gets, with quality of service 1, on the topic from its template: `{type}` becomes the event type with slashes for dots (`pulaski/lot/received/v1`), and `{subjectType}` and `{subject}` are filled in too. It uses MQTT 5: the event id goes as the `Idempotency-Key` user property, and with a secret the timestamp and signature as `X-Pulaski-Timestamp` and `X-Pulaski-Signature`. An event counts as delivered when the broker accepts it; a broker that refuses it (not allowed, bad topic) fails it at once, and one that is busy or unreachable is retried. Whatever reads from the broker can post an acknowledgment back to the feed's address, as a webhook receiver can.
 - **Delivered rows are cleared** after 90 days (`Retention:DeliveredDays` in the API's configuration, at least 7). Failed, waiting and skipped deliveries stay until someone deals with them, and the events themselves are always kept.
 - **Several API servers** share the work safely: only one sends each feed at a time.
 - **Who.** Anyone who can see Integrations (Administrator, Manager and Auditor to start with) sees the status and the deliveries; retrying and skipping need *integrations.manage* (Administrator to start with). Each retry and skip is recorded as an event with who did it, and a skip keeps its reason on the delivery.
@@ -2120,12 +2120,12 @@ never change, since results and specifications depend on them.
 **Run rules its chart checks** picks the patterns that signal a change, numbered as Lloyd Nelson numbered them. Rule 1 (beyond the control
 limits) is always checked; 1, 2, 5 and 6, the Western Electric set, are ticked to start with:
 1. one point beyond the control limits (3 sigma);
-2. 9 in a row on one side of the centre line;
+2. 9 in a row on one side of the center line;
 3. 6 in a row rising or falling;
 4. 14 in a row alternating up and down;
 5. 2 of 3 beyond 2 sigma on one side;
 6. 4 of 5 beyond 1 sigma on one side;
-7. 15 in a row within 1 sigma (hugging the centre line);
+7. 15 in a row within 1 sigma (hugging the center line);
 8. 8 in a row beyond 1 sigma, on either side.
 
 More rules find smaller changes sooner, and give more false alarms. Rules can change at any time.
@@ -2149,7 +2149,7 @@ can have its own, which it uses before the material's.
 5. When the limits look right, optionally set when they **Start** (now if blank) and a **Note**, and click **Approve these limits**.
 
 To enter limits by hand (agreed with a customer, or carried over from another system), use **Enter limits by hand**. It takes the material and
-line chosen above, the **Lower**, **Centre** and **Upper** limits (and the dispersion chart's centre and upper limit for measured charts), and
+line chosen above, the **Lower**, **Center** and **Upper** limits (and the dispersion chart's center and upper limit for measured charts), and
 **Why**. To stop using limits, click **End** on their row.
 
 **In detail**
@@ -2203,14 +2203,14 @@ from the [process values](#process-values) its tag sends, instead of by hand.
 2. Choose the **Characteristic**, the **Material**, a **Line** if you want one line's results only (else **Every line**), and the period (the last
    30 days to start with). Click **Show**.
 3. The chart shows each result in time order: the value (or a subgroup's mean, proportion or count, as the chart takes it), with the control
-   limits in force for it as dashed lines and the centre line solid. A result beyond its limits is a red diamond; one that completes another run
-   rule is an amber square labelled with the rules' numbers. The rules checked are listed above the chart.
+   limits in force for it as dashed lines and the center line solid. A result beyond its limits is a red diamond; one that completes another run
+   rule is an amber square labeled with the rules' numbers. The rules checked are listed above the chart.
 4. Measured characteristics have views above the chart. Subgroups (X-bar charts): **X̄ chart (means)**, the default, **R chart (ranges)** and
    **S chart (standard deviations)**. Single values: **Individuals** and **Moving range**. Click one to see it; Pulaski keeps it as you move
    between charts.
 5. Hover over a point to see when it was sampled, its value against its limits, and its line, job and lot. Below the chart, **The data
    plotted** lists every result, newest first: when, its measurements, the size, the view's value (mean, range, standard deviation or moving
-   range), the centre line and limits in force for it, its line, job and lot, and whether it is beyond the limits or breaks a run rule.
+   range), the center line and limits in force for it, its line, job and lot, and whether it is beyond the limits or breaks a run rule.
 6. Under the chart, **Capability** says how well the results fit the material's specification.
 7. The chart refreshes itself every 30 seconds while open; the pill at the top right says when it was last updated, and the refresh button
    updates it at once.
@@ -2245,7 +2245,7 @@ from the [process values](#process-values) its tag sends, instead of by hand.
     and in parts per million, beside the most defects the specification allows a sample.
 - **Live.** Each refresh redraws the chart you clicked **Show** for, not filters you've changed since. If its period reached the present, new
   results appear as they're recorded (its **To** moves on with the time); a period ending earlier stays as it is. If Pulaski can't reach the
-  server, the chart stays as it was and the pill turns grey: *Stale since* the last update.
+  server, the chart stays as it was and the pill turns gray: *Stale since* the last update.
 - **Who:** anyone who can see quality at the site.
 
 ### Write a specification
@@ -2306,7 +2306,7 @@ From a lot's page, **Record a result** under **Quality** opens this form with th
 
 ### Respond to SPC alerts
 
-An SPC alert means a control chart signalled: a result beyond its control limits, or completing one of its characteristic's run rules. The
+An SPC alert means a control chart signaled: a result beyond its control limits, or completing one of its characteristic's run rules. The
 Overview's **Open SPC alerts** counts those waiting at the site.
 
 1. Open **Operate → Quality** and click **SPC alerts** (or click the Overview's count).
@@ -2332,7 +2332,7 @@ too, keeping the cause and action you're typing. The pill at the top right says 
   tooling wear, startup or changeover, measurement or gauge error, and no cause found (which needs a fuller note).
 - **Excluding** a result later doesn't change an alert it raised; close it with the cause *Measurement or gauge error* if that's what it was.
 - **Who:** anyone who can see quality sees alerts; closing one needs permission to record quality results at the site. Raising, adding to and
-  closing are events (`pulaski.spc_alert.raised.v1`, `…signalled.v1`, `…closed.v1`) that [delivery feeds](#send-movements-to-the-erp-and-certificates-to-a-document-system) can send on.
+  closing are events (`pulaski.spc_alert.raised.v1`, `…signaled.v1`, `…closed.v1`) that [delivery feeds](#send-movements-to-the-erp-and-certificates-to-a-document-system) can send on.
 - Closed alerts stay listed for 30 days, and on record after that.
 - An alert's details offer **Raise an NCR**, when the cause needs following up (see below).
 
@@ -2350,7 +2350,7 @@ preventive actions, each with an owner and a due day) and what becomes of the lo
    go. When the cause is found, click **Root cause found: act on it**.
 3. **Act.** Under **Corrective and preventive actions**, add what is to be done, by whom and by when. Whoever owns an action, or anyone who
    manages NCRs, clicks **Finish** and says what was done, then **Mark done** (or **Cancel the action**, saying why).
-4. **Close.** Once every action is done or cancelled, choose **What becomes of the lots** (*Use as is*, *Rework*, *Scrap*, *Return to
+4. **Close.** Once every action is done or canceled, choose **What becomes of the lots** (*Use as is*, *Rework*, *Scrap*, *Return to
    supplier*, *Not applicable*), add a **Closing note** and click **Close NCR**.
 5. **Carry out the disposition.** Once closed, the NCR lists its lots still in stock with what to do to each: **Release it** (used as is,
    held), **Hold it** (scrap, rework or return, not held yet: choose a hold reason), **Write it off** (scrap, held: choose a scrap reason). Each
@@ -2449,7 +2449,7 @@ Materials from the ERP don't use this form: they arrive through the import (see 
 
 ### The material page
 
-The left side lists the material's properties, grouped into *Identity*, *Classification*, *Stock* and *Status*. Edit one the same way as equipment: text saves when you press **Enter** or leave the field, and a choice saves as soon as you pick it. Click a property to read what it means and, when it is greyed out, why it can't change.
+The left side lists the material's properties, grouped into *Identity*, *Classification*, *Stock* and *Status*. Edit one the same way as equipment: text saves when you press **Enter** or leave the field, and a choice saves as soon as you pick it. Click a property to read what it means and, when it is grayed out, why it can't change.
 
 The rest of the page shows what the material is connected to:
 
@@ -2461,13 +2461,13 @@ The rest of the page shows what the material is connected to:
 
 ### Where it can run: capabilities and rates
 
-The **Where it can run** table lists each line that can run the material: its ideal rate, the **planning rate** Pulaski schedules with and where that comes from (*calculated* or *modified*; point at the word to see who set a modified rate and why), the standard changeover and crew, and the days it applies. ★ marks a preferred line. A capability that has ended is hidden; tick **Show ended** to see it in grey.
+The **Where it can run** table lists each line that can run the material: its ideal rate, the **planning rate** Pulaski schedules with and where that comes from (*calculated* or *modified*; point at the word to see who set a modified rate and why), the standard changeover and crew, and the days it applies. ★ marks a preferred line. A capability that has ended is hidden; tick **Show ended** to see it in gray.
 
 **Add a line**
 
 1. Click **Add line**.
 2. Choose the **Line**. Only active lines that run jobs are offered; a department gets its lines' capabilities.
-3. Enter the **Ideal rate, per hour**, the best the line can do, and its **Rate unit**. The unit must convert to the material's base unit; for metres of profile on a line rated in kilograms, add a [conversion](#6-units-and-conversions) first.
+3. Enter the **Ideal rate, per hour**, the best the line can do, and its **Rate unit**. The unit must convert to the material's base unit; for meters of profile on a line rated in kilograms, add a [conversion](#6-units-and-conversions) first.
 4. Optionally enter the **Standard changeover** in minutes (used when no changeover rule matches), the **Crew size**, and tick **Preferred line**. For a material made in batches, enter the **Batch size on this line** when the line's equipment makes a different amount at a time (a 200 kg mixer next to the 50 kg ones), and the **Batch tolerance on this line, %** when its batches may vary more or less than the material's; leave either blank for the material's.
    **… per machine count** is how much of the material one count of the line's counter makes, in the material's base unit: *2.4* when each cut of the saw is 2.4 m of profile. Leave it blank for one. [Reports from the machine](#report-production-from-the-machine) use it; the counter tag's own scale applies first. The rate column shows it as *2.4 m a count*.
    For a lot-tracked material not made in batches, **Production lots on this line** (**Lot size**, **Lot age, hours**, **New lot each shift**) makes reports fill a lot until it is full instead of making one each; see [Lots filled by reports](#report-production). The line's row shows it as *Lots of at most 1000 m, 8 h*.
@@ -2521,7 +2521,7 @@ Load many materials at once, for example when setting up a new site, from a spre
 
 1. On the Materials tab, click **Import file**.
 2. Leave **Import** on **Materials** and pick the **Format**: **CSV** or **B2MML** (see [B2MML files](#b2mml-files) below). For B2MML, type the **External system** the items come from, such as `ERP1`, if they are the ERP's items.
-3. Tick **Create missing classes** if the file may name classes that aren't on the Classes tab yet. Left unticked, such a row is an error, so a misspelt class can't slip in.
+3. Tick **Create missing classes** if the file may name classes that aren't on the Classes tab yet. Left unticked, such a row is an error, so a misspelled class can't slip in.
 4. Prepare the file: click **Download a template** for an empty one in the chosen format. For CSV, its first line names the columns; the panel shows them all. **code**, **name**, **type** and **base_unit** are required; the rest are optional:
 
    | Column | Holds |
@@ -2547,7 +2547,7 @@ Load many materials at once, for example when setting up a new site, from a spre
 - **Left out or blank.** A column the file doesn't have keeps what each material already has (or the default for a new one: lot-tracked, active, no class). A blank cell in `class`, `description` or `shelf_life_days` clears it; a blank `lot_tracked` or `active` keeps it.
 - **The rules are the same as on the material page:** a base unit that is in use can't change, lot tracking can't change while stock is on hand, an inactive class can't be given to a material, and a code or ERP key can appear only once in a file.
 - **New classes.** With **Create missing classes**, a class code the file names that doesn't exist is created once (active, named from `class_name` or its code) and used by every row that names it; each is recorded as `pulaski.material_class.created.v1` with the import as its reason. An inactive class is never switched back on by an import. In B2MML, a `ClassName` property gives the name.
-- **A CSV file:** comma or semicolon separators, quotes around a value that contains them (or line breaks), column names in any order and case (`Base unit` and `base-unit` both work, as do `item_code` and `uom`). An unknown column stops the import, so a misspelt name isn't ignored. At most 5 MB and 5,000 rows per file.
+- **A CSV file:** comma or semicolon separators, quotes around a value that contains them (or line breaks), column names in any order and case (`Base unit` and `base-unit` both work, as do `item_code` and `uom`). An unknown column stops the import, so a misspelled name isn't ignored. At most 5 MB and 5,000 rows per file.
 - Each imported row is recorded in the event log as usual, with the reason *CSV import* or *B2MML import*. The same import is `POST /api/materials/import/csv` or `…/import/b2mml` (`?dryRun=true` to check, `&externalSystem=ERP1` for B2MML, `&createClasses=true`), for scripts; `GET /api/materials/import/sources` lists the formats and `GET /api/materials/import/{csv|b2mml}/template` downloads a template.
 
 #### B2MML files
@@ -2576,7 +2576,7 @@ For example:
 ```
 
 - **External system.** A B2MML file doesn't say which system its items belong to, so you name it on import. With it, each material is that system's item, matched on its `ID` exactly as a CSV row with `external_system` and `external_key` is. Without it, they are Pulaski materials matched on their code.
-- **Other properties are skipped.** Properties Pulaski has no field for (density, colour…) are ignored, unlike an unknown CSV column. Property IDs are compared ignoring case, spaces and underscores, so `Shelf life days` and `shelf_life_days` work too. Giving a field twice, such as a class by `MaterialClassID` and by a property, is an error on that material.
+- **Other properties are skipped.** Properties Pulaski has no field for (density, color…) are ignored, unlike an unknown CSV column. Property IDs are compared ignoring case, spaces and underscores, so `Shelf life days` and `shelf_life_days` work too. Giving a field twice, such as a class by `MaterialClassID` and by a property, is an error on that material.
 - **Left out or blank** works as in CSV: a property that isn't there keeps what the material has, and one with an empty value clears an optional field.
 - Any B2MML namespace version (or none) works, inside `MaterialInformation`, a wrapper such as `SyncMaterialInformation`, or as a bare `MaterialDefinition`. The *Line* is where the material's `MaterialDefinition` starts. Further class IDs and descriptions (other languages) are ignored. Files with a `DOCTYPE` are refused. At most 5 MB and 5,000 materials per file.
 - **Classes.** Each `MaterialClass` in the file (its `ID` the code, its `Description` the name) is added if Pulaski doesn't have it and renamed if its name differs, before the materials, whether or not **Create missing classes** is ticked: the file states the class itself. The result says which classes it creates or renames. Whether a class is switched on stays as Pulaski has it. A file can hold only classes.
@@ -2696,7 +2696,7 @@ A class's code can't change and a class is never deleted: switch it off instead.
 
 ### Lot attributes
 
-The properties a site records on its lots, such as melt index, moisture or colour grade, recorded on each [lot's page](#lot-attributes-and-certificates).
+The properties a site records on its lots, such as melt index, moisture or color grade, recorded on each [lot's page](#lot-attributes-and-certificates).
 
 1. Open the **Lot attributes** tab and, with more than one site, choose the site.
 2. Type a **Code** (up to 30 characters, unique in the site; it can't change later) and a **Name**.
@@ -2737,8 +2737,8 @@ Everyone signs in to Pulaski. Your **roles** decide what you **see** and what yo
 ### Sign in
 
 1. Open Pulaski. It shows **Sign in**.
-2. If your organisation set up its own sign-in, click **Sign in with …** and sign in there; Pulaski opens when you come back. Otherwise type your **User name** and **Password** and click **Sign in**.
-   The first time you use your organisation's sign-in, Pulaski says you have no role yet: an administrator gives you one, and then you sign in again.
+2. If your organization set up its own sign-in, click **Sign in with …** and sign in there; Pulaski opens when you come back. Otherwise type your **User name** and **Password** and click **Sign in**.
+   The first time you use your organization's sign-in, Pulaski says you have no role yet: an administrator gives you one, and then you sign in again.
 3. The first time, or after an administrator reset your password, Pulaski asks you to **Change your password**: type the temporary password, then your new one twice, and click **Change password**.
 4. To sign out, click the door at the top right.
 
@@ -2757,7 +2757,7 @@ A password needs at least 10 characters, with two of: lower case, upper case, di
 Where whoever runs Pulaski has switched it on, the sign-in page shows **Forgotten your password?**:
 
 1. Click **Forgotten your password?**, type your **User name or e-mail**, and click **Send the link**. Pulaski says a link is on its way if that matches an account; it says the same either way, so nobody can find out who has an account.
-2. Open the e-mail and its link within 30 minutes (or the time your organisation set). The link works once.
+2. Open the e-mail and its link within 30 minutes (or the time your organization set). The link works once.
 3. Type the **New password** twice and click **Change password**, then sign in with it. Pulaski e-mails you that the password was changed.
 
 **In detail**
@@ -2782,11 +2782,11 @@ its time, when a control chart signals, when a lot is put on hold, or when a job
 **In detail**
 
 - You get one e-mail for each stop, call, SPC alert, hold or shortage, with a link to it (**Machines**, **Andon**, **SPC alerts**, the lot,
-  **Shortages**) when your organisation has told Pulaski its web address. Times in the e-mail are the site's.
+  **Shortages**) when your organization has told Pulaski its web address. Times in the e-mail are the site's.
 - *A machine stopped longer than*: a stop of a machine or line at or below **Where**, still going or not, once it has lasted the minutes.
   *A stop still without a reason*: that many minutes after it ended. Micro-stops don't count, and pieces of a stop someone split, merged or
   retimed don't alert again. *An andon call escalated*: once a call is still unanswered past its kind of help's time.
-- *A control chart signalled*: when an SPC alert opens for a line at or below **Where** (an alert for results without a line only for the
+- *A control chart signaled*: when an SPC alert opens for a line at or below **Where** (an alert for results without a line only for the
   whole site); further breaks while it stays open don't e-mail again. *A lot put on hold*: when someone holds a lot that is at or below
   **Where** now, with the reason and comment. *A job will be short of a component*: what the **Shortages** check shows as not covered by
   stock or supply due in time, for jobs needing it within the minutes; checked every 10 minutes, and once per job and component.
@@ -2816,7 +2816,7 @@ A new Pulaski starts with these roles. Your administrator may have changed them 
 
 Equipment (with machine profiles and edge nodes), units and retrying or skipping deliveries to the ERP (**Integrations**) belong to the Administrator. Someone with two roles can do what either allows.
 
-When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator. A switched-off button is greyed out the same way everywhere. When it is off because of the state of something, such as a lot on hold, a shift that hasn't ended or a file not checked yet, it says why: point at it, or move to it with the Tab key, and a small note appears; screen readers read the note with the button. A button that is off only while Pulaski saves says nothing and comes back by itself. Permissions held at one site count only there: on the **Schedule**, at a site where you can't plan, jobs don't drag and a job's panel shows a lock note instead of *Move*, *Pins* and *Cancel*; where you can't manage work orders, cards don't drag between Kanban columns and an order's panel has no status buttons.
+When you can't change something, Pulaski leaves out the button, or switches the fields off and says *You can view this, but changing it needs permission to …*. If you should be able to, ask an administrator. A switched-off button is grayed out the same way everywhere. When it is off because of the state of something, such as a lot on hold, a shift that hasn't ended or a file not checked yet, it says why: point at it, or move to it with the Tab key, and a small note appears; screen readers read the note with the button. A button that is off only while Pulaski saves says nothing and comes back by itself. Permissions held at one site count only there: on the **Schedule**, at a site where you can't plan, jobs don't drag and a job's panel shows a lock note instead of *Move*, *Pins* and *Cancel*; where you can't manage work orders, cards don't drag between Kanban columns and an order's panel has no status buttons.
 
 ### What each role can see
 
@@ -2837,13 +2837,13 @@ You see a screen, and its entry in the menu, only if one of your roles lets you 
 - **No screens at all.** Someone whose roles let them see nothing lands on **Nothing to see here yet**, with a button to sign out. Ask an administrator for a role.
 - **Sites.** A role held at one site shows that site's data only: other sites' work orders, lots, lines and schedules aren't listed.
 
-### Let in someone from your organisation's sign-in (administrators)
+### Let in someone from your organization's sign-in (administrators)
 
 1. Ask them to sign in once with **Sign in with …**. Pulaski adds them and tells them they have no role yet.
 2. On **Configure → Users**, they show **Awaiting a role**. Click **Change**, choose a role and site under **Add a role…**, and click **Add**.
 3. Ask them to sign in again.
 
-Their name and e-mail come from your organisation's sign-in and are kept up to date at every sign-in; they have no Pulaski password to reset. Setting up the sign-in is a job for whoever runs Pulaski: see `deploy/identity/README.md`.
+Their name and e-mail come from your organization's sign-in and are kept up to date at every sign-in; they have no Pulaski password to reset. Setting up the sign-in is a job for whoever runs Pulaski: see `deploy/identity/README.md`.
 
 ### Add a user (administrators)
 
@@ -2917,8 +2917,8 @@ To stop using a role, untick **Active** and save. A role someone holds can't be 
 - **History** names who did what by user name, such as *oli.operator* on a lot's history.
 - **Changes apply at once.** Switching someone off or taking a role away takes effect on their next click, without waiting for their session to end.
 - **Ended, not deleted.** Taking a role away from someone ends it, and a role or permission is switched off rather than deleted; Pulaski keeps who held which role when, and who changed a role.
-- **Your organisation's sign-in.** People who use it are known by who it says they are, not by name or e-mail, so a renamed person keeps their history. Switching them off in Pulaski keeps them out even when the sign-in lets them in. Roles always come from Pulaski.
-- **Passwords only for administrators.** Whoever runs Pulaski can set it so that, besides your organisation's sign-in, only administrators and service accounts use a Pulaski password. Anyone else trying one is told to use the organisation's sign-in. An administrator's password always works, so you can get in if the organisation's sign-in is down.
+- **Your organization's sign-in.** People who use it are known by who it says they are, not by name or e-mail, so a renamed person keeps their history. Switching them off in Pulaski keeps them out even when the sign-in lets them in. Roles always come from Pulaski.
+- **Passwords only for administrators.** Whoever runs Pulaski can set it so that, besides your organization's sign-in, only administrators and service accounts use a Pulaski password. Anyone else trying one is told to use the organization's sign-in. An administrator's password always works, so you can get in if the organization's sign-in is down.
 - **The first administrator** is created when Pulaski starts with no users, from the `Security:BootstrapAdmin` settings, with a temporary password to change at the first sign-in.
 - **For integrators:** the API takes a bearer token from `POST /api/auth/sign-in`; every other call needs one, and a call without the permission is refused with 403 and the permission in words.
 
@@ -3067,7 +3067,7 @@ Who worked on which line, for how long, and against the standard crew. Superviso
 - **Shifts and approval.** Time belongs to the shift running when it started (or starting within two hours). Once a shift has ended, a supervisor approves it: open time ends when the shift ended, and the shift is locked. After that, a change is a **correction** with a reason.
 - **Breaks** are recorded on their own, paid or unpaid. A break's time comes out of the hours of every line the person is on, and is shown apart in the reports; the time they were clocked on stays as it was.
 - **Terminals and badges.** A shared tablet or panel PC can be a **terminal** where people badge to clock on and off and take breaks, without signing in to Pulaski. Each person has one badge; a terminal can also ask for a PIN.
-- **Qualifications** are the skills and certificates a line needs, such as a forklift licence. Each person holds them for a set of days. Someone checked onto a line without a qualification it needs is still checked on, and Pulaski warns.
+- **Qualifications** are the skills and certificates a line needs, such as a forklift license. Each person holds them for a set of days. Someone checked onto a line without a qualification it needs is still checked on, and Pulaski warns.
 
 ### Set up people and crews
 
@@ -3142,9 +3142,9 @@ Running it needs permission to maintain people at the site. Credentials go in th
 ### Set up a terminal (managers)
 
 1. Open **Configure → Terminals**. Type a **Code** (it can't change later) and a **Name** such as where it hangs. Under **Offers the lines of**, choose the site, an area or a line, then the **First line offered**, and whether people identify with **Badge** or **Badge and PIN**. Choose its **Language** and, if you like, its **Region** (such as *es-MX*) for the people at that line: its screens follow them, not whoever badges in. Click **Register terminal**.
-2. Click **Enrolment code** on its row. A ten-character code shows, once, with the time it runs out (15 minutes).
-3. On the device, open the address the page shows (ending `/terminal/enrol`), type the code and press **Enrol**. The device now shows the badge screen; leave it there.
-4. To stop a terminal working (lost, stolen, moved), click **Change**, untick **Active** and save. To move it to another device, issue a new code and enrol the new device: the old one stops working.
+2. Click **Enrollment code** on its row. A ten-character code shows, once, with the time it runs out (15 minutes).
+3. On the device, open the address the page shows (ending `/terminal/enrol`), type the code and press **Enroll**. The device now shows the badge screen; leave it there.
+4. To stop a terminal working (lost, stolen, moved), click **Change**, untick **Active** and save. To move it to another device, issue a new code and enroll the new device: the old one stops working.
 
 ### Issue badges
 
@@ -3197,8 +3197,8 @@ Running it needs permission to maintain people at the site. Credentials go in th
 - **Hours** are worked time: elapsed time outside the person's breaks × share; an open session counts until now. Someone on two lines at 50% who takes a 30-minute break loses 15 minutes on each, and has 30 minutes of break.
 - **Breaks:** a break must start while the person is on a line, belongs to that line's shift, lasts at most 4 hours and can't overlap another of theirs. Paid and unpaid breaks both come out of worked hours; paid ones are reported for payroll to add back. Breaks lock with their shift's approval, like time on a line.
 - **Qualifications** belong to a site. A grant is valid from its first day to its last, both included, in the site's time zone; a renewal is a new grant, and the old one stays in the list. A revoked grant no longer counts from the moment it is revoked. Switching a qualification off stops it being granted or required. The Labor screen marks someone on a line without what it requires **Not qualified**; point at it to see what is missing and why.
-- **Terminals:** a terminal records only the badged person's own time: direct, setup, indirect or training time on a line it offers, ending their own sessions, and their breaks, under the same rules as clocking yourself on. People of another site listed as also working here badge here too. Shift review shows *Badged at* and the terminal for that time. A badge that is unknown, revoked or from another site is just *not recognised*. Five wrong PINs in a row lock the badge for 5 minutes. A badge scan is good for 2 minutes; after that, badge again. Pulaski keeps only a scrambled form of badge numbers and PINs, so they can't be read back: to change a PIN, issue the badge again.
-- **Who:** registering terminals needs permission to register and enrol terminals (Manager); issuing badges, permission to maintain people and crews. People badging at a terminal need no Pulaski permission of their own: the terminal is trusted for that.
+- **Terminals:** a terminal records only the badged person's own time: direct, setup, indirect or training time on a line it offers, ending their own sessions, and their breaks, under the same rules as clocking yourself on. People of another site listed as also working here badge here too. Shift review shows *Badged at* and the terminal for that time. A badge that is unknown, revoked or from another site is just *not recognized*. Five wrong PINs in a row lock the badge for 5 minutes. A badge scan is good for 2 minutes; after that, badge again. Pulaski keeps only a scrambled form of badge numbers and PINs, so they can't be read back: to change a PIN, issue the badge again.
+- **Who:** registering terminals needs permission to register and enroll terminals (Manager); issuing badges, permission to maintain people and crews. People badging at a terminal need no Pulaski permission of their own: the terminal is trusted for that.
 - **Who:** qualifications and grants need permission to maintain people and crews; requiring them on equipment needs permission to maintain equipment. Recording breaks for others needs permission to record labor; taking your own, permission to clock yourself on.
 
 ---
@@ -3496,7 +3496,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 ### In detail
 
 - **Who:** seeing edge nodes needs permission to see equipment; adding and changing them, their connections and tags needs permission to maintain equipment at the site. The edge's own user needs only the **Edge node** role and sees no screens.
-- **Sending once.** The edge numbers everything it buffers and Pulaski applies each number once, so forwarding again after a failure changes nothing. A new buffer file starts a new numbering, which Pulaski recognises.
+- **Sending once.** The edge numbers everything it buffers and Pulaski applies each number once, so forwarding again after a failure changes nothing. A new buffer file starts a new numbering, which Pulaski recognizes.
 - **What the edge forwards:** a tag's value when it changes, when it is lost, and the last value seen when the tag is newly bound; a speed at most every 5 seconds; a process value when it moves past its deadband, and at least once a minute while it holds steady or stays within it (`Edge:ProcessValueHeartbeat`). A connection it hears from without a birth certificate is asked for one (a Sparkplug *rebirth*), as is every node its tags name when it connects, so an idle machine's state is known.
 - **Stop codes** are latched: a machine that clears its code once acknowledged keeps it in Pulaski until it runs (Execute) again.
 - **Counts** are taken across the rollover value; a counter going back without one is taken as reset to zero. Machine counts don't change the job's reported quantities by themselves: a [report from the machine](#report-production-from-the-machine) takes them, once the operator has checked them.
@@ -3524,7 +3524,7 @@ The edge reads its tags every minute, so new and changed ones take effect withou
 ### The status board
 
 1. Open **Operate → Machines**. With more than one site, choose the site.
-2. Each tile is a piece of equipment that tracks state, coloured by what it is doing: **Producing** (green), **Waiting** (starved or blocked), **Held**, **Stopped**, **Ready** (idle, starting, resetting…), and **No signal** or **Not reporting** (hatched).
+2. Each tile is a piece of equipment that tracks state, colored by what it is doing: **Producing** (green), **Waiting** (starved or blocked), **Held**, **Stopped**, **Ready** (idle, starting, resetting…), and **No signal** or **Not reporting** (hatched).
 3. A tile shows the PackML state and for how long, the unit mode when it isn't Production, the stop in progress with its reason (or **uncoded**) and stop code, the job running with its good count so far, and the speed.
 4. A line sits first in its row, with the machines below it. A line set to take its state from its machines says so: **Worst of its machines** (series), **Best of its machines** (parallel) or **Its constraint machine**.
 5. **… stops to code** on a tile opens that machine's stops. **… quiet** means its edge node hasn't been heard from for 2 minutes.
@@ -3695,13 +3695,13 @@ When the meter reaches the interval, Pulaski raises a request by itself, with th
 
 | Status | Meaning | Can go to |
 | --- | --- | --- |
-| **Planned** | Being arranged; jobs move freely. | Dispatched, Cancelled |
-| **Dispatched** | Published to the floor with a baseline. | Planned (un-dispatch), Firmed, Cancelled |
-| **Firmed** | Plan frozen; jobs anchored at their start. | In progress (when its first job starts), Cancelled |
+| **Planned** | Being arranged; jobs move freely. | Dispatched, Canceled |
+| **Dispatched** | Published to the floor with a baseline. | Planned (un-dispatch), Firmed, Canceled |
+| **Firmed** | Plan frozen; jobs anchored at their start. | In progress (when its first job starts), Canceled |
 | **In progress** | Being made: its first job has started. | Completed (when its last open job completes) |
 | **Completed** | All its jobs are done; production can still be reported into their runs. | In progress (a job is reopened), Closed |
 | **Closed** | Done and closed: its jobs are closed and take no more reports. | — |
-| **Cancelled** | Not going ahead. Cancel its open jobs first. | — |
+| **Canceled** | Not going ahead. Cancel its open jobs first. | — |
 
 ### Job rules
 
@@ -3755,7 +3755,7 @@ An order can count in several tiles (starting today *and* behind, for example).
 
 ### Changeovers
 
-Between two production jobs on different materials, a line needs a changeover. Pulaski sizes it from the plant's [changeover rules](#changeover-rules) (for example *white to grey: 30 minutes*, *grey to white: 2 hours*), or from the line's standard changeover for the incoming material. By default Pulaski inserts these automatically as placeholders and recalculates them as you resequence. A plant can instead choose to have planners place changeover jobs themselves; Pulaski then warns where one is missing. A manager chooses which on [Site settings](#18-site-settings).
+Between two production jobs on different materials, a line needs a changeover. Pulaski sizes it from the plant's [changeover rules](#changeover-rules) (for example *white to gray: 30 minutes*, *gray to white: 2 hours*), or from the line's standard changeover for the incoming material. By default Pulaski inserts these automatically as placeholders and recalculates them as you resequence. A plant can instead choose to have planners place changeover jobs themselves; Pulaski then warns where one is missing. A manager chooses which on [Site settings](#18-site-settings).
 
 ---
 
@@ -3818,7 +3818,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
 - **Reversing:** a chain undo follows a lot and the lots split off it, not merges into other lots, consumption into jobs or the output made from it; corrections made before this version can't be reversed.
 - **Genealogy through a silo is an estimate** from the declared movements. A level tag's readings confirm when it was empty and check the declared stock (see [How a silo flows](#how-a-silo-flows)), but they don't change how much each arrival gave. A reversed movement and its reversal are left out of the estimate, as if neither happened.
 - **Production performance** carries no labor or machine time, and a job's lots are listed but not which lot each was made from. A production performance feed sends one document per change, even when several changes come together; the built-in ERP feed sends only events (add a feed for B2MML).
-- **Sending to other systems** is by HTTPS webhook or MQTT; there is no Kafka or other message queue yet, and retention is the same for every feed. Receivers' acknowledgements are recorded on the delivery, but nothing compares what the ERP booked with what Pulaski sent; there is no adapter for a particular ERP's or document system's own API. A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows at most 200 at a time, with no paging beyond that.
+- **Sending to other systems** is by HTTPS webhook or MQTT; there is no Kafka or other message queue yet, and retention is the same for every feed. Receivers' acknowledgments are recorded on the delivery, but nothing compares what the ERP booked with what Pulaski sent; there is no adapter for a particular ERP's or document system's own API. A certificate's file goes inline in the event, up to 10 MB; there is no download link for a receiver to fetch it later. The delivery list shows at most 200 at a time, with no paging beyond that.
 - **Allocations:** the background refresh is all or nothing for a site, and any change anywhere makes it run. Preferences are per site, not per material. A picking list is printed, not confirmed: fetching the lot is still an ordinary move. Approved alternates show only in allocations and on consumption, not in an order's planned components, and only a BOM's approved alternates can be allocated.
 - **Shortages don't plan.** Incoming deliveries are counted only as entered or sent by the ERP, and a lead time only flags what can't arrive in time; nothing is suggested or ordered. Lead times are per material, not per supplier or site. The live timing is the schedule as projected now, not a forecast of slips.
 - **The Overview** has no quality figures yet, and no targets per line. Its shift figures don't take calendar exceptions out (as in the OEE report), and good output is only what is reported, never the machine's counter.
@@ -3830,7 +3830,7 @@ Pulaski is pre-alpha. These are known gaps, so you don't spend time looking for 
   supplier have no steps of their own; runs can't be added to an NCR after it is raised; NCRs aren't sent on a delivery feed.
 - **Quality:** alerts aren't e-mailed, and there are no sampling plans or reminders of samples due. Process values make results only at fixed intervals from one tag per line, never for an inspected characteristic or a lot. A specification is per material, not per site or customer, so a certificate of analysis has one layout and no customer-specific
 requirements; it takes no results from the lots a lot was split or merged from, and is printed in English. A job's results are recorded from its page; the Quality page itself has no job picker. Results only change OEE through a rejected lot.
-- **Signing in through your organisation's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
+- **Signing in through your organization's identity provider** works for OpenID Connect providers set up in configuration; its groups don't give Pulaski roles yet, signing out of Pulaski doesn't sign you out of the provider, and a session still ends after 12 hours. Forgotten Pulaski passwords are reset by e-mail only where it is switched on; Pulaski sends no other e-mail.
 - **Some switched-off controls give no reason yet:** a form's Save waiting on a field next to it, an Export with nothing to export, and the locked boxes on the Permissions tab (point at those with the mouse to see why).
 
 ---
@@ -3850,7 +3850,7 @@ Check the user name and password (the password is case-sensitive). After five wr
 Sessions last up to 12 hours, and end straight away if an administrator switches you off. Sign in again.
 
 **I can't find a process when creating an order.**
-The process must be at the order's site, be active, have a released version, and make the material (all materials, its class, or the material itself). If it is listed but greyed out, read the reason under the field: usually a missing capability.
+The process must be at the order's site, be active, have a released version, and make the material (all materials, its class, or the material itself). If it is listed but grayed out, read the reason under the field: usually a missing capability.
 
 **The schedule is empty.**
 Mark lines as **Schedulable** (and **Can run jobs**) on the Equipment page. Then create a work order.

@@ -89,20 +89,20 @@ public static class ControlLimitPeriods
         return (equipmentId is null ? null : inForce.FirstOrDefault(l => l.EquipmentId == equipmentId)) ?? inForce.FirstOrDefault(l => l.EquipmentId is null);
     }
 
-    /// <summary>The limits a person enters must be in order, and a chart with a dispersion chart needs its centre and upper limit.</summary>
+    /// <summary>The limits a person enters must be in order, and a chart with a dispersion chart needs its center and upper limit.</summary>
     /// <exception cref="DomainRuleException">They aren't.</exception>
     public static void Ensure(ControlLimit limit)
     {
         var l = limit.Limits;
         if (!(double.IsFinite(l.Center) && double.IsFinite(l.Ucl) && double.IsFinite(l.Lcl)) || l.Lcl > l.Center || l.Center > l.Ucl)
         {
-            throw new DomainRuleException("The limits must be numbers with the lower limit at most the centre line, and the centre line at most the upper limit.");
+            throw new DomainRuleException("The limits must be numbers with the lower limit at most the center line, and the center line at most the upper limit.");
         }
 
         if (ChartTypes.HasDispersion(limit.ChartType)
             && (l.DispersionCenter is not { } dc || l.DispersionUcl is not { } du || dc < 0 || du < dc || (l.DispersionLcl ?? 0) > dc || (l.DispersionLcl ?? 0) < 0))
         {
-            throw new DomainRuleException("This chart has a dispersion chart: give its centre line and upper limit (and a lower limit from 0 to the centre).");
+            throw new DomainRuleException("This chart has a dispersion chart: give its center line and upper limit (and a lower limit from 0 to the center).");
         }
 
         if (ChartTypes.IsAttribute(limit.ChartType) && l.Lcl < 0)

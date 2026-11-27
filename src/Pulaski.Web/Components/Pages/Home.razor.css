@@ -1,5 +1,5 @@
 /* Plant overview (design/admin-dashboard-brief.md). Calm surfaces, 1 px rules, no shadows; one
-   accent for planned work and links; state colours only for state. One visual idea runs through
+   accent for planned work and links; state colors only for state. One visual idea runs through
    the page: diagonal hatching means "no data yet", from the no-signal lane to the placeholders. */
 
 .ov-head {
@@ -174,7 +174,7 @@ a.ov-att:hover {
     font: var(--type-caption);
 }
 
-/* Something to do: the count is full ink, the icon takes the status colour, and a bar marks the cell. */
+/* Something to do: the count is full ink, the icon takes the status color, and a bar marks the cell. */
 .ov-att.is-danger::before,
 .ov-att.is-warning::before {
     content: "";
@@ -474,7 +474,7 @@ a.ov-att:hover {
         color: var(--text-muted);
     }
 
-    /* A live state: a dot in the state colour, from the design system's state tokens (as on the Machines board). */
+    /* A live state: a dot in the state color, from the design system's state tokens (as on the Machines board). */
     .ov-state.is-producing { --state: var(--state-producing); }
     .ov-state.is-waiting { --state: var(--state-waiting); }
     .ov-state.is-held { --state: var(--state-held); }
@@ -656,7 +656,7 @@ a.ov-att:hover {
     top: 0;
     bottom: 0;
     border-radius: 3px;
-    /* A surface gap keeps neighbouring jobs apart. */
+    /* A surface gap keeps neighboring jobs apart. */
     box-shadow: 0 0 0 1px var(--surface-2);
 }
 

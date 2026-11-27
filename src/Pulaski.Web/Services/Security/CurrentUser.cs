@@ -19,7 +19,7 @@ public sealed class CurrentUser
     /// <summary>For tests and previews: the user as given.</summary>
     public void Set(MeDto me) => Me = me;
 
-    /// <summary>A view setting changed (#131): the menu shows favourites again.</summary>
+    /// <summary>A view setting changed (#131): the menu shows favorites again.</summary>
     public event Action? SettingsChanged;
 
     private static readonly System.Text.Json.JsonSerializerOptions SettingJson = new(System.Text.Json.JsonSerializerDefaults.Web);

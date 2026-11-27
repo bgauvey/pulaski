@@ -221,7 +221,7 @@ else if (_error is null)
         await RunAsync(async () =>
         {
             await Api.CancelStockCountAsync(CountId, new CancelStockCountRequest { Version = _count!.Count.Version });
-            _message = L["Count cancelled. Nothing was adjusted."];
+            _message = L["Count canceled. Nothing was adjusted."];
         });
     }
 

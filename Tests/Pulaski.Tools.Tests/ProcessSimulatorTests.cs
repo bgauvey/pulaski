@@ -55,7 +55,7 @@ public class ProcessSimulatorTests
     }
 
     [Fact]
-    public void A_rebirth_request_is_recognised_and_its_births_start_the_sequence_again()
+    public void A_rebirth_request_is_recognized_and_its_births_start_the_sequence_again()
     {
         var time = new FakeTimeProvider();
         var node = new SparkplugNode("Plant1", "ExtruderProcess", "EXT-01-EXT", time);

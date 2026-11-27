@@ -4,10 +4,10 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
-@* Starring a page (#131, D-131): it joins Favourites at the top of the menu, kept for the user on any device. *@
+@* Starring a page (#131, D-131): it joins Favorites at the top of the menu, kept for the user on any device. *@
 <button type="button" class="icon-button" aria-pressed="@(IsFavorite ? "true" : "false")"
-        aria-label="@(IsFavorite ? L["Remove this page from your favourites"] : L["Add this page to your favourites"])"
-        title="@(IsFavorite ? L["Remove this page from your favourites"] : L["Add this page to your favourites"])" @onclick="ToggleAsync">
+        aria-label="@(IsFavorite ? L["Remove this page from your favorites"] : L["Add this page to your favorites"])"
+        title="@(IsFavorite ? L["Remove this page from your favorites"] : L["Add this page to your favorites"])" @onclick="ToggleAsync">
     <Icon Name="@(IsFavorite ? "star-filled" : "star")" />
 </button>
 

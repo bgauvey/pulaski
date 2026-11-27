@@ -90,16 +90,16 @@ public sealed class InMemoryDeliveries : IDeliveryStore, IDeliveryFeedStore
     }
 
     public Task AcknowledgeAsync(
-        Guid id, Acknowledgement acknowledgement, string source, string? status, string? failure, DateTimeOffset at, CancellationToken cancellationToken)
+        Guid id, Acknowledgment acknowledgment, string source, string? status, string? failure, DateTimeOffset at, CancellationToken cancellationToken)
     {
         lock (_lock)
         {
             var i = _rows.FindIndex(r => r.Id == id);
             _rows[i] = _rows[i] with
             {
-                AckStatus = acknowledgement.Status,
-                AckReference = acknowledgement.Reference,
-                AckMessage = acknowledgement.Message,
+                AckStatus = acknowledgment.Status,
+                AckReference = acknowledgment.Reference,
+                AckMessage = acknowledgment.Message,
                 AckSource = source,
                 AckAt = at,
                 Status = status ?? _rows[i].Status,

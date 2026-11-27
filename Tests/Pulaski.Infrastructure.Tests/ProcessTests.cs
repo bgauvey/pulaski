@@ -429,7 +429,7 @@ public sealed class ProcessTests(DatabaseFixture db)
         var siteCode = await connection.ExecuteScalarAsync<string>("SELECT code FROM core.equipment WHERE id = @Id", new { Id = plant.Site });
         var uomCode = await connection.ExecuteScalarAsync<string>("SELECT code FROM core.uom WHERE id = @Id", new { Id = db.UomId });
         var start = TestTime.Now.AddDays(2);
-        ErpWorkOrderRequest Order(string key, decimal qty, string? version = null, bool cancelled = false) => new()
+        ErpWorkOrderRequest Order(string key, decimal qty, string? version = null, bool canceled = false) => new()
         {
             ExternalSystem = "SAP-" + suffix,
             ExternalKey = key,
@@ -440,7 +440,7 @@ public sealed class ProcessTests(DatabaseFixture db)
             Quantity = qty,
             UomCode = uomCode!,
             PlannedStart = start,
-            Cancelled = cancelled,
+            Canceled = canceled,
         };
         async Task<ErpOrderResultDto> ImportAsync(ErpWorkOrderRequest order) =>
             Assert.Single((await db.SendAsync(new ImportWorkOrdersCommand([order], null))).Results);
@@ -493,8 +493,8 @@ public sealed class ProcessTests(DatabaseFixture db)
         row = (await reads.GetAsync(a.WorkOrderId.Value, CancellationToken.None))!;
         Assert.Equal((1200m, (ErpPendingChangeDto?)null), (row.PlannedQty, row.PendingChange));
 
-        // Cancelled in the ERP while planned: cancelled here, with its jobs.
-        Assert.Equal(ErpOrderAction.Cancelled, (await ImportAsync(Order("B", 1025m, cancelled: true))).Action);
+        // Canceled in the ERP while planned: canceled here, with its jobs.
+        Assert.Equal(ErpOrderAction.Canceled, (await ImportAsync(Order("B", 1025m, canceled: true))).Action);
         Assert.Equal("cancelled", (await reads.GetAsync(b.WorkOrderId.Value, CancellationToken.None))!.Status);
     }
 
@@ -549,7 +549,7 @@ public sealed class ProcessTests(DatabaseFixture db)
         Assert.Equal((ErpOrderAction.Created, "PO-" + suffix), (made.Action, made.OrderNumber));
         Assert.Equal(1, await OrdersAsync());
         Assert.Equal(ErpOrderAction.Unchanged, (await ImportAsync("Released", dryRun: false)).Results[0].Action);
-        Assert.Equal(ErpOrderAction.Cancelled, (await ImportAsync("Cancelled", dryRun: false)).Results[0].Action);
+        Assert.Equal(ErpOrderAction.Canceled, (await ImportAsync("Canceled", dryRun: false)).Results[0].Action);
 
         var empty = await db.SendAsync(new ImportB2mmlWorkOrdersCommand("<nothing/>", "ERP-" + suffix, null, null, DryRun: false));
         Assert.Empty(empty.Results);

@@ -14,32 +14,32 @@ INSERT INTO core.uom (code, name, dimension, to_base_factor) VALUES
     ('mg',    'Milligram',               'mass',   0.000001),
     ('g',     'Gram',                    'mass',   0.001),
     ('kg',    'Kilogram',                'mass',   1),
-    ('t',     'Tonne (metric ton)',      'mass',   1000),
+    ('t',     'Metric ton',              'mass',   1000),
     ('oz',    'Ounce',                   'mass',   0.028349523125),
     ('lb',    'Pound',                   'mass',   0.45359237),
     ('cwt',   'Hundredweight (US, 100 lb)', 'mass', 45.359237),
     ('ton',   'Short ton (US, 2000 lb)', 'mass',   907.18474),
     ('lt',    'Long ton (UK, 2240 lb)',  'mass',   1016.0469088),
     -- Length, base m
-    ('mm',    'Millimetre',              'length', 0.001),
-    ('cm',    'Centimetre',              'length', 0.01),
-    ('m',     'Metre',                   'length', 1),
-    ('km',    'Kilometre',               'length', 1000),
+    ('mm',    'Millimeter',              'length', 0.001),
+    ('cm',    'Centimeter',              'length', 0.01),
+    ('m',     'Meter',                   'length', 1),
+    ('km',    'Kilometer',               'length', 1000),
     ('in',    'Inch',                    'length', 0.0254),
     ('ft',    'Foot',                    'length', 0.3048),
     ('yd',    'Yard',                    'length', 0.9144),
     ('mi',    'Mile',                    'length', 1609.344),
     -- Area, base m2
-    ('mm2',   'Square millimetre',       'area',   0.000001),
-    ('cm2',   'Square centimetre',       'area',   0.0001),
-    ('m2',    'Square metre',            'area',   1),
+    ('mm2',   'Square millimeter',       'area',   0.000001),
+    ('cm2',   'Square centimeter',       'area',   0.0001),
+    ('m2',    'Square meter',            'area',   1),
     ('in2',   'Square inch',             'area',   0.00064516),
     ('ft2',   'Square foot',             'area',   0.09290304),
     ('yd2',   'Square yard',             'area',   0.83612736),
     -- Volume, base L
-    ('mL',    'Millilitre',              'volume', 0.001),
-    ('L',     'Litre',                   'volume', 1),
-    ('m3',    'Cubic metre',             'volume', 1000),
+    ('mL',    'Milliliter',              'volume', 0.001),
+    ('L',     'Liter',                   'volume', 1),
+    ('m3',    'Cubic meter',             'volume', 1000),
     ('in3',   'Cubic inch',              'volume', 0.016387064),
     ('ft3',   'Cubic foot',              'volume', 28.316846592),
     ('qt',    'Quart (US liquid)',       'volume', 0.946352946),
@@ -73,7 +73,7 @@ ON CONFLICT (code) DO NOTHING;
 -- Demo conversions: 1 from-unit = factor to-units, for each material. Weights are typical,
 -- not measured. A pair already present in either direction is left alone.
 WITH conversions(material_pattern, class_code, from_code, to_code, factor) AS (VALUES
-    -- Extruded profiles weigh by series, in kg per metre, and ship 6 m lengths bundled.
+    -- Extruded profiles weigh by series, in kg per meter, and ship 6 m lengths bundled.
     ('PRF-4410-%', NULL,      'm',   'kg',  1.20),
     ('PRF-4420-%', NULL,      'm',   'kg',  1.05),
     ('PRF-5100-%', NULL,      'm',   'kg',  1.60),
@@ -88,7 +88,7 @@ WITH conversions(material_pattern, class_code, from_code, to_code, factor) AS (V
     (NULL,         'MASTERBATCH', 'bag', 'kg', 25),
     (NULL,         'COMPOUND',    'bag', 'kg', 25),
     (NULL,         'COMPOUND',    'bb',  'kg', 1000),
-    -- Film is sold by the roll; moulded parts by the carton.
+    -- Film is sold by the roll; molded parts by the carton.
     (NULL,         'FILM',        'roll', 'kg', 25),
     (NULL,         'MOLDED',      'ctn',  'ea', 100),
     -- Packaging items.

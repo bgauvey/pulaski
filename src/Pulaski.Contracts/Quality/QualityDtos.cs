@@ -512,7 +512,7 @@ public sealed record UpdateTagBindingRequest
     public bool IsActive { get; init; } = true;
 }
 
-/// <summary>An SPC alert (D-099): a chart that signalled, open until someone closes it with a cause and the action taken.</summary>
+/// <summary>An SPC alert (D-099): a chart that signaled, open until someone closes it with a cause and the action taken.</summary>
 public sealed record SpcAlertDto
 {
     public Guid Id { get; init; }
@@ -653,7 +653,7 @@ public sealed record DueSampleDto
 }
 
 /// <summary>
-/// A lot's certificate of analysis (#137, D-123): the lot, its released specification, one line per spec item summarising the lot's results
+/// A lot's certificate of analysis (#137, D-123): the lot, its released specification, one line per spec item summarizing the lot's results
 /// (or, when the lot has none for an item, its making job's), and what the issuer should know first. Worked out now; issuing stores it.
 /// </summary>
 public sealed record CertificateDto

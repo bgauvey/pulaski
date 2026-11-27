@@ -15,15 +15,15 @@ public class PlacementPreviewHandlerTests : SchedulingHandlerTestBase
         var line = Line();
         var white = await WorkOrderAsync(White);
         var queued = await CreateProductionAsync(line, white, "W-1");   // 100 m at 100 m/h: Now to Now+1h
-        var grey = await WorkOrderAsync(Grey);
+        var gray = await WorkOrderAsync(Gray);
 
-        var result = await Preview().HandleAsync(new PreviewJobPlacementQuery(line.Id, grey.Id, 200m, null), CancellationToken.None);
+        var result = await Preview().HandleAsync(new PreviewJobPlacementQuery(line.Id, gray.Id, 200m, null), CancellationToken.None);
 
         var mine = result.Timeline.Segments.Where(s => s.JobId == result.PreviewJobId).ToList();
         Assert.Equal(
             [(SegmentKind.ChangeoverPlaceholder, Now.AddHours(1), Now.AddHours(1.5)), (SegmentKind.Job, Now.AddHours(1.5), Now.AddHours(3.5))],
             mine.Select(s => (s.Kind, s.Start, s.End)));
-        Assert.Equal((grey.Id, grey.OrderNumber, (decimal?)200m), (mine[1].WorkOrderId, mine[1].JobNumber, mine[1].PlannedQty));
+        Assert.Equal((gray.Id, gray.OrderNumber, (decimal?)200m), (mine[1].WorkOrderId, mine[1].JobNumber, mine[1].PlannedQty));
         Assert.Empty(result.Delayed);
         Assert.Equal([queued], (await F.Stores.Scheduling.GetLinePlanAsync(line.Id, Now, Now.AddDays(1), CancellationToken.None))!.Jobs.Select(j => j.JobId));
     }

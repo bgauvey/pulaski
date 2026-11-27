@@ -136,7 +136,7 @@ public sealed class LaborTests(DatabaseFixture db)
 
         var grants = await QueryAsync<ListQualificationGrantsQuery, IReadOnlyList<QualificationGrantDto>>(new ListQualificationGrantsQuery(site.Id, null, fork.Id, null));
         Assert.Equal((granted.Id, GrantStatus.Valid), (Assert.Single(grants).Id, grants[0].Status));
-        await db.SendAsync(new RevokeQualificationGrantCommand(granted.Id, grants[0].Version, "Expired licence"));
+        await db.SendAsync(new RevokeQualificationGrantCommand(granted.Id, grants[0].Version, "Expired license"));
         var listed = Assert.Single(await QueryAsync<ListQualificationsQuery, IReadOnlyList<QualificationDto>>(new ListQualificationsQuery(site.Id)));
         Assert.Equal(("FORK", 0), (listed.Code, listed.Holders));
         Assert.Equal([$"QA-{_s}"], listed.RequiredOn);
@@ -151,14 +151,14 @@ public sealed class LaborTests(DatabaseFixture db)
         CreatedResponse ann = await db.SendAsync(new CreatePersonCommand(site.Id, "300-" + _s, "Ann", null, null));
 
         CreatedResponse created = await db.SendAsync(new CreateTerminalCommand("hall", "Hall", site.Id, line.Id, TerminalAuthModes.BadgePlusPin));
-        var code = await db.SendAsync(new IssueEnrolmentCodeCommand(created.Id));
-        var enrolled = await db.SendAsync(new EnrolTerminalCommand(code.Code));
-        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new EnrolTerminalCommand(code.Code)));
+        var code = await db.SendAsync(new IssueEnrollmentCodeCommand(created.Id));
+        var enrolled = await db.SendAsync(new EnrollTerminalCommand(code.Code));
+        await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new EnrollTerminalCommand(code.Code)));
 
         var terminal = await TerminalAsync(enrolled.Secret);
         Assert.Equal(("HALL", created.Id), (terminal.Code, terminal.Id));
         var listed = Assert.Single(await QueryAsync<ListTerminalsQuery, IReadOnlyList<TerminalDto>>(new ListTerminalsQuery(site.Id)));
-        Assert.Equal(($"TL-{_s}", (DateTimeOffset?)null), (listed.DefaultCode, listed.EnrolmentExpiresAt));
+        Assert.Equal(($"TL-{_s}", (DateTimeOffset?)null), (listed.DefaultCode, listed.EnrollmentExpiresAt));
         Assert.NotNull(listed.EnrolledAt);
 
         await db.SendAsync(new IssueBadgeCommand(ann.Id, "B-" + _s, "2468"));

@@ -93,7 +93,7 @@ public static class InventoryView
     {
         "consumed" => l["The {0} {1} goes back to the lot, and it stops being a parent of what {2} made, unless more of it went into that job.", Qty(-(movement.QtyDelta ?? 0m)), movement.UomCode, movement.JobNumber],
         "produced" => l["This production was recorded before reports could be reversed whole: the lot gives the quantity back, but the job's reported output stays."],
-        "split" => l["The split comes apart: the new lot is cancelled and its quantity goes back to the lot it came from. The new lot must be just as it was split off."],
+        "split" => l["The split comes apart: the new lot is canceled and its quantity goes back to the lot it came from. The new lot must be just as it was split off."],
         "merged" => l["The merge comes apart: the lot that was merged gets its quantity and status back, and the lot it joined goes down by that much."],
         "moved" when movement.RelatedLotId is not null => l["The quantity goes back to the balance it came from; the receiving balance must still hold it."],
         "moved" => l["The lot goes back to where it was. Only while this is its latest move: a later move is reversed first."],
@@ -101,7 +101,7 @@ public static class InventoryView
         "packed" => l["The lot comes out of the container (back into any it was in before, and back to where it was if packing moved it)."],
         "unpacked" => l["The lot goes back into the container, which must still be where the lot is."],
         "corrected" => l["The lot number, supplier lot and expiry go back to what they were, unless corrected again since."],
-        _ when movement.Kind == "received" && lot.Quantity == movement.QtyDelta && !lot.IsBulk => l["The lot goes back to how it was before it: empty, so it is cancelled."],
+        _ when movement.Kind == "received" && lot.Quantity == movement.QtyDelta && !lot.IsBulk => l["The lot goes back to how it was before it: empty, so it is canceled."],
         _ => l["The lot goes back to how it was before it. A reversal counts when the movement did, so stock at every time is as if it never happened."],
     };
 

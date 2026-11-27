@@ -23,8 +23,8 @@ public sealed record TerminalDto
     public bool IsActive { get; init; }
     public DateTimeOffset? EnrolledAt { get; init; }
 
-    /// <summary>When a one-time enrolment code is waiting, until when it can be used.</summary>
-    public DateTimeOffset? EnrolmentExpiresAt { get; init; }
+    /// <summary>When a one-time enrollment code is waiting, until when it can be used.</summary>
+    public DateTimeOffset? EnrollmentExpiresAt { get; init; }
     public DateTimeOffset? LastSeenAt { get; init; }
     public long Version { get; init; }
 }
@@ -59,7 +59,7 @@ public sealed record UpdateTerminalRequest
 }
 
 /// <summary>A one-time code to type on the terminal, shown once; it replaces any earlier one.</summary>
-public sealed record EnrolmentCodeResponse(string Code, DateTimeOffset ExpiresAt);
+public sealed record EnrollmentCodeResponse(string Code, DateTimeOffset ExpiresAt);
 
 /// <summary>A person's badge, without its value (only a hash is kept).</summary>
 public sealed record BadgeDto
@@ -92,8 +92,8 @@ public sealed record RevokeBadgeRequest
 
 // ---- At the terminal ----
 
-/// <summary>Enrols a terminal with the one-time code an administrator issued.</summary>
-public sealed record EnrolTerminalRequest
+/// <summary>Enrolls a terminal with the one-time code an administrator issued.</summary>
+public sealed record EnrollTerminalRequest
 {
     public string Code { get; init; } = "";
 }

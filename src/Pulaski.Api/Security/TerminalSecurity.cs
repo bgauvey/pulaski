@@ -96,7 +96,7 @@ internal sealed class TerminalFilter : IEndpointFilter
     public const string Scheme = "Terminal";
     public const string ItemKey = "pulaski.terminal";
 
-    public static TerminalRecord Current(HttpContext http) => http.Items[ItemKey] as TerminalRecord ?? throw new UnauthorizedException("Enrol this terminal first.");
+    public static TerminalRecord Current(HttpContext http) => http.Items[ItemKey] as TerminalRecord ?? throw new UnauthorizedException("Enroll this terminal first.");
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
@@ -109,7 +109,7 @@ internal sealed class TerminalFilter : IEndpointFilter
 
         var store = http.RequestServices.GetRequiredService<ITerminalReadStore>();
         var terminal = await store.FindBySecretAsync(TerminalRules.Sha256(header[(Scheme.Length + 1)..].Trim()), http.RequestAborted)
-            ?? throw new UnauthorizedException("This terminal isn't enrolled, or was switched off. Ask a supervisor to enrol it again.");
+            ?? throw new UnauthorizedException("This terminal isn't enrolled, or was switched off. Ask a supervisor to enroll it again.");
         http.Items[ItemKey] = terminal;
         return await next(context);
     }

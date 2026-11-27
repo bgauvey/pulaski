@@ -58,7 +58,7 @@ internal static class OverviewFigures
             .Distinct()
             .Count();
 
-    /// <summary>The line's time from <paramref name="from"/> on as the strip's lanes show it, neighbours of one use joined.</summary>
+    /// <summary>The line's time from <paramref name="from"/> on as the strip's lanes show it, neighbors of one use joined.</summary>
     public static IReadOnlyList<OverviewStateSpanDto> Lane(IEnumerable<UseSpan> uses, DateTimeOffset from)
     {
         var lane = new List<OverviewStateSpanDto>();

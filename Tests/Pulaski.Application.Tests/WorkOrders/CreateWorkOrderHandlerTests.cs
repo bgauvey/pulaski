@@ -93,13 +93,13 @@ public class CreateWorkOrderHandlerTests
     [Fact]
     public async Task An_order_in_another_unit_is_converted_to_the_bom_unit()
     {
-        var metre = _f.Stores.Units.AddUnit("m", "length", 1m);
+        var meter = _f.Stores.Units.AddUnit("m", "length", 1m);
         var foot = _f.Stores.Units.AddUnit("ft", "length", 0.3048m);
         var kg = _f.Stores.Units.AddUnit("kg", "mass", 1m);
-        _f.Stores.Boms.AddMaterial(_material, metre.Id);
+        _f.Stores.Boms.AddMaterial(_material, meter.Id);
         var route = _f.Stores.Processes.AddReleased(_site, OneOperation(Line().Id));
         var blend = Guid.CreateVersion7();
-        _f.Stores.Boms.AddReleased(_material, null, new BomDefinition(1000m, metre.Id, [BomLine(10, blend, 1450m, null)]));
+        _f.Stores.Boms.AddReleased(_material, null, new BomDefinition(1000m, meter.Id, [BomLine(10, blend, 1450m, null)]));
 
         var order = await _handler.HandleAsync(Command(route.Process.Id, qty: 1000m) with { UomId = foot.Id }, CancellationToken.None);
 

@@ -57,7 +57,7 @@ public sealed record BoardItem(Guid LineId, string LineCode, TimelineSegmentDto 
         : IsFromGroup ? l["The job is {0}; it is on the floor now.", l.Label(Segment.Status).ToLowerInvariant()]
         : l["The job is {0}; only planned and firmed jobs change line.", l.Label(Segment.Status).ToLowerInvariant()];
 
-    /// <summary>The board only shows open jobs, and any open job can be pinned or cancelled.</summary>
+    /// <summary>The board only shows open jobs, and any open job can be pinned or canceled.</summary>
     public bool CanPin => !IsPlaceholder;
 
     public bool CanCancel => !IsPlaceholder;

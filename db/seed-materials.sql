@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Pulaski — demo materials                                  2026-10-14
--- 200 materials across eleven classes, for lines that extrude, mould,
+-- 200 materials across eleven classes, for lines that extrude, mold,
 -- compound and pack plastics. Load after seed-demo.sql. Re-runnable:
 -- existing classes and material codes are left alone.
 --
@@ -17,20 +17,20 @@ INSERT INTO core.material_class (code, name) VALUES
     ('PIPE',        'Extruded pipe'),
     ('SHEET',       'Extruded sheet'),
     ('FILM',        'Blown film'),
-    ('MOLDED',      'Injection-moulded parts'),
+    ('MOLDED',      'Injection-molded parts'),
     ('PACKAGING',   'Packaging'),
     ('CONSUMABLE',  'Line consumables')
 ON CONFLICT (code) DO NOTHING;
 
-WITH colour(code, name) AS (VALUES
-    ('WH', 'white'), ('GY', 'grey'), ('BR', 'brown'), ('AN', 'anthracite'), ('BG', 'beige'), ('CR', 'cream')),
+WITH color(code, name) AS (VALUES
+    ('WH', 'white'), ('GY', 'gray'), ('BR', 'brown'), ('AN', 'anthracite'), ('BG', 'beige'), ('CR', 'cream')),
 items(code, name, material_type, class_code, uom_code, lot_tracked) AS (
-    -- Extruded profiles: six series in six colours (34, the two 4410 whites/greys already exist).
+    -- Extruded profiles: six series in six colors (34, the two 4410 whites/grays already exist).
     SELECT format('PRF-%s-%s', s.series, c.code), format('%s %s, %s', s.kind, s.series, c.name),
            'finished', 'PROFILE', 'm', true
     FROM (VALUES ('4410', 'Window frame profile'), ('4420', 'Window sash profile'), ('5100', 'Door frame profile'),
                  ('5200', 'Door leaf profile'), ('6000', 'Fence rail profile'), ('7300', 'Decking board profile')) AS s(series, kind)
-    CROSS JOIN colour c
+    CROSS JOIN color c
     WHERE (s.series, c.code) NOT IN (('4410', 'WH'), ('4410', 'GY'))
 
     UNION ALL
@@ -41,7 +41,7 @@ items(code, name, material_type, class_code, uom_code, lot_tracked) AS (
     CROSS JOIN unnest(ARRAY[11, 17]) AS sdr
 
     UNION ALL
-    -- Sheet: six thicknesses in three colours (18).
+    -- Sheet: six thicknesses in three colors (18).
     SELECT format('SHT-PVC-%sMM-%s', t, c.code), format('PVC sheet %s mm, %s', t, c.name),
            'finished', 'SHEET', 'kg', true
     FROM unnest(ARRAY[1, 2, 3, 4, 5, 6]) AS t
@@ -56,7 +56,7 @@ items(code, name, material_type, class_code, uom_code, lot_tracked) AS (
     CROSS JOIN (VALUES ('NAT', 'natural'), ('BLK', 'black')) AS c(code, name)
 
     UNION ALL
-    -- Moulded parts: eight parts in four colours (32).
+    -- Molded parts: eight parts in four colors (32).
     SELECT format('MLD-%s-%s', part.code, c.code), format('%s, %s', part.name, c.name),
            'finished', 'MOLDED', 'ea', true
     FROM (VALUES ('CAP28', 'Screw cap 28 mm'), ('CAP38', 'Screw cap 38 mm'), ('CL63', 'Flip-top closure 63 mm'),
@@ -71,7 +71,7 @@ items(code, name, material_type, class_code, uom_code, lot_tracked) AS (
         ('PVC-K57', 'PVC suspension resin K57'), ('PVC-K60', 'PVC suspension resin K60'),
         ('PVC-K65', 'PVC suspension resin K65'), ('PVC-K70', 'PVC suspension resin K70'),
         ('HDPE-PE100', 'HDPE pipe grade PE100'), ('HDPE-PE80', 'HDPE pipe grade PE80'),
-        ('HDPE-BM5', 'HDPE blow moulding MFI 0.5'), ('HDPE-IM8', 'HDPE injection MFI 8'), ('HDPE-FLM07', 'HDPE film MFI 0.7'),
+        ('HDPE-BM5', 'HDPE blow molding MFI 0.5'), ('HDPE-IM8', 'HDPE injection MFI 8'), ('HDPE-FLM07', 'HDPE film MFI 0.7'),
         ('LDPE-FLM2', 'LDPE film MFI 2'), ('LDPE-FLM4', 'LDPE film MFI 4'), ('LDPE-IM20', 'LDPE injection MFI 20'),
         ('LDPE-EXT1', 'LDPE extrusion coating MFI 1'),
         ('LLDPE-C4', 'LLDPE butene film MFI 1'), ('LLDPE-C6', 'LLDPE hexene film MFI 1'), ('LLDPE-C8', 'LLDPE octene film MFI 1'),
@@ -94,7 +94,7 @@ items(code, name, material_type, class_code, uom_code, lot_tracked) AS (
     -- Masterbatches (13; TIO2-MB already exists).
     SELECT m.code, m.name, 'raw', 'MASTERBATCH', 'kg', true
     FROM (VALUES
-        ('MB-BK-CB40', 'Black masterbatch, 40% carbon black'), ('MB-GY-7035', 'Light grey masterbatch'),
+        ('MB-BK-CB40', 'Black masterbatch, 40% carbon black'), ('MB-GY-7035', 'Light gray masterbatch'),
         ('MB-BR-8017', 'Chocolate brown masterbatch'), ('MB-AN-7016', 'Anthracite masterbatch'),
         ('MB-BG-1015', 'Light ivory masterbatch'), ('MB-BL-5015', 'Sky blue masterbatch'),
         ('MB-RD-3020', 'Traffic red masterbatch'), ('MB-GN-6018', 'Yellow-green masterbatch'),
@@ -106,10 +106,10 @@ items(code, name, material_type, class_code, uom_code, lot_tracked) AS (
     -- Compounds and dry blends (8).
     SELECT x.code, x.name, 'intermediate', 'COMPOUND', 'kg', true
     FROM (VALUES
-        ('CMP-PVC-PRF-WH', 'PVC profile dry blend, white'), ('CMP-PVC-PRF-GY', 'PVC profile dry blend, grey'),
+        ('CMP-PVC-PRF-WH', 'PVC profile dry blend, white'), ('CMP-PVC-PRF-GY', 'PVC profile dry blend, gray'),
         ('CMP-PVC-PRF-CAP', 'PVC capstock compound'), ('CMP-PVC-PIPE', 'PVC pipe dry blend'),
         ('CMP-PVC-SHT', 'PVC sheet compound'), ('CMP-PP-TALC20', 'PP compound, 20% talc'),
-        ('CMP-HDPE-BK', 'HDPE pipe compound, black'), ('CMP-REGRIND', 'PVC regrind, mixed colour')) AS x(code, name)
+        ('CMP-HDPE-BK', 'HDPE pipe compound, black'), ('CMP-REGRIND', 'PVC regrind, mixed color')) AS x(code, name)
 
     UNION ALL
     -- Packaging (10).

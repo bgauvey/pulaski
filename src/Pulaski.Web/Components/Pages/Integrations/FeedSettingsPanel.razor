@@ -24,7 +24,7 @@
                 }
                 : L["Not saved yet: these are the API's configuration. Once you save, the screen's settings are used and the configuration keeps only the secret."])
             @(_settings.SecretConfigured ? "" : Mqtt
-                ? " " + L["No secret is set in the API's configuration, so messages aren't signed and acknowledgements can't be posted back."]
+                ? " " + L["No secret is set in the API's configuration, so messages aren't signed and acknowledgments can't be posted back."]
                 : " " + L["The secret isn't set in the API's configuration, so nothing is sent until it is."])
         </p>
         <form class="row g-2 align-items-end" @onsubmit="SaveAsync" @onsubmit:preventDefault>
@@ -51,7 +51,7 @@
             @if (B2mml)
             {
                 <div class="col-12 small">
-                    <span class="fw-semibold">@L["What it sends:"]</span> @L["each time a production job's totals change (it starts, pauses, completes, is reopened, closed or cancelled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML"] <code>SyncProductionPerformance</code> @L["as it stands then."]
+                    <span class="fw-semibold">@L["What it sends:"]</span> @L["each time a production job's totals change (it starts, pauses, completes, is reopened, closed or canceled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML"] <code>SyncProductionPerformance</code> @L["as it stands then."]
                 </div>
             }
             else
@@ -97,7 +97,7 @@
             <div class="col-12">
                 <button type="submit" class="btn btn-sm btn-primary" disabled="@_busy">@L["Save settings"]</button>
                 <span class="small text-muted ms-2">
-                    @L["Receivers may acknowledge by answering with"] <code>{"status":"accepted"|"rejected","reference":…,"message":…}</code>@L[", or later by posting the event id with that to"] <code>@_settings.AcknowledgementPath</code>@L[", signed like Pulaski's messages."]
+                    @L["Receivers may acknowledge by answering with"] <code>{"status":"accepted"|"rejected","reference":…,"message":…}</code>@L[", or later by posting the event id with that to"] <code>@_settings.AcknowledgmentPath</code>@L[", signed like Pulaski's messages."]
                 </span>
             </div>
         </form>

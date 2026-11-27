@@ -1,6 +1,6 @@
 # Signing in through an identity provider
 
-Pulaski can let people sign in through your organisation's OpenID Connect provider: Microsoft Entra ID, AD FS (2016 or later), Keycloak,
+Pulaski can let people sign in through your organization's OpenID Connect provider: Microsoft Entra ID, AD FS (2016 or later), Keycloak,
 Okta or any other that publishes a discovery document (`/.well-known/openid-configuration`). Pulaski passwords keep working beside it, at
 least for administrators, so you can always get back in (see [Recovery](#recovery)).
 
@@ -104,7 +104,7 @@ Set `Security:LocalSignIn` to `administrators` once everyone signs in through th
 - **service accounts**: machines such as the edge (accounts created with the *Edge node* role are marked so automatically; others are
   marked on **Configure → Users**).
 
-Everyone else is told to use your organisation's sign-in.
+Everyone else is told to use your organization's sign-in.
 
 ## Recovery
 

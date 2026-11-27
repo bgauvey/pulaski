@@ -39,7 +39,7 @@ public class UnitHandlerTests
         var box = await create.HandleAsync(new CreateUnitCommand("box", "Box", UnitDimensions.Other, null), CancellationToken.None);
         Assert.Null(_f.Stores.Units.Find(box.Id)!.Value.ToBaseFactor);
 
-        await Assert.ThrowsAsync<ValidationException>(() => create.HandleAsync(new CreateUnitCommand("t", "Tonne", "mass", null), CancellationToken.None));
+        await Assert.ThrowsAsync<ValidationException>(() => create.HandleAsync(new CreateUnitCommand("t", "Metric ton", "mass", null), CancellationToken.None));
         await Assert.ThrowsAsync<ValidationException>(() => create.HandleAsync(new CreateUnitCommand("bag", "Bag", UnitDimensions.Other, 25m), CancellationToken.None));
         await Assert.ThrowsAsync<ConflictException>(() => create.HandleAsync(new CreateUnitCommand("box", "Box", UnitDimensions.Other, null), CancellationToken.None));
     }

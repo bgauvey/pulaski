@@ -53,7 +53,7 @@ public interface IMaterialAdminRepository
     /// <returns>The new row version.</returns>
     Task<long> UpdateBatchingAsync(Guid id, decimal? size, decimal tolerancePct, string? rule, DateTimeOffset at, CancellationToken cancellationToken);
 
-    /// <summary>The material's work orders that aren't completed, closed or cancelled, with their quantities.</summary>
+    /// <summary>The material's work orders that aren't completed, closed or canceled, with their quantities.</summary>
     Task<IReadOnlyList<(string OrderNumber, decimal Quantity, Guid UomId)>> ListOpenOrdersAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>A unit read <c>FOR SHARE</c>: its id and whether it is active; null when there is no such code.</summary>
@@ -126,6 +126,6 @@ public interface ICapabilityRepository
     /// <summary>Writes the calculated rate, its basis and unit; the modified rate belongs to people (D-016).</summary>
     Task UpdateRunStandardCalculationAsync(RunStandard standard, DateTimeOffset at, CancellationToken cancellationToken);
 
-    /// <summary>Open production jobs for the material on the line (not completed, closed or cancelled).</summary>
+    /// <summary>Open production jobs for the material on the line (not completed, closed or canceled).</summary>
     Task<int> CountOpenJobsAsync(Guid equipmentId, Guid materialId, CancellationToken cancellationToken);
 }

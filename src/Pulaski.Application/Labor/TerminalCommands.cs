@@ -40,13 +40,13 @@ public interface ITerminalRepository
 
     Task<long> UpdateAsync(TerminalRecord terminal, DateTimeOffset at, CancellationToken cancellationToken);
 
-    Task SetEnrolmentCodeAsync(Guid id, byte[] codeHash, DateTimeOffset expiresAt, DateTimeOffset at, CancellationToken cancellationToken);
+    Task SetEnrollmentCodeAsync(Guid id, byte[] codeHash, DateTimeOffset expiresAt, DateTimeOffset at, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Enrols the active terminal waiting with this code, if it hasn't expired: it takes the new secret and the code is used
+    /// Enrolls the active terminal waiting with this code, if it hasn't expired: it takes the new secret and the code is used
     /// up. Null when no terminal is waiting with it.
     /// </summary>
-    Task<TerminalRecord?> EnrolAsync(byte[] codeHash, byte[] secretHash, DateTimeOffset now, CancellationToken cancellationToken);
+    Task<TerminalRecord?> EnrollAsync(byte[] codeHash, byte[] secretHash, DateTimeOffset now, CancellationToken cancellationToken);
 
     Task TouchAsync(Guid id, DateTimeOffset at, CancellationToken cancellationToken);
 
@@ -92,11 +92,11 @@ public sealed record UpdateTerminalCommand(Guid Id, long ExpectedVersion, string
     public string? Region { get; init; }
 }
 
-/// <summary>Issues a one-time enrolment code for a terminal, replacing any earlier one; enrolling with it replaces its secret.</summary>
-public sealed record IssueEnrolmentCodeCommand(Guid Id) : ICommand<EnrolmentCodeResponse>;
+/// <summary>Issues a one-time enrollment code for a terminal, replacing any earlier one; enrolling with it replaces its secret.</summary>
+public sealed record IssueEnrollmentCodeCommand(Guid Id) : ICommand<EnrollmentCodeResponse>;
 
-/// <summary>Enrols a terminal with its one-time code; answers with the terminal's secret, given only this once.</summary>
-public sealed record EnrolTerminalCommand(string Code) : ICommand<TerminalEnrolledResponse>;
+/// <summary>Enrolls a terminal with its one-time code; answers with the terminal's secret, given only this once.</summary>
+public sealed record EnrollTerminalCommand(string Code) : ICommand<TerminalEnrolledResponse>;
 
 /// <summary>Issues a person a badge, and a PIN for terminals that ask for one; their earlier badge is revoked.</summary>
 public sealed record IssueBadgeCommand(Guid PersonId, string BadgeValue, string? Pin) : ICommand<CreatedResponse>;
@@ -245,10 +245,10 @@ internal sealed class UpdateTerminalHandler(IUnitOfWork unitOfWork, ITerminalRep
     }
 }
 
-internal sealed class IssueEnrolmentCodeHandler(IUnitOfWork unitOfWork, ITerminalRepository terminals, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
-    : ICommandHandler<IssueEnrolmentCodeCommand, EnrolmentCodeResponse>
+internal sealed class IssueEnrollmentCodeHandler(IUnitOfWork unitOfWork, ITerminalRepository terminals, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+    : ICommandHandler<IssueEnrollmentCodeCommand, EnrollmentCodeResponse>
 {
-    public async Task<EnrolmentCodeResponse> HandleAsync(IssueEnrolmentCodeCommand command, CancellationToken cancellationToken)
+    public async Task<EnrollmentCodeResponse> HandleAsync(IssueEnrollmentCodeCommand command, CancellationToken cancellationToken)
     {
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var terminal = (await terminals.GetForUpdateAsync(command.Id, cancellationToken))?.Value ?? throw new NotFoundException($"Terminal {command.Id} not found.");
@@ -257,20 +257,20 @@ internal sealed class IssueEnrolmentCodeHandler(IUnitOfWork unitOfWork, ITermina
             throw new DomainRuleException($"{terminal.Code} is switched off; switch it on first.");
         }
 
-        var code = TerminalRules.NewEnrolmentCode();
+        var code = TerminalRules.NewEnrollmentCode();
         var now = timeProvider.GetUtcNow();
-        var expires = now + TerminalRules.EnrolmentCodeLifetime;
-        await terminals.SetEnrolmentCodeAsync(terminal.Id, TerminalRules.Sha256(TerminalRules.NormalizeCode(code)), expires, now, cancellationToken);
-        await eventLog.AppendAsync(events.Create(EventTypes.TerminalEnrolmentCodeIssued, "terminal", terminal.Id, new { ExpiresAt = expires }), cancellationToken);
+        var expires = now + TerminalRules.EnrollmentCodeLifetime;
+        await terminals.SetEnrollmentCodeAsync(terminal.Id, TerminalRules.Sha256(TerminalRules.NormalizeCode(code)), expires, now, cancellationToken);
+        await eventLog.AppendAsync(events.Create(EventTypes.TerminalEnrollmentCodeIssued, "terminal", terminal.Id, new { ExpiresAt = expires }), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new EnrolmentCodeResponse(code, expires);
+        return new EnrollmentCodeResponse(code, expires);
     }
 }
 
-internal sealed class EnrolTerminalHandler(IUnitOfWork unitOfWork, ITerminalRepository terminals, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
-    : ICommandHandler<EnrolTerminalCommand, TerminalEnrolledResponse>
+internal sealed class EnrollTerminalHandler(IUnitOfWork unitOfWork, ITerminalRepository terminals, IEventLog eventLog, IEventFactory events, TimeProvider timeProvider)
+    : ICommandHandler<EnrollTerminalCommand, TerminalEnrolledResponse>
 {
-    public async Task<TerminalEnrolledResponse> HandleAsync(EnrolTerminalCommand command, CancellationToken cancellationToken)
+    public async Task<TerminalEnrolledResponse> HandleAsync(EnrollTerminalCommand command, CancellationToken cancellationToken)
     {
         var code = TerminalRules.NormalizeCode(command.Code);
         if (code.Length != 10)
@@ -280,7 +280,7 @@ internal sealed class EnrolTerminalHandler(IUnitOfWork unitOfWork, ITerminalRepo
 
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var secret = TerminalRules.NewSecret();
-        var terminal = await terminals.EnrolAsync(TerminalRules.Sha256(code), TerminalRules.Sha256(secret), timeProvider.GetUtcNow(), cancellationToken)
+        var terminal = await terminals.EnrollAsync(TerminalRules.Sha256(code), TerminalRules.Sha256(secret), timeProvider.GetUtcNow(), cancellationToken)
             ?? throw new DomainRuleException("That code isn't valid: it is wrong, used already or more than 15 minutes old. Ask for a new one.");
         await eventLog.AppendAsync(events.Create(EventTypes.TerminalEnrolled, "terminal", terminal.Id, new { terminal.Code }), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -351,14 +351,14 @@ internal sealed class IdentifyBadgeHandler(
     IUnitOfWork unitOfWork, ITerminalRepository terminals, ILaborRepository labor, IBadgeHasher badgeHasher, IPasswordHasher pinHasher, IEventLog eventLog,
     IEventFactory events, TimeProvider timeProvider) : ICommandHandler<IdentifyBadgeCommand, BadgeIdentity>
 {
-    private static readonly UserMessage NotRecognised = UserMessage.Of("Badge not recognised. Try again, or ask a supervisor.");
+    private static readonly UserMessage NotRecognized = UserMessage.Of("Badge not recognized. Try again, or ask a supervisor.");
 
     public async Task<BadgeIdentity> HandleAsync(IdentifyBadgeCommand command, CancellationToken cancellationToken)
     {
         var value = TerminalRules.NormalizeBadge(command.BadgeValue);
         if (TerminalRules.BadgeProblem(value) is not null)
         {
-            throw new DomainRuleException(NotRecognised);
+            throw new DomainRuleException(NotRecognized);
         }
 
         var now = timeProvider.GetUtcNow();
@@ -369,7 +369,7 @@ internal sealed class IdentifyBadgeHandler(
         if (badge is null || person is null || !person.IsActive || !await LaborWriter.WorksAtAsync(labor, person, command.Terminal.SiteId, cancellationToken))
         {
             await transaction.CommitAsync(cancellationToken);
-            throw new DomainRuleException(NotRecognised);
+            throw new DomainRuleException(NotRecognized);
         }
 
         if (badge.LockedUntil is { } locked && locked > now)

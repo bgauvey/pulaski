@@ -1,5 +1,5 @@
 /* The floor board (D-035): one card per line with its running job and what comes next.
-   Colours come from css/tokens.css; a running line gets the accent edge, nothing else is coloured. */
+   Colors come from css/tokens.css; a running line gets the accent edge, nothing else is colored. */
 
 .floor-grid {
     display: grid;

@@ -134,7 +134,7 @@
         focus(id) {
             document.getElementById(id)?.focus();
         },
-        // The page's title, for naming a favourite (#131).
+        // The page's title, for naming a favorite (#131).
         title() {
             return document.title;
         },

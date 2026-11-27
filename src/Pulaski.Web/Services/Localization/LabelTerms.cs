@@ -40,7 +40,7 @@ public static class LabelTerms
         Term.Mark("By product"),
         Term.Mark("C"),
         Term.Mark("Callback"),
-        Term.Mark("Cancelled"),
+        Term.Mark("Canceled"),
         Term.Mark("Changeover"),
         Term.Mark("Checklist"),
         Term.Mark("Choice"),

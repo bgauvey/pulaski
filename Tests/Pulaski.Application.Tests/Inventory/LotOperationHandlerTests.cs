@@ -116,7 +116,7 @@ public class LotOperationHandlerTests
 
         var undone = await reverse.HandleAsync(new ReverseMovementCommand(lot.LotId, lot.Version, receipt.Id, _count.Id, "Wrong material"), CancellationToken.None);
 
-        Assert.Equal((0m, LotStatus.Cancelled), (undone.Quantity, undone.Status));
+        Assert.Equal((0m, LotStatus.Canceled), (undone.Quantity, undone.Status));
         var row = Inventory.Events[^1];
         Assert.Equal((LotEventKind.Reversed, receipt.Id, _count.Id), (row.Movement.Kind, row.ReversesEventId, row.ReasonCodeId));
         await Assert.ThrowsAsync<DomainRuleException>(() => reverse.HandleAsync(

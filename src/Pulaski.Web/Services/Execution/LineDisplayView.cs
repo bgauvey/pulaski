@@ -4,7 +4,7 @@ using Pulaski.Web.Services.Localization;
 
 namespace Pulaski.Web.Services.Execution;
 
-/// <summary>The words and classes of a line display board (#120): readable from across the floor, colour only where something needs attention.</summary>
+/// <summary>The words and classes of a line display board (#120): readable from across the floor, color only where something needs attention.</summary>
 public static class LineDisplayView
 {
     /// <summary>How often the board reloads.</summary>
@@ -19,7 +19,7 @@ public static class LineDisplayView
         _ => Term.Mark("Idle"),
     };
 
-    /// <summary>Running is quiet; down and no signal stand out; waiting is a caution (ISA-101: colour for the abnormal).</summary>
+    /// <summary>Running is quiet; down and no signal stand out; waiting is a caution (ISA-101: color for the abnormal).</summary>
     public static string StatusClass(string status) => status switch
     {
         "down" => "is-down",

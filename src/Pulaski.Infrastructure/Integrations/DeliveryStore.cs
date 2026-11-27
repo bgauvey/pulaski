@@ -107,15 +107,15 @@ internal sealed class DeliveryStore(DbSession session, NpgsqlDataSource dataSour
         session.QuerySingleOrDefaultAsync<DeliveryRecord>(GetByEvent, new { Sink = sink, EventId = eventId }, cancellationToken);
 
     public Task AcknowledgeAsync(
-        Guid id, Acknowledgement acknowledgement, string source, string? status, string? failure, DateTimeOffset at, CancellationToken cancellationToken) =>
+        Guid id, Acknowledgment acknowledgment, string source, string? status, string? failure, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(
             Acknowledge,
             new
             {
                 Id = id,
-                AckStatus = acknowledgement.Status,
-                acknowledgement.Reference,
-                acknowledgement.Message,
+                AckStatus = acknowledgment.Status,
+                acknowledgment.Reference,
+                acknowledgment.Message,
                 Source = source,
                 Status = status,
                 Failure = failure,
@@ -299,7 +299,7 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
 
     /// <summary>Records an attempt's outcome; a delivery an operator resolved meanwhile is left as they set it.</summary>
     public async Task RecordAsync(
-        Guid deliveryId, DeliveryOutcome outcome, int? statusCode, DateTimeOffset at, CancellationToken cancellationToken, Acknowledgement? acknowledgement = null)
+        Guid deliveryId, DeliveryOutcome outcome, int? statusCode, DateTimeOffset at, CancellationToken cancellationToken, Acknowledgment? acknowledgment = null)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await connection.ExecuteAsync(new CommandDefinition(
@@ -312,9 +312,9 @@ public sealed class DeliveryRelay(NpgsqlDataSource dataSource)
                 At = at,
                 Code = statusCode,
                 Error = outcome.Error,
-                AckStatus = acknowledgement?.Status,
-                AckReference = acknowledgement?.Reference,
-                AckMessage = acknowledgement?.Message,
+                AckStatus = acknowledgment?.Status,
+                AckReference = acknowledgment?.Reference,
+                AckMessage = acknowledgment?.Message,
             },
             cancellationToken: cancellationToken));
     }

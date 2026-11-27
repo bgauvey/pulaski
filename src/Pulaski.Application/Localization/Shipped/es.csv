@@ -163,13 +163,13 @@ term,translation
 6 in a row rising or falling,6 seguidos subiendo o bajando
 "6 to 12 digits, as GS1 issued it.","6 a 12 dígitos, tal como lo asignó GS1."
 "8 in a row beyond 1 sigma, either side","8 seguidos más allá de 1 sigma, de cualquier lado"
-9 in a row on one side of the centre line,9 seguidos de un lado de la línea central
+9 in a row on one side of the center line,9 seguidos de un lado de la línea central
 ": the lines this terminal offers, read only.",": las líneas que ofrece esta terminal, solo lectura."
 ; any they aren't already granted are granted (an import never revokes one). Nothing is saved until every row is valid.,; las que aún no tenga se le otorgan (una importación nunca revoca ninguna). No se guarda nada hasta que todas las filas sean válidas.
 ; good output in lot {0},; producción buena en el lote {0}
 ; good output in lots {0},; producción buena en los lotes {0}
 "; to give roles to people,","; para dar roles a las personas,"
-"; {0} centre {1}, up to {2}","; {0} centro {1}, hasta {2}"
+"; {0} center {1}, up to {2}","; {0} centro {1}, hasta {2}"
 A BTXML script's root element is XMLScript.,El elemento raíz de un script BTXML es XMLScript.
 A BarTender document ends in .btw.,Un documento de BarTender termina en .btw.
 "A ControlLogix needs its CIP path, such as 1,0 (backplane, slot 0).","Un ControlLogix necesita su ruta CIP, como 1,0 (backplane, ranura 0)."
@@ -208,7 +208,7 @@ A choice attribute needs at least one choice.,Un atributo de opciones necesita a
 "A connection runs when you click Import, or on its schedule. Credentials and database connection strings are kept in the API's configuration, never here.","Una conexión se ejecuta al hacer clic en Importar, o según su programación. Las credenciales y cadenas de conexión a bases de datos se guardan en la configuración de la API, nunca aquí."
 A connection's code is fixed once made: it names its credentials in the configuration ({0}).,El código de una conexión es fijo una vez creada: nombra sus credenciales en la configuración ({0}).
 A connection's kind is fixed once made ({0}); add another connection instead.,El tipo de una conexión es fijo una vez creada ({0}); agregue otra conexión en su lugar.
-A control chart signalled (SPC alert),Un gráfico de control dio una señal (alerta SPC)
+A control chart signaled (SPC alert),Un gráfico de control dio una señal (alerta SPC)
 A conversion needs two different units.,Una conversión necesita dos unidades distintas.
 A copied line goes under a site or an area.,Una línea copiada va bajo un sitio o un área.
 A count can't be negative.,Un conteo no puede ser negativo.
@@ -229,7 +229,7 @@ A handover entry is a note or an open item.,Una entrada de entrega de turno es u
 A hold,Una retención
 A job cannot be placed before itself.,Un trabajo no puede colocarse antes de sí mismo.
 A job has a schedule warning or overlaps other work.,Un trabajo tiene una advertencia del programa o se traslapa con otro trabajo.
-"A job of {0} has started, so it can't be cancelled as a whole.","Un trabajo de {0} ya empezó, así que no puede cancelarse completo."
+"A job of {0} has started, so it can't be canceled as a whole.","Un trabajo de {0} ya empezó, así que no puede cancelarse completo."
 A job of {0} has started; change its jobs on the schedule instead.,Un trabajo de {0} ya empezó; cambie sus trabajos en el programa.
 A job overlaps other work on its line.,Un trabajo se traslapa con otro trabajo en su línea.
 A job planned to a group needs a finish-by time: its window must have an end.,Un trabajo planeado a un grupo necesita una hora límite: su ventana debe tener fin.
@@ -407,7 +407,7 @@ Add shift,Agregar turno
 Add someone,Agregar a alguien
 Add state,Agregar estado
 Add the,Agregue el
-Add this page to your favourites,Añadir esta página a sus favoritos
+Add this page to your favorites,Añadir esta página a sus favoritos
 Add {0},Agregar {0}
 Add {0} group,Agregar grupo de {0}
 Add {0} reason,Agregar motivo de {0}
@@ -559,7 +559,7 @@ Around the clock: no shift schedule is set here or above,Las 24 horas: no hay ho
 Arrange,Acomodar
 As it was,Como estaba
 As recorded,Tal como se registró
-Ask a supervisor to enrol it.,Pida a un supervisor que lo inscriba.
+Ask a supervisor to enroll it.,Pida a un supervisor que lo inscriba.
 Ask for a new one.,Pida uno nuevo.
 Ask on each report,Preguntar en cada reporte
 Ask why at most {0} times.,Pregunte por qué como máximo {0} veces.
@@ -658,7 +658,7 @@ Badge in to give their reasons.,Registre su gafete para dar sus motivos.
 Badge in to record a sample.,Registre su gafete para registrar una muestra.
 Badge in to request maintenance.,Pase su gafete para solicitar mantenimiento.
 Badge in to sign it off.,Registre su gafete para firmarla.
-"Badge not recognised. Try again, or ask a supervisor.",Gafete no reconocido. Intente de nuevo o pida ayuda a un supervisor.
+"Badge not recognized. Try again, or ask a supervisor.",Gafete no reconocido. Intente de nuevo o pida ayuda a un supervisor.
 Badge of {0},Gafete de {0}
 Badge plus pin,Gafete más PIN
 Badge to switch person,Gafete para cambiar de persona
@@ -791,9 +791,9 @@ Cancel the action,Cancelar la acción
 Cancel this work order?,¿Cancelar esta orden de trabajo?
 Cancel {0},Cancelar {0}
 Cancel {0} work orders?,¿Cancelar {0} órdenes de trabajo?
-Cancelled,Cancelado
-Cancelled in the ERP before Pulaski had it; nothing to do.,Cancelada en el ERP antes de que Pulaski la tuviera; no hay nada que hacer.
-"Cancelled, with its jobs.","Cancelada, con sus trabajos."
+Canceled,Cancelado
+Canceled in the ERP before Pulaski had it; nothing to do.,Cancelada en el ERP antes de que Pulaski la tuviera; no hay nada que hacer.
+"Canceled, with its jobs.","Cancelada, con sus trabajos."
 Cancel…,Cancelar…
 Cap,Tope
 Capabilities,Capacidades
@@ -810,8 +810,8 @@ Categorized,Por categoría
 Category,Categoría
 Category of {0},Categoría de {0}
 Cause,Causa
-Centre,Centro
-Centre line,Línea central
+Center,Centro
+Center line,Línea central
 Certificate files,Archivos de certificados
 Certificate of analysis,Certificado de análisis
 Certificates and documents,Certificados y documentos
@@ -1009,7 +1009,7 @@ Close it,Cerrarlo
 "Close the lot being filled, so the next report starts a new one","Cerrar el lote en llenado, para que el siguiente reporte inicie uno nuevo"
 Close {0} on {1},Cerrar {0} en {1}
 Closed,Cerrado
-Closed and cancelled,Cerradas y canceladas
+Closed and canceled,Cerradas y canceladas
 Closed by {0}: {1},Cerrado por {0}: {1}
 Closed in the last 7 days,Cerradas en los últimos 7 días
 Closed lot {0}; the next report starts a new lot.,Se cerró el lote {0}; el siguiente reporte inicia un lote nuevo.
@@ -1033,7 +1033,7 @@ Codes starting PUL1 are Pulaski's barcodes.,Los códigos que empiezan con PUL1 s
 Collapse,Contraer
 Collapse all,Contraer todo
 "Collects PackML machine state, so downtime and OEE are recorded for it.","Recolecta el estado PackML de la máquina, así que se registran su tiempo parado y su OEE."
-Colour theme,Tema de color
+Color theme,Tema de color
 Column 'lot_number' appears twice.,La columna 'lot_number' aparece dos veces.
 Column 'material_code' appears twice.,La columna 'material_code' aparece dos veces.
 Column '{0}' appears twice.,La columna '{0}' aparece dos veces.
@@ -1098,8 +1098,8 @@ Containers · Inventory,Contenedores · Inventario
 Contains,Contiene
 Control chart,Gráfico de control
 Control charts,Gráficos de control
-"Control charts that signalled (beyond their limits, or a run rule) and wait for someone to record the cause and what was done.","Gráficos de control que dieron una señal (fuera de sus límites, o una regla de corrida) y esperan que alguien registre la causa y lo que se hizo."
-"Control charts that signalled: a result beyond its limits, or completing a run rule. Find the cause, then close the alert with it and what was done.","Gráficos de control que dieron una señal: un resultado fuera de sus límites, o que completa una regla de corrida. Encuentre la causa y luego cierre la alerta con ella y lo que se hizo."
+"Control charts that signaled (beyond their limits, or a run rule) and wait for someone to record the cause and what was done.","Gráficos de control que dieron una señal (fuera de sus límites, o una regla de corrida) y esperan que alguien registre la causa y lo que se hizo."
+"Control charts that signaled: a result beyond its limits, or completing a run rule. Find the cause, then close the alert with it and what was done.","Gráficos de control que dieron una señal: un resultado fuera de sus límites, o que completa una regla de corrida. Encuentre la causa y luego cierre la alerta con ella y lo que se hizo."
 Control limits,Límites de control
 Control limits {0} not found.,Límites de control {0} no encontrados.
 Control limits{0},Límites de control{0}
@@ -1133,7 +1133,7 @@ Couldn't send the labels to {0} through BarTender: {1}.,No se pudieron enviar la
 Count,Conteo
 "Count a location, then post the differences as write-ups and write-offs.",Cuente una ubicación y luego registre las diferencias como ajustes positivos y bajas.
 Count again,Contar de nuevo
-Count cancelled. Nothing was adjusted.,Conteo cancelado. No se ajustó nada.
+Count canceled. Nothing was adjusted.,Conteo cancelado. No se ajustó nada.
 Count {0} can't be posted yet. {1},El conteo {0} aún no se puede contabilizar. {1}
 Count {0} is {1}; it can't be changed.,El conteo {0} está {1}; no puede cambiarse.
 Count {0} not found.,Conteo {0} no encontrado.
@@ -1351,13 +1351,13 @@ Endpoint,Endpoint
 Ends on,Termina el
 English,Inglés
 English is the language the screens are written in; add another language to translate into.,El inglés es el idioma en que están escritas las pantallas; agregue otro idioma al cual traducir.
-Enrol,Inscribir
-Enrol it,Inscribirlo
-"Enrol it as a terminal, then open this page again.",Inscríbalo como terminal y luego abra esta página de nuevo.
-Enrol terminal,Inscribir terminal
-Enrol this terminal,Inscribir esta terminal
+Enroll,Inscribir
+Enroll it,Inscribirlo
+"Enroll it as a terminal, then open this page again.",Inscríbalo como terminal y luego abra esta página de nuevo.
+Enroll terminal,Inscribir terminal
+Enroll this terminal,Inscribir esta terminal
 Enrolled,Registrada
-Enrolment code,Código de inscripción
+Enrollment code,Código de inscripción
 Enter a percentage.,Escriba un porcentaje.
 Enter a stop,Ingresar un paro
 Enter at least one value.,Ingrese al menos un valor.
@@ -1365,7 +1365,7 @@ Enter by hand instead,Ingresar a mano
 Enter how many were inspected (at least 1).,Ingrese cuántos se inspeccionaron (al menos 1).
 Enter limits by hand,Ingresar límites a mano
 "Enter machine stops by hand, and split or merge stops","Ingresar paradas de máquina a mano, y dividir o combinar paradas"
-"Enter the lower, centre and upper limits.","Ingrese los límites inferior, central y superior."
+"Enter the lower, center and upper limits.","Ingrese los límites inferior, central y superior."
 Enter your user name and password.,Escriba su nombre de usuario y contraseña.
 Entered,Ingresado
 Entered after the run ended; counted at the run's end,Ingresado después de que terminó la corrida; se cuenta al final de la corrida
@@ -1407,7 +1407,7 @@ Every (hours),Cada (horas)
 Every 1 to 168 hours.,Cada 1 a 168 horas.
 Every 1 to {0:0} counts.,Cada 1 a {0:0} conteos.
 Every 1 to {0:0} run hours.,Cada 1 a {0:0} horas de funcionamiento.
-Every action has to be done or cancelled first.,"Antes, cada acción debe estar hecha o cancelada."
+Every action has to be done or canceled first.,"Antes, cada acción debe estar hecha o cancelada."
 "Every change Pulaski recorded: what, by whom and when. Open one to see what changed.","Cada cambio que Pulaski registró: qué, quién y cuándo. Abra uno para ver qué cambió."
 Every characteristic,Todas las características
 "Every class and material as B2MML, which the B2MML import reads back","Cada clase y material como B2MML, que la importación B2MML vuelve a leer"
@@ -1484,7 +1484,7 @@ Failed to rejoin.,No se pudo reconectar.
 Failed to resume the session.,No se pudo reanudar la sesión.
 Failing,Fallando
 False,Falso
-Favourites,Favoritos
+Favorites,Favoritos
 Feed,Canal
 Feed point,Punto de alimentación
 Feed points,Puntos de alimentación
@@ -1581,7 +1581,7 @@ From the {0} barcode,Del código de barras {0}
 "From today on, it follows the site's","A partir de hoy, sigue las del sitio"
 "From today on, the site has no targets","A partir de hoy, el sitio no tiene metas"
 From {0},De {0}
-"From {0} results: centre {1}, limits {2} to {3}","De {0} resultados: centro {1}, límites {2} a {3}"
+"From {0} results: center {1}, limits {2} to {3}","De {0} resultados: centro {1}, límites {2} a {3}"
 "From {0}, key {1}: its name and whether they are active change there","De {0}, clave {1}: su nombre y si está activa cambian allá"
 GS1 DataMatrix,GS1 DataMatrix
 "GS1 barcodes are always read. For a supplier's own barcodes, add a pattern (a regular expression) naming its parts:","Los códigos de barras GS1 siempre se leen. Para los códigos de barras propios de un proveedor, agregue un patrón (una expresión regular) que nombre sus partes:"
@@ -1775,7 +1775,7 @@ In,En
 In BOM of,En la lista de materiales de
 In a container (one move fetches it),En un contenedor (un movimiento lo trae)
 In force,Vigente
-"In force now: centre {0}, limits {1} to {2}. Approving ends them where the new ones start.","Vigentes ahora: centro {0}, límites {1} a {2}. Aprobar los termina donde empiezan los nuevos."
+"In force now: center {0}, limits {1} to {2}. Approving ends them where the new ones start.","Vigentes ahora: centro {0}, límites {1} a {2}. Aprobar los termina donde empiezan los nuevos."
 In production,En producción
 In progress,En proceso
 In progress · {0},En proceso · {0}
@@ -1789,7 +1789,7 @@ In the level tag's unit; blank: the level isn't compared with declared stock,En 
 "In use. Its code, name, base unit and type come from {0}.","En uso. Su código, nombre, unidad base y tipo vienen de {0}."
 In {0}'s specification (version {1}),En la especificación de {0} (versión {1})
 Inactive,Inactivo
-"Inactive equipment stays in the hierarchy and its history, greyed out.","Los equipos inactivos permanecen en la jerarquía y en su historial, en gris."
+"Inactive equipment stays in the hierarchy and its history, grayed out.","Los equipos inactivos permanecen en la jerarquía y en su historial, en gris."
 Inbox,Pendientes
 Inbox: what waits for you to decide,Pendientes: lo que espera su decisión
 Incoming,Entrantes
@@ -1921,7 +1921,7 @@ Job {0} is planned on another line; move it there on the schedule first.,El trab
 Job {0} is waiting on its department; choose the line it runs on.,El trabajo {0} está esperando en su departamento; elija la línea en que corre.
 Job {0} is waiting on its group; choose the line it runs on.,El trabajo {0} espera en su grupo; elija la línea en que se ejecuta.
 Job {0} is {1}; dispatch its work order before starting it.,El trabajo {0} está {1}; despache su orden de trabajo antes de iniciarlo.
-Job {0} is {1}; it can no longer be cancelled.,El trabajo {0} está {1}; ya no puede cancelarse.
+Job {0} is {1}; it can no longer be canceled.,El trabajo {0} está {1}; ya no puede cancelarse.
 Job {0} is {1}; it can no longer be moved.,El trabajo {0} está {1}; ya no puede moverse.
 Job {0} is {1}; it can no longer be pinned.,El trabajo {0} está {1}; ya no puede fijarse.
 Job {0} is {1}; it can no longer be started.,El trabajo {0} está {1}; ya no se puede iniciar.
@@ -2598,7 +2598,7 @@ No run standard for this material on this line; duration unknown.,No hay estánd
 No samples to rate.,No hay muestras para evaluar.
 No schedulable lines,No hay líneas programables
 No scheduled time in this period.,No hay tiempo programado en este periodo.
-"No secret is set in the API's configuration, so messages aren't signed and acknowledgements can't be posted back.","No hay un secreto en la configuración de la API, así que los mensajes no se firman y no se pueden enviar confirmaciones de vuelta."
+"No secret is set in the API's configuration, so messages aren't signed and acknowledgments can't be posted back.","No hay un secreto en la configuración de la API, así que los mensajes no se firman y no se pueden enviar confirmaciones de vuelta."
 No shift,Sin turno
 No shift calendar covers this line; times assume it runs around the clock.,Ningún calendario de turnos cubre esta línea; las horas suponen que trabaja las 24 horas.
 No shift now,Sin turno ahora
@@ -2810,7 +2810,7 @@ Older changes,Cambios anteriores
 Oldest,Más antiguo
 On,Encendido
 On a break {0}.,En descanso {0}.
-"On a signed-in screen, open Configure → Terminals, click Enrolment code on this terminal's row and type the code here.","En una pantalla con sesión iniciada, abra Configurar → Terminales, haga clic en Código de inscripción en la fila de esta terminal y escriba el código aquí."
+"On a signed-in screen, open Configure → Terminals, click Enrollment code on this terminal's row and type the code here.","En una pantalla con sesión iniciada, abra Configurar → Terminales, haga clic en Código de inscripción en la fila de esta terminal y escriba el código aquí."
 On break since {0},En descanso desde {0}
 On demand,A pedido
 On hand,En existencia
@@ -3329,7 +3329,7 @@ Refuse the order,Rechazar la orden
 Refuse the order: the ERP must send whole batches,Rechazar la orden: el ERP debe enviar tandas completas
 Region,Región
 Register a terminal,Registrar una terminal
-Register and enrol shop-floor terminals,Registrar e inscribir terminales de piso
+Register and enroll shop-floor terminals,Registrar e inscribir terminales de piso
 Register terminal,Registrar terminal
 Reject,Rechazar
 Reject and write off,Rechazar y dar de baja
@@ -3365,7 +3365,7 @@ Remove line,Quitar línea
 Remove shift,Quitar turno
 Remove shift {0},Quitar el turno {0}
 Remove stop,Quitar paro
-Remove this page from your favourites,Quitar esta página de sus favoritos
+Remove this page from your favorites,Quitar esta página de sus favoritos
 Remove {0},Quitar {0}
 Removed,Quitada
 Removed by {0},Quitado por {0}
@@ -3379,7 +3379,7 @@ Reopen a completed job,Reabrir un trabajo completado
 Repeats,Se repite
 Repeats every (days),Se repite cada (días)
 Replace,Reemplazar
-"Replace a cancelled job with exactly what is left, even when that isn't whole batches","Reemplazar un trabajo cancelado con exactamente lo que falta, aunque no sean tandas completas"
+"Replace a canceled job with exactly what is left, even when that isn't whole batches","Reemplazar un trabajo cancelado con exactamente lo que falta, aunque no sean tandas completas"
 "Replace exactly what is left, or round it down, not both.","Reemplace exactamente lo que falta, o redondee hacia abajo, no ambos."
 Replace it with a job for the quantity not yet made,Reemplazarlo con un trabajo por la cantidad aún no hecha
 Replaced,Reemplazado
@@ -3815,7 +3815,7 @@ Show on the schedule,Mostrar en el programa
 Show only those in force today,Mostrar solo las vigentes hoy
 Show past and removed ones too,Mostrar también las pasadas y quitadas
 Show properties,Mostrar propiedades
-Show received and cancelled,Mostrar recibidas y canceladas
+Show received and canceled,Mostrar recibidas y canceladas
 Show replaced stops,Mostrar paros reemplazados
 Show retired,Mostrar retirados
 Show rules for line,Mostrar reglas de la línea
@@ -3833,7 +3833,7 @@ Sign it off,Firmarla
 Sign off,Cerrar sesión de estación
 Sign on,Iniciar sesión de estación
 Sign out,Cerrar sesión
-Signalled,Con señal
+Signaled,Con señal
 Signed,Firmada
 Signed in through an identity provider; give them a role to let them in,Inició sesión a través de un proveedor de identidad; asígnele un rol para dejarlo entrar
 Signed off,Firmada
@@ -3893,7 +3893,7 @@ Stale since {0},Desactualizado desde {0}
 Standard,Estándar
 Standard = run hours × the line's standard crew size for the material. Efficiency = standard ÷ direct hours: under 100% took more people than the standard.,Estándar = horas de ejecución × el tamaño de cuadrilla estándar de la línea para el material. Eficiencia = estándar ÷ horas directas: menos de 100% tomó más personas que el estándar.
 Standard changeover (min),Cambio estándar (min)
-"Standard units convert within their dimension for every material. A material's own conversions link the rest: weight per metre, pieces per box, kilograms per bag.","Las unidades estándar se convierten dentro de su dimensión para todo material. Las conversiones propias de un material enlazan el resto: peso por metro, piezas por caja, kilogramos por bolsa."
+"Standard units convert within their dimension for every material. A material's own conversions link the rest: weight per meter, pieces per box, kilograms per bag.","Las unidades estándar se convierten dentro de su dimensión para todo material. Las conversiones propias de un material enlazan el resto: peso por metro, piezas por caja, kilogramos por bolsa."
 Stands for characteristic,Representa la característica
 Start,Iniciar
 Start a count,Iniciar un conteo
@@ -4144,7 +4144,7 @@ The NCR is closed.,La NC está cerrada.
 The Pulaski API is not reachable.,No se puede contactar la API de Pulaski.
 "The SSCC's company prefix, extension digit or serial is out of range.","El prefijo de empresa, el dígito de extensión o el serial del SSCC está fuera de rango."
 The action is added.,La acción está agregada.
-The action is cancelled.,La acción está cancelada.
+The action is canceled.,La acción está cancelada.
 The action is done.,La acción está hecha.
 The address must be a full https:// URL.,La dirección debe ser una URL https:// completa.
 "The audit trail covers every site, so it needs permission to browse it everywhere.","El registro de auditoría abarca todos los sitios, así que necesita permiso para consultarlo en todas partes."
@@ -4251,7 +4251,7 @@ The language's usual,La habitual del idioma
 "The languages Pulaski's screens can show, and their translations. Where a term has none, it shows in English.",Los idiomas en que Pulaski puede mostrar las pantallas y sus traducciones. Un término sin traducción se muestra en inglés.
 The last e-mail couldn't be sent: {0},No se pudo enviar el último correo: {0}
 The last valid day; empty for no expiry,El último día válido; vacío para sin vencimiento
-"The limits must be numbers with the lower limit at most the centre line, and the centre line at most the upper limit.","Los límites deben ser números, con el límite inferior como máximo la línea central, y la línea central como máximo el límite superior."
+"The limits must be numbers with the lower limit at most the center line, and the center line at most the upper limit.","Los límites deben ser números, con el límite inferior como máximo la línea central, y la línea central como máximo el límite superior."
 "The line has no capability in effect for the material, so there is no ideal rate to go back to.","La línea no tiene una capacidad vigente para el material, así que no hay tasa ideal a la que volver."
 "The line has no ideal rate for this material, so the rate isn't checked.","La línea no tiene tasa ideal para este material, así que la tasa no se revisa."
 The line isn't an active line of this site that runs jobs.,La línea no es una línea activa de este sitio que ejecute trabajos.
@@ -4263,7 +4263,7 @@ The lot and job must be at the site the result is recorded for.,El lote y el tra
 "The lot comes out of the container (back into any it was in before, and back to where it was if packing moved it).","El lote sale del contenedor (de vuelta a cualquiera en que estaba antes, y a donde estaba si empacarlo lo movió)."
 "The lot goes back into the container, which must still be where the lot is.","El lote vuelve al contenedor, que debe seguir donde está el lote."
 "The lot goes back to how it was before it. A reversal counts when the movement did, so stock at every time is as if it never happened.","El lote vuelve a como estaba antes. Una reversión cuenta cuando contó el movimiento, así que la existencia en todo momento es como si nunca hubiera pasado."
-"The lot goes back to how it was before it: empty, so it is cancelled.","El lote vuelve a como estaba antes: vacío, así que se cancela."
+"The lot goes back to how it was before it: empty, so it is canceled.","El lote vuelve a como estaba antes: vacío, así que se cancela."
 The lot goes back to the status it had. Only while this is its latest status change.,El lote vuelve al estado que tenía. Solo mientras este sea su último cambio de estado.
 The lot goes back to where it was. Only while this is its latest move: a later move is reversed first.,El lote vuelve a donde estaba. Solo mientras este sea su último movimiento: un movimiento posterior se revierte primero.
 The lot has been shipped.,El lote ya se envió.
@@ -4388,7 +4388,7 @@ The site's planning rate settings were changed by someone else. Reload and try a
 The site's reporting tolerances were changed by someone else. Reload and try again.,Alguien más cambió las tolerancias de reporte del sitio. Recargue e intente de nuevo.
 The site's rule,La regla del sitio
 The specification gives no limits for it.,La especificación no da límites para ella.
-The split comes apart: the new lot is cancelled and its quantity goes back to the lot it came from. The new lot must be just as it was split off.,La división se deshace: el lote nuevo se cancela y su cantidad vuelve al lote del que vino. El lote nuevo debe estar tal como se separó.
+The split comes apart: the new lot is canceled and its quantity goes back to the lot it came from. The new lot must be just as it was split off.,La división se deshace: el lote nuevo se cancela y su cantidad vuelve al lote del que vino. El lote nuevo debe estar tal como se separó.
 The standard changeover must be between 0 and 7 days.,El cambio estándar debe estar entre 0 y 7 días.
 The standard crew is {0},La cuadrilla estándar es {0}
 The station can't be shown,La estación no puede mostrarse
@@ -4486,7 +4486,7 @@ This badge has no PIN yet; ask a supervisor to set one.,Este gafete aún no tien
 This call is resolved already.,Esta llamada ya está resuelta.
 This capability has already ended.,Esta capacidad ya terminó.
 This capability hasn't started yet; change its dates instead.,Esta capacidad aún no empieza; cambie sus fechas en su lugar.
-This chart has a dispersion chart: give its centre line and upper limit (and a lower limit from 0 to the centre).,Este gráfico tiene un gráfico de dispersión: indique su línea central y su límite superior (y un límite inferior de 0 a la línea central).
+This chart has a dispersion chart: give its center line and upper limit (and a lower limit from 0 to the center).,Este gráfico tiene un gráfico de dispersión: indique su línea central y su límite superior (y un límite inferior de 0 a la línea central).
 This chart is set up as X̄-R: its standard deviation limits come from the same sigma as its range limits.,Este gráfico está configurado como X̄-R: sus límites de desviación estándar salen de la misma sigma que sus límites de rango.
 This chart is set up as X̄-S: its range limits come from the same sigma as its standard deviation limits.,Este gráfico está configurado como X̄-S: sus límites de rango salen de la misma sigma que sus límites de desviación estándar.
 This device is enrolled already; enrolling again replaces that.,Este dispositivo ya está inscrito; inscribirlo de nuevo lo reemplaza.
@@ -4956,9 +4956,9 @@ You can only end your own break.,Solo puede terminar su propio descanso.
 "You can view the schedule, but planning needs permission to plan jobs at this site.","Puede ver el programa, pero planear necesita permiso para planear trabajos en este sitio."
 "You can view this, but changing it needs permission to {0} at this site. Ask an administrator if you should have it.","Puede ver esto, pero cambiarlo necesita permiso para {0} en este sitio. Pregunte a un administrador si debería tenerlo."
 "You can view this, but changing it needs permission to {0}. Ask an administrator if you should have it.","Puede ver esto, pero cambiarlo necesita permiso para {0}. Pregunte a un administrador si debería tenerlo."
-"You can view work orders, but dispatching, firming or cancelling them needs permission to manage work orders at this site.","Puede ver las órdenes de trabajo, pero despacharlas, ponerlas en firme o cancelarlas necesita permiso para administrar órdenes de trabajo en este sitio."
+"You can view work orders, but dispatching, firming or canceling them needs permission to manage work orders at this site.","Puede ver las órdenes de trabajo, pero despacharlas, ponerlas en firme o cancelarlas necesita permiso para administrar órdenes de trabajo en este sitio."
 "You can view {0}, but changing its status needs permission to manage work orders at this site.","Puede ver {0}, pero cambiar su estado necesita permiso para administrar órdenes de trabajo en este sitio."
-"You can view {0}, but moving, pinning or cancelling it needs permission to plan jobs at this site.","Puede ver {0}, pero moverlo, fijarlo o cancelarlo necesita permiso para planear trabajos en este sitio."
+"You can view {0}, but moving, pinning or canceling it needs permission to plan jobs at this site.","Puede ver {0}, pero moverlo, fijarlo o cancelarlo necesita permiso para planear trabajos en este sitio."
 You can't change the capabilities of {0} at its site.,No puede cambiar las capacidades de {0} en su sitio.
 You can't change the capabilities of {0} at {1}.,No puede cambiar las capacidades de {0} en {1}.
 You can't manage work orders at {0}.,No puede administrar órdenes de trabajo en {0}.
@@ -5096,7 +5096,7 @@ e.g. es-MX,p. ej. es-MX
 e.g. j.smith,p. ej. j.smith
 e.g. line_lead,p. ej. line_lead
 e.g. pulaski,p. ej. pulaski
-"each time a production job's totals change (it starts, pauses, completes, is reopened, closed or cancelled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML","cada vez que cambian los totales de un trabajo de producción (empieza, se pausa, termina, se reabre, se cierra o se cancela; se captura, corrige o revierte un reporte; se produce o consume un lote para él; se decide una tanda parcial), el B2MML del trabajo"
+"each time a production job's totals change (it starts, pauses, completes, is reopened, closed or canceled; a report is entered, corrected or reversed; a lot is produced or consumed for it; a partial batch is decided), the job's B2MML","cada vez que cambian los totales de un trabajo de producción (empieza, se pausa, termina, se reabre, se cierra o se cancela; se captura, corrige o revierte un reporte; se produce o consume un lote para él; se decide una tanda parcial), el B2MML del trabajo"
 effective_to must be after effective_from.,effective_to debe ser posterior a effective_from.
 employeeNumber (enterprise extension) is missing; it is the person's employee number.,Falta employeeNumber (extensión enterprise); es el número de empleado de la persona.
 every {0} h,cada {0} h
@@ -5214,7 +5214,7 @@ of {0},de {0}
 of {0} {1},de {0} {1}
 of {0} {1} good,de {0} {1} buenos
 off,desactivado
-on the device and type its enrolment code. Badges are issued on,en el dispositivo y escriba su código de registro. Los gafetes se emiten en
+on the device and type its enrollment code. Badges are issued on,en el dispositivo y escriba su código de registro. Los gafetes se emiten en
 on the device and type this code before {0}.,en el dispositivo y escriba este código antes de las {0}.
 one-off changes on Shifts,cambios puntuales en Turnos
 ongoing,en curso
@@ -5415,14 +5415,14 @@ yes,sí
 {0} can't record time at {1}.,{0} no puede registrar tiempo en {1}.
 {0} can't run jobs; pick a line.,{0} no ejecuta trabajos; elija una línea.
 {0} can't start yet. {1},{0} aún no puede iniciar. {1}
-{0} cancelled,{0} canceladas
-{0} cancelled and replaced for exactly the rest of its quantity.,{0} cancelado y reemplazado por exactamente el resto de su cantidad.
-{0} cancelled and replaced for the rest of its quantity.,{0} cancelado y reemplazado por el resto de su cantidad.
-{0} cancelled and replaced for the whole batches left; the order may end short.,{0} cancelado y reemplazado por las tandas completas que quedan; la orden puede terminar con faltante.
-{0} cancelled.,{0} cancelado.
-{0} centre,{0} centro
+{0} canceled,{0} canceladas
+{0} canceled and replaced for exactly the rest of its quantity.,{0} cancelado y reemplazado por exactamente el resto de su cantidad.
+{0} canceled and replaced for the rest of its quantity.,{0} cancelado y reemplazado por el resto de su cantidad.
+{0} canceled and replaced for the whole batches left; the order may end short.,{0} cancelado y reemplazado por las tandas completas que quedan; la orden puede terminar con faltante.
+{0} canceled.,{0} cancelado.
+{0} center,{0} centro
 {0} changed after it was counted; count it again.,{0} cambió después de contarse; cuéntelo de nuevo.
-{0} closed and {1} cancelled.,{0} cerradas y {1} canceladas.
+{0} closed and {1} canceled.,{0} cerradas y {1} canceladas.
 {0} code,código {0}
 "{0} comes from {1} (key {2}); give its external_system and external_key to import it, or change it there.","{0} viene de {1} (clave {2}); indique su external_system y external_key para importarlo, o cámbielo allí."
 "{0} comes from {1}: change their name and whether they are active there, and import again.","{0} viene de {1}: cambie allí su nombre y si está activo, e importe de nuevo."
@@ -5661,7 +5661,7 @@ yes,sí
 {0} is {1} in Pulaski; the ERP's change comes too late and is left out.,{0} está {1} en Pulaski; el cambio del ERP llega tarde y se deja fuera.
 "{0} is {1} now, not {2}; reverse what changed it first.","{0} está {1} ahora, no {2}; revierta primero lo que lo cambió."
 "{0} is {1}, so it wasn't put on hold.","{0} está {1}, así que no se retuvo."
-{0} is {1}; it can't be cancelled.,{0} está {1}; no se puede cancelar.
+{0} is {1}; it can't be canceled.,{0} está {1}; no se puede cancelar.
 {0} is {1}; it can't be changed.,{0} está {1}; no se puede cambiar.
 {0} is {1}; it can't be closed.,{0} está {1}; no se puede cerrar.
 {0} is {1}; it can't be consumed.,{0} está {1}; no se puede consumir.
@@ -5787,7 +5787,7 @@ yes,sí
 {0} on {1} is no longer sampled.,{0} en {1} ya no se muestrea.
 {0} on {1} is now sampled {2}.,{0} en {1} ahora se muestrea {2}.
 {0} on {1} is sampled again from now on.,{0} en {1} se muestrea de nuevo a partir de ahora.
-{0} on {1} signalled,{0} en {1} dio señal
+{0} on {1} signaled,{0} en {1} dio señal
 "{0} on {1}, {2} – {3}","{0} en {1}, {2} – {3}"
 "{0} open jobs for {1} on {2} stay there, but can't be moved to it or dispatched on it until it has a capability again.","{0} trabajos abiertos de {1} en {2} se quedan ahí, pero no pueden moverse a ella ni despacharse en ella hasta que vuelva a tener una capacidad."
 {0} open sessions were ended at the end of the shift.,Se terminaron {0} sesiones abiertas al final del turno.
@@ -5895,7 +5895,7 @@ yes,sí
 "{0} {1} good, {2} scrap","{0} {1} buenos, {2} de desperdicio"
 {0} {1} here. It joins the balance at the new location.,{0} {1} aquí. Se une al saldo en la nueva ubicación.
 "{0} {1} in {2} is more than {3} can make: its ideal rate is {4} {5}/h, allowing {6} {7} with the site's {8}% tolerance. At most {9} {10} more can be reported into this run.","{0} {1} en {2} es más de lo que {3} puede hacer: su tasa ideal es {4} {5}/h, lo que permite {6} {7} con la tolerancia del {8}% del sitio. Como máximo pueden reportarse {9} {10} más en esta corrida."
-{0} {1} is cancelled and Pulaski hasn't seen it; there is nothing to cancel.,{0} {1} está cancelada y Pulaski no la ha visto; no hay nada que cancelar.
+{0} {1} is canceled and Pulaski hasn't seen it; there is nothing to cancel.,{0} {1} está cancelada y Pulaski no la ha visto; no hay nada que cancelar.
 {0} {1} is for another site or material in Pulaski; send it as a new key.,{0} {1} es de otro sitio o material en Pulaski; envíela como una clave nueva.
 {0} {1} is {2} batches of {3} {4}: held until a planner sets a whole-batch quantity.,{0} {1} son {2} tandas de {3} {4}: retenida hasta que un planificador fije una cantidad de tandas completas.
 "{0} {1} is {2} batches of {3} {4}: planned {5} {6}, rounded down to whole batches.","{0} {1} son {2} tandas de {3} {4}: se planearon {5} {6}, redondeado hacia abajo a tandas completas."
@@ -5920,8 +5920,8 @@ yes,sí
 {0}% of the planned quantity,{0}% de la cantidad planeada
 {0}% slower than the rate in force.,{0}% más lenta que la tasa vigente.
 {0}% slower than {1} then,{0}% más lenta que {1} entonces
-{0}'s control chart signalled (rule {1}): added to its open SPC alert.,La gráfica de control de {0} dio una señal (regla {1}): se agregó a su alerta SPC abierta.
-{0}'s control chart signalled (rule {1}): an SPC alert was raised.,La gráfica de control de {0} dio una señal (regla {1}): se generó una alerta SPC.
+{0}'s control chart signaled (rule {1}): added to its open SPC alert.,La gráfica de control de {0} dio una señal (regla {1}): se agregó a su alerta SPC abierta.
+{0}'s control chart signaled (rule {1}): an SPC alert was raised.,La gráfica de control de {0} dio una señal (regla {1}): se generó una alerta SPC.
 {0}'s details have been corrected again since; reverse that correction first.,Los detalles de {0} se corrigieron de nuevo desde entonces; revierta primero esa corrección.
 "{0}'s drop folder '{1}' isn't configured in Labels:DropFolders, or doesn't exist.","La carpeta de depósito '{1}' de {0} no está configurada en Labels:DropFolders, o no existe."
 {0}'s results weren't judged against limits.,Los resultados de {0} no se evaluaron contra límites.

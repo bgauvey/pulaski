@@ -72,7 +72,7 @@ public sealed class DeliveryTests(DatabaseFixture db)
     }
 
     [Fact]
-    public async Task Acknowledgements_are_recorded_from_the_answer_or_a_callback_and_feed_settings_are_saved_audited_and_read_by_the_relay()
+    public async Task Acknowledgments_are_recorded_from_the_answer_or_a_callback_and_feed_settings_are_saved_audited_and_read_by_the_relay()
     {
         var relay = db.Services.GetRequiredService<DeliveryRelay>();
         var sink = TestDeliveryTargets.Sink;
@@ -86,7 +86,7 @@ public sealed class DeliveryTests(DatabaseFixture db)
         // Accepted in the answer: delivered, with the receiver's reference.
         var now = TestTime.Now;
         await relay.RecordAsync(due.DeliveryId, DeliveryPolicy.AfterAttempt(1, 200, null, now), 200, now, CancellationToken.None,
-            new Acknowledgement(AcknowledgementStatuses.Accepted, "GR-1001", null));
+            new Acknowledgment(AcknowledgmentStatuses.Accepted, "GR-1001", null));
         DeliveryDto Mine(IReadOnlyList<DeliveryDto> all) => all.Single(d => d.Id == due.DeliveryId);
         var row = Mine(await QueryAsync<ListDeliveriesQuery, IReadOnlyList<DeliveryDto>>(new ListDeliveriesQuery()));
         Assert.Equal((DeliveryStatuses.Delivered, "accepted", "GR-1001", "response"), (row.Status, row.AckStatus, row.AckReference, row.AckSource));

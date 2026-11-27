@@ -133,13 +133,13 @@ for (const theme of ["light", "dark"]) {
   });
   await tabWalk(page, "3 scan keys", theme, 40);
 
-  // 4. Station and boards (only with a terminal cookie, set by ENROL_CODE)
-  if (process.env.ENROL_CODE) {
+  // 4. Station and boards (only with a terminal cookie, set by ENROLL_CODE)
+  if (process.env.ENROLL_CODE) {
     if (terminalCookies === null) {
       await page.goto(base + "/terminal/enrol");
       await settle(page);
-      await check(page, "4 terminal enrol", theme);
-      await page.locator("#code").fill(process.env.ENROL_CODE);
+      await check(page, "4 terminal enroll", theme);
+      await page.locator("#code").fill(process.env.ENROLL_CODE);
       await page.locator("button[type=submit]").first().click();
       await settle(page);
       terminalCookies = (await context.cookies()).filter(c => c.name.toLowerCase().includes("terminal"));

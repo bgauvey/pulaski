@@ -38,7 +38,7 @@ public sealed record Job(
     DateTimeOffset? CompletedAt = null)
 {
     /// <summary>
-    /// Planned with a partial last batch (D-067): the replacement for exactly what was left of a cancelled job. Its quantity needn't be
+    /// Planned with a partial last batch (D-067): the replacement for exactly what was left of a canceled job. Its quantity needn't be
     /// whole batches on any line, and its last batch is reported as a partial batch without a stop reason.
     /// </summary>
     public bool PartialBatchPlanned { get; init; }
@@ -259,10 +259,10 @@ public sealed record Job(
     {
         if (!IsOpen)
         {
-            throw new DomainRuleException($"Job {JobNumber} is {UserMessage.Code(Status)}; it can no longer be cancelled.");
+            throw new DomainRuleException($"Job {JobNumber} is {UserMessage.Code(Status)}; it can no longer be canceled.");
         }
 
-        return this with { Status = JobStatus.Cancelled };
+        return this with { Status = JobStatus.Canceled };
     }
 
     /// <summary>

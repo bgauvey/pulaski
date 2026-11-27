@@ -5,7 +5,7 @@ namespace Pulaski.DemoHistory;
 /// the simulators' profile, PACKML-SIM), its cumulative length counter every minute while it executes, and its alarm code. Worked out
 /// before the history runs, so production reports can count what the machine counted.
 /// </summary>
-public sealed class MachineFeed(DateTimeOffset from, DateTimeOffset to, decimal metresPerMinute, int seed)
+public sealed class MachineFeed(DateTimeOffset from, DateTimeOffset to, decimal metersPerMinute, int seed)
 {
     // The simulators' raw states (deploy/simulator/packml-simulator-profile.csv).
     public const int Idle = 1;
@@ -42,7 +42,7 @@ public sealed class MachineFeed(DateTimeOffset from, DateTimeOffset to, decimal 
 
     public int StateAt(DateTimeOffset at) => _states.LastOrDefault(s => s.Key <= at).Value;
 
-    /// <summary>Metres the counter moved in (after, until].</summary>
+    /// <summary>Meters the counter moved in (after, until].</summary>
     public decimal Counted(DateTimeOffset after, DateTimeOffset until)
     {
         var counts = Counts();
@@ -71,7 +71,7 @@ public sealed class MachineFeed(DateTimeOffset from, DateTimeOffset to, decimal 
                 continue;
             }
 
-            carry += metresPerMinute * (0.94m + (decimal)random.NextDouble() * 0.1m);
+            carry += metersPerMinute * (0.94m + (decimal)random.NextDouble() * 0.1m);
             var whole = (long)carry;
             carry -= whole;
             raw += whole;

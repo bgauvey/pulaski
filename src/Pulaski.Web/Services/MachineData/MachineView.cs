@@ -19,7 +19,7 @@ public static class MachineView
         _ => Term.Mark("Not reporting"),
     };
 
-    /// <summary>The CSS modifier colouring a tile for its category, matching the design system's state tokens.</summary>
+    /// <summary>The CSS modifier coloring a tile for its category, matching the design system's state tokens.</summary>
     public static string CategoryClass(string? category) => category switch
     {
         "producing" => "is-producing",

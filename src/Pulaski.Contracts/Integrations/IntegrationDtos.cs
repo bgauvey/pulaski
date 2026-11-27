@@ -21,7 +21,7 @@ public sealed record DeliveryDto
     public string? ResolvedBy { get; init; }
     public string? ResolveNote { get; init; }
 
-    /// <summary>The receiver's acknowledgement (#73): <c>accepted</c> or <c>rejected</c>, its reference and message, and how it came.</summary>
+    /// <summary>The receiver's acknowledgment (#73): <c>accepted</c> or <c>rejected</c>, its reference and message, and how it came.</summary>
     public string? AckStatus { get; init; }
     public string? AckReference { get; init; }
     public string? AckMessage { get; init; }
@@ -109,8 +109,8 @@ public sealed record DeliveryFeedSettingsDto
     public bool StartFromNow { get; init; }
     public bool SecretConfigured { get; init; }
 
-    /// <summary>Where a receiver posts acknowledgements: <c>/api/integrations/{feed}/acknowledgements</c>.</summary>
-    public required string AcknowledgementPath { get; init; }
+    /// <summary>Where a receiver posts acknowledgments: <c>/api/integrations/{feed}/acknowledgements</c>.</summary>
+    public required string AcknowledgmentPath { get; init; }
     public IReadOnlyList<DeliveryKindDto> Kinds { get; init; } = [];
     public long Version { get; init; }
     public DateTimeOffset? UpdatedAt { get; init; }
@@ -146,10 +146,10 @@ public sealed record CreateDeliveryFeedRequest
 }
 
 /// <summary>
-/// A receiver's acknowledgement of one event (#73), posted to <c>/api/integrations/{feed}/acknowledgements</c> and signed like Pulaski's
+/// A receiver's acknowledgment of one event (#73), posted to <c>/api/integrations/{feed}/acknowledgements</c> and signed like Pulaski's
 /// own messages: <c>X-Pulaski-Timestamp</c> and <c>X-Pulaski-Signature</c> (HMAC-SHA256 with the feed's secret of "{timestamp}.{body}").
 /// </summary>
-public sealed record AcknowledgementRequest
+public sealed record AcknowledgmentRequest
 {
     public Guid EventId { get; init; }
 
@@ -159,4 +159,4 @@ public sealed record AcknowledgementRequest
     public string? Message { get; init; }
 }
 
-public sealed record AcknowledgementResponse(Guid DeliveryId, string DeliveryStatus);
+public sealed record AcknowledgmentResponse(Guid DeliveryId, string DeliveryStatus);

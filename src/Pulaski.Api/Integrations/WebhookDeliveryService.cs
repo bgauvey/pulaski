@@ -75,15 +75,15 @@ public sealed class WebhookSender(HttpClient http)
         "sha256=" + Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes($"{timestamp}.{body}")));
 
     /// <summary>
-    /// The receiver's status code, or null with why when there was no answer; with a 2xx, any acknowledgement in its body (#73). The attempt
+    /// The receiver's status code, or null with why when there was no answer; with a 2xx, any acknowledgment in its body (#73). The attempt
     /// gives up after <paramref name="timeout"/> (default: the client's own).
     /// </summary>
-    public Task<(int? StatusCode, string? Error, Acknowledgement? Acknowledgement)> SendAsync(
+    public Task<(int? StatusCode, string? Error, Acknowledgment? Acknowledgment)> SendAsync(
         Uri url, string secret, OutboundEvent e, DateTimeOffset now, CancellationToken cancellationToken, TimeSpan? timeout = null) =>
         SendAsync(url, secret, e, FeedMessage.CloudEvent(e), now, cancellationToken, timeout);
 
     /// <summary>Sends <paramref name="message"/> for the event, keyed and signed as an event is.</summary>
-    public async Task<(int? StatusCode, string? Error, Acknowledgement? Acknowledgement)> SendAsync(
+    public async Task<(int? StatusCode, string? Error, Acknowledgment? Acknowledgment)> SendAsync(
         Uri url, string secret, OutboundEvent e, FeedMessage message, DateTimeOffset now, CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
         var body = message.Body;
@@ -106,7 +106,7 @@ public sealed class WebhookSender(HttpClient http)
             using var response = await http.SendAsync(request, attempt.Token);
             var text = await response.Content.ReadAsStringAsync(attempt.Token);
             return response.IsSuccessStatusCode
-                ? ((int)response.StatusCode, null, Acknowledgement.FromResponse(text))
+                ? ((int)response.StatusCode, null, Acknowledgment.FromResponse(text))
                 : ((int)response.StatusCode, Trim(text), null);
         }
         catch (HttpRequestException ex)
@@ -242,7 +242,7 @@ public sealed class WebhookDeliveryService(
             var (message, problem) = options.SendsPerformance ? await PerformanceAsync(e, cancellationToken) : (FeedMessage.CloudEvent(e), null);
             int? code;
             string? error;
-            Acknowledgement? acknowledgement = null;
+            Acknowledgment? acknowledgment = null;
             if (message is null)
             {
                 // Nothing to send that trying again would mend: it fails, holding the job's later documents until retried or skipped.
@@ -250,7 +250,7 @@ public sealed class WebhookDeliveryService(
             }
             else
             {
-                (code, error, acknowledgement) = options.Kind == DeliveryFeedKinds.Mqtt
+                (code, error, acknowledgment) = options.Kind == DeliveryFeedKinds.Mqtt
                     ? await PublishAsync(options, url, e, message, now, cancellationToken)
                     : await webhook.SendAsync(url, options.Secret!, e, message, now, cancellationToken, TimeSpan.FromSeconds(options.TimeoutSeconds));
             }
@@ -258,12 +258,12 @@ public sealed class WebhookDeliveryService(
             var outcome = DeliveryPolicy.AfterAttempt(e.Attempts + 1, code, error, now, options.MaxAttempts);
 
             // Delivered but rejected in the answer (#73): it fails as a refused delivery does, holding the subject's later events.
-            if (outcome.Status == DeliveryStatuses.Delivered && acknowledgement is { IsRejected: true })
+            if (outcome.Status == DeliveryStatuses.Delivered && acknowledgment is { IsRejected: true })
             {
-                outcome = new DeliveryOutcome(DeliveryStatuses.Failed, now, acknowledgement.RejectionText);
+                outcome = new DeliveryOutcome(DeliveryStatuses.Failed, now, acknowledgment.RejectionText);
             }
 
-            await relay.RecordAsync(e.DeliveryId, outcome, code, now, cancellationToken, acknowledgement);
+            await relay.RecordAsync(e.DeliveryId, outcome, code, now, cancellationToken, acknowledgment);
             if (outcome.Status != DeliveryStatuses.Delivered)
             {
                 blocked.Add(e.Subject);
@@ -272,8 +272,8 @@ public sealed class WebhookDeliveryService(
         }
     }
 
-    // A broker gives no acknowledgement in its answer; a receiver behind it can still post one back.
-    private async Task<(int? StatusCode, string? Error, Acknowledgement? Acknowledgement)> PublishAsync(
+    // A broker gives no acknowledgment in its answer; a receiver behind it can still post one back.
+    private async Task<(int? StatusCode, string? Error, Acknowledgment? Acknowledgment)> PublishAsync(
         WebhookFeedOptions options, Uri url, OutboundEvent e, FeedMessage message, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var (code, error) = await mqtt.SendAsync(options, url, e, message, now, cancellationToken);

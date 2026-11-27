@@ -139,7 +139,7 @@ public static class EquipmentProperties
         }
 
         items.Add(Bool("isActive", l["Active"], l[Status],
-            l["Inactive equipment stays in the hierarchy and its history, greyed out."], e.IsActive));
+            l["Inactive equipment stays in the hierarchy and its history, grayed out."], e.IsActive));
 
         if (e.TracksState)
         {

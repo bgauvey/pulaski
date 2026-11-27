@@ -91,5 +91,6 @@ public sealed record ErpOrderChange(
     DateTimeOffset? DueAt,
     int Priority,
     string? Version,
+    // Named as stored: work_order.erp_pending_change keeps this record as JSON, and its events carry it (kept in British spelling).
     bool Cancelled,
     DateTimeOffset ReceivedAt);

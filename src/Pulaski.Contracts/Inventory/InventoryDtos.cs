@@ -509,7 +509,7 @@ public sealed record StockCountSummaryDto
     public required Guid LocationId { get; init; }
     public required string LocationCode { get; init; }
 
-    /// <summary><c>open</c>, <c>posted</c> or <c>cancelled</c>.</summary>
+    /// <summary><c>open</c>, <c>posted</c> or <c>canceled</c>.</summary>
     public required string Status { get; init; }
     public int LineCount { get; init; }
     public int CountedLines { get; init; }
@@ -650,7 +650,7 @@ public sealed record ExpectedReceiptDto
     public string? Supplier { get; init; }
     public string? Note { get; init; }
 
-    /// <summary><c>open</c> (perhaps partly received), <c>received</c> or <c>cancelled</c>.</summary>
+    /// <summary><c>open</c> (perhaps partly received), <c>received</c> or <c>canceled</c>.</summary>
     public required string Status { get; init; }
 
     /// <summary>The latest lot received against it; <see cref="ReceivedLotCount"/> says how many there were (#83).</summary>

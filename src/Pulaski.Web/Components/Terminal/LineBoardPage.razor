@@ -21,10 +21,10 @@
 {
     <div class="board-message">
         <h1>@(_enrolled ? L["The board can't be shown"] : L["This screen isn't enrolled"])</h1>
-        <p>@(_error ?? L["Enrol it as a terminal, then open this page again."])</p>
+        <p>@(_error ?? L["Enroll it as a terminal, then open this page again."])</p>
         @if (!_enrolled)
         {
-            <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">@L["Enrol it"]</a>
+            <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrollPath">@L["Enroll it"]</a>
         }
     </div>
 }
@@ -87,7 +87,7 @@ else
                     </div>
                 }
 
-                @* Maintenance requests not closed (#127): waiting ones in the waiting colour, those in progress quiet. *@
+                @* Maintenance requests not closed (#127): waiting ones in the waiting color, those in progress quiet. *@
                 @foreach (var request in line.Maintenance.Take(3))
                 {
                     <div class="board-call board-maintenance @(request.Status == "open" ? "" : "is-answered")" @key="request.Id">
@@ -100,7 +100,7 @@ else
                     <div class="board-quiet">@L["and {0} more", line.Maintenance.Count - 3]</div>
                 }
 
-                @* Samples the running job owes (#136b): overdue ones in red, due ones in the waiting colour. *@
+                @* Samples the running job owes (#136b): overdue ones in red, due ones in the waiting color. *@
                 @foreach (var sample in line.Samples.Take(3))
                 {
                     <div class="board-call board-sample @(sample.Status == "overdue" ? "is-escalated" : "")" @key="sample.CharacteristicId">

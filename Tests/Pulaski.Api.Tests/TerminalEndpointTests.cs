@@ -18,10 +18,10 @@ public sealed class TerminalEndpointTests(ApiFactory factory) : IClassFixture<Ap
         var terminal = new TerminalRecord(Guid.CreateVersion7(), site, "T-" + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant(), "Line terminal", site, null,
             TerminalAuthModes.Badge, true, null);
         await factory.Stores.Terminals.InsertAsync(terminal, DateTimeOffset.UtcNow, CancellationToken.None);
-        var code = TerminalRules.NewEnrolmentCode();
-        await factory.Stores.Terminals.SetEnrolmentCodeAsync(terminal.Id, TerminalRules.Sha256(TerminalRules.NormalizeCode(code)), DateTimeOffset.UtcNow.AddMinutes(10), DateTimeOffset.UtcNow, CancellationToken.None);
+        var code = TerminalRules.NewEnrollmentCode();
+        await factory.Stores.Terminals.SetEnrollmentCodeAsync(terminal.Id, TerminalRules.Sha256(TerminalRules.NormalizeCode(code)), DateTimeOffset.UtcNow.AddMinutes(10), DateTimeOffset.UtcNow, CancellationToken.None);
 
-        var response = await factory.CreateSignedOutClient().PostAsJsonAsync("/api/terminal/enrol", new EnrolTerminalRequest { Code = code });
+        var response = await factory.CreateSignedOutClient().PostAsJsonAsync("/api/terminal/enrol", new EnrollTerminalRequest { Code = code });
         response.EnsureSuccessStatusCode();
         return (terminal, (await response.Content.ReadFromJsonAsync<TerminalEnrolledResponse>())!.Secret);
     }

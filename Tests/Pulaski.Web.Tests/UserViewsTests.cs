@@ -3,11 +3,11 @@ using Pulaski.Web.Services.Security;
 
 namespace Pulaski.Web.Tests;
 
-/// <summary>Favourites, the home page and saved filters as the screens keep them (#131).</summary>
+/// <summary>Favorites, the home page and saved filters as the screens keep them (#131).</summary>
 public class UserViewsTests
 {
     [Fact]
-    public void A_page_is_its_place_without_query_and_a_favourite_toggles_and_keeps_the_newest()
+    public void A_page_is_its_place_without_query_and_a_favorite_toggles_and_keeps_the_newest()
     {
         Assert.Equal("inventory/lots", UserViews.PageOf("/inventory/lots?status=on_hold#top"));
         Assert.Equal("Lots · Inventory", UserViews.TitleOf("Lots · Inventory · Pulaski", "x"));

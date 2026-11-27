@@ -73,7 +73,7 @@ public class OverviewFiguresTests
     }
 
     [Fact]
-    public void The_lane_joins_neighbours_of_one_use_and_starts_at_the_window()
+    public void The_lane_joins_neighbors_of_one_use_and_starts_at_the_window()
     {
         var uses = new[]
         {

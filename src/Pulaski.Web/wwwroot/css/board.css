@@ -1,5 +1,5 @@
 /* Line display boards (#120): a TV on the floor, read from across the line. Its own dark, high-contrast palette whatever the device's
-   theme; type scales with the screen. ISA-101 habits: grey for normal, colour only for what needs someone (down, no signal, waiting,
+   theme; type scales with the screen. ISA-101 habits: gray for normal, color only for what needs someone (down, no signal, waiting,
    below target). */
 
 .board-shell {
@@ -183,7 +183,7 @@
     text-align: center;
 }
 
-/* Calls for help (#158): a waiting call in the waiting colour, an answered one quiet, an escalated one red and the line's frame with it. */
+/* Calls for help (#158): a waiting call in the waiting color, an answered one quiet, an escalated one red and the line's frame with it. */
 .board-call {
     display: flex;
     justify-content: space-between;

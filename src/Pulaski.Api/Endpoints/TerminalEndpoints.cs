@@ -55,8 +55,8 @@ internal static class TerminalEndpoints
             }, ct)))
         .RequirePermission(Permissions.Terminals, Site.Of(SiteOf.Terminal));
 
-        terminals.MapPost("/{id:guid}/enrolment-code", async Task<Ok<EnrolmentCodeResponse>> (Guid id, ICommandHandler<IssueEnrolmentCodeCommand, EnrolmentCodeResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new IssueEnrolmentCodeCommand(id), ct)))
+        terminals.MapPost("/{id:guid}/enrolment-code", async Task<Ok<EnrollmentCodeResponse>> (Guid id, ICommandHandler<IssueEnrollmentCodeCommand, EnrollmentCodeResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new IssueEnrollmentCodeCommand(id), ct)))
         .RequirePermission(Permissions.Terminals, Site.Of(SiteOf.Terminal));
 
         var badges = routes.MapGroup("/badges").WithTags("Terminals");
@@ -85,8 +85,8 @@ internal static class TerminalEndpoints
     /// </summary>
     public static IEndpointRouteBuilder MapTerminalEndpoints(this IEndpointRouteBuilder routes)
     {
-        routes.MapPost("/enrol", async Task<Ok<TerminalEnrolledResponse>> (EnrolTerminalRequest request, ICommandHandler<EnrolTerminalCommand, TerminalEnrolledResponse> handler, CancellationToken ct) =>
-            TypedResults.Ok(await handler.HandleAsync(new EnrolTerminalCommand(request.Code), ct)))
+        routes.MapPost("/enrol", async Task<Ok<TerminalEnrolledResponse>> (EnrollTerminalRequest request, ICommandHandler<EnrollTerminalCommand, TerminalEnrolledResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new EnrollTerminalCommand(request.Code), ct)))
         .WithTags("Terminal");
 
         var terminal = routes.MapGroup("").WithTags("Terminal").AddEndpointFilter<TerminalFilter>();

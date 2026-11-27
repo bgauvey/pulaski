@@ -14,7 +14,7 @@
         <h1 class="mb-1">@L["Terminals"]</h1>
         <p class="text-muted mb-0">
             @L["Shared tablets and panel PCs where people badge to record their time. Register one here, then open"]
-            <code>@TerminalUrl</code> @L["on the device and type its enrolment code. Badges are issued on"] <ScreenLink Href="people" Permission="@PermissionCodes.People">@L["People"]</ScreenLink>.
+            <code>@TerminalUrl</code> @L["on the device and type its enrollment code. Badges are issued on"] <ScreenLink Href="people" Permission="@PermissionCodes.People">@L["People"]</ScreenLink>.
             @L["A TV enrolled the same way shows a line display board at"] <code>@BoardUrl</code>@L[": the lines this terminal offers, read only."]
         </p>
     </div>
@@ -149,7 +149,7 @@ else
                             <td class="small">@(t.AuthMode == "badge_plus_pin" ? L["Badge and PIN"] : L["Badge"])</td>
                             <td class="small">
                                 @(t.EnrolledAt is { } at ? Display.SiteTime(at, Sites.Site?.TimeZone) : L["Not yet"])
-                                @if (t.EnrolmentExpiresAt is not null)
+                                @if (t.EnrollmentExpiresAt is not null)
                                 {
                                     <div class="text-muted">@L["code waiting"]</div>
                                 }
@@ -158,7 +158,7 @@ else
                             <td class="text-end text-nowrap">
                                 @if (t.IsActive)
                                 {
-                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => CodeAsync(t)">@L["Enrolment code"]</button>
+                                    <button type="button" class="btn btn-sm btn-link" disabled="@_busy" @onclick="() => CodeAsync(t)">@L["Enrollment code"]</button>
                                 }
                                 <button type="button" class="btn btn-sm btn-link" @onclick="() => Edit(t)">@L["Change"]</button>
                             </td>
@@ -174,11 +174,11 @@ else
     private IReadOnlyList<TerminalDto>? _terminals;
     private IReadOnlyList<EquipmentDto> _equipment = [];
     private TerminalForm _form = new();
-    private (string Terminal, EnrolmentCodeResponse Code)? _code;
+    private (string Terminal, EnrollmentCodeResponse Code)? _code;
     private ApiException? _error;
     private bool _busy;
 
-    private string TerminalUrl => Navigation.ToAbsoluteUri(TerminalCookie.EnrolPath).ToString();
+    private string TerminalUrl => Navigation.ToAbsoluteUri(TerminalCookie.EnrollPath).ToString();
     private string BoardUrl => Navigation.ToAbsoluteUri(TerminalCookie.BoardPath).ToString();
 
     // The site itself, its areas, and its lines: what a terminal can offer the lines of.
@@ -308,7 +308,7 @@ else
         ResetForm();
     });
 
-    private Task CodeAsync(TerminalDto t) => RunAsync(async () => _code = (t.Code, await Api.IssueEnrolmentCodeAsync(t.Id)));
+    private Task CodeAsync(TerminalDto t) => RunAsync(async () => _code = (t.Code, await Api.IssueEnrollmentCodeAsync(t.Id)));
 
     private async Task RunAsync(Func<Task> action)
     {

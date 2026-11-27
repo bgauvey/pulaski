@@ -22,8 +22,8 @@
 @if (_status is null)
 {
     <h1 class="h3">@L["This terminal isn't enrolled"]</h1>
-    <p>@(_error ?? L["Ask a supervisor to enrol it."])</p>
-    <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">@L["Enrol it"]</a>
+    <p>@(_error ?? L["Ask a supervisor to enroll it."])</p>
+    <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrollPath">@L["Enroll it"]</a>
 
     @* A post is matched to a form of its name in this render; without one, a terminal whose status can't be read would fail outright. *@
     <EditForm Model="Input" FormName="terminal" OnSubmit="SubmitAsync" method="post" />
@@ -174,7 +174,7 @@ else
     {
         if (Secret is null)
         {
-            Navigation.NavigateTo(TerminalCookie.EnrolPath, forceLoad: true);
+            Navigation.NavigateTo(TerminalCookie.EnrollPath, forceLoad: true);
             return;
         }
 

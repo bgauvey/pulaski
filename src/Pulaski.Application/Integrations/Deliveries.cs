@@ -87,8 +87,8 @@ public interface IDeliveryStore
     /// <summary>The sink's delivery of the event, locked; null when it never captured it.</summary>
     Task<DeliveryRecord?> GetByEventForUpdateAsync(string sink, Guid eventId, CancellationToken cancellationToken);
 
-    /// <summary>Records a receiver's acknowledgement (#73); with <paramref name="status"/>, also sets the status and, for a failure, why (<paramref name="failure"/>).</summary>
-    Task AcknowledgeAsync(Guid id, Acknowledgement acknowledgement, string source, string? status, string? failure, DateTimeOffset at, CancellationToken cancellationToken);
+    /// <summary>Records a receiver's acknowledgment (#73); with <paramref name="status"/>, also sets the status and, for a failure, why (<paramref name="failure"/>).</summary>
+    Task AcknowledgeAsync(Guid id, Acknowledgment acknowledgment, string source, string? status, string? failure, DateTimeOffset at, CancellationToken cancellationToken);
 
     /// <summary>Every failed delivery of the sink back to pending, due now; returns how many.</summary>
     Task<int> RetryFailedAsync(string sink, string actor, DateTimeOffset at, CancellationToken cancellationToken);

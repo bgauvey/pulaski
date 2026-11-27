@@ -7,7 +7,7 @@ namespace Pulaski.Web.Services.Security;
 public static class TerminalCookie
 {
     public const string Name = ".Pulaski.Terminal";
-    public const string EnrolPath = "/terminal/enrol";
+    public const string EnrollPath = "/terminal/enrol";
     public const string HomePath = "/terminal";
 
     /// <summary>The line display board (#120), under the cookie's path so the device's secret is sent.</summary>

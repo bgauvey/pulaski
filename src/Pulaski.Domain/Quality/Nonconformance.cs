@@ -61,7 +61,7 @@ public static class NcrActionStatus
 {
     public const string Open = "open";
     public const string Done = "done";
-    public const string Cancelled = "cancelled";
+    public const string Canceled = "cancelled";
 }
 
 /// <summary>
@@ -195,7 +195,7 @@ public sealed record Nonconformance(
     }
 }
 
-/// <summary>A corrective or preventive action of an NCR (#133): what is to be done, by whom, by when; done with what was done, or cancelled with why.</summary>
+/// <summary>A corrective or preventive action of an NCR (#133): what is to be done, by whom, by when; done with what was done, or canceled with why.</summary>
 public sealed record NcrAction(
     Guid Id, Guid NcrId, string Kind, string Description, Guid? OwnerUserId, DateOnly? DueOn, string Status, DateTimeOffset? DoneAt = null,
     string? DoneBy = null, string? Note = null)
@@ -218,7 +218,7 @@ public sealed record NcrAction(
 
     public NcrAction Complete(string? note, string by, DateTimeOffset at) => Finish(NcrActionStatus.Done, note, by, at, noteRequired: true);
 
-    public NcrAction Cancel(string? note, string by, DateTimeOffset at) => Finish(NcrActionStatus.Cancelled, note, by, at, noteRequired: true);
+    public NcrAction Cancel(string? note, string by, DateTimeOffset at) => Finish(NcrActionStatus.Canceled, note, by, at, noteRequired: true);
 
     private NcrAction Finish(string status, string? note, string by, DateTimeOffset at, bool noteRequired)
     {

@@ -57,14 +57,14 @@ public sealed class InMemoryTerminals : ITerminalRepository, ITerminalReadStore
 
     public Task<long> UpdateAsync(TerminalRecord terminal, DateTimeOffset at, CancellationToken cancellationToken) => Locked(() => Save(terminal));
 
-    public Task SetEnrolmentCodeAsync(Guid id, byte[] codeHash, DateTimeOffset expiresAt, DateTimeOffset at, CancellationToken cancellationToken) =>
+    public Task SetEnrollmentCodeAsync(Guid id, byte[] codeHash, DateTimeOffset expiresAt, DateTimeOffset at, CancellationToken cancellationToken) =>
         Locked(() =>
         {
             _credentials[id] = _credentials.GetValueOrDefault(id) with { Code = codeHash, Expires = expiresAt };
             return 0;
         });
 
-    public Task<TerminalRecord?> EnrolAsync(byte[] codeHash, byte[] secretHash, DateTimeOffset now, CancellationToken cancellationToken) =>
+    public Task<TerminalRecord?> EnrollAsync(byte[] codeHash, byte[] secretHash, DateTimeOffset now, CancellationToken cancellationToken) =>
         Locked(() =>
         {
             var match = _credentials.FirstOrDefault(c => c.Value.Code is { } code && code.SequenceEqual(codeHash) && c.Value.Expires > now

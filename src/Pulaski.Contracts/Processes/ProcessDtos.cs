@@ -98,7 +98,7 @@ public sealed record ProcessOperationDto
     public double X { get; init; }
     public double Y { get; init; }
 
-    /// <summary>The lines or departments that perform it, each with its share of the quantity (totalling 100).</summary>
+    /// <summary>The lines or departments that perform it, each with its share of the quantity (totaling 100).</summary>
     public IReadOnlyList<OperationEquipmentDto> Equipment { get; init; } = [];
 }
 

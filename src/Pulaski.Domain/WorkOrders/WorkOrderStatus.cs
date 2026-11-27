@@ -12,20 +12,20 @@ public static class WorkOrderStatus
     public const string InProgress = "in_progress";
     public const string Completed = "completed";
     public const string Closed = "closed";
-    public const string Cancelled = "cancelled";
+    public const string Canceled = "cancelled";
 
     public static IReadOnlyList<string> All { get; } =
-        [Planned, Dispatched, Firmed, InProgress, Completed, Closed, Cancelled];
+        [Planned, Dispatched, Firmed, InProgress, Completed, Closed, Canceled];
 
     private static readonly Dictionary<string, string[]> Transitions = new(StringComparer.Ordinal)
     {
-        [Planned] = [Dispatched, Cancelled],
-        [Dispatched] = [Planned, Firmed, Cancelled],
-        [Firmed] = [InProgress, Cancelled],
+        [Planned] = [Dispatched, Canceled],
+        [Dispatched] = [Planned, Firmed, Canceled],
+        [Firmed] = [InProgress, Canceled],
         [InProgress] = [Completed],
         [Completed] = [InProgress, Closed],
         [Closed] = [],
-        [Cancelled] = [],
+        [Canceled] = [],
     };
 
     /// <summary>Statuses a work order may move to from <paramref name="current"/>.</summary>

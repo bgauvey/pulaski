@@ -16,7 +16,7 @@ SELECT ts.ensure_partitions(3);
 INSERT INTO core.uom (code, name, dimension, to_base_factor) VALUES
     ('kg', 'Kilogram', 'mass',   1),
     ('lb', 'Pound',    'mass',   0.45359237),
-    ('m',  'Metre',    'length', 1),
+    ('m',  'Meter',    'length', 1),
     ('ft', 'Foot',     'length', 0.3048),
     ('ea', 'Each',     'count',  1);
 
@@ -30,7 +30,7 @@ FROM (VALUES
     ('PVC-K67',     'PVC compound K67, white',      'raw',      'RESIN',   'kg'),
     ('TIO2-MB',     'TiO2 masterbatch',             'raw',      'RESIN',   'kg'),
     ('PRF-4410-WH', 'Window frame profile 4410, white', 'finished', 'PROFILE', 'm'),
-    ('PRF-4410-GY', 'Window frame profile 4410, grey',  'finished', 'PROFILE', 'm')
+    ('PRF-4410-GY', 'Window frame profile 4410, gray',  'finished', 'PROFILE', 'm')
 ) AS v(code, name, material_type, class_code, uom_code)
 JOIN core.material_class mc ON mc.code = v.class_code
 JOIN core.uom u ON u.code = v.uom_code;

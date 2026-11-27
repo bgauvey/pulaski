@@ -60,7 +60,7 @@ public static class BomExplosion
 
     /// <summary>
     /// The components one job needs on its own: a job added to an order after it was made, or the
-    /// replacement for a cancelled one (D-025). Each item consumed by the job's operation (the
+    /// replacement for a canceled one (D-025). Each item consumed by the job's operation (the
     /// first operation when the item names none) takes <paramref name="jobQty"/> ÷ base quantity ×
     /// quantity per × (1 + scrap factor).
     /// </summary>

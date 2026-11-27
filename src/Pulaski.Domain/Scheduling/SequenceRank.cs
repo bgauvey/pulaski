@@ -2,7 +2,7 @@ namespace Pulaski.Domain.Scheduling;
 
 /// <summary>
 /// Fractional ranks for <c>core.job.sequence_rank</c> (<c>numeric(20,10)</c>), so moving a job
-/// writes one row (D-014). A new rank sits halfway between its neighbours; when ten decimal places
+/// writes one row (D-014). A new rank sits halfway between its neighbors; when ten decimal places
 /// leave no room, the line is renumbered and the move is retried.
 /// </summary>
 public static class SequenceRank

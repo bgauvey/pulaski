@@ -80,8 +80,8 @@ internal sealed class TerminalRepository(DbSession session) : ITerminalRepositor
         UPDATE sec.terminal SET enrolment_code_hash = @Hash, enrolment_expires_at = @Expires, updated_at = @At WHERE id = @Id
         """;
 
-    // The code is used up as it enrols: a second try with it finds nothing.
-    private const string Enrol = $"""
+    // The code is used up as it enrolls: a second try with it finds nothing.
+    private const string Enroll = $"""
         UPDATE sec.terminal t
         SET secret_hash = @Secret, enrolled_at = @Now, enrolment_code_hash = NULL, enrolment_expires_at = NULL, updated_at = @Now
         WHERE t.enrolment_code_hash = @Code AND t.enrolment_expires_at > @Now AND t.is_active
@@ -119,11 +119,11 @@ internal sealed class TerminalRepository(DbSession session) : ITerminalRepositor
     public Task<long> UpdateAsync(TerminalRecord t, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteScalarAsync<long>(Update, Args(t, at), cancellationToken);
 
-    public Task SetEnrolmentCodeAsync(Guid id, byte[] codeHash, DateTimeOffset expiresAt, DateTimeOffset at, CancellationToken cancellationToken) =>
+    public Task SetEnrollmentCodeAsync(Guid id, byte[] codeHash, DateTimeOffset expiresAt, DateTimeOffset at, CancellationToken cancellationToken) =>
         session.ExecuteAsync(SetCode, new { Id = id, Hash = codeHash, Expires = expiresAt, At = at }, cancellationToken);
 
-    public async Task<TerminalRecord?> EnrolAsync(byte[] codeHash, byte[] secretHash, DateTimeOffset now, CancellationToken cancellationToken) =>
-        (await session.QuerySingleOrDefaultAsync<TerminalSql.Row>(Enrol, new { Code = codeHash, Secret = secretHash, Now = now }, cancellationToken))?.ToRecord();
+    public async Task<TerminalRecord?> EnrollAsync(byte[] codeHash, byte[] secretHash, DateTimeOffset now, CancellationToken cancellationToken) =>
+        (await session.QuerySingleOrDefaultAsync<TerminalSql.Row>(Enroll, new { Code = codeHash, Secret = secretHash, Now = now }, cancellationToken))?.ToRecord();
 
     public Task TouchAsync(Guid id, DateTimeOffset at, CancellationToken cancellationToken) => session.ExecuteAsync(Touch, new { Id = id, At = at }, cancellationToken);
 
@@ -150,7 +150,7 @@ internal sealed class TerminalQueries(NpgsqlDataSource dataSource) : ITerminalRe
     private const string List = """
         SELECT t.id, t.site_id, t.code, t.name, t.scope_equipment_id, s.code AS scope_code, t.default_equipment_id, d.code AS default_code,
                t.auth_mode, t.is_active, t.enrolled_at, t.language, t.region,
-               CASE WHEN t.enrolment_expires_at > now() THEN t.enrolment_expires_at END AS enrolment_expires_at,
+               CASE WHEN t.enrolment_expires_at > now() THEN t.enrolment_expires_at END AS enrollment_expires_at,
                t.last_seen_at, t.xmin::text::bigint AS version
         FROM sec.terminal t
         JOIN core.equipment s ON s.id = t.scope_equipment_id

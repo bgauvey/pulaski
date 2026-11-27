@@ -6,7 +6,7 @@ SET LOCAL client_min_messages = warning;
 ALTER TABLE core.job ADD COLUMN IF NOT EXISTS partial_batch_planned boolean NOT NULL DEFAULT false;
 
 INSERT INTO sec.permission (code, description) VALUES
-    ('schedule.plan_partial', 'Replace a cancelled job with exactly what is left, even when that isn''t whole batches')
+    ('schedule.plan_partial', 'Replace a canceled job with exactly what is left, even when that isn''t whole batches')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 INSERT INTO sec.role_permission (role_id, permission_code)

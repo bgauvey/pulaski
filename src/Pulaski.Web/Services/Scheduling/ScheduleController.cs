@@ -129,7 +129,7 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time, 
 
     public static readonly string ReadOnlyMessage = Term.Mark("You can view the schedule, but planning needs permission to plan jobs at this site.");
 
-    public static readonly string OrdersReadOnlyMessage = Term.Mark("You can view work orders, but dispatching, firming or cancelling them needs permission to manage work orders at this site.");
+    public static readonly string OrdersReadOnlyMessage = Term.Mark("You can view work orders, but dispatching, firming or canceling them needs permission to manage work orders at this site.");
 
     public void StartDrag(BoardItem item)
     {
@@ -313,9 +313,9 @@ public sealed class ScheduleController(PulaskiApiClient api, TimeProvider time, 
     public Task CancelJobAsync(BoardItem item, bool replace, string? reason, bool exact = false, bool roundDown = false) =>
         RunAsync(
             item.Key,
-            !replace ? l["{0} cancelled.", item.Segment.JobNumber]
-                : roundDown ? l["{0} cancelled and replaced for the whole batches left; the order may end short.", item.Segment.JobNumber]
-                : (exact ? l["{0} cancelled and replaced for exactly the rest of its quantity.", item.Segment.JobNumber] : l["{0} cancelled and replaced for the rest of its quantity.", item.Segment.JobNumber]),
+            !replace ? l["{0} canceled.", item.Segment.JobNumber]
+                : roundDown ? l["{0} canceled and replaced for the whole batches left; the order may end short.", item.Segment.JobNumber]
+                : (exact ? l["{0} canceled and replaced for exactly the rest of its quantity.", item.Segment.JobNumber] : l["{0} canceled and replaced for the rest of its quantity.", item.Segment.JobNumber]),
             async () => (await api.CancelJobAsync(item.JobId, new CancelJobRequest
             {
                 Version = item.Segment.Version ?? 0,

@@ -21,10 +21,10 @@ public sealed record CreateDeliveryFeedCommand(string Code, string Name, string 
 public sealed record ListDeliveryFeedsQuery : IQuery<IReadOnlyList<DeliveryFeedSummaryDto>>;
 
 /// <summary>
-/// Records a receiver's acknowledgement of one event (#73), from the signed callback. Rejected, the delivery fails and holds its subject's
+/// Records a receiver's acknowledgment of one event (#73), from the signed callback. Rejected, the delivery fails and holds its subject's
 /// later events until retried or skipped; accepted, a delivery that had failed is delivered after all.
 /// </summary>
-public sealed record AcknowledgeDeliveryCommand(string Feed, Guid EventId, string Status, string? Reference, string? Message) : ICommand<AcknowledgementResponse>;
+public sealed record AcknowledgeDeliveryCommand(string Feed, Guid EventId, string Status, string? Reference, string? Message) : ICommand<AcknowledgmentResponse>;
 
 internal sealed class GetDeliveryFeedSettingsHandler(IDeliveryTargets targets, IDeliveryFeedStore feeds) : IQueryHandler<GetDeliveryFeedSettingsQuery, DeliveryFeedSettingsDto>
 {
@@ -58,7 +58,7 @@ internal sealed class GetDeliveryFeedSettingsHandler(IDeliveryTargets targets, I
             PollSeconds = settings.PollSeconds,
             StartFromNow = settings.StartFromNow,
             SecretConfigured = configured.SecretConfigured,
-            AcknowledgementPath = $"/api/integrations/{configured.Feed}/acknowledgements",
+            AcknowledgmentPath = $"/api/integrations/{configured.Feed}/acknowledgements",
             Kinds = [.. DeliveryKinds.All.Select(k => new DeliveryKindDto(k.Code, k.Label, k.Prefixes))],
             Version = saved?.Version ?? 0,
             UpdatedAt = saved?.UpdatedAt,
@@ -117,35 +117,35 @@ internal sealed class SaveDeliveryFeedSettingsHandler(
 
 internal sealed class AcknowledgeDeliveryHandler(
     IUnitOfWork unitOfWork, IDeliveryTargets targets, IDeliveryFeedStore feeds, IDeliveryStore store, IEventLog eventLog, IEventFactory events, TimeProvider time)
-    : ICommandHandler<AcknowledgeDeliveryCommand, AcknowledgementResponse>
+    : ICommandHandler<AcknowledgeDeliveryCommand, AcknowledgmentResponse>
 {
-    public async Task<AcknowledgementResponse> HandleAsync(AcknowledgeDeliveryCommand command, CancellationToken cancellationToken)
+    public async Task<AcknowledgmentResponse> HandleAsync(AcknowledgeDeliveryCommand command, CancellationToken cancellationToken)
     {
         var status = command.Status?.Trim().ToLowerInvariant() ?? "";
         new Validator()
             .Require(command.EventId != Guid.Empty, nameof(command.EventId), "Required.")
-            .Require(AcknowledgementStatuses.All.Contains(status), nameof(command.Status), "accepted or rejected.")
+            .Require(AcknowledgmentStatuses.All.Contains(status), nameof(command.Status), "accepted or rejected.")
             .ThrowIfInvalid();
-        var acknowledgement = new Acknowledgement(status, Acknowledgement.Trim(command.Reference), Acknowledgement.Trim(command.Message));
+        var acknowledgment = new Acknowledgment(status, Acknowledgment.Trim(command.Reference), Acknowledgment.Trim(command.Message));
         var target = await DeliveryFeeds.ResolveAsync(targets, feeds, command.Feed, cancellationToken);
         await using var transaction = await unitOfWork.BeginAsync(cancellationToken);
         var delivery = await store.GetByEventForUpdateAsync(target.Sink, command.EventId, cancellationToken)
             ?? throw new NotFoundException($"The {target.Label} feed has no delivery of event {command.EventId}.");
 
         // A rejection stops the subject as a refused delivery does; an acceptance clears a failure. A skipped delivery only records it.
-        var (newStatus, error) = (acknowledgement.IsRejected, delivery.Status) switch
+        var (newStatus, error) = (acknowledgment.IsRejected, delivery.Status) switch
         {
-            (true, DeliveryStatuses.Delivered or DeliveryStatuses.Pending) => (DeliveryStatuses.Failed, acknowledgement.RejectionText),
+            (true, DeliveryStatuses.Delivered or DeliveryStatuses.Pending) => (DeliveryStatuses.Failed, acknowledgment.RejectionText),
             (false, DeliveryStatuses.Failed or DeliveryStatuses.Pending) => (DeliveryStatuses.Delivered, (string?)null),
             _ => ((string?)null, (string?)null),
         };
         var envelope = events.Create(
             EventTypes.DeliveryAcknowledged, "delivery", delivery.Id,
-            new { delivery.Sink, delivery.EventId, delivery.EventType, acknowledgement.Status, acknowledgement.Reference, acknowledgement.Message, Before = delivery.Status, After = newStatus ?? delivery.Status });
-        await store.AcknowledgeAsync(delivery.Id, acknowledgement, AcknowledgementSources.Callback, newStatus, error, time.GetUtcNow(), cancellationToken);
+            new { delivery.Sink, delivery.EventId, delivery.EventType, acknowledgment.Status, acknowledgment.Reference, acknowledgment.Message, Before = delivery.Status, After = newStatus ?? delivery.Status });
+        await store.AcknowledgeAsync(delivery.Id, acknowledgment, AcknowledgmentSources.Callback, newStatus, error, time.GetUtcNow(), cancellationToken);
         await eventLog.AppendAsync(envelope, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new AcknowledgementResponse(delivery.Id, newStatus ?? delivery.Status);
+        return new AcknowledgmentResponse(delivery.Id, newStatus ?? delivery.Status);
     }
 }
 

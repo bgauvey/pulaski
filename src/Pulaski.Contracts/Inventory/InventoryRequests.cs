@@ -298,7 +298,7 @@ public sealed record CancelExpectedReceiptRequest
 
 /// <summary>
 /// One expected receipt from the ERP (D-058), matched on its system and key: sending it again changes nothing, a change updates
-/// the open one, <see cref="Cancelled"/> cancels it. Material and unit by code, as the ERP knows them.
+/// the open one, <see cref="Canceled"/> cancels it. Material and unit by code, as the ERP knows them.
 /// </summary>
 public sealed record ImportExpectedReceiptRequest
 {
@@ -311,7 +311,8 @@ public sealed record ImportExpectedReceiptRequest
     public DateTimeOffset ExpectedAt { get; init; }
     public string? Reference { get; init; }
     public string? Supplier { get; init; }
-    public bool Cancelled { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("cancelled")] // the import's field, as integrations send it
+    public bool Canceled { get; init; }
 }
 
 public sealed record ImportExpectedReceiptResponse(Guid Id, long Version, bool Created, bool Changed);

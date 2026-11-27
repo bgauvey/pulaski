@@ -5,7 +5,7 @@ namespace Pulaski.Api.Integrations;
 
 /// <summary>
 /// A delivery feed's settings (D-061, #73, #74): the built-in <c>Integrations:Erp</c> and <c>Integrations:Documents</c>, or a feed added on the
-/// screen under <c>Integrations:Feeds:{code}</c>. Configuration keeps the secret (signing and acknowledgements) and a broker's username and
+/// screen under <c>Integrations:Feeds:{code}</c>. Configuration keeps the secret (signing and acknowledgments) and a broker's username and
 /// password, never stored in the database; everything else comes from the screen once saved (<see cref="Apply"/>).
 /// </summary>
 public sealed class WebhookFeedOptions
@@ -155,10 +155,10 @@ internal sealed class DeliveryTargets(IConfiguration configuration) : IDeliveryT
 }
 
 /// <summary>
-/// Checks a receiver's signed acknowledgement (#73): <c>X-Pulaski-Signature</c> must be <c>sha256=</c> and the hex HMAC-SHA256, with the feed's
+/// Checks a receiver's signed acknowledgment (#73): <c>X-Pulaski-Signature</c> must be <c>sha256=</c> and the hex HMAC-SHA256, with the feed's
 /// secret, of <c>X-Pulaski-Timestamp</c>, a full stop and the body, as Pulaski signs its own messages; the timestamp within five minutes.
 /// </summary>
-public static class AcknowledgementSignature
+public static class AcknowledgmentSignature
 {
     public static readonly TimeSpan MaxSkew = TimeSpan.FromMinutes(5);
 

@@ -43,7 +43,7 @@ public sealed record ConnectorSettings(string ConnectionCode, IReadOnlyDictionar
 /// </summary>
 public interface IConnector : IAsyncDisposable
 {
-    /// <summary>Connects and keeps the connection until <paramref name="cancellationToken"/> is cancelled.</summary>
+    /// <summary>Connects and keeps the connection until <paramref name="cancellationToken"/> is canceled.</summary>
     Task RunAsync(ISampleSink sink, CancellationToken cancellationToken);
 
     /// <summary>The addresses the host has bound, so a connector that subscribes per address knows which; may change while running.</summary>

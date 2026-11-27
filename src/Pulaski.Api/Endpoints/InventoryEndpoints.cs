@@ -113,7 +113,7 @@ internal static class InventoryEndpoints
             CancellationToken ct) =>
             TypedResults.Ok(await handler.HandleAsync(
                 new ImportExpectedReceiptCommand(request.SiteId, request.ExternalSystem, request.ExternalKey, request.MaterialCode, request.Quantity,
-                    request.UomCode, request.ExpectedAt, request.Reference, request.Supplier, request.Cancelled),
+                    request.UomCode, request.ExpectedAt, request.Reference, request.Supplier, request.Canceled),
                 ct)))
         .RequirePermission(Permissions.LotReceive, Site.FromBody<ImportExpectedReceiptRequest>(SiteOf.Equipment, r => r.SiteId));
 

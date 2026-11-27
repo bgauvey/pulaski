@@ -12,14 +12,14 @@ namespace Pulaski.Application.Tests.Boms;
 public class BomHandlerTests
 {
     private readonly HandlerFixture _f = new();
-    private readonly Guid _metre = Guid.CreateVersion7();
+    private readonly Guid _meter = Guid.CreateVersion7();
     private readonly Guid _kg = Guid.CreateVersion7();
     private readonly Guid _profile = Guid.CreateVersion7();
     private readonly Guid _blend = Guid.CreateVersion7();
 
     public BomHandlerTests()
     {
-        _f.Stores.Boms.AddMaterial(_profile, _metre);
+        _f.Stores.Boms.AddMaterial(_profile, _meter);
         _f.Stores.Boms.AddMaterial(_blend, _kg);
     }
 
@@ -36,7 +36,7 @@ public class BomHandlerTests
     {
         var created = await Create().HandleAsync(new CreateBomCommand(_profile, null), CancellationToken.None);
         var draft = await DraftAsync(created.Id);
-        Assert.Equal((1, BomVersionStatus.Draft, 1m, _metre), (draft.Value.Number, draft.Value.Status, draft.Value.Definition.BaseQty, draft.Value.Definition.BaseUomId));
+        Assert.Equal((1, BomVersionStatus.Draft, 1m, _meter), (draft.Value.Number, draft.Value.Status, draft.Value.Definition.BaseQty, draft.Value.Definition.BaseUomId));
 
         var saved = await Save().HandleAsync(
             new SaveBomDraftCommand(created.Id, draft.Value.Id, draft.Version, Definition(Line(10, _blend, 1450m))), CancellationToken.None);
@@ -141,7 +141,7 @@ public class BomHandlerTests
         return _f.Stores.Boms.FindVersion(bom.Versions.Single(v => v.Status == BomVersionStatus.Draft).Id)!;
     }
 
-    private BomDefinitionDto Definition(params BomItemDto[] items) => new() { BaseQty = 1000m, BaseUomId = _metre, Items = items };
+    private BomDefinitionDto Definition(params BomItemDto[] items) => new() { BaseQty = 1000m, BaseUomId = _meter, Items = items };
 
     private BomItemDto Line(int line, Guid component, decimal qty, int? op = null) => new()
     {

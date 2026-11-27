@@ -24,9 +24,9 @@ public class DeclarationReversalTests
     }
 
     [Fact]
-    public void Stock_taken_back_must_still_be_there_and_a_lot_that_only_held_it_is_cancelled()
+    public void Stock_taken_back_must_still_be_there_and_a_lot_that_only_held_it_is_canceled()
     {
-        Assert.Equal(LotStatus.Cancelled, L(50m).TakeBack(50m, cancelWhenEmpty: true, "m").Lot.Status);
+        Assert.Equal(LotStatus.Canceled, L(50m).TakeBack(50m, cancelWhenEmpty: true, "m").Lot.Status);
         Assert.Equal(LotStatus.Consumed, L(50m).TakeBack(50m, cancelWhenEmpty: false, "m").Lot.Status);
         Assert.Equal(LotStatus.Available, L(50m, bulk: true).TakeBack(50m, cancelWhenEmpty: true, "m").Lot.Status);
         Assert.Equal(20m, L(50m).TakeBack(30m, true, "m").Lot.Quantity);

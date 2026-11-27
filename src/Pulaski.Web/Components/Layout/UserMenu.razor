@@ -3,7 +3,7 @@
 @inject IJSRuntime JS
 @inject PulaskiApiClient Api
 
-@* The header's user menu: who is signed in, then Preferences (a dialog with language and region, colour theme and touch layout), My alerts,
+@* The header's user menu: who is signed in, then Preferences (a dialog with language and region, color theme and touch layout), My alerts,
    changing the password and signing out. The menu is a native popover (closes on Escape or a click outside); theme and touch layout are kept
    per device in the browser (js/theme.js), language and region on the user. *@
 @if (Me is { } me)
@@ -67,7 +67,7 @@
         </div>
 
         <section class="prefs-section" aria-labelledby="prefs-theme">
-            <h3 class="prefs-title" id="prefs-theme">@L["Colour theme"]</h3>
+            <h3 class="prefs-title" id="prefs-theme">@L["Color theme"]</h3>
             <p class="prefs-help">@L["Kept on this device."]</p>
             <div class="prefs-choices" role="radiogroup" aria-labelledby="prefs-theme">
                 @Choice("pulaski-theme", "system", L["Like the device"])

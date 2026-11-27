@@ -287,7 +287,7 @@ what ran); sum `worked_hours` by `equipment_id` and day for line totals.
 
 ### report.spc_alert
 
-**Grain:** one SPC alert: a control chart that signalled, open until closed. `alert_id`, `site_id`, `characteristic_id`, `material_id`,
+**Grain:** one SPC alert: a control chart that signaled, open until closed. `alert_id`, `site_id`, `characteristic_id`, `material_id`,
 `equipment_id`, `status` (`open`, `closed`), `rules` (the Nelson rules broken), `breaks` (how many results broke them), `raised_at`,
 `closed_at`, `closed_by`, `cause_reason_id`, `action`, `open_hours`.
 

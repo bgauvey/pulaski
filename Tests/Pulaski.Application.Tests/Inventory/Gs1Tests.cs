@@ -57,7 +57,7 @@ public class Gs1Tests
         const string Pattern = @"(?<material>[A-Z0-9-]+)\|(?<lot>[A-Z0-9]+)\|(?<qty>\d+(\.\d+)?)\|(?<expiry>\d{6})";
 
         Assert.Empty(SupplierBarcodes.Problems(Pattern, "yyMMdd"));
-        Assert.Contains(SupplierBarcodes.Problems(@"(?<colour>\w+)", null), p => p.Text.Contains("isn't a part", StringComparison.Ordinal));
+        Assert.Contains(SupplierBarcodes.Problems(@"(?<color>\w+)", null), p => p.Text.Contains("isn't a part", StringComparison.Ordinal));
         Assert.Contains(SupplierBarcodes.Problems(@"(?<qty>\d+)", null), p => p.Text.Contains("finds a lot or a material", StringComparison.Ordinal));
         Assert.Contains(SupplierBarcodes.Problems("(unclosed", null), p => p.Text.Contains("regular expression", StringComparison.Ordinal));
 

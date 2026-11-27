@@ -2,7 +2,7 @@ using Pulaski.Domain.Quality;
 
 namespace Pulaski.Application.Tests.Domain;
 
-/// <summary>A certificate line summarises a lot's results for a spec item and never hides a failure (#137).</summary>
+/// <summary>A certificate line summarizes a lot's results for a spec item and never hides a failure (#137).</summary>
 public class CertificateTests
 {
     [Fact]

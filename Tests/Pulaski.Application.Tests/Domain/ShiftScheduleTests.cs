@@ -117,7 +117,7 @@ public class ShiftScheduleTests
     }
 
     [Fact]
-    public void An_override_that_overlaps_a_neighbouring_shift_or_repeats_is_a_problem()
+    public void An_override_that_overlaps_a_neighboring_shift_or_repeats_is_a_problem()
     {
         var late = new ShiftOverride(new DateOnly(2026, 10, 19), "A", IsWorking: true, new TimeOnly(9, 0), TimeSpan.FromHours(8), "Days");
         var clash = Assert.Single((TwoShifts with { Overrides = [late] }).Problems());

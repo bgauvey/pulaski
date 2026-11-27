@@ -256,7 +256,7 @@ public sealed class SchedulingTests(DatabaseFixture db)
     }
 
     [Fact]
-    public async Task Work_order_is_planned_dispatched_firmed_and_a_started_job_cancelled_and_replaced()
+    public async Task Work_order_is_planned_dispatched_firmed_and_a_started_job_canceled_and_replaced()
     {
         var (site, line) = await CreateLineAsync();
         var (white, _) = await CreateMaterialsAsync();
@@ -290,7 +290,7 @@ public sealed class SchedulingTests(DatabaseFixture db)
         Assert.All(jobs, j => Assert.Equal(JobStatus.Firmed, j.Status));
         Assert.Equal(dispatched.Jobs.Single(j => j.JobId == first).PlannedStart, jobs[0].Start);
 
-        // The first job starts, makes 400 of 1000, and is cancelled and replaced.
+        // The first job starts, makes 400 of 1000, and is canceled and replaced.
         await db.ExecuteAsync(
             $"""
             UPDATE core.work_order SET status = 'in_progress' WHERE id = '{wo}';
@@ -298,15 +298,15 @@ public sealed class SchedulingTests(DatabaseFixture db)
             INSERT INTO core.job_run (job_id, equipment_id, run_no, started_at, good_qty, uom_id)
             VALUES ('{first}', '{line}', 1, now() - interval '1 hour', 400, '{db.UomId}');
             """);
-        var cancelled = await db.SendAsync(new CancelJobCommand(first, await JobVersionAsync(line, first), "Die damage", true));
+        var canceled = await db.SendAsync(new CancelJobCommand(first, await JobVersionAsync(line, first), "Die damage", true));
 
-        var replacement = cancelled.ReplacementJobId!.Value;
+        var replacement = canceled.ReplacementJobId!.Value;
         await using var connection = await db.AdminDataSource.OpenConnectionAsync();
         var row = await connection.QuerySingleAsync<(string Status, decimal Qty, Guid? Replaces, DateTimeOffset? FirmedAt)>(
             "SELECT status, planned_qty, replaces_job_id, firmed_at FROM core.job WHERE id = @replacement", new { replacement });
         Assert.Equal((JobStatus.Firmed, 600m, (Guid?)first), (row.Status, row.Qty, row.Replaces));
         Assert.NotNull(row.FirmedAt);
-        Assert.Equal(JobStatus.Cancelled, await connection.ExecuteScalarAsync<string>("SELECT status FROM core.job WHERE id = @first", new { first }));
+        Assert.Equal(JobStatus.Canceled, await connection.ExecuteScalarAsync<string>("SELECT status FROM core.job WHERE id = @first", new { first }));
         Assert.Equal(0, await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM core.job_run WHERE job_id = @first AND ended_at IS NULL", new { first }));
         Assert.Equal([replacement, second], (await QueryAsync(line)).Segments.Select(s => s.JobId));
 
@@ -317,7 +317,7 @@ public sealed class SchedulingTests(DatabaseFixture db)
                 new { wo, created = EventTypes.WorkOrderCreated }));
         Assert.Equal(
             [(null, JobStatus.Planned), (JobStatus.Planned, JobStatus.Dispatched), (JobStatus.Dispatched, JobStatus.Planned),
-             (JobStatus.Planned, JobStatus.Dispatched), (JobStatus.Dispatched, JobStatus.Firmed), (JobStatus.Running, JobStatus.Cancelled)],
+             (JobStatus.Planned, JobStatus.Dispatched), (JobStatus.Dispatched, JobStatus.Firmed), (JobStatus.Running, JobStatus.Canceled)],
             await connection.QueryAsync<(string?, string)>(
                 "SELECT from_status, to_status FROM ts.job_status_change WHERE job_id = @first ORDER BY occurred_at, id", new { first }));
     }

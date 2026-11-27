@@ -23,8 +23,9 @@ public sealed record ErpWorkOrderRequest
     public string? ProcessCode { get; init; }
     public string? Notes { get; init; }
 
-    /// <summary>The ERP cancelled the order.</summary>
-    public bool Cancelled { get; init; }
+    /// <summary>The ERP canceled the order.</summary>
+    [System.Text.Json.Serialization.JsonPropertyName("cancelled")] // the import's field, as integrations send it
+    public bool Canceled { get; init; }
 }
 
 public sealed record ImportWorkOrdersRequest
@@ -32,7 +33,7 @@ public sealed record ImportWorkOrdersRequest
     public IReadOnlyList<ErpWorkOrderRequest> Orders { get; init; } = [];
 }
 
-/// <summary>What became of one order: <c>created</c>, <c>updated</c>, <c>unchanged</c>, <c>pending</c> (waits for a planner), <c>cancelled</c> or <c>refused</c>.</summary>
+/// <summary>What became of one order: <c>created</c>, <c>updated</c>, <c>unchanged</c>, <c>pending</c> (waits for a planner), <c>canceled</c> or <c>refused</c>.</summary>
 public sealed record ErpOrderResultDto
 {
     public required string ExternalKey { get; init; }
@@ -62,7 +63,8 @@ public sealed record ErpPendingChangeDto
     public DateTimeOffset? DueAt { get; init; }
     public int Priority { get; init; }
     public string? Version { get; init; }
-    public bool Cancelled { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("cancelled")] // the import's field, as integrations send it
+    public bool Canceled { get; init; }
     public DateTimeOffset ReceivedAt { get; init; }
 }
 

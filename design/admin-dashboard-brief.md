@@ -98,18 +98,18 @@ compact (compact fits ~25 lines at 1080p).
 | Waiting (external) | `--state-waiting` | amber |
 | Held (internal) | `--state-held` | violet |
 | Stopped / faulted | `--state-stopped` | red |
-| Ready / transitioning | `--state-ready` | blue-grey |
-| No signal | `--state-nosignal` | grey with diagonal hatch |
+| Ready / transitioning | `--state-ready` | blue-gray |
+| No signal | `--state-nosignal` | gray with diagonal hatch |
 | Not scheduled | `--state-unscheduled` | very light neutral |
 
 All pairs must pass WCAG AA against their background in both themes, and each state also
 carries an icon and text label.
 
-## Behaviour
+## Behavior
 
 - Live updates pushed from the server (SignalR / server-sent events), not polling. Numbers
   that change briefly highlight, then settle; no constant animation.
-- If the feed is more than 60 s stale, show a banner and grey the live indicator; never show
+- If the feed is more than 60 s stale, show a banner and gray the live indicator; never show
   stale numbers as if current.
 - Loading: skeleton rows matching final layout. Empty scope: friendly message and a link to
   equipment setup.

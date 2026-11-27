@@ -40,7 +40,7 @@
 
 @if (_raising && Sites.SiteId is { } siteId)
 {
-    <RaiseNcrForm SiteId="siteId" Cancelled="() => _raising = false" />
+    <RaiseNcrForm SiteId="siteId" Canceled="() => _raising = false" />
 }
 
 @if (Sites.SiteId is null)

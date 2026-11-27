@@ -62,8 +62,8 @@ public class MaterialConnectionTests
     public void A_map_names_only_import_fields_as_property_names_and_always_maps_code_and_key()
     {
         Assert.Empty(ODataMaterialRows.Problems(Map));
-        var problems = ODataMaterialRows.Problems(new Dictionary<string, string> { ["colour"] = "Colour", ["name"] = "Name; drop" });
-        Assert.Contains(problems, p => p.Text.Contains("'colour' isn't an import field", StringComparison.Ordinal));
+        var problems = ODataMaterialRows.Problems(new Dictionary<string, string> { ["color"] = "Color", ["name"] = "Name; drop" });
+        Assert.Contains(problems, p => p.Text.Contains("'color' isn't an import field", StringComparison.Ordinal));
         Assert.Contains(problems, p => p.Text.Contains("isn't a property name", StringComparison.Ordinal));
         Assert.Contains(problems, p => p.Text.Contains("Map code", StringComparison.Ordinal));
         Assert.Contains(problems, p => p.Text.Contains("Map external_key", StringComparison.Ordinal));

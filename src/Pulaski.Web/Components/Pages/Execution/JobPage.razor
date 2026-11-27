@@ -225,7 +225,7 @@
                                 <tr @key="@($"{r.Id}-ncr")">
                                     <td colspan="6">
                                         <Pulaski.Web.Components.Pages.Quality.RaiseNcrForm SiteId="job.SiteId" SourceKind="checklist" SourceId="r.Id"
-                                                      Title="@L["{0} of job {1} not passed", Services.Instructions.ChecklistView.Title(L, r.Phase), job.JobNumber]" Cancelled="() => _ncrFrom = null" />
+                                                      Title="@L["{0} of job {1} not passed", Services.Instructions.ChecklistView.Title(L, r.Phase), job.JobNumber]" Canceled="() => _ncrFrom = null" />
                                     </td>
                                 </tr>
                             }
@@ -390,7 +390,7 @@
                                 <tr @key="@($"{r.Id}-ncr")">
                                     <td colspan="10">
                                         <Pulaski.Web.Components.Pages.Quality.RaiseNcrForm SiteId="job.SiteId" SourceKind="run" SourceId="r.Id"
-                                                      Title="@L["Job {0}, run {1} on {2}", job.JobNumber, r.RunNo, r.LineCode]" Cancelled="() => _ncrFrom = null" />
+                                                      Title="@L["Job {0}, run {1} on {2}", job.JobNumber, r.RunNo, r.LineCode]" Canceled="() => _ncrFrom = null" />
                                     </td>
                                 </tr>
                             }

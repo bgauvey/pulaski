@@ -61,7 +61,7 @@ ALTER TABLE core.labor_break DROP CONSTRAINT IF EXISTS labor_break_source_check;
 ALTER TABLE core.labor_break ADD CONSTRAINT labor_break_source_check CHECK (source IN ('self','supervisor','terminal','correction'));
 
 INSERT INTO sec.permission (code, description) VALUES
-    ('terminals.manage', 'Register and enrol shop-floor terminals')
+    ('terminals.manage', 'Register and enroll shop-floor terminals')
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 
 INSERT INTO sec.role_permission (role_id, permission_code)

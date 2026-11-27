@@ -70,7 +70,7 @@ compounding, high-rate packaging). Pulaski is a working codename. Pre-alpha; API
 - A job may be planned to a group (schedulable, not `can_run_job`, e.g. a department) in a window; the floor
   assigns it to a line below that can run it (D-022). Pulaski checks the window and never picks the line.
 - Process routes (D-023): versioned templates of numbered operations, each on lines or departments with
-  shares totalling 100%, linked after start / after end. Drafts are one `jsonb` document; release writes
+  shares totaling 100%, linked after start / after end. Drafts are one `jsonb` document; release writes
   fixed rows for jobs to reference.
 - Work orders are made from a released process (D-024, proposed): each operation's equipment gets a planned job
   for its share, at the end of its line, held until the order's start. The order keeps the version and a note.

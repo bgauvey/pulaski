@@ -77,14 +77,14 @@ public class DeliveryTests
     [Fact]
     public void An_answer_body_acknowledges_only_with_a_known_status_and_kinds_map_to_type_prefixes()
     {
-        Assert.Equal(new Acknowledgement("rejected", "ERP-1", "Unknown item"),
-            Acknowledgement.FromResponse("""{"status":"Rejected","reference":"ERP-1","message":" Unknown item "}"""));
-        Assert.Equal(new Acknowledgement("accepted", null, null), Acknowledgement.FromResponse("""{"status":"accepted"}"""));
-        Assert.Null(Acknowledgement.FromResponse("""{"status":"maybe"}"""));
-        Assert.Null(Acknowledgement.FromResponse("OK"));
-        Assert.Null(Acknowledgement.FromResponse("""{"status":"""));
-        Assert.Null(Acknowledgement.FromResponse(null));
-        Assert.Equal("Rejected by the receiver.", new Acknowledgement("rejected", null, null).RejectionText);
+        Assert.Equal(new Acknowledgment("rejected", "ERP-1", "Unknown item"),
+            Acknowledgment.FromResponse("""{"status":"Rejected","reference":"ERP-1","message":" Unknown item "}"""));
+        Assert.Equal(new Acknowledgment("accepted", null, null), Acknowledgment.FromResponse("""{"status":"accepted"}"""));
+        Assert.Null(Acknowledgment.FromResponse("""{"status":"maybe"}"""));
+        Assert.Null(Acknowledgment.FromResponse("OK"));
+        Assert.Null(Acknowledgment.FromResponse("""{"status":"""));
+        Assert.Null(Acknowledgment.FromResponse(null));
+        Assert.Equal("Rejected by the receiver.", new Acknowledgment("rejected", null, null).RejectionText);
 
         Assert.Equal(["pulaski.work_order.", "pulaski.job.", "pulaski.job.production_", "pulaski.partial_batch."],
             DeliveryKinds.PrefixesOf([DeliveryKinds.Production, DeliveryKinds.Orders]));

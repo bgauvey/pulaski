@@ -1,5 +1,5 @@
 /* Process editor (D-023): palette, canvas of operation boxes and links, properties, grid.
-   Colours come from css/tokens.css; departments are marked with the accent, lines stay neutral. */
+   Colors come from css/tokens.css; departments are marked with the accent, lines stay neutral. */
 
 .process-new {
     display: flex;

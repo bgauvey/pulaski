@@ -18,9 +18,9 @@ public static class WorkOrderView
     /// <summary>What the pending change would change, field by field: "Quantity 1,100 → 1,200 m; due 12 Nov → 14 Nov".</summary>
     public static string PendingSummary(WorkOrderDto order, ErpPendingChangeDto change, string? timeZone)
     {
-        if (change.Cancelled)
+        if (change.Canceled)
         {
-            return "Cancelled in the ERP. Accepting cancels the order and its jobs, if none has started.";
+            return "Canceled in the ERP. Accepting cancels the order and its jobs, if none has started.";
         }
 
         var parts = new List<string>();

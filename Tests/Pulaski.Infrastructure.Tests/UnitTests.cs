@@ -33,7 +33,7 @@ public sealed class UnitTests(DatabaseFixture db)
         Assert.NotNull(pound.BaseCode);
         Assert.Null(Assert.Single(units, u => u.Id == box.Id).ToBaseFactor);
 
-        // The fixture's material is in metres: 1 m weighs 1.6 kg, and 250 m fill a box.
+        // The fixture's material is in meters: 1 m weighs 1.6 kg, and 250 m fill a box.
         await db.SendAsync(new SetMaterialConversionCommand(db.MaterialId, db.UomId, kg.Id, 1.6m));
         await db.SendAsync(new SetMaterialConversionCommand(db.MaterialId, box.Id, db.UomId, 250m));
         await Assert.ThrowsAsync<DomainRuleException>(() => db.SendAsync(new SetMaterialConversionCommand(db.MaterialId, box.Id, lb.Id, 900m)));

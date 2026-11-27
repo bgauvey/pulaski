@@ -57,21 +57,21 @@ public class TerminalHandlerTests
         var terminal = await TerminalAsync();
         Assert.Equal(("T1", _site.Id, "terminal:T1"), (terminal.Code, terminal.SiteId, terminal.ActorId));
 
-        var issue = new IssueEnrolmentCodeHandler(_f.Stores.UnitOfWork, Terminals, _f.Stores.Events, _f.Events, _f.Time);
-        var code = await issue.HandleAsync(new IssueEnrolmentCodeCommand(terminal.Id), CancellationToken.None);
+        var issue = new IssueEnrollmentCodeHandler(_f.Stores.UnitOfWork, Terminals, _f.Stores.Events, _f.Events, _f.Time);
+        var code = await issue.HandleAsync(new IssueEnrollmentCodeCommand(terminal.Id), CancellationToken.None);
         Assert.Matches("^[A-Z2-9]{5}-[A-Z2-9]{5}$", code.Code);
         Assert.Equal(HandlerFixture.Now.AddMinutes(15), code.ExpiresAt);
 
-        var enrol = new EnrolTerminalHandler(_f.Stores.UnitOfWork, Terminals, _f.Stores.Events, _f.Events, _f.Time);
-        var enrolled = await enrol.HandleAsync(new EnrolTerminalCommand(" " + code.Code.ToLowerInvariant().Replace("-", " ", StringComparison.Ordinal)), CancellationToken.None);
+        var enroll = new EnrollTerminalHandler(_f.Stores.UnitOfWork, Terminals, _f.Stores.Events, _f.Events, _f.Time);
+        var enrolled = await enroll.HandleAsync(new EnrollTerminalCommand(" " + code.Code.ToLowerInvariant().Replace("-", " ", StringComparison.Ordinal)), CancellationToken.None);
         Assert.Equal(terminal.Id, enrolled.TerminalId);
         Assert.Equal(terminal.Id, (await Terminals.FindBySecretAsync(TerminalRules.Sha256(enrolled.Secret), CancellationToken.None))!.Id);
 
         // Used up; and a fresh code that runs out before it is typed doesn't work either.
-        await Assert.ThrowsAsync<DomainRuleException>(() => enrol.HandleAsync(new EnrolTerminalCommand(code.Code), CancellationToken.None));
-        var late = await issue.HandleAsync(new IssueEnrolmentCodeCommand(terminal.Id), CancellationToken.None);
+        await Assert.ThrowsAsync<DomainRuleException>(() => enroll.HandleAsync(new EnrollTerminalCommand(code.Code), CancellationToken.None));
+        var late = await issue.HandleAsync(new IssueEnrollmentCodeCommand(terminal.Id), CancellationToken.None);
         _f.Time.Advance(TimeSpan.FromMinutes(16));
-        await Assert.ThrowsAsync<DomainRuleException>(() => enrol.HandleAsync(new EnrolTerminalCommand(late.Code), CancellationToken.None));
+        await Assert.ThrowsAsync<DomainRuleException>(() => enroll.HandleAsync(new EnrollTerminalCommand(late.Code), CancellationToken.None));
 
         // Switched off, its secret stops working.
         var update = new UpdateTerminalHandler(_f.Stores.UnitOfWork, Terminals, _f.Stores.Equipment, _f.Stores.Events, _f.Events);
@@ -119,7 +119,7 @@ public class TerminalHandlerTests
         await Assert.ThrowsAsync<ConflictException>(() => BadgeAsync(bob, "aaaa2"));
         await Assert.ThrowsAsync<ValidationException>(() => BadgeAsync(bob, "BBBB1", "12"));
 
-        // A badge of another site's person isn't recognised here.
+        // A badge of another site's person isn't recognized here.
         var elsewhere = Guid.CreateVersion7();
         Labor.AddSite(elsewhere);
         await BadgeAsync(Labor.AddPerson(elsewhere, "Cy"), "CCCC1");

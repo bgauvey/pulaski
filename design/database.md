@@ -974,7 +974,7 @@ The top level, usually from the ERP. A work order may also stand alone.
 | `origin` | text | no | `local` or `erp`. |
 | `external_system`, `external_key`, `external_version` | text | yes | The ERP record (D-066): system and key are unique together (`wo_external_uq`), so an import finds its order; the version is the one last applied. |
 | `erp_change_pending` | boolean | no | The ERP changed the order after dispatch and a planner must accept or reject it; true exactly when `erp_pending_change` is set (`wo_erp_pending_ck`). |
-| `erp_pending_change` | jsonb | yes | The change waiting (D-066): `Quantity`, `UomId`, `PlannedStart`, `DueAt`, `Priority`, `Version`, `Cancelled`, `ReceivedAt`. |
+| `erp_pending_change` | jsonb | yes | The change waiting (D-066): `Quantity`, `UomId`, `PlannedStart`, `DueAt`, `Priority`, `Version`, `Canceled`, `ReceivedAt`. |
 | `erp_qty`, `erp_uom_id` | qty, uuid → uom | yes | What the ERP sent, when the plan differs from it (rounded or held). |
 | `batch_adjustment` | text | yes | How the ERP's quantity was made whole batches: `rounded_up`, `rounded_down` or `held`. |
 | `quantity_held` | boolean | no | Not whole batches: it can't be dispatched until a planner sets a whole-batch quantity. |
@@ -1008,15 +1008,15 @@ A job is what the planner places and sequences on a line and what operators exec
 | `status` | text | no | `planned`, `dispatched`, `firmed` (these follow the work order), then `running`, `paused`, `completed`, `closed`, or `cancelled`. |
 | `dispatched_at` | timestamptz | yes | When its order was dispatched. |
 | `firmed_at` | timestamptz | yes | When its order was firmed; from then on `planned_start` is frozen. |
-| `replaces_job_id` | uuid → job | yes | On a replacement, the cancelled job whose remaining quantity it took. |
+| `replaces_job_id` | uuid → job | yes | On a replacement, the canceled job whose remaining quantity it took. |
 | `partial_batch_planned` | boolean | no | Planned with a partial last batch (D-067): a replacement for exactly what was left. Its quantity needn't be whole batches on its line, and its partial batch is reported without a stop reason. |
 | `completed_at` | timestamptz | yes | When it was last completed (D-035); cleared on reopening. Downstream *after end* links count their lag from it. |
-| `process_operation_id` | uuid → process_operation | yes | The process operation the job belongs to, when its order came from a process (D-024). Set when the order makes the job; a job added later takes the operation that runs on its line (or the first), and a replacement keeps the cancelled job's (D-025). Order quantities are counted per operation, and the links will drive the projection later. |
+| `process_operation_id` | uuid → process_operation | yes | The process operation the job belongs to, when its order came from a process (D-024). Set when the order makes the job; a job added later takes the operation that runs on its line (or the first), and a replacement keeps the canceled job's (D-025). Order quantities are counted per operation, and the links will drive the projection later. |
 | `created_at`, `updated_at` | timestamptz | no | See conventions. |
 
 ### core.job_material — planned material for a job · *In use*
 
-Planned when the work order is made (D-025): one `consume` row per BOM item and job of the operation that consumes it, its share of the item's total in proportion to the job's quantity. A job added to the order later, or a replacement for a cancelled one, gets rows for its own quantity from the order's BOM version. Never changed afterwards; consumption is recorded against it later.
+Planned when the work order is made (D-025): one `consume` row per BOM item and job of the operation that consumes it, its share of the item's total in proportion to the job's quantity. A job added to the order later, or a replacement for a canceled one, gets rows for its own quantity from the order's BOM version. Never changed afterwards; consumption is recorded against it later.
 
 | Column | Type | Null | Description |
 | --- | --- | --- | --- |
@@ -1040,7 +1040,7 @@ A job may run several times (interruptions, shifts, resumes). Counts, downtime a
 | `equipment_id` | uuid → equipment | no | Where it ran. One run at a time per equipment (`job_run_no_overlap`). |
 | `run_no` | integer | no | 1, 2, 3… per job. |
 | `started_at` | timestamptz | no | Start. |
-| `ended_at` | timestamptz | yes | End; null while running. Cancelling a job ends its open run. |
+| `ended_at` | timestamptz | yes | End; null while running. Canceling a job ends its open run. |
 | `status` | text | no | `running` or `ended`. `paused` is allowed but unused: a pause ends the run, and resuming opens the next. |
 | `end_reason_code_id` | uuid → reason_code | yes | Why it ended: a reason of kind `run_end`, given when pausing. |
 | `good_qty`, `scrap_qty` | qty | no | Running totals of the reports into it, kept with `ts.production_count`, late reports included. The projection uses good quantity to size what is left; the rate check caps good plus scrap at the run's length × the ideal rate × the site's tolerance. |
@@ -1338,7 +1338,7 @@ A stored file, a reference, or both (`lot_document_source_ck`). Never deleted: w
 | `issuer` | text | yes | The supplier or lab. |
 | `issued_on` | date | yes | |
 | `url` | text | yes | An http(s) address where it is kept. |
-| `file_name`, `content_type`, `size_bytes`, `sha256` | text, text, integer, bytea | yes | A stored file: its name, type (`application/pdf`, `image/png` or `image/jpeg`, recognised from its contents), size and SHA-256; all set or none (`lot_document_file_ck`). |
+| `file_name`, `content_type`, `size_bytes`, `sha256` | text, text, integer, bytea | yes | A stored file: its name, type (`application/pdf`, `image/png` or `image/jpeg`, recognized from its contents), size and SHA-256; all set or none (`lot_document_file_ck`). |
 | `status` | text | no | `current` or `withdrawn`. |
 | `withdrawn_at`, `withdrawn_by`, `withdraw_reason` | timestamptz, text, text | yes | Set exactly when withdrawn (`lot_document_withdrawn_ck`). |
 | `created_at`, `created_by` | timestamptz, text | no | When and by whom it was attached. |
@@ -2352,7 +2352,7 @@ The queue and record of what was sent where. A row is added for each matching ev
 | `delivered_at` | timestamptz | yes | When the receiver accepted it. |
 | `resolved_by` | text | yes | Who last retried or skipped it. |
 | `resolve_note` | text | yes | The reason given for a skip. |
-| `ack_status` | text | yes | The receiver's acknowledgement (#73, D-087): `accepted` or `rejected`. A rejection fails the delivery (`last_error` says why); an acceptance delivers a failed one. |
+| `ack_status` | text | yes | The receiver's acknowledgment (#73, D-087): `accepted` or `rejected`. A rejection fails the delivery (`last_error` says why); an acceptance delivers a failed one. |
 | `ack_reference`, `ack_message` | text | yes | The receiver's own reference for what it booked, and its message; up to 500 characters each. |
 | `ack_source` | text | yes | `response` (in the webhook's 2xx answer body) or `callback` (posted back later, signed). |
 | `ack_at` | timestamptz | yes | When it came. `ack_status`, `ack_source` and `ack_at` are set together (`delivery_ack_ck`). |

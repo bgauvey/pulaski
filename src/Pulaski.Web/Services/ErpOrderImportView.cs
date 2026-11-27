@@ -56,7 +56,7 @@ public static class ErpOrderImportView
         ("pending", false) => l["{0} waiting for a planner", n],
         ("created", false) => l["{0} created", n],
         ("updated", false) => l["{0} updated", n],
-        ("cancelled", false) => l["{0} cancelled", n],
+        ("cancelled", false) => l["{0} canceled", n],
         ("refused", false) => l["{0} refused", n],
         _ => l["{0} unchanged", n],
     };

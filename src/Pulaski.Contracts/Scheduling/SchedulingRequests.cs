@@ -58,7 +58,7 @@ public sealed record AssignJobRequest
 
 /// <summary>
 /// Cancels a job. With <see cref="Replace"/>, a new job for the quantity it did not make takes
-/// its slot (D-019); a job that has started can only be cancelled this way or outright.
+/// its slot (D-019); a job that has started can only be canceled this way or outright.
 /// </summary>
 public sealed record CancelJobRequest
 {

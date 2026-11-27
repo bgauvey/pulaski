@@ -1,4 +1,4 @@
--- A user's own view settings (#131, D-131): the filters each list page opens with, favourite pages and a home page, kept on the server so
+-- A user's own view settings (#131, D-131): the filters each list page opens with, favorite pages and a home page, kept on the server so
 -- they follow the user to any device and survive signing out. Personal view state, not plant records: no events (as language and region).
 
 CREATE TABLE IF NOT EXISTS sec.user_setting (

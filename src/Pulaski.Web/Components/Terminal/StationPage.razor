@@ -29,10 +29,10 @@
 {
     <div class="station-panel">
         <h1 class="h3">@(_enrolled ? L["The station can't be shown"] : L["This station isn't enrolled"])</h1>
-        <p>@(_error ?? L["Enrol it as a terminal, then open this page again."])</p>
+        <p>@(_error ?? L["Enroll it as a terminal, then open this page again."])</p>
         @if (!_enrolled)
         {
-            <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrolPath">@L["Enrol it"]</a>
+            <a class="btn btn-primary btn-lg" href="@TerminalCookie.EnrollPath">@L["Enroll it"]</a>
         }
     </div>
 }

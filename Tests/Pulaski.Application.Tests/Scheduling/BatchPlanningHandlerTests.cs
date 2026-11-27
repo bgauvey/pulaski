@@ -10,7 +10,7 @@ namespace Pulaski.Application.Tests.Scheduling;
 /// <summary>Jobs of a material made in batches are whole batches (D-036).</summary>
 public class BatchPlanningHandlerTests : SchedulingHandlerTestBase
 {
-    public BatchPlanningHandlerTests() => F.Stores.Boms.AddMaterial(White, Metre, batchSize: 50m);
+    public BatchPlanningHandlerTests() => F.Stores.Boms.AddMaterial(White, Meter, batchSize: 50m);
 
     [Fact]
     public async Task A_job_is_whole_batches()
@@ -29,7 +29,7 @@ public class BatchPlanningHandlerTests : SchedulingHandlerTestBase
         var line = Line();
         var wo = await WorkOrderAsync(White, WorkOrderStatus.InProgress);
         var job = F.Stores.Scheduling.AddJob(global::Pulaski.Domain.Scheduling.Job.CreateProduction(
-            Guid.CreateVersion7(), Site, wo.Id, "J-9", line.Id, White, 200m, Metre, 1m, null) with
+            Guid.CreateVersion7(), Site, wo.Id, "J-9", line.Id, White, 200m, Meter, 1m, null) with
         { Status = JobStatus.Running });
         F.Stores.Scheduling.SetGoodQty(job.Id, 125m);
 
@@ -44,7 +44,7 @@ public class BatchPlanningHandlerTests : SchedulingHandlerTestBase
 /// <summary>Replacing a job with exactly what is left, a partial batch included (D-067).</summary>
 public class PartialReplacementHandlerTests : SchedulingHandlerTestBase
 {
-    public PartialReplacementHandlerTests() => F.Stores.Boms.AddMaterial(White, Metre, batchSize: 50m);
+    public PartialReplacementHandlerTests() => F.Stores.Boms.AddMaterial(White, Meter, batchSize: 50m);
 
     private CancelJobHandler Cancel() => new(
         F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Boms, F.Stores.Units, F.Stores.Events, F.Events, F.Ids, F.Time,
@@ -54,7 +54,7 @@ public class PartialReplacementHandlerTests : SchedulingHandlerTestBase
     {
         var wo = await WorkOrderAsync(White, WorkOrderStatus.InProgress);
         var job = F.Stores.Scheduling.AddJob(global::Pulaski.Domain.Scheduling.Job.CreateProduction(
-            Guid.CreateVersion7(), Site, wo.Id, "J-" + Guid.NewGuid().ToString("N")[..4], line.Id, White, planned, Metre, 1m, null) with
+            Guid.CreateVersion7(), Site, wo.Id, "J-" + Guid.NewGuid().ToString("N")[..4], line.Id, White, planned, Meter, 1m, null) with
         { Status = JobStatus.Running });
         F.Stores.Scheduling.SetGoodQty(job.Id, made);
         return job;
@@ -88,7 +88,7 @@ public class PartialReplacementHandlerTests : SchedulingHandlerTestBase
 /// <summary>A line's own batch size (D-065) decides whole batches on that line.</summary>
 public class LineBatchSizeHandlerTests : SchedulingHandlerTestBase
 {
-    public LineBatchSizeHandlerTests() => F.Stores.Boms.AddMaterial(White, Metre, batchSize: 50m);
+    public LineBatchSizeHandlerTests() => F.Stores.Boms.AddMaterial(White, Meter, batchSize: 50m);
 
     private CreateJobHandler CreateOnLines() => new(
         F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Boms, F.Stores.Units, F.Stores.Events, F.Events, F.Ids, F.Time,
@@ -120,7 +120,7 @@ public class LineBatchSizeHandlerTests : SchedulingHandlerTestBase
         F.Stores.LineBatchSizes.Sizes[(line.Id, White)] = 200m;
         var wo = await WorkOrderAsync(White, WorkOrderStatus.InProgress);
         var job = F.Stores.Scheduling.AddJob(global::Pulaski.Domain.Scheduling.Job.CreateProduction(
-            Guid.CreateVersion7(), Site, wo.Id, "J-9", line.Id, White, 400m, Metre, 1m, null) with
+            Guid.CreateVersion7(), Site, wo.Id, "J-9", line.Id, White, 400m, Meter, 1m, null) with
         { Status = JobStatus.Running });
         F.Stores.Scheduling.SetGoodQty(job.Id, 150m);
 
@@ -137,7 +137,7 @@ public class LineBatchSizeHandlerTests : SchedulingHandlerTestBase
 /// <summary>Replacing a job with only the whole batches left, leaving the order short (#85).</summary>
 public class RoundDownReplacementHandlerTests : SchedulingHandlerTestBase
 {
-    public RoundDownReplacementHandlerTests() => F.Stores.Boms.AddMaterial(White, Metre, batchSize: 50m);
+    public RoundDownReplacementHandlerTests() => F.Stores.Boms.AddMaterial(White, Meter, batchSize: 50m);
 
     private CancelJobHandler Cancel() => new(
         F.Stores.UnitOfWork, F.Stores.Scheduling, F.Stores.WorkOrders, F.Stores.Processes, F.Stores.Boms, F.Stores.Units, F.Stores.Events, F.Events, F.Ids, F.Time,
@@ -147,7 +147,7 @@ public class RoundDownReplacementHandlerTests : SchedulingHandlerTestBase
     {
         var wo = await WorkOrderAsync(White, WorkOrderStatus.InProgress);
         var job = F.Stores.Scheduling.AddJob(global::Pulaski.Domain.Scheduling.Job.CreateProduction(
-            Guid.CreateVersion7(), Site, wo.Id, "J-" + Guid.NewGuid().ToString("N")[..4], line.Id, White, planned, Metre, 1m, null) with
+            Guid.CreateVersion7(), Site, wo.Id, "J-" + Guid.NewGuid().ToString("N")[..4], line.Id, White, planned, Meter, 1m, null) with
         { Status = JobStatus.Running });
         F.Stores.Scheduling.SetGoodQty(job.Id, made);
         return job;

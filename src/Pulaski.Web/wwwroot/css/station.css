@@ -50,7 +50,7 @@
     background: var(--surface-2);
 }
 
-    /* The surface colour on the status colour keeps 4.5:1 in both themes (#142). */
+    /* The surface color on the status color keeps 4.5:1 in both themes (#142). */
     .station-status.is-down { background: var(--danger); color: var(--surface); }
     .station-status.is-waiting { background: var(--warning); color: var(--surface); }
     .station-status.is-nosignal { background: var(--state-held); color: var(--surface); }
@@ -101,7 +101,7 @@
     border-width: 2px;
 }
 
-/* Calls for help (#157): an escalated call, still waiting past its type's time, is marked in the danger colour. */
+/* Calls for help (#157): an escalated call, still waiting past its type's time, is marked in the danger color. */
 .station-shell .station-andon:has(.is-escalated) {
     border-color: var(--danger);
     border-width: 2px;

@@ -59,7 +59,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
     private readonly Random _random = new(20261124);
     private MachineFeed _line2 = null!;
     private Guid _site, _ext01, _ext02, _pack1, _rmStore, _fgStage, _hopper;
-    private Guid _metre, _kg, _white, _grey, _pvc, _tio2;
+    private Guid _meter, _kg, _white, _gray, _pvc, _tio2;
     private Guid _scheduleId;
     private string _prefix = "";
     private int _lotSeq;
@@ -111,10 +111,10 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
         _rmStore = await db.EquipmentAsync("RM-STORE");
         _fgStage = await db.EquipmentAsync("FG-STAGE");
         _hopper = await db.EquipmentAsync("EXT-01-HOP");
-        _metre = await db.IdAsync("SELECT id FROM core.uom WHERE code = 'm'");
+        _meter = await db.IdAsync("SELECT id FROM core.uom WHERE code = 'm'");
         _kg = await db.IdAsync("SELECT id FROM core.uom WHERE code = 'kg'");
         _white = await db.MaterialAsync("PRF-4410-WH");
-        _grey = await db.MaterialAsync("PRF-4410-GY");
+        _gray = await db.MaterialAsync("PRF-4410-GY");
         _pvc = await db.MaterialAsync("PVC-K67");
         _tio2 = await db.MaterialAsync("TIO2-MB");
         _prev = CrewAt(window.PreviousStart);
@@ -137,7 +137,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
     {
         _line2 = new MachineFeed(P(0), window.Now - HistoryWindow.Margin, 700m * 0.92m / 60m, seed: 7);
         _line2
-            // Previous shift: white order HIST-1001, a starved spell, a micro-stop, a melt pump fault, a jam, then the change to grey.
+            // Previous shift: white order HIST-1001, a starved spell, a micro-stop, a melt pump fault, a jam, then the change to gray.
             .State(P(0, 15), MachineFeed.Starting).State(P(0, 20), MachineFeed.Execute)
             .Stop(P(1, 10), TimeSpan.FromMinutes(12), MachineFeed.Suspended)
             .Stop(P(2, 5), TimeSpan.FromMinutes(4), MachineFeed.Stopped)
@@ -146,7 +146,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
             .Stop(P(4, 30), TimeSpan.FromMinutes(18), MachineFeed.Stopped)
             .State(P(5, 50), MachineFeed.Idle).State(P(6, 10), MachineFeed.Starting).State(P(6, 15), MachineFeed.Execute)
             .Stop(P(7, 10), TimeSpan.FromMinutes(22), MachineFeed.Stopped)
-            // Current shift: grey HIST-1002 to its end, the change back to white HIST-1003, which is still running.
+            // Current shift: gray HIST-1002 to its end, the change back to white HIST-1003, which is still running.
             // The first two hours of the shift hold one of each kind of stop, so a short current shift has them too.
             .Stop(C(0, 18), TimeSpan.FromMinutes(8), MachineFeed.Suspended)
             .Stop(C(0, 55), TimeSpan.FromMinutes(12), MachineFeed.Stopped)
@@ -267,7 +267,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
             var process = await commands.SendAsync(Admin, new CreateProcessCommand(_site, "DEMO-PROFILE", "Extrude and pack profile",
                 "Extrude on line 2, then bundle and wrap on the packer (made by the demo history)"));
             _id["process"] = process.Id;
-            await commands.SendAsync(Admin, new SetProcessScopeCommand(process.Id, await db.VersionAsync("core.process", process.Id), false, [], [_white, _grey]));
+            await commands.SendAsync(Admin, new SetProcessScopeCommand(process.Id, await db.VersionAsync("core.process", process.Id), false, [], [_white, _gray]));
             var draft = await db.IdAsync("SELECT id FROM core.process_version WHERE process_id = @id AND status = 'draft'", new { id = process.Id });
             Guid extrude = Guid.CreateVersion7(clock.Now), pack = Guid.CreateVersion7(clock.Now);
             var saved = await commands.SendAsync(Admin, new SaveProcessDraftCommand(process.Id, draft, await db.VersionAsync("core.process_version", draft), new ProcessDefinitionDto
@@ -282,14 +282,14 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
             Problems("process", saved.Problems.Select(p => p.Message));
             await commands.SendAsync(Admin, new ReleaseProcessVersionCommand(process.Id, draft, saved.Version, "Demo process (made by the demo history)"));
 
-            foreach (var (material, tio2) in new[] { (_white, 32m), (_grey, 6m) })
+            foreach (var (material, tio2) in new[] { (_white, 32m), (_gray, 6m) })
             {
                 var bom = (await commands.SendAsync(Admin, new CreateBomCommand(material, process.Id))).Id;
                 var version = await db.IdAsync("SELECT id FROM core.bom_version WHERE bom_id = @bom AND status = 'draft'", new { bom });
                 var bomSaved = await commands.SendAsync(Admin, new SaveBomDraftCommand(bom, version, await db.VersionAsync("core.bom_version", version), new BomDefinitionDto
                 {
                     BaseQty = 1000,
-                    BaseUomId = _metre,
+                    BaseUomId = _meter,
                     Items =
                     [
                         new BomItemDto { Id = Guid.CreateVersion7(clock.Now), LineNo = 10, ComponentMaterialId = _pvc, QtyPer = 868, UomId = _kg, ScrapFactor = 0.02m, ConsumptionMethod = "declared", OperationNumber = 10 },
@@ -301,7 +301,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
             }
 
             // Line 2's own limits (a line's limits win over the material's), from the same design as line 1's.
-            foreach (var material in new[] { _white, _grey })
+            foreach (var material in new[] { _white, _gray })
             {
                 await commands.SendAsync(Quality, new SetManualControlLimitsCommand(await Characteristic("MELT-TEMP"), material, _ext02,
                     215, 218.6, 211.4, 1.354, 4.42, 0, null, "Line 2's melt temperature: 215 °C, sigma 1.2 (made by the demo history)"));
@@ -315,7 +315,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
             var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(window.Now, SiteTime.Zone).DateTime);
             var targetVersion = await db.OneAsync<long?>("SELECT max(xmin::text::bigint) FROM core.oee_target WHERE site_id = @site", new { site = _site }) ?? 0;
             await commands.SendAsync(Admin, new SetOeeTargetCommand(_site, null, today.AddDays(-28), new OeeTargetValues(85, 90, 98, 75), targetVersion));
-            await commands.SendAsync(Planner, new CreateExpectedReceiptCommand(_site, _tio2, 750, _kg, window.Now.AddDays(2), "PO-4471", "Northfield Colours",
+            await commands.SendAsync(Planner, new CreateExpectedReceiptCommand(_site, _tio2, 750, _kg, window.Now.AddDays(2), "PO-4471", "Northfield Colors",
                 "TiO2 masterbatch, 30 bags"));
             await commands.SendAsync(Planner, new CreateExpectedReceiptCommand(_site, _pvc, 18_000, _kg, window.Now.AddDays(1), "PO-4468", "Lakeside Polymers",
                 "PVC K67, one bulk truck"));
@@ -347,10 +347,10 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
         At(P(0, 10), "work orders HIST-1001 and HIST-1002 made and dispatched", async () =>
         {
             await OrderAsync(prevSupervisor, "HIST-1001", _white, 4000, P(0, 15), "White 4410 for Harbor Windows, two pallets", dispatch: true);
-            await OrderAsync(prevSupervisor, "HIST-1002", _grey, 3000, P(6, 0), "Grey 4410 stock replenishment", dispatch: true);
+            await OrderAsync(prevSupervisor, "HIST-1002", _gray, 3000, P(6, 0), "Gray 4410 stock replenishment", dispatch: true);
         });
 
-        // Line 2 runs white, then grey.
+        // Line 2 runs white, then gray.
         At(P(0, 20), "HIST-1001 starts on line 2", () => StartAsync(prevOperator, "HIST-1001", "EXT-02"));
         Consume(P(0, 40), prevOperator, "HIST-1001", "EXT-02", "PVC-24-1187", 1500);
         Consume(P(0, 40), prevOperator, "HIST-1001", "EXT-02", "TIO-0932", 60);
@@ -369,7 +369,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
         Changeover(P(5, 52), P(6, 15), prevOperator, "HIST-1002");
         Consume(P(6, 20), prevOperator, "HIST-1002", "EXT-02", "PVC-24-1188", 1200);
         Consume(P(6, 20), prevOperator, "HIST-1002", "EXT-02", "TIO-0932", 8);
-        Report(P(7, 15), prevOperator, "HIST-1002", P(6, 15), "CHANGEOVER", 0.06m, "Purge to grey");
+        Report(P(7, 15), prevOperator, "HIST-1002", P(6, 15), "CHANGEOVER", 0.06m, "Purge to gray");
         Report(P(7, 50), prevOperator, "HIST-1002", P(7, 15), "SURFACE", 0.01m, null);
 
         // The packer takes line 2's lots and bundles them.
@@ -399,7 +399,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
 
         // Stops: the machine's own reasons stand; people code the rest, and split one.
         At(P(4, 55), "the jam on line 2 coded", () => CodeStopAsync(prevOperator, _ext02, P(4, 30), "JAM", "Profile caught in the puller tracks"));
-        At(P(6, 20), "the change to grey coded", () => CodeStopAsync(prevOperator, _ext02, P(5, 50), "SETUP", "Changeover white to grey: purge"));
+        At(P(6, 20), "the change to gray coded", () => CodeStopAsync(prevOperator, _ext02, P(5, 50), "SETUP", "Changeover white to gray: purge"));
         At(P(7, 45), "a stop on line 2 split and coded", async () =>
         {
             var stop = await StopAsync(_ext02, P(7, 10));
@@ -465,7 +465,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
         });
 
         // Handover.
-        Note(P(7, 30), prevSupervisor, "EXT-02", "note", "Running grey HIST-1002 at about 650 m/h. Melt pump transducer replaced at the 3-hour mark; watch the pressure.");
+        Note(P(7, 30), prevSupervisor, "EXT-02", "note", "Running gray HIST-1002 at about 650 m/h. Melt pump transducer replaced at the 3-hour mark; watch the pressure.");
         Note(P(7, 35), prevSupervisor, "EXT-02", "open_item", "Die land needs a full clean at the next changeover: width drifted high mid-shift.", key: "die");
         Note(P(7, 40), prevSupervisor, "PACK1", "open_item", "Only 3 rolls of stretch film left; more requested from stores.", key: "film");
         Note(P(7, 42), prevOperator, "PACK1", "open_item", "Bundle counter misses about 1 in 200 bundles; maintenance to look at the sensor.", key: "counter");
@@ -502,7 +502,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
             await commands.SendAsync(curOperator, new MoveLotCommand(lot, await db.VersionAsync("core.lot", lot), _hopper, 1500, _kg, "Top-up for line 1"));
         });
 
-        // Line 2: the rest of grey, then white again.
+        // Line 2: the rest of gray, then white again.
         Report(C(0, 45), curOperator, "HIST-1002", P(7, 50), "SURFACE", 0.01m, null);
         Report(C(1, 45), curOperator, "HIST-1002", C(0, 45), "DIMENSION", 0.012m, null);
         Report(C(2, 50), curOperator, "HIST-1002", C(1, 45), "SURFACE", 0.01m, null);
@@ -532,15 +532,15 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
             var closed = await db.IdAsync("SELECT id FROM core.work_order WHERE order_number = 'HIST-1001'");
             await commands.SendAsync(Planner, new ChangeWorkOrderStatusCommand(closed, await db.VersionAsync("core.work_order", closed), "closed", "Packed and counted"));
             await OrderAsync(Planner, "HIST-1003", _white, 5000, C(3, 30), "White 4410 for Harbor Windows, release 2", dispatch: true);
-            await OrderAsync(Planner, "HIST-1004", _grey, 6000, window.CurrentStart.AddHours(16), "Grey 4410 for Midway Supply", dispatch: true);
+            await OrderAsync(Planner, "HIST-1004", _gray, 6000, window.CurrentStart.AddHours(16), "Gray 4410 for Midway Supply", dispatch: true);
             await OrderAsync(Planner, "HIST-1006", _white, 8000, window.CurrentStart.AddHours(40), "White 4410 forecast, not yet confirmed", dispatch: false);
-            var cancelled = await OrderAsync(Planner, "HIST-1005", _grey, 2000, window.CurrentStart.AddHours(24), "Grey 4410 sample run", dispatch: false);
-            foreach (var job in await db.ListAsync<Guid>("SELECT id FROM core.job WHERE work_order_id = @cancelled ORDER BY job_number", new { cancelled }))
+            var canceled = await OrderAsync(Planner, "HIST-1005", _gray, 2000, window.CurrentStart.AddHours(24), "Gray 4410 sample run", dispatch: false);
+            foreach (var job in await db.ListAsync<Guid>("SELECT id FROM core.job WHERE work_order_id = @canceled ORDER BY job_number", new { canceled }))
             {
                 await commands.SendAsync(Planner, new Pulaski.Application.Scheduling.CancelJobCommand(job, await db.VersionAsync("core.job", job), "Not needed", Replace: false));
             }
 
-            await commands.SendAsync(Planner, new ChangeWorkOrderStatusCommand(cancelled, await db.VersionAsync("core.work_order", cancelled), "cancelled", "The customer took the sample from stock"));
+            await commands.SendAsync(Planner, new ChangeWorkOrderStatusCommand(canceled, await db.VersionAsync("core.work_order", canceled), "cancelled", "The customer took the sample from stock"));
         });
 
         At(C(1, 5), "packed profile shipped", async () =>
@@ -561,7 +561,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
         });
 
         // Stops.
-        At(C(3, 35), "the change back to white coded", () => CodeStopAsync(curOperator, _ext02, C(2, 55), "SETUP", "Changeover grey to white, die land cleaned"));
+        At(C(3, 35), "the change back to white coded", () => CodeStopAsync(curOperator, _ext02, C(2, 55), "SETUP", "Changeover gray to white, die land cleaned"));
         At(C(2, 0), "the fault on line 2 commented", () => CodeStopAsync(Maintenance, _ext02, C(1, 40), "FAULT", "Screen changer hydraulic fault; reset"));
 
         // Andon: answered, one being worked on, and two waiting.
@@ -605,7 +605,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
         // Handover.
         At(C(0, 30), "film delivered: the item closed", () => CloseNoteAsync(curSupervisor, "film", "Two pallets of film delivered to the packer"));
         At(C(3, 40), "die cleaned: the item closed", () => CloseNoteAsync(curOperator, "die", "Die land cleaned at the change back to white"));
-        Note(C(0, 35), curOperator, "EXT-02", "note", "Took over grey HIST-1002 running at rate. Melt temperature jumped after the start of shift; quality told.");
+        Note(C(0, 35), curOperator, "EXT-02", "note", "Took over gray HIST-1002 running at rate. Melt temperature jumped after the start of shift; quality told.");
         Note(C(1, 30), curSupervisor, "EXT-01", "open_item", "DEMO-0001 runs to Thursday; decide whether HIST-1006 goes on line 1 after it.");
     }
 
@@ -613,7 +613,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
 
     private async Task<Guid> OrderAsync(string actor, string number, Guid material, decimal qty, DateTimeOffset start, string notes, bool dispatch)
     {
-        var order = await commands.SendAsync(actor, new CreateWorkOrderCommand(_id["process"], number, material, qty, _metre, start, start.AddDays(3), 0, notes));
+        var order = await commands.SendAsync(actor, new CreateWorkOrderCommand(_id["process"], number, material, qty, _meter, start, start.AddDays(3), 0, notes));
         if (dispatch)
         {
             await commands.SendAsync(actor, new Pulaski.Application.Scheduling.DispatchWorkOrderCommand(order.Id, await db.VersionAsync("core.work_order", order.Id), "Released to the floor"));
@@ -661,7 +661,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
             var made = _line2.Counted(since, at);
             var scrap = Math.Round(made * scrapShare);
             var number = NextLot("E2");
-            var report = await commands.SendAsync(actor, new ReportProductionCommand(await JobAsync(order, "EXT-02"), null, made - scrap, scrap, _metre,
+            var report = await commands.SendAsync(actor, new ReportProductionCommand(await JobAsync(order, "EXT-02"), null, made - scrap, scrap, _meter,
                 await db.ReasonAsync("scrap", scrapReason), _fgStage, number, null, comment));
             _line2Lots.Add((number, report.Lots.Single().LotId, at, suspect));
             if (correctTo is { } correction)
@@ -694,7 +694,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
                     continue;
                 }
 
-                await commands.SendAsync(actor, new ConsumeLotCommand(lot.Id, job, take, _metre, "Bundled"));
+                await commands.SendAsync(actor, new ConsumeLotCommand(lot.Id, job, take, _meter, "Bundled"));
                 taken += take;
             }
 
@@ -704,7 +704,7 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
             }
 
             var bundled = Math.Floor(taken / 6m) * 6m;
-            var report = await commands.SendAsync(actor, new ReportProductionCommand(job, null, bundled, taken - bundled, _metre,
+            var report = await commands.SendAsync(actor, new ReportProductionCommand(job, null, bundled, taken - bundled, _meter,
                 await db.ReasonAsync("scrap", "OTHER"), _fgStage, NextLot("P1"), null, "Offcuts short of a full bundle"));
             if (reverse is { } undo)
             {
@@ -714,9 +714,9 @@ public sealed class History(Commands commands, Lookup db, HistoryClock clock, Hi
         });
     }
 
-    private void Sample(DateTimeOffset at, string actor, string order, string line, string characteristic, decimal centre, decimal spread, int decimals)
+    private void Sample(DateTimeOffset at, string actor, string order, string line, string characteristic, decimal center, decimal spread, int decimals)
     {
-        var value = Math.Round(centre + (decimal)Gaussian() * spread, decimals);
+        var value = Math.Round(center + (decimal)Gaussian() * spread, decimals);
         At(at, $"{characteristic} measured", async () =>
             await commands.SendAsync(actor, new RecordQualityResultCommand(_site, await Characteristic(characteristic), null, await JobAsync(order, line), at,
                 [value], null, null, "manual", null)));

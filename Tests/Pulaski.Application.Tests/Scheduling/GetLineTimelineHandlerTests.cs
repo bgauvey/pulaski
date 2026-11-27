@@ -22,7 +22,7 @@ public class GetLineTimelineHandlerTests
     {
         var white = Guid.CreateVersion7();
         var black = Guid.CreateVersion7();
-        var metre = Guid.CreateVersion7();
+        var meter = Guid.CreateVersion7();
         var job = Guid.CreateVersion7();
         var source = _f.Stores.Scheduling.Add(new LinePlanSource
         {
@@ -33,12 +33,12 @@ public class GetLineTimelineHandlerTests
                 new PlanJobRow
                 {
                     JobId = job, JobNumber = "J-1", JobType = JobType.Production, Status = JobStatus.Planned,
-                    MaterialId = black, MaterialCode = "BK", PlannedQty = 1000m, UomId = metre, UomCode = "m",
+                    MaterialId = black, MaterialCode = "BK", PlannedQty = 1000m, UomId = meter, UomCode = "m",
                     WorkOrderNumber = "WO-1", IsLocked = true,
                     PlannedStart = HandlerFixture.Now, PlannedEnd = HandlerFixture.Now.AddHours(1),
                 },
             ],
-            Rates = [new RunRateRow { MaterialId = black, UomId = metre, RatePerHour = 500m, RateSource = RateSource.Modified }],
+            Rates = [new RunRateRow { MaterialId = black, UomId = meter, RatePerHour = 500m, RateSource = RateSource.Modified }],
             StandardChangeovers = [new StandardChangeoverRow { MaterialId = black, StandardChangeover = TimeSpan.FromMinutes(30) }],
             HasShiftCalendar = true,
             Shifts = [new WindowRow { StartsAt = HandlerFixture.Now.AddHours(-1), EndsAt = HandlerFixture.Now.AddHours(12) }],

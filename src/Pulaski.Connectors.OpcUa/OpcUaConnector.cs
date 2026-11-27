@@ -137,12 +137,12 @@ public sealed partial class OpcUaConnector(OpcUaOptions options, Func<IOpcUaSess
         session.ConnectionLost += why => lost.TrySetResult(why);
 
         await AnnounceAsync(session, sink, cancellationToken);
-        // What was watched before connecting is monitored now: a change signalled meanwhile is already in it.
+        // What was watched before connecting is monitored now: a change signaled meanwhile is already in it.
         _watchChanged.Reader.TryRead(out _);
         await session.MonitorAsync(Watched(), cancellationToken);
         while (true)
         {
-            // WhenAny doesn't throw for a cancelled wait, so stopping is checked each time round.
+            // WhenAny doesn't throw for a canceled wait, so stopping is checked each time round.
             cancellationToken.ThrowIfCancellationRequested();
             var next = values.Reader.WaitToReadAsync(cancellationToken).AsTask();
             var watch = _watchChanged.Reader.WaitToReadAsync(cancellationToken).AsTask();

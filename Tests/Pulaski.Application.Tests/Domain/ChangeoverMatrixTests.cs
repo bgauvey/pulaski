@@ -7,13 +7,13 @@ public class ChangeoverMatrixTests
     private static readonly Guid Line = Guid.CreateVersion7();
     private static readonly Guid OtherLine = Guid.CreateVersion7();
     private static readonly Guid White = Guid.CreateVersion7();
-    private static readonly Guid Grey = Guid.CreateVersion7();
+    private static readonly Guid Gray = Guid.CreateVersion7();
     private static readonly Guid Black = Guid.CreateVersion7();
     private static readonly Guid Light = Guid.CreateVersion7();
     private static readonly Guid Dark = Guid.CreateVersion7();
 
     private static readonly MaterialRef WhiteRef = new(White, Light);
-    private static readonly MaterialRef GreyRef = new(Grey, Light);
+    private static readonly MaterialRef GrayRef = new(Gray, Light);
     private static readonly MaterialRef BlackRef = new(Black, Dark);
 
     private static ChangeoverRule Rule(
@@ -39,10 +39,10 @@ public class ChangeoverMatrixTests
     [Fact]
     public void Exact_pair_beats_class_rules_and_the_catch_all()
     {
-        var exact = Rule(15, fromMaterial: White, toMaterial: Grey);
+        var exact = Rule(15, fromMaterial: White, toMaterial: Gray);
         var matrix = new ChangeoverMatrix(Line, [Rule(60), Rule(30, fromClass: Light, toClass: Light), exact]);
 
-        var result = matrix.Resolve(WhiteRef, GreyRef);
+        var result = matrix.Resolve(WhiteRef, GrayRef);
 
         Assert.Equal(exact.Id, result.RuleId);
         Assert.Equal(TimeSpan.FromMinutes(15), result.Duration);
@@ -91,10 +91,10 @@ public class ChangeoverMatrixTests
         var matrix = new ChangeoverMatrix(Line, [], new Dictionary<Guid, TimeSpan> { [Black] = TimeSpan.FromMinutes(35) });
 
         var toBlack = matrix.Resolve(WhiteRef, BlackRef);
-        var toGrey = matrix.Resolve(WhiteRef, GreyRef);
+        var toGray = matrix.Resolve(WhiteRef, GrayRef);
 
         Assert.Equal((TimeSpan.FromMinutes(35), ChangeoverSource.Standard), (toBlack.Duration, toBlack.Source));
-        Assert.Equal((TimeSpan.Zero, ChangeoverSource.Unknown), (toGrey.Duration, toGrey.Source));
+        Assert.Equal((TimeSpan.Zero, ChangeoverSource.Unknown), (toGray.Duration, toGray.Source));
     }
 
     [Fact]

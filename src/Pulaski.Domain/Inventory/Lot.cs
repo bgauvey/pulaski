@@ -13,7 +13,7 @@ public static class LotStatus
     public const string Shipped = "shipped";
 
     /// <summary>Its receipt was reversed (D-030).</summary>
-    public const string Cancelled = "cancelled";
+    public const string Canceled = "cancelled";
 
     /// <summary>Statuses whose quantity counts as on hand.</summary>
     public static IReadOnlyList<string> OnHand { get; } = [Available, OnHold, Quarantine];
@@ -452,7 +452,7 @@ public sealed record Lot(
         var status = original.ToStatus is not null ? original.FromStatus ?? Status : Status;
         if (original.Kind == LotEventKind.Received && quantity == 0 && !IsBulk)
         {
-            status = LotStatus.Cancelled;
+            status = LotStatus.Canceled;
         }
 
         var after = this with { Quantity = quantity, LocationId = location, Status = status, ContainerId = location == LocationId ? ContainerId : null };
@@ -527,7 +527,7 @@ public sealed record Lot(
     /// A lot that went to consumed or scrapped is available again; <paramref name="status"/> puts back the status it had before
     /// (a merge's source).
     /// </summary>
-    /// <exception cref="DomainRuleException">The lot can't take stock back: shipped or cancelled.</exception>
+    /// <exception cref="DomainRuleException">The lot can't take stock back: shipped or canceled.</exception>
     public (Lot Lot, LotMovement Movement) Restore(decimal quantity, string? status = null)
     {
         var (after, movement) = Add(quantity, LotEventKind.Reversed);
@@ -541,7 +541,7 @@ public sealed record Lot(
 
     /// <summary>
     /// Takes back stock a declaration gave (D-063): reversing a production, a split's new lot, a merge's target or a transfer's receiving
-    /// balance. It must still be on hand and hold all of it. At zero a lot is cancelled when <paramref name="cancelWhenEmpty"/> (it only
+    /// balance. It must still be on hand and hold all of it. At zero a lot is canceled when <paramref name="cancelWhenEmpty"/> (it only
     /// ever held what is taken back) and consumed otherwise; a balance stays available.
     /// </summary>
     /// <exception cref="DomainRuleException">It isn't on hand or no longer holds that much.</exception>
@@ -556,7 +556,7 @@ public sealed record Lot(
         }
 
         var remaining = Quantity - quantity;
-        var status = remaining == 0 && !IsBulk ? cancelWhenEmpty ? LotStatus.Cancelled : LotStatus.Consumed : Status;
+        var status = remaining == 0 && !IsBulk ? cancelWhenEmpty ? LotStatus.Canceled : LotStatus.Consumed : Status;
         var after = this with { Quantity = remaining, Status = status, ContainerId = status == Status ? ContainerId : null };
         return (after, new LotMovement(LotEventKind.Reversed, -quantity, remaining, FromLocationId: LocationId,
             FromStatus: status == Status ? null : Status, ToStatus: status == Status ? null : status));
