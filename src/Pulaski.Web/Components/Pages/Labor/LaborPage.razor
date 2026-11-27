@@ -39,13 +39,13 @@
     @switch (Tab)
     {
         case "Shift review":
-            <LaborReview @key="siteId" SiteId="siteId" TimeZone="@Sites.Site?.TimeZone" Day="ReviewDay" />
+            <LaborReview @key="@($"review-{siteId}")" SiteId="siteId" TimeZone="@Sites.Site?.TimeZone" Day="ReviewDay" />
             break;
         case "Reports":
-            <LaborReports @key="siteId" SiteId="siteId" SiteCode="@Sites.Site?.Code" TimeZone="@Sites.Site?.TimeZone" />
+            <LaborReports @key="@($"reports-{siteId}")" SiteId="siteId" SiteCode="@Sites.Site?.Code" TimeZone="@Sites.Site?.TimeZone" />
             break;
         default:
-            <LaborOnNow @key="siteId" SiteId="siteId" TimeZone="@Sites.Site?.TimeZone" />
+            <LaborOnNow @key="@($"on-now-{siteId}")" SiteId="siteId" TimeZone="@Sites.Site?.TimeZone" />
             break;
     }
 }

@@ -39,7 +39,7 @@ internal static class SecurityEndpoints
                 PasswordResetByEmail = reset.Enabled,
             }));
 
-        // Forgotten passwords (D-093): the same answer whoever is asked about; the link and the new password come back separately.
+        // Forgot-password requests (D-093): the same answer whoever is asked about; the link and the new password come back separately.
         auth.MapPost("/password-reset", [AllowSignedOut] async Task<Ok<PasswordResetAnswer>> (
             RequestPasswordResetRequest request, ICommandHandler<RequestPasswordResetCommand, string> handler, CancellationToken ct) =>
             TypedResults.Ok(new PasswordResetAnswer { Message = await handler.HandleAsync(new RequestPasswordResetCommand(request.Login), ct) }));

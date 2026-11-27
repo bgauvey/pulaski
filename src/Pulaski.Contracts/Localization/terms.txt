@@ -1558,9 +1558,9 @@ For the stop of {0}, {1}.
 For this material {0} already converts to {1} (1 {2} = {3:0.######} {4}) through its other conversions; change one of those instead.
 For time the machine didn't report, such as an outage with no signal. It may not overlap the machine's other stops.
 For {0}: open
-Forgotten password
-Forgotten your password?
-Forgotten your password? Ask an administrator to reset it.
+Forgot password
+Forgot your password?
+Forgot your password? Ask an administrator to reset it.
 Format
 Forwarding
 Found from the counter tags

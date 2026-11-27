@@ -204,12 +204,12 @@
 
     @if (User.Can(PermissionCodes.QualityView, l.SiteId) || User.Can(PermissionCodes.LotRecords, l.SiteId))
     {
-        <CertificatePanel @key="l.Id" LotId="l.Id" SiteId="l.SiteId" Issued="() => _documentsShown++" />
+        <CertificatePanel @key="@($"certificate-{l.Id}")" LotId="l.Id" SiteId="l.SiteId" Issued="() => _documentsShown++" />
     }
 
     @if (User.Can(PermissionCodes.QualityView, l.SiteId))
     {
-        <LotNcrPanel @key="l.Id" Lot="l" />
+        <LotNcrPanel @key="@($"ncr-{l.Id}")" Lot="l" />
     }
 
     @if (User.Can(PermissionCodes.QualityView, l.SiteId))
@@ -219,7 +219,7 @@
 
     @if (l.IsBulk)
     {
-        <BalanceAllocationPanel @key="l.Id" LotId="l.Id" TimeZone="@tz" />
+        <BalanceAllocationPanel @key="@($"balance-{l.Id}")" LotId="l.Id" TimeZone="@tz" />
     }
 
     @if (detail.Allocations.Count > 0)

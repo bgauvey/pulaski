@@ -14,3 +14,6 @@ TestResults/
 
 # Local settings that may hold secrets
 appsettings.*.local.json
+
+# PowerPoint and Office lock files
+~$*

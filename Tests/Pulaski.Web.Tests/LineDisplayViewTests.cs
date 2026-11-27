@@ -40,6 +40,7 @@ public class LineDisplayViewTests
         Assert.Equal(100, LineDisplayView.Progress(new LineDisplayJobDto { JobNumber = "J", PlannedQty = 100m, GoodQty = 130m }));
         Assert.Null(LineDisplayView.Progress(new LineDisplayJobDto { JobNumber = "J", GoodQty = 5m }));
         Assert.Equal(("board-grid-1", "board-grid-2", "board-grid-3"), (LineDisplayView.GridClass(1), LineDisplayView.GridClass(4), LineDisplayView.GridClass(5)));
+        Assert.Equal(("board-grid-2", "board-grid-3"), (LineDisplayView.GridClass(2), LineDisplayView.GridClass(3)));
         Assert.Equal(("12,345.7", "73%", "—"), (LineDisplayView.Qty(12345.67m), LineDisplayView.Pct(72.6m), LineDisplayView.Pct(null)));
     }
 }

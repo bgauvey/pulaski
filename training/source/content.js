@@ -20,7 +20,7 @@ m("basics", "Getting started", "Signing in, finding your way, and how Pulaski be
         tips: [
             "Passwords are case-sensitive. **Five wrong tries lock you out for 15 minutes**; an administrator can reset your password, which unlocks you.",
             "A session lasts up to **12 hours**, then asks you to sign in again.",
-            "**Forgotten your password?** links from the sign-in page when e-mail is set up.",
+            "**Forgot your password?** links from the sign-in page when e-mail is set up.",
         ],
         notes: "A user who is switched off, or who has no role, can't sign in. Someone whose roles let them see nothing lands on 'Nothing to see here yet': ask an administrator for a role.",
     },
@@ -1394,6 +1394,484 @@ m("adminSystem", "Running Pulaski", "System health, integrations and languages",
 
 // ===================== Roles =====================
 
+// ===================== Screenshots =====================
+// Where each module shows its screen: screens/<image>.png, taken from the demo by capture-screens.js (npm run screens).
+// `before` is the index of the module's slide the screenshot goes in front of (default 0, first).
+// The line board course (a topic, not a role): a TV on the floor, from Pulaski's address to the board it shows.
+const tvShot = (image, title, points, notes) => ({ type: "screen", image, title, points, notes });
+
+m("tvIdeas", "What a line board is", "A TV on the floor that shows the lines as they are now", [
+    {
+        type: "cards", title: "A line board in four points",
+        cards: [
+            { icon: "MdTv", title: "Read only", text: "Nobody signs in at the TV and nothing on it can be touched or changed. It shows; people act elsewhere." },
+            { icon: "MdDevices", title: "It is a terminal", text: "The TV is registered and **enrolled** like a badge terminal. That enrollment is its key to Pulaski." },
+            { icon: "MdAccountTree", title: "Its lines", text: "It shows the lines its terminal **offers**: a whole site, an area, or one line. Only lines that run jobs." },
+            { icon: "MdAutorenew", title: "It keeps itself current", text: "Within seconds of a change, and every 15 seconds anyway. After a network drop it comes back by itself." },
+        ],
+        notes: "A line board is for reading from across the floor: state, job, output, down time and OEE for the shift, calls for help. Operators act at the station or on the Floor; supervisors on the Andon and Machines pages. The board just shows the result.",
+    },
+    tvShot("tv-board", "A line board on a 1080p TV", [
+        "The title is the terminal's **Name**.",
+        "One card per line: state, job, output, OEE.",
+        "Color only where someone is needed: red, amber, purple.",
+        "Up to four lines share the screen two by two; three sit side by side.",
+    ], "Three lines from the demo: EXT-01 has a supervisor call waiting, EXT-02 a stop to code, PACK1 an escalated quality call (its red frame)."),
+]);
+
+m("tvBefore", "Before you start", "What you need, at the TV and at your desk", [
+    {
+        type: "cards", title: "What you need",
+        cards: [
+            { icon: "MdTv", title: "A TV with a browser", text: "A smart TV's own browser, or a small PC or stick on its HDMI port. 1080p or better; landscape." },
+            { icon: "MdWifi", title: "Pulaski's address", text: "The address people sign in at, such as **https://pulaski.example.com**. The TV must reach it over the plant network." },
+            { icon: "MdPerson", title: "A user that may register terminals", text: "Your **user name** and password, with the **Manager** or **Administrator** role at the site (*Register and enroll shop-floor terminals*)." },
+            { icon: "MdKeyboard", title: "A way to type, once", text: "A keyboard, or the TV remote, to type two addresses and a ten-character code. After that nobody touches it." },
+        ],
+        notes: "The permission is terminals: manage. A new Pulaski gives it to Manager and Administrator; an administrator can see who holds it on Configure → Users, Permissions tab. The Pulaski address is the web address (the one with the sign-in page), not the API.",
+    },
+    {
+        type: "cards", title: "Set the TV up to stay on",
+        cards: [
+            { icon: "MdPowerSettingsNew", title: "No sleep", text: "Turn off sleep, screen saver and eco power-off, or the board goes dark mid-shift." },
+            { icon: "MdFullscreen", title: "Full screen", text: "Use the browser's full screen or kiosk mode, so nothing but the board shows." },
+            { icon: "MdCookie", title: "Keep cookies", text: "The enrollment lives in a cookie on the TV for 400 days. No private or guest mode; don't clear browsing data." },
+            { icon: "MdHome", title: "Start on the board", text: "Make **/terminal/board** the browser's home page, so the board comes back after a power cut." },
+        ],
+        notes: "How to do each depends on the TV or player: look in its settings for power saving, kiosk mode and home page. If the cookie is lost the board says 'This screen isn't enrolled': enroll it again with a new code.",
+    },
+]);
+
+m("tvSetup", "Set it up", "From Pulaski's address to the board, in six steps", [
+    {
+        type: "steps", title: "From the address to the board",
+        steps: [
+            "At your desk, open Pulaski's address and sign in with your **user name** and **password**.",
+            "Open **Configure → Equipment → Terminals** and register the TV: **Code**, **Name**, **Offers the lines of**.",
+            "Click **Enrollment code** on its row. Note the code: it shows once and works for 15 minutes.",
+            "On the TV, open the address followed by **/terminal/enrol**, type the code and press **Enroll**.",
+            "On the TV, open the address followed by **/terminal/board**. The board appears.",
+            "Make that the browser's home page, go full screen, and leave it.",
+        ],
+        tips: [
+            "The Terminals page prints both addresses for your site: copy them from there.",
+            "Enrollment takes the TV to the badge screen first; step 5 moves it to the board.",
+            "One line only: **/terminal/board?line=EXT-01**.",
+        ],
+        tipsIcon: "MdTv",
+        notes: "The whole thing takes about five minutes. If the code runs out before you type it, click Enrollment code again for a new one: each works once.",
+    },
+    tvShot("tv-sign-in", "1. Sign in at your desk", [
+        "Pulaski's own address, on your PC, not the TV.",
+        "Your **user name** and **password**, then **Sign in**.",
+        "Your role must be Manager or Administrator at the site.",
+    ]),
+    tvShot("tv-register", "2. Register the TV", [
+        "**Code**: short, fixed once saved (TV-FLOOR).",
+        "**Name**: the board's title (Plant floor TV).",
+        "**Offers the lines of**: the site, an area or a line.",
+        "**Language** and **Region**: how the board reads.",
+        "**First line offered** and **People identify with** don't matter for a TV.",
+        "Click **Register terminal**.",
+    ], "Configure → Equipment → Terminals. The Code is how the terminal is known in the audit trail; the Name is what people read at the top of the board, so say where it hangs or what it covers."),
+    tvShot("tv-code", "3. Get the enrollment code", [
+        "Ten characters, shown this once.",
+        "Works once, before the time shown (15 minutes).",
+        "The address to open on the TV is printed beside it.",
+        "The row says **code waiting** until the TV uses it.",
+    ]),
+    tvShot("tv-enroll", "4. Enroll the TV", [
+        "On the TV: the address + **/terminal/enrol**.",
+        "Type the code, with or without the dash.",
+        "Press **Enroll**: the TV is now this terminal.",
+        "Enrolling again replaces the earlier enrollment.",
+    ]),
+    tvShot("tv-board-line", "5. Open the board, or one line", [
+        "**/terminal/board**: every line the terminal offers.",
+        "**/terminal/board?line=EXT-01**: one line, large.",
+        "Use the line's **code**, as on Equipment.",
+    ], "One TV per line, each with ?line=, suits lines far apart. One TV per area suits a hall where people see the whole area from one place."),
+]);
+
+m("tvReading", "What the board shows", "Reading a line's card from across the floor", [
+    {
+        type: "table", title: "The line's state",
+        head: ["The board says…", "It means"],
+        italicFirst: true,
+        rows: [
+            ["Running (green)", "The machine is producing, or a job runs on a line that doesn't report machine state."],
+            ["Down (red)", "Stopped by a fault, or held by the line itself. The stop's reason, or the machine's stop code, shows under it."],
+            ["Waiting (amber)", "Starved, blocked or otherwise ready but not producing while a job is on it."],
+            ["No signal (purple)", "The line reports machine state but nothing has arrived. Its time counts as down."],
+            ["Idle (gray)", "No job and nothing wrong: nothing is planned to run now."],
+        ],
+        notes: "Next to the word: for how long (for 12 min). The colors follow the Machines board; gray is normal on purpose, so color always means someone is needed.",
+    },
+    {
+        type: "cards", title: "What else a card shows",
+        cards: [
+            { icon: "MdCampaign", title: "Calls for help", text: "Amber while waiting, quiet once someone is on it, **red** once escalated: the whole card gets a red frame." },
+            { icon: "MdBuild", title: "Maintenance", text: "Requests not yet closed, dashed: number and machine, waiting first; up to three, then **and … more**." },
+            { icon: "MdScience", title: "Samples due", text: "Quality samples the running job owes: amber when due, red when overdue, with the time." },
+            { icon: "MdSwapCalls", title: "Handover items", text: "Open items from the shift handover, up to three, until someone closes them." },
+            { icon: "MdPlayCircleOutline", title: "The job", text: "Running job and material, good so far **of** the planned quantity, and a progress bar." },
+            { icon: "MdInsights", title: "The figures", text: "OEE for the shift against its target (amber when below), good and scrap, down time, **Stops to code**." },
+        ],
+        notes: "The figures are the Overview's, for the current shift (or the site day where no shift runs): output is what was reported, not machine counts. OEE shows — until there is enough to work it out. At the foot: Next, the next job, and when the shift ends.",
+    },
+    tvShot("tv-board-line", "One line, read from the top", [
+        "Code, name, state and how long.",
+        "Handover items and calls for help.",
+        "The job: good of planned, and the bar.",
+        "OEE and target, good, scrap, down.",
+        "The shift's end at the foot.",
+    ]),
+]);
+
+m("tvLooking", "Look after it", "Changing, moving and switching off a board, and what its messages mean", [
+    {
+        type: "cards", title: "Changes are made at your desk",
+        cards: [
+            { icon: "MdEdit", title: "Other lines or language", text: "Terminals → **Change** on its row: **Offers the lines of**, **Name**, **Language**. The board follows at its next update." },
+            { icon: "MdSwapHoriz", title: "New TV", text: "Click **Enrollment code** again and enroll the new TV. The old one stops working at once." },
+            { icon: "MdBlock", title: "Take it out of use", text: "**Change**, untick **Active**, **Save terminal**. The board stops at once; tick it again to bring it back." },
+            { icon: "MdWifiOff", title: "Network drops", text: "Nothing to do: the board keeps trying and comes back by itself when the network does." },
+        ],
+        notes: "Nobody needs to go to the TV for any change except a new device. Switching a terminal off is also the answer to a TV that was stolen or moved somewhere it shouldn't be.",
+    },
+    tvShot("tv-not-enrolled", "This screen isn't enrolled", [
+        "The TV has no enrollment, or lost its cookie.",
+        "Or its terminal was switched off: the reason shows under the heading.",
+        "**Enroll it** opens the enrollment page; get a new code at your desk.",
+    ]),
+    {
+        type: "table", title: "If the board doesn't show",
+        head: ["The TV says…", "What to do"],
+        italicFirst: true,
+        rows: [
+            ["This screen isn't enrolled", "Issue a new **Enrollment code** and enroll the TV again. If it keeps happening, the browser is clearing cookies."],
+            ["This terminal isn't enrolled, or was switched off", "Tick **Active** on the terminal again, or enroll the TV with a new code."],
+            ["The code is refused when enrolling", "It was used or ran out (15 minutes): click **Enrollment code** for a new one."],
+            ["No lines that run jobs are in this terminal's area", "**Offers the lines of** points at equipment with no line below it: choose the area or site."],
+            ["There is no line … in this terminal's area", "The **?line=** code is wrong, or that line is outside what the terminal offers."],
+            ["The browser can't reach the page", "Check the address and that the TV is on the plant network. Pulaski itself may be down: ask your administrator."],
+        ],
+        notes: "Too many lines for one screen makes the type small: more than six lines on a TV is hard to read from a distance. Use a TV per area, or ?line= for the lines that matter most.",
+    },
+]);
+
+const screen = (id, image, title, points, before = 0, notes) => {
+    if (!modules[id]) throw new Error(`No module ${id} for screen ${image}`);
+    screenSlides.push({ id, before, slide: { type: "screen", image, title, points, notes } });
+};
+const screenSlides = [];
+
+screen("basics", "sign-in", "The sign-in page", [
+    "Your **user name** and **password**, then **Sign in**.",
+    "**Forgot your password?** appears when e-mail is set up.",
+    "**Help** opens the guide's section on signing in.",
+]);
+screen("basics", "help-panel", "Help beside the screen you're on", [
+    "**?** at the top right opens the guide's section for this screen.",
+    "It stays open and follows you from screen to screen.",
+    "**Open the whole guide** at the bottom; **×** closes it.",
+    "**☆** beside it adds the page to Favorites.",
+], 2);
+screen("basics", "inbox", "The Inbox", [
+    "The number beside **Inbox** in the menu is what waits for you.",
+    "Items are grouped by kind; each says its site and how long it has waited.",
+    "Click one to decide it on its own page.",
+], 3);
+screen("alerts", "my-alerts", "My alerts", [
+    "**Tell me when**: what to be told about.",
+    "**Where**: the whole site, an area or one line.",
+    "**Minutes**: how long a stop or call lasts first.",
+    "A yellow note says when you have no e-mail address yet.",
+]);
+screen("overview", "overview", "The Overview", [
+    "The tiles at the top: what needs a person. A red edge means act now.",
+    "**This shift**: OEE, output, scrap and downtime so far.",
+    "**Lines**: each line's state, its job now or next, and its time strip.",
+    "**Live, updated…** means it refreshes by itself.",
+]);
+screen("workOrders", "work-orders", "The Work orders screen", [
+    "Tiles count orders starting or finishing today, on track, behind, needing attention or not on a line.",
+    "**Find by**, search and the status list narrow the table.",
+    "Tick orders to act on several at once.",
+]);
+screen("createOrder", "new-work-order", "The New work order form", [
+    "Choose the **material** first; the **process** list then offers its released processes.",
+    "Quantity and unit, **Start** and **Due**.",
+    "Times are in the site's time zone, named under the form.",
+]);
+screen("schedule", "schedule", "The Schedule", [
+    "**Gantt**, **Calendar**, **Kanban**, **Table**: four views of one plan.",
+    "One row per line; groups such as departments above their lines.",
+    "**Day** to **2 weeks**, and **Today** to come back to now.",
+    "The key at the bottom names each job style.",
+]);
+screen("changeovers", "changeovers", "The Changeovers screen", [
+    "**Add a rule**: line, **From**, **To** and **Minutes**.",
+    "Each side is a material, a class or **Anything**.",
+    "**Switch off** retires a rule; rules are never deleted.",
+    "**Import from a file** and **Export CSV** for many at once.",
+]);
+screen("allocations", "shortages", "Material shortages", [
+    "One row per short component, with **Needed**, **Available**, **Held** and **Incoming**.",
+    "**Short** in red, and the **First short** job it reaches.",
+    "**Refresh allocations** and **Picking list** at the top.",
+], 1);
+screen("materialsPlanning", "material", "A material's page", [
+    "Properties grouped as **Identity**, **Classification**, **Stock**, **Batches**, **Status**.",
+    "**What uses it**: stock, orders, jobs, BOMs and lines.",
+    "Once in use, code and base unit are fixed, and the page says so.",
+]);
+screen("capabilities", "material", "Where you add lines to a material", [
+    "Open the material from **Materials**.",
+    "**Lines that can run it** counts its capabilities.",
+    "Capabilities, rates and batch sizes are kept on this page.",
+]);
+screen("floorIdeas", "floor", "The Floor", [
+    "One card per line: its state and how many people are on.",
+    "The running job: made so far, and the room left at the line's rate.",
+    "**Next**: what comes after, each with **Start** when it can start.",
+    "A note says why a job can't start yet.",
+]);
+screen("runJobs", "floor-report", "Reporting production on the Floor", [
+    "**Report** opens the form on the line's card.",
+    "Choose the **run**; it says how much more fits at the line's rate.",
+    "**From the machine** fills in the machine's count.",
+    "**Good**, **Scrap** and a comment, then **Report**.",
+], 1);
+screen("runJobs", "job", "A job's page", [
+    "The job's state and its order, with **Pause**, **Complete** and **Report production**.",
+    "Planned, good and scrap so far.",
+    "**Runs**: every run, its line and its length.",
+], 5);
+screen("handover", "handover", "The Handover screen", [
+    "One part per line: **This shift** and **Last shift**.",
+    "**Open items** stay until someone closes them.",
+    "Type in **Hand on to the next shift**, then **Add a note** or **Add an open item**.",
+]);
+screen("station", "station-signed-out", "The station before you badge in", [
+    "The line, its state and how long it has been in it.",
+    "Calls for help, the running job and what's next.",
+    "**Badge in** at the right: hold your badge to the reader.",
+]);
+screen("station", "station", "The station once you're signed on", [
+    "Your name, and **Sign off** when you leave.",
+    "**Scan** a lot, container or shop order.",
+    "**I'm here**, **Resolve** and **Call for help**; **Request maintenance**.",
+    "The running job's **Report**, **Pause** and **Complete**.",
+], 1);
+screen("station", "tv-board", "A line board", [
+    "A TV at the line: every line the terminal offers.",
+    "State, job, output and today's OEE against target.",
+    "Calls for help, red once escalated; stops to code.",
+    "Updates every 15 seconds; nothing to touch.",
+], 2);
+screen("machinesView", "machines", "Machines: the status board", [
+    "One card per machine: state, for how long, and its speed.",
+    "Gray hatching: the machine isn't reporting.",
+    "**Stops** shows how many wait for a reason.",
+    "Tabs for maintenance, alarms, process values and OEE.",
+]);
+screen("inventoryBasics", "inventory", "The Inventory screen", [
+    "Tabs across the top: **Stock**, **Lots**, **Locations**, **Scan**, **Journal** and more.",
+    "Stock by material, grouped by class, in each base unit.",
+    "**Receive** and **Declare production** at the top right.",
+], 1);
+screen("inventoryBasics", "scan", "Scan", [
+    "**Working at**: the line you're at, so likely actions come first.",
+    "Click **Scan or type** first, then scan a label or type a number.",
+    "Pulaski offers what you can do with it.",
+], 2);
+screen("qualityFloor", "quality-results", "Quality results", [
+    "**Record a result**: lot or job, characteristic, value.",
+    "**Source** and **Sampled at** say where and when.",
+    "Each result is checked against the released limits: **In spec** or not.",
+    "**Leave out…** excludes a result with a reason; nothing is edited.",
+]);
+screen("supervisorJobs", "floor-production", "Production by shift", [
+    "Good and scrap by shift, line, job and material.",
+    "Each shift's total at its right.",
+    "**Against the jobs' runs**: each job's figures match its runs.",
+    "**Export CSV** for a spreadsheet.",
+], 2);
+screen("supervisorLabor", "labor", "Labor: on now", [
+    "One card per line: the shift, its crew and planned breaks.",
+    "Each person: kind of time, since when, **Break**, **End**.",
+    "**Check crew in**, **Add someone**, **Check everyone out**.",
+]);
+screen("supervisorLabor", "labor-review", "Labor: shift review", [
+    "Pick the **Day** and the shift.",
+    "Every session: person, line, kind, times, share and hours.",
+    "**Change** or **End** a session; breaks below.",
+    "**Approve shift** locks it.",
+], 1);
+screen("laborApprove", "labor-review", "Labor: shift review", [
+    "Pick the **Day** and the shift.",
+    "Every session: person, line, kind, times, share and hours.",
+    "**Approve shift** locks it; later changes are corrections.",
+]);
+screen("andonAnswer", "andon", "The Andon screen", [
+    "**Calls for help**: line, call, who called and how long it waits.",
+    "Red once escalated.",
+    "**I'm on it** when you go; **Resolve** with what was done.",
+    "**Resolved in the last day** below.",
+]);
+screen("maintenanceWork", "machines-maintenance", "Machines: the Maintenance tab", [
+    "Requests waiting, and those closed in the last 7 days.",
+    "**Request maintenance** raises one by hand.",
+    "**Preventive plans**: **Add a plan** by run hours or counts.",
+]);
+screen("stockControl", "lot", "A lot's page", [
+    "Buttons for everything you can do: **Move**, **Hold…**, **Ship**, **Write off**…",
+    "Status, quantity, location and where it came from.",
+    "**Genealogy**: what it was made from, **Trace back**, **Trace forward**.",
+]);
+screen("stockControl", "journal", "The movement journal", [
+    "Every movement in the site, newest first.",
+    "Filter by dates, kind, material, location, lot or who.",
+    "Each row links its lot and job; **Export CSV**.",
+], 1);
+screen("oeeReports", "machines-oee", "Machines: Utilization and OEE", [
+    "**From**, **to**, equipment and shifts, then **Show**.",
+    "Scheduled, planned, run and down hours per machine.",
+    "Availability, performance, quality and OEE against targets.",
+    "**By shift** below; **Export CSV**.",
+]);
+screen("spc", "quality-alerts", "SPC alerts", [
+    "One row per chart that signaled: the rules broken and when.",
+    "**Respond** on an open alert; **Details** once closed.",
+    "**Control charts** opens the chart.",
+]);
+screen("spc", "quality-charts", "A control chart", [
+    "Choose a **characteristic** and **material**, then **Show**.",
+    "Each result against the control limits (**UCL**, **LCL**) and center line.",
+    "Red diamonds go beyond the limits; squares break a run rule.",
+    "**Moving range** beside it; capability below.",
+], 1);
+screen("specs", "specs", "Specifications", [
+    "One row per material: version released, draft, last update.",
+    "**New specification**, and **Characteristics** to define what's measured.",
+]);
+screen("processes", "process", "A process", [
+    "**Lines and departments** to drag onto the canvas.",
+    "Each operation and the share each line takes.",
+    "Properties at the right: what it makes, and its default.",
+    "Released versions are fixed: **Change: start version 2**.",
+]);
+screen("boms", "boms", "Bills of materials", [
+    "One row per material and process.",
+    "The released version, its components, and any draft.",
+    "**New BOM** at the top right.",
+]);
+screen("shifts", "shifts", "Shift schedules", [
+    "Each schedule: how it repeats, its shifts and crews.",
+    "**Followed by**: equipment that takes it.",
+    "**One-off changes** for a single day; **Change** for the pattern.",
+]);
+screen("people", "people", "People and crews", [
+    "Tabs: **People**, **Crews**, **Qualifications**.",
+    "Each person: number, name, crew, sign-in, badge.",
+    "**Issue** a badge; **Add person** or **Import file**.",
+]);
+screen("people", "terminals", "Terminals", [
+    "**Register a terminal**: code, name, lines it offers, how people identify.",
+    "Then open the enroll address on the device and type its code.",
+    "**Enrollment code** gives a new code; **Change** edits it.",
+], 1);
+screen("siteSettings", "site-settings", "Site settings", [
+    "**Changeovers**: automatic or placed by planners.",
+    "**ERP orders that aren't whole batches**.",
+    "**Reporting tolerances**, then OEE targets and more below.",
+]);
+screen("siteSettings", "setup", "The setup checklist", [
+    "Each step in order, with what is done.",
+    "**(optional)** steps can be marked not needed.",
+    "Each step links to the screen where it is done.",
+], 1);
+screen("reasons", "reasons", "Reason codes", [
+    "A tab per kind: adjustment, hold, utilization, scrap and more.",
+    "Code, name, the group it sits **Under**, order, active.",
+    "**Make group** to file reasons under it.",
+]);
+screen("audit", "audit", "The audit trail", [
+    "Filter by **Area**, **Who**, text and dates; then **Search**.",
+    "Each change: when, what, of what, and who.",
+    "**Details** shows before and after; **History** the record's story.",
+]);
+screen("traceJournal", "lot", "Tracing from a lot's page", [
+    "**Genealogy**: what the lot was made from.",
+    "**Trace back** to raw materials; **Trace forward** to what used it.",
+    "Each link says how sure it is: exact, estimated, not paired.",
+]);
+screen("users", "users", "Users", [
+    "Each user: roles and site, how they sign in, last sign-in.",
+    "**New user**; **Change** for roles and password.",
+    "**Temporary password** until they choose their own.",
+]);
+screen("users", "roles", "Roles", [
+    "Each role: what it's for, permissions, users.",
+    "**Administrator** is fixed; others **Change**.",
+    "**New role**; the **Permissions** tab ticks permissions role by role.",
+], 1);
+screen("equipment", "equipment", "Equipment", [
+    "The plant as a tree: enterprise, site, area, line.",
+    "**Add child** under the one selected.",
+    "Its properties at the right: capabilities, status, working time.",
+]);
+screen("machineData", "edge-nodes", "Edge nodes", [
+    "Each node: connections, tags, last heard from, version.",
+    "**Add edge node**, then its connections and tags.",
+], 1);
+screen("machineData", "machine-profiles", "Machine profiles", [
+    "One profile per kind of machine.",
+    "Its stop codes and those still without a reason.",
+    "How many machines use it.",
+], 2);
+screen("adminSystem", "system-health", "System health", [
+    "**Needs a look** at the top when something does.",
+    "Edge nodes, the database and every background service.",
+    "Each row says what it found and when.",
+]);
+
+for (const { id, before, slide } of screenSlides.slice().reverse()) modules[id].slides.splice(before, 0, slide);
+
+// Decks on one topic rather than a role: no "your role" slides, the same course structure otherwise.
+const topics = [
+    {
+        code: "boards", name: "Line boards", topic: true, icon: "MdTv", tagline: "Put the lines on a TV: set it up, read it, look after it",
+        welcomeNotes: "For whoever puts a TV on the floor (a manager, an administrator, IT) and for anyone who reads one. It goes from Pulaski's web address and your user name to a board on the wall, then what each part of the board means. The guide's section is Show a line board on a TV.",
+        agenda: [
+            { icon: "MdTv", title: "What it is", text: "A read-only TV that is a terminal, and the lines it shows." },
+            { icon: "MdChecklist", title: "Before you start", text: "The TV, the address, your user, settings to stay on." },
+            { icon: "MdSettings", title: "Set it up", text: "Sign in, register, code, enroll, open the board." },
+            { icon: "MdVisibility", title: "Read and look after it", text: "States, calls, figures; changes and messages." },
+        ],
+        modules: ["tvIdeas", "tvBefore", "tvSetup", "tvReading", "tvLooking"],
+        quiz: [
+            { q: "Who signs in at the TV?", short: "Signing in at the TV", a: "Nobody: the TV is an enrolled terminal. You sign in at your desk to register it and get its code." },
+            { q: "What decides which lines the board shows?", short: "Which lines", a: "The terminal's **Offers the lines of** (site, area or line); **?line=CODE** narrows it to one." },
+            { q: "Your enrollment code was refused. Why, and what now?", short: "Code refused", a: "It was used already or ran out after 15 minutes: click **Enrollment code** for a new one." },
+            { q: "A card has a red frame but says **Running**. What does that mean?", short: "Red frame, Running", a: "A call for help on that line has escalated: it waited longer than its type allows." },
+            { q: "The TV is moved to another hall. What do you change?", short: "The TV moves", a: "On Terminals → **Change**: **Offers the lines of** (and the Name). Nothing at the TV." },
+            { q: "After a weekend the board says *This screen isn't enrolled*. What happened?", short: "Not enrolled after a weekend", a: "The browser lost its cookie (cleared data, guest mode) or the terminal was switched off: enroll again with a new code." },
+        ],
+        quickref: [
+            ["Register a TV", "Configure → Equipment → **Terminals** → **Register terminal**"],
+            ["Get its code", "Terminals → **Enrollment code** on its row"],
+            ["Enroll the TV", "On the TV: *address*/**terminal/enrol**"],
+            ["Show the board", "On the TV: *address*/**terminal/board**"],
+            ["Show one line", "*address*/terminal/board**?line=EXT-01**"],
+            ["Change its lines, name or language", "Terminals → **Change**"],
+            ["Stop a board", "Terminals → **Change** → untick **Active**"],
+        ],
+        helpFrom: "Your administrator for users, roles and Pulaski's address; IT for the TV, its network and its browser.",
+    },
+];
+
 const roles = [
     {
         code: "planner", name: "Planner", icon: "MdViewTimeline", tagline: "Plan and sequence the work, and keep the plan honest",
@@ -1740,4 +2218,4 @@ const roles = [
     },
 ];
 
-module.exports = { roles, modules };
+module.exports = { roles, topics, modules };

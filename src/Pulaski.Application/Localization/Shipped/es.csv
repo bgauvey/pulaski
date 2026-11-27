@@ -1559,9 +1559,9 @@ For process,Para el proceso
 For this material {0} already converts to {1} (1 {2} = {3:0.######} {4}) through its other conversions; change one of those instead.,Para este material {0} ya se convierte a {1} (1 {2} = {3:0.######} {4}) por sus otras conversiones; cambie una de ellas.
 "For time the machine didn't report, such as an outage with no signal. It may not overlap the machine's other stops.","Para tiempo que la máquina no reportó, como una interrupción sin señal. No puede traslaparse con los otros paros de la máquina."
 For {0}: open,Para {0}: abra
-Forgotten password,Contraseña olvidada
-Forgotten your password?,¿Olvidó su contraseña?
-Forgotten your password? Ask an administrator to reset it.,¿Olvidó su contraseña? Pida a un administrador que la restablezca.
+Forgot password,Contraseña olvidada
+Forgot your password?,¿Olvidó su contraseña?
+Forgot your password? Ask an administrator to reset it.,¿Olvidó su contraseña? Pida a un administrador que la restablezca.
 Format,Formato
 Forwarding,Reenvío
 Found from the counter tags,Encontrado a partir de las etiquetas de contador
