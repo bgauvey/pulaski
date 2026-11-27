@@ -46,7 +46,7 @@
         <option value="published">@L["Jobs at their published times"]</option>
     </select>
     <div class="form-check ms-1">
-        <input class="form-check-input" type="checkbox" id="short-only" @bind="_shortOnly" />
+        <input class="form-check-input" type="checkbox" id="short-only" @bind="_shortOnly" @bind:after="SaveFiltersAsync" />
         <label class="form-check-label" for="short-only">@L["Short only"]</label>
     </div>
     <button type="button" class="btn btn-sm btn-outline-secondary btn-with-icon ms-auto" @onclick="LoadAsync"><Icon Name="refresh" Size="16" /> @L["Refresh"]</button>
@@ -213,11 +213,24 @@ else
     private async Task OnTimingChangedAsync(ChangeEventArgs e)
     {
         _live = e.Value?.ToString() != "published";
+        await SaveFiltersAsync();
         await LoadAsync();
     }
 
+    // The check last made (#131): horizon, live or published timing, and short materials only.
+    private sealed record Filters(string? Horizon, bool Live, bool ShortOnly);
+
+    private const string Page = "inventory/shortages";
+
+    private Task SaveFiltersAsync() => SavedFilters.SaveAsync(User, Api, Page, new Filters(_horizon, _live, _shortOnly));
+
     protected override async Task OnInitializedAsync()
     {
+        if (SavedFilters.Load<Filters>(User, Page) is { } f)
+        {
+            (_horizon, _live, _shortOnly) = (f.Horizon ?? "", f.Live, f.ShortOnly);
+        }
+
         try
         {
             await Sites.EnsureAsync(Api);
@@ -304,6 +317,7 @@ else
     private async Task OnHorizonChangedAsync(ChangeEventArgs e)
     {
         _horizon = e.Value?.ToString() ?? "";
+        await SaveFiltersAsync();
         await LoadAsync();
     }
 

@@ -3485,7 +3485,9 @@ audit trail. The web reads and writes them through `CurrentUser.Setting`/`SetSet
 User's choices: filters remembered **automatically, last used** (a link naming its own wins; **Clear filters** resets), on every list page
 with filters; a **star** in the header adds the page to **Favourites** at the top of the menu (≤ 20, as the page was titled); **Make this page
 my home page** in the user menu sets where a visit starts (the first arrival at the start goes there) and where the logo leads.
-(a) the store, favourites, the home page, and filters on Lots, Work orders and Quality results; (b) the other list pages.
+(a) the store, favourites, the home page, and filters on Lots, Work orders and Quality results; (b) the other list pages through
+`SavedFilters` (stock, journal, containers, shortages, materials, the schedule's view, NCRs, the OEE report, deliveries, audit trail):
+dates aren't kept (a window stays recent: the OEE report keeps its length), nor words typed as you go; a test checks each page's key.
 
 ## Application architecture
 

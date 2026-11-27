@@ -46,9 +46,9 @@
 }
 
 <div class="inv-toolbar">
-    <input type="search" class="form-control" style="max-width: 16rem" placeholder="@L["Container or location code"]" aria-label="@L["Search"]" @bind="_search" @bind:after="LoadAsync" />
+    <input type="search" class="form-control" style="max-width: 16rem" placeholder="@L["Container or location code"]" aria-label="@L["Search"]" @bind="_search" @bind:after="SearchAsync" />
     <div class="form-check">
-        <input class="form-check-input" type="checkbox" id="ct-retired" @bind="_includeRetired" @bind:after="LoadAsync" />
+        <input class="form-check-input" type="checkbox" id="ct-retired" @bind="_includeRetired" @bind:after="SearchAsync" />
         <label class="form-check-label" for="ct-retired">@L["Show retired"]</label>
     </div>
 </div>
@@ -216,8 +216,24 @@ else
 
     private bool CanManage => User.Can(PermissionCodes.LotMove, Sites.SiteId);
 
+    // The search last made (#131): its words and whether retired containers show.
+    private sealed record Filters(string? Search, bool IncludeRetired);
+
+    private const string Page = "inventory/containers";
+
+    private async Task SearchAsync()
+    {
+        await SavedFilters.SaveAsync(User, Api, Page, new Filters(_search, _includeRetired));
+        await LoadAsync();
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        if (SavedFilters.Load<Filters>(User, Page) is { } f)
+        {
+            (_search, _includeRetired) = (f.Search, f.IncludeRetired);
+        }
+
         try
         {
             await Sites.EnsureAsync(Api);

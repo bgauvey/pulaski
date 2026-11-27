@@ -1,6 +1,7 @@
 @using System.Globalization
 @using Pulaski.Web.Services.MachineData
 @inject PulaskiApiClient Api
+@inject CurrentUser User
 @inject Downloads Downloads
 @inject TimeProvider Clock
 
@@ -26,7 +27,7 @@
             <option value="@shiftCode">@L["Shift {0}{1}", shiftCode, shiftName is null ? "" : $" · {shiftName}"]</option>
         }
     </select>
-    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="LoadAsync">@L["Show"]</button>
+    <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="ShowAsync">@L["Show"]</button>
     <span class="ms-auto small text-muted">@L["Production days; at most {0}. Over {1}, from the daily rollups.", MaxDays, OnReadDays]</span>
 </div>
 
@@ -371,10 +372,24 @@ else if (_error is null)
               }
           </select>;
 
+    // The report last shown (#131): how many days back from today, the equipment and the shift. Dates themselves aren't kept, so it
+    // stays a recent window.
+    private sealed record Filters(int Days, Guid? EquipmentId, string? Shift);
+
+    private const string Page = "machines/oee";
+
     protected override async Task OnInitializedAsync()
     {
         _to = DateOnly.FromDateTime(Display.ToSite(Clock.GetUtcNow(), TimeZone).DateTime);
-        _from = _to.AddDays(-6);
+        var saved = SavedFilters.Load<Filters>(User, Page);
+        _from = _to.AddDays(-(Math.Clamp(saved?.Days ?? 7, 1, MaxDays) - 1));
+        (_equipment, _shift) = (saved?.EquipmentId, saved?.Shift);
+        await LoadAsync();
+    }
+
+    private async Task ShowAsync()
+    {
+        await SavedFilters.SaveAsync(User, Api, Page, new Filters(_to.DayNumber - _from.DayNumber + 1, _equipment, _shift));
         await LoadAsync();
     }
 

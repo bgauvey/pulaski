@@ -280,7 +280,11 @@ else
 
     private bool CanManage => User.Can(PermissionCodes.Integrations);
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override Task OnInitializedAsync()
+    {
+        RestoreFilter();
+        return LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -303,7 +307,25 @@ else
     {
         _filter = e.Value?.ToString() is { Length: > 0 } value ? value : null;
         _deliveries = null;
+        await SavedFilters.SaveAsync(User, Api, Page, new Filters(_filter ?? ""));
         await LoadAsync();
+    }
+
+    // Which deliveries show (#131), as last chosen: failed by default. Empty means all.
+    private sealed record Filters(string? Show);
+
+    private const string Page = "integrations";
+
+    private bool _filterRestored;
+
+    private void RestoreFilter()
+    {
+        if (!_filterRestored && SavedFilters.Load<Filters>(User, Page) is { Show: { } show })
+        {
+            _filter = show.Length > 0 ? show : null;
+        }
+
+        _filterRestored = true;
     }
 
     private async Task SwitchAsync(string feed)

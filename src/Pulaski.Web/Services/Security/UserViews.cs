@@ -38,3 +38,21 @@ public static class UserViews
 
     public static bool IsFavorite(IReadOnlyList<FavoritePage>? favorites, string href) => favorites?.Any(f => f.Href == href) == true;
 }
+
+/// <summary>A list page's remembered filters (#131): read from the user's profile, and kept when they search or change one.</summary>
+public static class SavedFilters
+{
+    public static T? Load<T>(CurrentUser user, string page) => user.Setting<T>(UserViews.FiltersKey(page));
+
+    /// <summary>Keeps the filters (null forgets them); a failure to save only means they aren't remembered this time.</summary>
+    public static async Task SaveAsync<T>(CurrentUser user, PulaskiApiClient api, string page, T? filters)
+    {
+        try
+        {
+            await user.SetSettingAsync(api, UserViews.FiltersKey(page), filters);
+        }
+        catch (ApiException)
+        {
+        }
+    }
+}

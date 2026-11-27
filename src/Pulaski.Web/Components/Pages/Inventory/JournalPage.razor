@@ -1,6 +1,7 @@
 @page "/inventory/journal"
 @attribute [RequiresView(PermissionCodes.InventoryView)]
 @inject PulaskiApiClient Api
+@inject CurrentUser User
 @inject SiteSelection Sites
 @inject TimeProvider Time
 @inject Downloads Downloads
@@ -163,10 +164,21 @@ else
     private string? _search;
     private string? _actor;
 
+    // The filters last searched with (#131), but not the dates: the window is the last week unless chosen again. A link naming a material,
+    // location or job opens with that instead.
+    private sealed record Filters(string? Kind, Guid? MaterialId, Guid? LocationId, string? Search, string? Actor);
+
+    private const string Page = "inventory/journal";
+
     protected override async Task OnInitializedAsync()
     {
-        _materialId = MaterialQuery;
-        _locationId = LocationQuery;
+        if (MaterialQuery is null && LocationQuery is null && JobQuery is null && SavedFilters.Load<Filters>(User, Page) is { } f)
+        {
+            (_kind, _materialId, _locationId, _search, _actor) = (f.Kind ?? "", f.MaterialId, f.LocationId, f.Search, f.Actor);
+        }
+
+        _materialId = MaterialQuery ?? _materialId;
+        _locationId = LocationQuery ?? _locationId;
         try
         {
             await Sites.EnsureAsync(Api);
@@ -181,10 +193,14 @@ else
             _error = ex;
         }
 
-        await SearchAsync();
+        await LoadAsync(after: null);
     }
 
-    private Task SearchAsync() => LoadAsync(after: null);
+    private async Task SearchAsync()
+    {
+        await SavedFilters.SaveAsync(User, Api, Page, new Filters(_kind, _materialId, _locationId, _search, _actor));
+        await LoadAsync(after: null);
+    }
 
     private Task<JournalPageDto> Fetch(LotEventDto? after)
     {

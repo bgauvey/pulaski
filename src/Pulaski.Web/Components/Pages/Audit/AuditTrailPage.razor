@@ -177,16 +177,29 @@ else if (_error is null)
 
         if (User.CanEverywhere(PermissionCodes.AuditView))
         {
+            if (Subject is null && !_restored && SavedFilters.Load<Filters>(User, Page) is { } f)
+            {
+                (_area, _actor, _text) = (f.Area, f.Actor, f.Text);
+            }
+
+            _restored = true;
             (_events, _next, _loaded) = ([], null, false);
             await LoadAsync(null);
         }
     }
 
-    private Task SearchAsync()
+    // The search last made (#131): area, who and text, not the dates (the last 30 days unless chosen again).
+    private sealed record Filters(string? Area, string? Actor, string? Text);
+
+    private const string Page = "audit";
+    private bool _restored;
+
+    private async Task SearchAsync()
     {
         (_events, _next) = ([], null);
         _open.Clear();
-        return LoadAsync(null);
+        await SavedFilters.SaveAsync(User, Api, Page, new Filters(_area, _actor, _text));
+        await LoadAsync(null);
     }
 
     private Task MoreAsync() => LoadAsync(_next);
