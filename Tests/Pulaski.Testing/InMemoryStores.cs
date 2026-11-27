@@ -130,6 +130,8 @@ public sealed class InMemoryStores
 
     public InMemoryLineCopies LineCopies { get; } = new();
 
+    public InMemorySiteCopies SiteCopies { get; } = new();
+
     public InMemoryAlerts Alerts { get; } = new();
 
     public InMemoryLineOutput LineOutput { get; } = new();
@@ -251,6 +253,7 @@ public sealed class InMemoryStores
         services.RemoveAll<Application.Security.IUserSettingStore>();
         services.RemoveAll<Application.Security.IUserSettingRepository>();
         services.RemoveAll<Application.EquipmentModel.ILineCopyRepository>();
+        services.RemoveAll<Application.EquipmentModel.ISiteCopyRepository>();
         services.RemoveAll<Application.Alerts.IAlertRepository>();
         services.RemoveAll<Application.Alerts.IAlertReadStore>();
         services.RemoveAll<Application.Execution.ILineOutputRepository>();
@@ -364,6 +367,7 @@ public sealed class InMemoryStores
         services.AddSingleton<Application.Security.IUserSettingStore>(UserSettings);
         services.AddSingleton<Application.Security.IUserSettingRepository>(UserSettings);
         services.AddSingleton<Application.EquipmentModel.ILineCopyRepository>(LineCopies);
+        services.AddSingleton<Application.EquipmentModel.ISiteCopyRepository>(SiteCopies);
         services.TryAddSingleton<Application.Quality.ICertificateRenderer>(new FakeCertificateRenderer());
         services.AddSingleton<Application.Alerts.IAlertRepository>(Alerts);
         services.AddSingleton<Application.Alerts.IAlertReadStore>(Alerts);

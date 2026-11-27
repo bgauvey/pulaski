@@ -99,6 +99,79 @@ public sealed class CapabilityAndImportTests(DatabaseFixture db)
     }
 
     [Fact]
+    public async Task A_new_site_takes_the_reference_data_of_another_with_its_reasons_and_profiles_pointing_at_the_copies()
+    {
+        var (line, _) = await PlantAsync();
+        Guid site, enterprise;
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            (site, enterprise) = await admin.QuerySingleAsync<(Guid, Guid)>(
+                "SELECT s.id, s.parent_id FROM core.equipment l JOIN core.equipment s ON s.id = l.site_id WHERE l.id = @Line", new { Line = line });
+            await admin.ExecuteAsync(
+                """
+                INSERT INTO core.shift_schedule (id, site_id, code, name, cycle_days, cycle_start, shifts, overrides)
+                VALUES (uuidv7(), @Site, 'S3X8', 'Three shifts', 1, current_date, '[{"code":"DAY","crew":"A","days":[0],"start":"06:00","minutes":480}]', '[{"date":"2026-12-25","off":true}]');
+                INSERT INTO core.crew (id, site_id, code, name) VALUES (uuidv7(), @Site, 'A', 'Crew A');
+                INSERT INTO core.qualification (id, site_id, code, name) VALUES (uuidv7(), @Site, 'FORK', 'Forklift');
+                INSERT INTO core.andon_type (id, site_id, code, name, escalate_after_minutes, sort_order) VALUES (uuidv7(), @Site, 'MAINT', 'Maintenance', 10, 1);
+                INSERT INTO core.reason_code (id, site_id, parent_id, reason_kind, code, name, is_selectable, sort_order)
+                VALUES (uuidv7(), @Site, NULL, 'utilization', 'G-' || @S, 'Mechanical', false, 1);
+                INSERT INTO core.reason_code (id, site_id, parent_id, reason_kind, utilization_class, code, name, is_selectable, sort_order)
+                SELECT uuidv7(), @Site, id, 'utilization', 'downtime', 'DIE-' || @S, 'Die', true, 2 FROM core.reason_code WHERE code = 'G-' || @S AND site_id = @Site;
+                INSERT INTO core.machine_profile (id, site_id, code, name) VALUES (uuidv7(), @Site, 'P-' || @S, 'Extruder');
+                INSERT INTO core.machine_profile_state (profile_id, raw_value, name, packml_state, reason_code_id)
+                SELECT p.id, 9, 'Die change', 6, r.id FROM core.machine_profile p, core.reason_code r WHERE p.code = 'P-' || @S AND r.code = 'DIE-' || @S;
+                INSERT INTO core.execution_policy (site_id, rate_tolerance_pct, consumption_tolerance_pct) VALUES (@Site, 125, 115);
+                INSERT INTO core.oee_target (id, site_id, effective_from, oee_pct) VALUES (uuidv7(), @Site, current_date - 30, 80);
+                INSERT INTO core.lot_attribute (id, site_id, code, name, data_type, applies_to_all, sort_order) VALUES (uuidv7(), @Site, 'MFI', 'Melt index', 'number', true, 1);
+                """, new { Site = site, S = _s });
+        }
+
+        async Task<Contracts.EquipmentModel.SiteCopyPlanDto> PlanAsync()
+        {
+            await using var scope = db.Services.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<Application.Abstractions.IQueryHandler<GetSiteCopyPlanQuery, Contracts.EquipmentModel.SiteCopyPlanDto>>()
+                .HandleAsync(new GetSiteCopyPlanQuery(site), CancellationToken.None);
+        }
+
+        var plan = await PlanAsync();
+        Assert.Equal((1, 2, 1, 1, 1, 1, 1, 2), (plan.ShiftSchedules, plan.Reasons, plan.MachineProfiles, plan.Crews, plan.Qualifications, plan.AndonTypes, plan.LotAttributes, plan.Settings));
+
+        var admin2 = new Domain.Security.UserAccess(Guid.CreateVersion7(), "test-user", "Test", "test-user", true,
+            [new Domain.Security.RoleGrant(Guid.CreateVersion7(), Domain.Security.Roles.Administrator, "Administrator", null, [])]);
+        var copied = await db.SendAsync(new CopySiteCommand(admin2, site, new Contracts.EquipmentModel.CopySiteRequest
+        {
+            Code = "SITE2-" + _s,
+            Name = "Second plant",
+            TimeZone = "Europe/Berlin",
+        }));
+        await Assert.ThrowsAsync<ValidationException>(() => db.SendAsync(new CopySiteCommand(admin2, site, new Contracts.EquipmentModel.CopySiteRequest { Code = "X" + _s, Name = "X" })));
+
+        await using (var admin = await db.AdminDataSource.OpenConnectionAsync())
+        {
+            var (parent, zone, level) = await admin.QuerySingleAsync<(Guid, string, string)>("SELECT parent_id, time_zone, level FROM core.equipment WHERE id = @Id", new { Id = copied.Id });
+            Assert.Equal((enterprise, "Europe/Berlin", "site"), (parent, zone, level));
+            Assert.Equal("[]", await admin.ExecuteScalarAsync<string>("SELECT overrides::text FROM core.shift_schedule WHERE site_id = @Id AND code = 'S3X8'", new { Id = copied.Id }));
+            Assert.Equal(3, await admin.ExecuteScalarAsync<int>(
+                "SELECT (SELECT count(*) FROM core.crew WHERE site_id = @Id) + (SELECT count(*) FROM core.qualification WHERE site_id = @Id) + (SELECT count(*) FROM core.andon_type WHERE site_id = @Id)",
+                new { Id = copied.Id }));
+
+            // The member's group and the profile's state point at the new site's copies, not the original's.
+            var (dieParentSite, stateReasonSite) = await admin.QuerySingleAsync<(Guid, Guid)>(
+                """
+                SELECT g.site_id, sr.site_id
+                FROM core.reason_code d JOIN core.reason_code g ON g.id = d.parent_id,
+                     core.machine_profile p JOIN core.machine_profile_state ps ON ps.profile_id = p.id JOIN core.reason_code sr ON sr.id = ps.reason_code_id
+                WHERE d.site_id = @Id AND d.code = 'DIE-' || @S AND p.site_id = @Id
+                """, new { Id = copied.Id, S = _s });
+            Assert.Equal((copied.Id, copied.Id), (dieParentSite, stateReasonSite));
+            Assert.Equal(125m, await admin.ExecuteScalarAsync<decimal>("SELECT rate_tolerance_pct FROM core.execution_policy WHERE site_id = @Id", new { Id = copied.Id }));
+            Assert.Equal(80m, await admin.ExecuteScalarAsync<decimal>("SELECT oee_pct FROM core.oee_target WHERE site_id = @Id AND equipment_id IS NULL", new { Id = copied.Id }));
+            Assert.Equal(1, await admin.ExecuteScalarAsync<int>("SELECT count(*) FROM core.lot_attribute WHERE site_id = @Id", new { Id = copied.Id }));
+        }
+    }
+
+    [Fact]
     public async Task The_audit_trail_says_who_changed_a_capability_and_what_changed()
     {
         var (line, _) = await PlantAsync();

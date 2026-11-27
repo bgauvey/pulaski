@@ -950,6 +950,7 @@ Choose the machine.,Elija la máquina.
 "Choose the material or class on each side, or Anything.","Elija el material o la clase en cada lado, o Cualquier cosa."
 "Choose the material, a line if it should have its own, and a period when the process ran normally. At least {0} results are needed; 25 or more give better limits.","Elija el material, una línea si debe tener sus propios límites, y un periodo en que el proceso funcionó normalmente. Se necesitan al menos {0} resultados; 25 o más dan mejores límites."
 Choose the material.,Elija el material.
+Choose the new site's time zone.,Elija la zona horaria del nuevo sitio.
 Choose the process and the operation's number.,Elija el proceso y el número de la operación.
 Choose the site.,Elija el sitio.
 Choose to merge,Elegir para unir
@@ -1176,6 +1177,7 @@ Crew working shift {0},Cuadrilla que trabaja el turno {0}
 Crew {0} is on shift; tick who is here.,La cuadrilla {0} está en turno; marque quién está aquí.
 Crew {0} not found.,Cuadrilla {0} no encontrada.
 Crews,Cuadrillas
+"Crews ({0}), qualifications ({1}) and andon call types ({2})","Cuadrillas ({0}), calificaciones ({1}) y tipos de llamada andon ({2})"
 Critical,Crítica
 Cumulative,Acumulado
 Current,Actual
@@ -1613,6 +1615,9 @@ Give the instruction a title of at most {0} characters.,Dé a la instrucción un
 Give the language a name of at most 100 characters.,Dé al idioma un nombre de como máximo 100 caracteres.
 Give the language's code and name.,Indique el código y el nombre del idioma.
 Give the lot number.,Dé el número de lote.
+Give the new site a code.,Dé un código al nuevo sitio.
+Give the new site a name.,Dé un nombre al nuevo sitio.
+"Give the new site's code, name and time zone.","Dé el código, el nombre y la zona horaria del nuevo sitio."
 Give the reason,Dar el motivo
 Give the receiver's address before switching the feed on.,Indique la dirección del receptor antes de activar el canal.
 "Give the server's endpoint, such as opc.tcp://plc1:4840.","Indique el endpoint del servidor, como opc.tcp://plc1:4840."
@@ -2242,11 +2247,13 @@ Make a material class…,Hacer una clase de material…
 Make a single material…,Hacer un solo material…
 Make group,Convertir en grupo
 Make reason,Convertir en motivo
+Make the new site,Crear el nuevo sitio
 Make this page my home page,Hacer de esta página mi página de inicio
 Make this version the one orders are made from.,Hacer de esta versión aquella desde la que se hacen las órdenes.
 Makes,Hace
 Makes {0} · {1} on {2},Hace {0} · {1} en {2}
 Makes {0} · {1} on {2}{3},Hace {0} · {1} en {2}{3}
+Making a site needs permission to manage equipment everywhere.,Crear un sitio necesita permiso para gestionar equipos en todas partes.
 Manual,Manual
 Map {0}: every connection needs it.,Asigne {0}: toda conexión lo necesita.
 Marginal,Marginal
@@ -2412,6 +2419,7 @@ New process,Nuevo proceso
 New role,Rol nuevo
 New schedule,Horario nuevo
 New shift schedule,Horario de turnos nuevo
+New site's code,Código del nuevo sitio
 New specification,Nueva especificación
 New state name,Nombre del estado nuevo
 New state value,Valor del estado nuevo
@@ -2658,6 +2666,7 @@ Not applied,No aplicado
 Not at this site yet: receive it?,Aún no está en este sitio: ¿recibirlo?
 Not capable,No capaz
 Not closed,Sin cerrar
+"Not copied: areas and lines (copy them one by one with Copy this line), people, devices, label serial numbers, and anything that happened.","No se copian: áreas y líneas (cópielas una a una con Copiar esta línea), personas, dispositivos, números de serie de etiquetas, ni nada de lo ocurrido."
 Not due yet,Aún no toca
 Not found,No encontrado
 Not heard from for {0} hours.,Sin noticias desde hace {0} horas.
@@ -3452,6 +3461,7 @@ Reversed: its counts are offset and its lots taken back,Revertido: sus cuentas s
 Reversed: run now has {0} good and {1} scrap; {2} lot(s) took the output back.,Revertido: la corrida ahora tiene {0} buenos y {1} de desperdicio; lotes que devolvieron la producción: {2}.
 Reverse…,Revertir…
 Review the copy,Revisar la copia
+Review what it would bring,Revisar lo que traería
 Revoke,Revocar
 Revoked,Revocada
 Revoked by {0}: {1},Revocada por {0}: {1}
@@ -3756,6 +3766,7 @@ Shift name,Nombre del turno
 Shift review,Revisión de turno
 Shift schedule {0} not found.,Horario de turnos {0} no encontrado.
 Shift schedules,Horarios de turno
+Shift schedules ({0}) and calendar exceptions still to come ({1}),Horarios de turnos ({0}) y excepciones de calendario por venir ({1})
 Shift {0},Turno {0}
 "Shift {0} doesn't run on {1:yyyy-MM-dd}, so there is nothing to take off.","El turno {0} no trabaja el {1:yyyy-MM-dd}, así que no hay nada que quitar."
 Shift {0} has two overrides on {1}.,El turno {0} tiene dos excepciones el {1}.
@@ -3833,6 +3844,7 @@ Since {0}{1}{2},Desde {0}{1}{2}
 Site,Sitio
 Site (default),Sitio (predeterminado)
 Site settings,Configuración de planta
+"Site settings and OEE targets ({0}), and lot attributes ({1})","Ajustes del sitio y objetivos de OEE ({0}), y atributos de lote ({1})"
 Site {0} not found.,Sitio {0} no encontrado.
 "Site, where the file names none","Sitio, donde el archivo no nombra ninguno"
 Size,Tamaño
@@ -3886,6 +3898,7 @@ Start a count,Iniciar un conteo
 "Start a line with # or ## for a heading, 1. for a numbered step, - for a point; **words** are bold. A blank line starts a new paragraph.","Empiece una línea con # o ## para un título, 1. para un paso numerado, - para un punto; **palabras** van en negrita. Una línea en blanco empieza un párrafo nuevo."
 "Start a new draft, move those lines to operations the process has, and release it.","Inicie un borrador nuevo, mueva esas líneas a operaciones que el proceso tenga, y libérelo."
 Start a new lot,Iniciar un lote nuevo
+Start a new site from this one,Empezar un nuevo sitio a partir de este
 Start a paid break now,Iniciar un descanso pagado ahora
 Start again,Empezar de nuevo
 Start an unpaid break now,Iniciar un descanso no pagado ahora
@@ -4368,6 +4381,7 @@ The site whose lines and departments it can use.,El sitio cuyas líneas y depart
 The site whose time zone and codes this equipment uses.,El sitio cuya zona horaria y códigos usa este equipo.
 The site's allocation settings were changed by someone else. Reload and try again.,Alguien más cambió los ajustes de asignación del sitio. Recargue e intente de nuevo.
 The site's label settings were changed by someone else. Reload and try again.,Alguien más cambió los ajustes de etiquetas del sitio. Recargue e intente de nuevo.
+The site's own reasons ({0}) and machine profiles ({1}),Los motivos propios del sitio ({0}) y perfiles de máquina ({1})
 The site's planning rate settings were changed by someone else. Reload and try again.,Alguien más cambió los ajustes de tasas de planeación del sitio. Recargue e intente de nuevo.
 The site's reporting tolerances were changed by someone else. Reload and try again.,Alguien más cambió las tolerancias de reporte del sitio. Recargue e intente de nuevo.
 The site's rule,La regla del sitio

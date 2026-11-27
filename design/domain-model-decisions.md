@@ -3503,7 +3503,13 @@ settings (profile, derivation, counter, output location, label printer, stop-cod
 today, maintenance plans counting from now, instructions aimed at the line). Codes follow the new line's; **tags are never copied** (bind them
 on Edge nodes), nor history, and processes keep naming the original. Same site only. Needs `equipment.manage`, and `processes.manage` for
 capabilities. Events: `equipment.created` per piece, `capability.added` per capability, `equipment.line_copied`.
-(b) a site's reference data.
+(b) **A site's reference data** into a new site beside it (user's choices: a new site made by the copy, under the same enterprise; reference data
+only, no equipment): `GetSiteCopyPlanQuery` counts, `CopySiteCommand` (`equipment.manage` everywhere) makes the site and copies, each part
+optional: shift schedules (without their one-day overrides) and calendar exceptions still to come; the site's own reasons (groups first) and
+machine profiles with their state, code and reason maps pointing at the copied reasons (`ISiteCopyRepository`); crews, qualifications, andon
+types; the settings rows (scheduling, execution, rate refresh, allocation, release approval), site OEE targets from today and lot attributes
+with their classes. Not label settings (SSCC serials are a site's own), people, devices or history. Event `equipment.site_copied`.
+(c) copying a line into another site.
 
 ## Application architecture
 

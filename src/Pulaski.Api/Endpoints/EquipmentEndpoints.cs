@@ -94,6 +94,17 @@ internal static class EquipmentEndpoints
             TypedResults.Ok(await handler.HandleAsync(new CopyLineCommand(await CallerAccess.RequireAsync(http), id, request), ct)))
         .RequirePermission(Permissions.Equipment, Site.Of(Application.Security.SiteOf.Equipment));
 
+        // Copying a site's reference data into a new site beside it (#140b).
+        group.MapGet("/{id:guid}/site-copy-plan", async Task<Ok<SiteCopyPlanDto>> (Guid id, IQueryHandler<GetSiteCopyPlanQuery, SiteCopyPlanDto> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new GetSiteCopyPlanQuery(id), ct)))
+        .RequireAny(Site.Of(Application.Security.SiteOf.Equipment), Permissions.EquipmentView);
+
+        // Making a site needs equipment.manage everywhere, which the handler checks; here, at the original site.
+        group.MapPost("/{id:guid}/copy-site", async Task<Ok<CreatedResponse>> (
+            Guid id, CopySiteRequest request, HttpContext http, ICommandHandler<CopySiteCommand, CreatedResponse> handler, CancellationToken ct) =>
+            TypedResults.Ok(await handler.HandleAsync(new CopySiteCommand(await CallerAccess.RequireAsync(http), id, request), ct)))
+        .RequirePermission(Permissions.Equipment, Site.Of(Application.Security.SiteOf.Equipment));
+
         return routes;
     }
 }

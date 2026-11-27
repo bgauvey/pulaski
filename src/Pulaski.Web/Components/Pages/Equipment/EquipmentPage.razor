@@ -81,6 +81,10 @@ else
                 {
                     <EquipmentOutput @key="(selected.Id, selected.Version)" Equipment="selected" Saved="() => RefreshAsync(selected.Id)" />
                 }
+                @if (selected.Level == "site" && User.CanEverywhere(PermissionCodes.Equipment))
+                {
+                    <SiteCopyPanel @key="selected.Id" Site="selected" Copied="OnLineCopiedAsync" />
+                }
                 @if (selected.CanRunJob && selected.Level is not ("site" or "area") && User.Can(PermissionCodes.Equipment, selected.SiteId))
                 {
                     <LineCopyPanel @key="selected.Id" Line="selected" Equipment="_equipment ?? []" Copied="OnLineCopiedAsync" />

@@ -497,6 +497,25 @@ In detail:
   the audit trail, with the copy itself (`pulaski.equipment.line_copied.v1`).
 - Copying needs permission to manage equipment at the site.
 
+### Start a new site from another
+
+A new plant set up like one you have can start with that one's lists and settings.
+
+1. Select the site on **Equipment**, and under **Start a new site from this one** click **Review what it would bring**.
+2. Give the **New site's code**, **Name** and **Time zone**, and untick what you don't want:
+   - **Shift schedules** and **calendar exceptions** still to come (holidays, shutdowns). A schedule's one-day changes aren't copied.
+   - **The site's own reasons** (stops, scrap, holds, adjustments, SPC causes, with their groups) and **machine profiles** with their state and
+     stop-code maps, which point at the new site's copies of the reasons.
+   - **Crews**, **qualifications** and **andon call types**.
+   - **Site settings** (changeover mode, reporting tolerances, planning-rate refresh, allocation and release approval), the site's **OEE
+     targets** (from today) and **lot attributes**.
+3. Click **Make the new site**. It goes under the same enterprise, and the tree shows it, selected.
+
+In detail: areas and lines aren't copied: add areas, then copy each line into the new site (one at a time, after this piece's follow-up). Nor
+are people, badges, terminals, printers, label settings (the SSCC serial numbers belong to one site), materials and processes (shared across
+the enterprise anyway), or anything that happened. It needs permission to manage equipment everywhere (administrators). One change: all or
+nothing, in the audit trail as `pulaski.equipment.site_copied.v1`.
+
 ### Deactivate equipment
 
 Set **Active** to *false*. Inactive equipment stays in the tree and in history, greyed out, but can no longer be used for new work. Pulaski never deletes equipment.

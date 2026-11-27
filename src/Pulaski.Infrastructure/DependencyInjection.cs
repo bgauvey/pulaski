@@ -126,6 +126,7 @@ public static class DependencyInjection
         services.AddScoped<Application.Setup.ISetupRepository, Setup.SetupRepository>();
         services.AddScoped<Application.Security.IUserSettingRepository, Security.UserSettingRepository>();
         services.AddScoped<Application.EquipmentModel.ILineCopyRepository, EquipmentModel.LineCopyRepository>();
+        services.AddScoped<Application.EquipmentModel.ISiteCopyRepository, EquipmentModel.SiteCopyRepository>();
         services.AddScoped<Application.Live.ILiveSignals, Live.LiveSignals>();
         services.AddScoped<Application.Maintenance.IMaintenancePlanRepository, Maintenance.MaintenancePlanRepository>();
         services.AddScoped<Application.Alerts.IAlertRepository, Alerts.AlertRepository>();

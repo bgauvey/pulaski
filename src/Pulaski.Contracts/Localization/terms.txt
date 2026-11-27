@@ -949,6 +949,7 @@ Choose the material classes it is for, or offer it for every material.
 Choose the material or class on each side, or Anything.
 Choose the material, a line if it should have its own, and a period when the process ran normally. At least {0} results are needed; 25 or more give better limits.
 Choose the material.
+Choose the new site's time zone.
 Choose the process and the operation's number.
 Choose the site.
 Choose to merge
@@ -1175,6 +1176,7 @@ Crew working shift {0}
 Crew {0} is on shift; tick who is here.
 Crew {0} not found.
 Crews
+Crews ({0}), qualifications ({1}) and andon call types ({2})
 Critical
 Cumulative
 Current
@@ -1612,6 +1614,9 @@ Give the language a name of at most 100 characters, as its speakers write it, su
 Give the language a name of at most 100 characters.
 Give the language's code and name.
 Give the lot number.
+Give the new site a code.
+Give the new site a name.
+Give the new site's code, name and time zone.
 Give the reason
 Give the receiver's address before switching the feed on.
 Give the server's endpoint, such as opc.tcp://plc1:4840.
@@ -2241,11 +2246,13 @@ Make a material class…
 Make a single material…
 Make group
 Make reason
+Make the new site
 Make this page my home page
 Make this version the one orders are made from.
 Makes
 Makes {0} · {1} on {2}
 Makes {0} · {1} on {2}{3}
+Making a site needs permission to manage equipment everywhere.
 Manual
 Map {0}: every connection needs it.
 Marginal
@@ -2411,6 +2418,7 @@ New process
 New role
 New schedule
 New shift schedule
+New site's code
 New specification
 New state name
 New state value
@@ -2657,6 +2665,7 @@ Not applied
 Not at this site yet: receive it?
 Not capable
 Not closed
+Not copied: areas and lines (copy them one by one with Copy this line), people, devices, label serial numbers, and anything that happened.
 Not due yet
 Not found
 Not heard from for {0} hours.
@@ -3451,6 +3460,7 @@ Reversed: its counts are offset and its lots taken back
 Reversed: run now has {0} good and {1} scrap; {2} lot(s) took the output back.
 Reverse…
 Review the copy
+Review what it would bring
 Revoke
 Revoked
 Revoked by {0}: {1}
@@ -3755,6 +3765,7 @@ Shift name
 Shift review
 Shift schedule {0} not found.
 Shift schedules
+Shift schedules ({0}) and calendar exceptions still to come ({1})
 Shift {0}
 Shift {0} doesn't run on {1:yyyy-MM-dd}, so there is nothing to take off.
 Shift {0} has two overrides on {1}.
@@ -3832,6 +3843,7 @@ Since {0}{1}{2}
 Site
 Site (default)
 Site settings
+Site settings and OEE targets ({0}), and lot attributes ({1})
 Site {0} not found.
 Site, where the file names none
 Size
@@ -3885,6 +3897,7 @@ Start a count
 Start a line with # or ## for a heading, 1. for a numbered step, - for a point; **words** are bold. A blank line starts a new paragraph.
 Start a new draft, move those lines to operations the process has, and release it.
 Start a new lot
+Start a new site from this one
 Start a paid break now
 Start again
 Start an unpaid break now
@@ -4367,6 +4380,7 @@ The site whose lines and departments it can use.
 The site whose time zone and codes this equipment uses.
 The site's allocation settings were changed by someone else. Reload and try again.
 The site's label settings were changed by someone else. Reload and try again.
+The site's own reasons ({0}) and machine profiles ({1})
 The site's planning rate settings were changed by someone else. Reload and try again.
 The site's reporting tolerances were changed by someone else. Reload and try again.
 The site's rule
