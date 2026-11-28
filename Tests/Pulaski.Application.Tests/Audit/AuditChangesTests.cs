@@ -32,6 +32,9 @@ public partial class AuditChangesTests
         Assert.Equal("capability changed", AuditChanges.Action("pulaski.capability.changed.v1"));
         Assert.Equal("ncr action done", AuditChanges.Action("pulaski.ncr.action_done.v1"));
         Assert.Equal("other.thing", AuditChanges.Action("other.thing"));
+        Assert.Equal("terminal enrollment code issued", AuditChanges.Action("pulaski.terminal.enrolment_code_issued.v1"));
+        Assert.Equal("job canceled", AuditChanges.Action("pulaski.job.cancelled.v1"));
+        Assert.Equal("spc alert signaled", AuditChanges.Action("pulaski.spc_alert.signalled.v1"));
 
         var row = new AuditRow(Guid.CreateVersion7(), new DateTimeOffset(2026, 11, 26, 8, 0, 0, TimeSpan.Zero), default, "t", "s", Guid.Empty, "lot", "user", "u", null, null, "{}");
         Assert.Equal((row.RecordedAt, row.Id), AuditCursor.Parse(AuditCursor.Of(row)));

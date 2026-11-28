@@ -67,11 +67,14 @@ public static class LineDisplayView
     /// <summary>Below its target, OEE shows as a caution; without a target or a figure, as normal.</summary>
     public static bool BelowTarget(LineDisplayLineDto line) => line is { OeePct: { } oee, OeeTargetPct: { } target } && oee < target;
 
-    /// <summary>The board's columns: one line fills the screen, two to four share it two by two, more fill rows of three.</summary>
+    /// <summary>
+    /// The board's columns: one line fills the screen, two or four share it two by two, three sit side by side (two rows of busy cards
+    /// don't fit a 1080p TV's height, and a TV can't scroll), more fill rows of three.
+    /// </summary>
     public static string GridClass(int lines) => lines switch
     {
         <= 1 => "board-grid-1",
-        <= 4 => "board-grid-2",
+        2 or 4 => "board-grid-2",
         _ => "board-grid-3",
     };
 }

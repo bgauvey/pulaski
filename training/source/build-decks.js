@@ -7,7 +7,7 @@ const sharp = require("sharp");
 const pptxgen = require("pptxgenjs");
 const md = require("react-icons/md");
 const { applyTheme } = require("./theme.js");
-const { roles, modules } = require("./content.js");
+const { roles, topics, modules } = require("./content.js");
 
 const OUT = path.resolve(__dirname, "..");
 const W = 13.333;
@@ -103,6 +103,21 @@ async function stepsSlide(ctx, s) {
     });
     check(ctx.deck, s.title, "steps", y - gap, BOTTOM);
     if (hasTips) await tipsCard(ctx, s.tipsTitle || "Good to know", s.tips, 8.55, TOP, 4.18, BOTTOM - TOP, s.tipsIcon || "MdLightbulbOutline", s.title);
+}
+
+// A screenshot (screens/<image>.png, from capture-screens.js) framed on the left, and what to notice on it beside it.
+async function screenSlide(ctx, s) {
+    const { slide, C } = ctx;
+    const file = path.join(__dirname, "screens", `${s.image}.png`);
+    const { width, height } = await sharp(file).metadata();
+    const boxW = 8.35, boxH = BOTTOM - TOP;
+    const scale = Math.min(boxW / width, boxH / height);
+    const w = width * scale, h = height * scale;
+    const x = 0.6 + (boxW - w) / 2, y = TOP;
+    slide.addShape("rect", { x: x - 0.03, y: y - 0.03, w: w + 0.06, h: h + 0.06, fill: { color: C.background1 }, line: { color: HEX.border, width: 1 },
+        shadow: { type: "outer", color: HEX.ink, opacity: 0.18, blur: 6, offset: 2, angle: 90 }, objectName: "Screenshot frame" });
+    slide.addImage({ path: file, x, y, w, h, altText: s.alt || `Screenshot: ${plain(s.title)}`, objectName: `Screenshot ${s.image}` });
+    await tipsCard(ctx, s.pointsTitle || "On this screen", s.points, 9.25, TOP, W - 0.6 - 9.25, BOTTOM - TOP, "MdDesktopWindows", s.title);
 }
 
 async function tipsCard(ctx, title, tips, x, y, w, h, iconName, slideTitle) {
@@ -290,6 +305,7 @@ async function addContent(pres, C, role, s, section) {
         case "quiz": await quizSlide(ctx, s); break;
         case "answers": await answersSlide(ctx, s); break;
         case "glance": await glanceSlide(ctx, s, role); break;
+        case "screen": await screenSlide(ctx, s); break;
         default: throw new Error(`Unknown slide type ${s.type}`);
     }
     if (s.notes) slide.addNotes(s.notes);
@@ -308,7 +324,7 @@ async function buildDeck(role) {
     pres.layout = "LAYOUT_WIDE";
     pres.theme = { headFontFace: FONT, bodyFontFace: FONT };
     pres.title = `Pulaski training: ${role.name}`;
-    pres.subject = `What the ${role.name} role does in Pulaski, step by step`;
+    pres.subject = role.topic ? role.tagline : `What the ${role.name} role does in Pulaski, step by step`;
     pres.author = "Pulaski";
     pres.company = "Pulaski";
     const C = pres.SchemeColor;
@@ -316,12 +332,12 @@ async function buildDeck(role) {
 
     pres.addSection({ title: "Welcome" });
     const t = pres.addSlide({ masterName: "Pulaski title", sectionTitle: "Welcome" });
-    t.addText(`${role.name} training`, { placeholder: "title" });
+    t.addText(role.topic ? role.name : `${role.name} training`, { placeholder: "title" });
     t.addText(`Pulaski MES · ${role.tagline}`, { placeholder: "body" });
     t.addNotes(role.welcomeNotes || `This course covers what the ${role.name} role does in Pulaski. Each topic has numbered steps for beginners and notes for the details. Pulaski is pre-alpha: screens change, and design/user_guide.md is the reference.`);
 
-    await addContent(pres, C, role, { type: "glance", title: "Your role at a glance", notes: role.glanceNotes }, "Welcome");
-    await addContent(pres, C, role, {
+    if (!role.topic) await addContent(pres, C, role, { type: "glance", title: "Your role at a glance", notes: role.glanceNotes }, "Welcome");
+    if (!role.topic) await addContent(pres, C, role, {
         type: "compare", title: "What you can see and change",
         columns: [
             { title: "You can see", icon: "MdVisibility", items: role.sees },
@@ -361,7 +377,7 @@ async function buildDeck(role) {
 
 (async () => {
     const only = process.argv[2];
-    for (const role of roles.filter((r) => !only || r.code === only)) {
+    for (const role of [...roles, ...topics].filter((r) => !only || r.code === only)) {
         const file = await buildDeck(role);
         console.log("wrote", path.relative(OUT, file));
     }

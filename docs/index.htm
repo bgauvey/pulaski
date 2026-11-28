@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pulaski · Open-source MES for process lines</title>
-<meta name="description" content="Pulaski is an open-source manufacturing execution system for extrusion, molding, compounding and high-rate packaging lines. It runs beneath your ERP. Pre-alpha, Apache 2.0.">
+<meta name="description" content="Pulaski is an open-source manufacturing execution system for extrusion, molding, compounding and high-rate packaging lines. It runs beneath your ERP. Free and open source under Apache 2.0, with no paid edition.">
 <meta name="color-scheme" content="light dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -155,7 +155,7 @@
     <nav class="links" aria-label="Sections">
       <a href="#capabilities">Capabilities</a>
       <a href="#architecture">Architecture</a>
-      <a href="#try">Try it</a>
+      <a href="#try">Demo</a>
       <a href="#docs">Docs</a>
       <a class="gh" href="https://github.com/bgauvey/pulaski">GitHub</a>
     </nav>
@@ -166,7 +166,7 @@
   <div class="hero">
     <div class="wrap">
       <div>
-        <p class="eyebrow">Open-source MES · Pre-alpha</p>
+        <p class="eyebrow">Open-source MES · Nearing beta</p>
         <h1>Execution for lines that never stop.</h1>
         <p class="lede">
           Pulaski is a manufacturing execution system for extrusion, molding, compounding and high-rate packaging lines.
@@ -175,10 +175,11 @@
         </p>
         <div class="actions">
           <a class="btn primary" href="https://github.com/bgauvey/pulaski">View on GitHub</a>
-          <a class="btn ghost" href="#try">Run it locally</a>
+          <a class="btn ghost" href="#try">Try the demo</a>
         </div>
         <div class="status" aria-label="Project status">
-          <span>Pre-alpha: APIs and screens will change</span>
+          <span>Nearing beta: APIs and screens may still change</span>
+          <span class="ok">Free, no paid edition</span>
           <span class="ok">Apache 2.0</span>
           <span class="ok">Self-hosted</span>
         </div>
@@ -233,21 +234,27 @@
     <div class="wrap">
       <h2>What it does today</h2>
       <p class="section-lede">
-        Pulaski is pre-alpha, but a lot already works end to end. Everything below is built and tested against PostgreSQL through the real handlers.
+        Pulaski is nearing beta, and works end to end from the machine to the ERP. Everything below is built and tested against PostgreSQL through the real handlers.
       </p>
       <div class="grid">
-        <div class="card"><h3>Equipment model <span class="tag">ISA-95</span></h3><p>Enterprise, site, area, line, unit and storage in one hierarchy, with capability flags, machine tags and shift calendars.</p></div>
-        <div class="card"><h3>Orders and scheduling</h3><p>Manufacturing order → work order → job → run. Planners set line and sequence; times are projected, with changeover rules, process links and batch sizes.</p></div>
-        <div class="card"><h3>Processes and BOMs <span class="tag">ISA-88</span></h3><p>Versioned routes of operations shared across lines, single-level BOMs with approved alternates, released into fixed rows that jobs reference.</p></div>
-        <div class="card"><h3>Production on the floor</h3><p>Start, pause and complete runs; report good and scrap, whole batches and partial ones, capped by a believable rate. Reversals, never edits.</p></div>
+        <div class="card"><h3>Equipment model <span class="tag">ISA-95</span></h3><p>Enterprise, site, area, line, unit and storage in one hierarchy, with capability flags, machine tags and shift calendars. Copy a line or a whole site to start the next one.</p></div>
+        <div class="card"><h3>Orders and scheduling</h3><p>Manufacturing order → work order → job → run, by hand or from the ERP. Planners set line and sequence; times are projected, with changeover rules, process links and batch sizes.</p></div>
+        <div class="card"><h3>Processes and BOMs <span class="tag">ISA-88</span></h3><p>Versioned routes of operations shared across lines, single-level BOMs with approved alternates, and an optional approval before anything is released.</p></div>
+        <div class="card"><h3>Production on the floor</h3><p>Start, pause and complete runs; report good and scrap, prefilled from the machine's counts for the operator to confirm. Lots filled by reports, labels printed as they close. Corrections, never edits.</p></div>
+        <div class="card"><h3>Operator stations and line boards</h3><p>Operators badge in at a touch station to run jobs, report, code stops, record samples and call for help. TVs on the floor show each line's state, calls, samples and OEE, live.</p></div>
         <div class="card"><h3>Machine data <span class="tag">Sparkplug B · OPC UA · EtherNet/IP</span></h3><p>An edge worker binds tags, buffers in SQLite through network loss and forwards. States are PackML; stops open and close on their own; alarms and process values are kept.</p></div>
-        <div class="card"><h3>Downtime and OEE</h3><p>Operators code stops from reason trees; supervisors split, merge and retime them. OEE by line, shift and day, with daily rollups, targets and a trend.</p></div>
-        <div class="card"><h3>Inventory and lots</h3><p>Lot balances by location, receipts, moves, holds, splits, merges, counts, back-dated movements and expiry. Containers, nested and mixing. GS1 labels and scanning.</p></div>
+        <div class="card"><h3>Downtime and OEE</h3><p>Operators code stops from reason trees; supervisors split, merge and retime them. OEE by line, shift and day, with daily rollups, targets, a trend and a stop Pareto.</p></div>
+        <div class="card"><h3>Quality and SPC</h3><p>Specifications with sampling plans, results by hand or from process values, control charts (X̄-R, X̄-S, I-MR, p, np, c, u) with Nelson rule alerts and capability, holds, NCRs and certificates of analysis.</p></div>
+        <div class="card"><h3>Work instructions</h3><p>Versioned instructions and files for an operation, material or line, shown on the job and at the station, with setup and first-article checklists and a second sign-off.</p></div>
+        <div class="card"><h3>Andon, maintenance and handover</h3><p>Calls for help that escalate, with response times. Maintenance requests from a stop or from preventive plans by run hours or counts. Shift handover notes and open items.</p></div>
+        <div class="card"><h3>Inventory and lots</h3><p>Lot balances by location, receipts, moves, holds, splits, merges, counts, back-dated movements and expiry. Containers, nested and mixing. GS1 labels, BarTender printing and scanning.</p></div>
         <div class="card"><h3>Genealogy through flow</h3><p>Feed points consume by time window, backflush or counter; silos and tanks are replayed FIFO or mixed, with exact, estimated or possible links in every trace.</p></div>
         <div class="card"><h3>Supply</h3><p>Shortages against stock and expected deliveries, lead times, lot allocation by expiry and site preferences, hard reservation, and picking lists.</p></div>
-        <div class="card"><h3>Labor</h3><p>People, crews, shifts and overrides, sessions shared out to runs, breaks, approvals, qualifications, and badge-and-PIN shop-floor terminals.</p></div>
-        <div class="card"><h3>Integration</h3><p>A REST API, CloudEvents webhooks to the ERP with retries, and imports for materials (CSV, B2MML, OData), people (CSV, SCIM), orders and receipts.</p></div>
-        <div class="card"><h3>Security and audit</h3><p>Roles held per site with fine-grained permissions. Every change appends a CloudEvents record to an append-only log in the same transaction.</p></div>
+        <div class="card"><h3>Labor</h3><p>People, crews, shifts and overrides, sessions shared out to runs, breaks, approvals, qualifications with expiry notices, and badge-and-PIN shop-floor terminals.</p></div>
+        <div class="card"><h3>Integration</h3><p>A REST API; CloudEvents feeds by webhook or MQTT with retries and acknowledgments; B2MML production performance. Materials, people, orders and lots from CSV, B2MML, OData, REST, SOAP, SCIM or a database, on a schedule.</p></div>
+        <div class="card"><h3>Reporting</h3><p>No in-app report builder: read-only report views for Power BI, Excel or a warehouse, giving the same figures as the screens.</p></div>
+        <div class="card"><h3>Security and audit</h3><p>Pulaski passwords or your identity provider (OpenID Connect). Roles held per site with fine-grained permissions. Every change goes into an append-only log, searchable as an audit trail.</p></div>
+        <div class="card"><h3>Everyday use</h3><p>Live updates, an Inbox of decisions waiting, e-mail alerts, favorites, help on every screen, translations (Spanish ships), a touch layout, a setup checklist and system health.</p></div>
       </div>
     </div>
   </section>
@@ -283,12 +290,14 @@
   <section id="not-yet">
     <div class="wrap">
       <h2>Not built yet</h2>
-      <p class="section-lede">Known gaps on the way to v1, so you don't go looking for them.</p>
+      <p class="section-lede">Known gaps on the way to v1, so you don't go looking for them. The user guide keeps <a href="https://github.com/bgauvey/pulaski/blob/main/design/user_guide.md#23-what-pulaski-doesnt-do-yet">the full list</a>.</p>
       <ul class="ticks">
-        <li>Quality: inspections and real-time SPC charts with rule alerts.</li>
-        <li>Sign-in through your identity provider (OpenID Connect). Today users have Pulaski passwords.</li>
-        <li>Machine counts turning into production reports; output is reported by hand.</li>
-        <li>A single-command demo. Today you run the API, the web app and the simulators yourself.</li>
+        <li>Working offline: stations and boards say when the network is gone and keep what was typed, but don't queue it to send later.</li>
+        <li>Writing to machines. Pulaski reads them; machine counts become production only when an operator confirms a report.</li>
+        <li>Adapters for a particular ERP's or CMMS's own API, and message queues such as Kafka. Feeds are webhooks and MQTT.</li>
+        <li>Alerts other than e-mail.</li>
+        <li>Help in other languages: the guide is in English.</li>
+        <li>Testing with a screen reader by a person. The main flows pass automated WCAG 2.2 AA checks.</li>
       </ul>
     </div>
   </section>
@@ -304,7 +313,7 @@
         <div class="arrow" aria-hidden="true">↓ signals over HTTPS</div>
         <div class="tier"><strong>Pulaski API</strong><span>ASP.NET Core, CQRS handlers, domain rules in C#. PostgreSQL with time-partitioned history, BRIN indexes and worker-maintained rollups; an append-only CloudEvents log.</span></div>
         <div class="arrow" aria-hidden="true">↓</div>
-        <div class="tier out"><strong>People and systems</strong><span>Blazor web app for planners, supervisors and operators · shop-floor terminals · ERP webhooks · your BI tools through the API</span></div>
+        <div class="tier out"><strong>People and systems</strong><span>Blazor web app for planners, supervisors and operators · operator stations and line boards · ERP feeds by webhook or MQTT · your BI tools through read-only report views</span></div>
       </div>
 
       <div class="principles two">
@@ -323,6 +332,7 @@
               <tr><th>Platform</th><td>C# on the current .NET LTS</td></tr>
               <tr><th>Database</th><td>PostgreSQL 18 only</td></tr>
               <tr><th>Data access</th><td>Dapper over Npgsql</td></tr>
+              <tr><th>Sign-in</th><td>Pulaski passwords or OpenID Connect</td></tr>
               <tr><th>UI</th><td>Blazor Web App, interactive server</td></tr>
               <tr><th>Deployment</th><td>Containers or a Windows service</td></tr>
             </table>
@@ -334,44 +344,54 @@
 
   <section id="try">
     <div class="wrap">
-      <h2>Run it locally</h2>
-      <p class="section-lede">You need the .NET SDK (current LTS), PostgreSQL 18 and, for machine data, Docker.</p>
+      <h2>Try the demo</h2>
+      <p class="section-lede">The demo needs only Docker (Docker Desktop on Windows or a Mac). Running from source needs the .NET SDK (current LTS) and PostgreSQL 18.</p>
       <ol class="steps">
         <li>
-          <p><strong>Get the code and load the database.</strong></p>
+          <p><strong>Start the demo plant.</strong></p>
 <pre>git clone https://github.com/bgauvey/pulaski.git && cd pulaski
-createdb pulaski
+docker compose up --build</pre>
+          <p>Give it a minute, then open <code>http://localhost:5090</code> and sign in as <code>admin</code> with the password <code>Pulaski-demo-1</code>; you'll choose a new one.</p>
+        </li>
+        <li>
+          <p><strong>Look around.</strong> Two extrusion lines and a packing line, with the last two shifts already recorded. Simulated PackML machines
+          publish over Sparkplug B (<strong>Operate → Machines</strong>), a work order is running, and the extruder's melt temperature and profile width fill
+          in live control charts. The API's e-mail lands in Mailpit at <code>http://localhost:8025</code>.</p>
+        </li>
+        <li>
+          <p><strong>Stop it</strong> with Ctrl+C or <code>docker compose down</code>; add <code>-v</code> to delete its data. The passwords and keys in <code>compose.yaml</code> are for the demo only.</p>
+        </li>
+      </ol>
+
+      <h3 class="small" style="margin-top:40px">Or run it from source</h3>
+<pre>createdb pulaski
 psql -d pulaski -v ON_ERROR_STOP=1 -f db/schema-draft.sql
 psql -d pulaski -f db/app-role.sql
+psql -d pulaski -f db/report-role.sql
 psql -d pulaski -f db/seed-demo.sql      <span class="c"># empty database only</span>
 psql -d pulaski -f db/seed-materials.sql <span class="c"># optional demo materials</span>
 psql -d pulaski -f db/seed-units.sql
-psql -d pulaski -f db/seed-reasons.sql</pre>
-        </li>
-        <li>
-          <p><strong>Start the API and the web app</strong> in two terminals.</p>
-<pre>dotnet run --project src/Pulaski.Api   <span class="c"># http://localhost:5080</span>
-dotnet run --project src/Pulaski.Web   <span class="c"># http://localhost:5090</span></pre>
-          <p>Sign in as <code>admin</code> with the temporary password in <code>src/Pulaski.Api/appsettings.Development.json</code>; you'll be asked to change it.</p>
-        </li>
-        <li>
-          <p><strong>Optionally, feed it machine data</strong> from the simulated line.</p>
-<pre>docker compose -f deploy/simulator/compose.yaml up -d
-dotnet run --project src/Pulaski.Edge  <span class="c"># credentials from Configure → Edge nodes → Setup</span></pre>
-        </li>
-      </ol>
+psql -d pulaski -f db/seed-reasons.sql
+dotnet run --project src/Pulaski.Api     <span class="c"># http://localhost:5080</span>
+dotnet run --project src/Pulaski.Web     <span class="c"># http://localhost:5090</span></pre>
+      <p>Sign in as <code>admin</code> with the temporary password in <code>src/Pulaski.Api/appsettings.Development.json</code>. For machine data, start the
+      simulators with <code>docker compose -f deploy/simulator/compose.yaml up -d</code> and run <code>src/Pulaski.Edge</code> with the credentials from
+      <strong>Configure → Edge nodes → Setup</strong>.</p>
     </div>
   </section>
 
   <section id="docs">
     <div class="wrap">
       <h2>Documentation</h2>
-      <p class="section-lede">The working documents live in the repository's <code>design</code> folder and change with the code.</p>
+      <p class="section-lede">The working documents live in the repository and change with the code.</p>
       <div class="grid">
         <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/user_guide.md"><h3>User guide</h3><p>Every screen, step by step for beginners, in detail for experienced users.</p></a>
         <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/charter.md"><h3>Charter</h3><p>Purpose, target plants, v1 scope, non-goals and the decisions that are expensive to reverse.</p></a>
         <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/domain-model-decisions.md"><h3>Decision log</h3><p>Each settled design decision, numbered, with why it was made.</p></a>
         <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/database.md"><h3>Database reference</h3><p>Every table and column of the PostgreSQL schema.</p></a>
+        <a class="card" href="https://github.com/bgauvey/pulaski/tree/main/training"><h3>Training decks</h3><p>A PowerPoint course for each role, and one on line boards, with screenshots, a knowledge check and a quick reference.</p></a>
+        <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/reporting.md"><h3>Reporting guide</h3><p>The read-only report views, for analysts building in Power BI, Excel or a warehouse.</p></a>
+        <a class="card" href="https://github.com/bgauvey/pulaski/blob/main/design/accessibility.md"><h3>Accessibility</h3><p>The WCAG 2.2 AA checks, what they found and the screen-reader test script.</p></a>
       </div>
     </div>
   </section>
@@ -392,7 +412,11 @@ dotnet run --project src/Pulaski.Edge  <span class="c"># credentials from Config
       <div>
         <h2>License</h2>
         <p class="section-lede">
-          Apache License 2.0. Pulaski is an independent personal project, built clean-room from public standards, and is not affiliated with,
+          Pulaski is free, and the code in this repository always will be: there is no paid edition and no paid feature. Under the
+          Apache License 2.0, anyone may fork it and do as they wish with their fork.
+        </p>
+        <p class="section-lede">
+          Pulaski is an independent personal project, built clean-room from public standards, and is not affiliated with,
           sponsored by or endorsed by any employer or company. <em>Pulaski</em> is a working codename.
         </p>
       </div>

@@ -2432,7 +2432,7 @@ Issue #87. Pulaski sent no e-mail, so only an administrator could reset a forgot
 
 **Off by default.** On only with `Security:PasswordReset:Enabled`, the UI's public address (`UiBaseUrl`, https; the link is made from it,
 never from the request's host, which a caller chooses) and an SMTP server and sender in the `Email` section (configuration only, never the
-database). `GET /api/auth/options` says whether it is on; the sign-in page then links to *Forgotten your password?*.
+database). `GET /api/auth/options` says whether it is on; the sign-in page then links to *Forgot your password?*.
 
 **Asking** (`POST /api/auth/password-reset`, signed out; `RequestPasswordResetCommand`). The user name, or an e-mail address (the user's
 choice) that is exactly one active local user's. Eligible: active, local, an e-mail address on file, not a service account, and, when only

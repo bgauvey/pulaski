@@ -1,13 +1,20 @@
 {
   "name": "pulaski-training-decks",
   "private": true,
-  "description": "Builds the role training decks in ../ from content.js (npm install, then npm run build).",
-  "scripts": { "build": "node build-decks.js" },
+  "description": "Builds the role and line board training decks in ../ from content.js and the screenshots in screens/ (npm install, then npm run build; npm run screens and screens:board retake the screenshots).",
+  "scripts": {
+    "build": "node build-decks.js",
+    "screens": "node capture-screens.js",
+    "screens:board": "node capture-board.js"
+  },
   "dependencies": {
     "pptxgenjs": "^3.12.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-icons": "^5.3.0",
     "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
   }
 }

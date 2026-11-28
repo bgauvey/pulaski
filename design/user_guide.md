@@ -75,7 +75,7 @@ To try Pulaski on your own computer, you need Docker (Docker Desktop on Windows 
 **In detail**
 
 - **What runs.** PostgreSQL, Pulaski's API (`http://localhost:5080`) and screens, the machine simulators (an MQTT broker with three simulated PackML machines, a process simulator for the extruder's melt temperature and profile width, and an OPC UA server: see [Edge nodes](#20-edge-nodes-collecting-machine-data), *The demo simulators*), and an edge node reading them. A mail catcher (Mailpit) takes every e-mail Pulaski sends, and nothing leaves your computer.
-- **E-mail.** Open `http://localhost:8025` to read what Pulaski sent: [My alerts](#get-e-mails-when-something-needs-you-my-alerts), qualification expiry notices, and password reset links (**Forgotten your password?** on the sign-in page works in the demo). Pulaski e-mails only users with an e-mail address, and the demo's users have none. Give yours one on **Configure → Users** first, any address will do.
+- **E-mail.** Open `http://localhost:8025` to read what Pulaski sent: [My alerts](#get-e-mails-when-something-needs-you-my-alerts), qualification expiry notices, and password reset links (**Forgot your password?** on the sign-in page works in the demo). Pulaski e-mails only users with an e-mail address, and the demo's users have none. Give yours one on **Configure → Users** first, any address will do.
 - **What the demo sets up.** Through Pulaski itself, as the administrator: the edge node **DEMO-EDGE** with a Sparkplug B connection to the broker, the machine profile **PACKML-SIM** (the simulators number their states their own way) on the three machines, their tags (every machine's state, unit mode and speed; the saw's and packer's processed and defective counts; the extruder's melt temperature and profile width), and the user **demo-edge** the edge signs in as. Then it resets and starts each simulated machine, as an operator would. Everything it did is in the history like anyone's work, and you can change it on **Configure → Edge nodes**.
 - **The control charts.** Also as the administrator, the setup adds the characteristics **MELT-TEMP** (melt temperature, °C in its name, as Pulaski has no temperature units) and **PROFILE-WIDTH** (mm), both individuals and moving range with the Western Electric rules; a released specification for PRF-4410-WH (melt temperature 209 to 221 °C, capable; width 41.85 to 42.15 mm, marginal); manual control limits at ±3 sigma of the simulator's design (for a real process, work them out from a baseline instead: see [Set control limits](#set-control-limits)); and samples each from its tag every minute. Results are taken only while a job runs on the line, so it also releases the process **DEMO-EXTRUDE** (operation 10 on EXT-01), and dispatches work order **DEMO-0001** for 50,000 m of PRF-4410-WH and starts its job. Results are recorded as source *Automatic*, against the job, and checked against the specification.
 - **The history.** After the setup, the demo records the previous shift and the current one up to the moment it starts, as if its people and machines had worked them. It goes through Pulaski's own rules, each step at its time, so everything is in the history and the event log like anyone's work. It adds:
@@ -1104,7 +1104,7 @@ Each line is a card. A running line shows its job with the run's length, good qu
 An operator station is a touch screen at one line: it shows the line's state, running job and next jobs, and the person working there signs on
 with their badge. (Starting, pausing, reporting and coding stops at the station come next.)
 
-1. On **Labor → Terminals**, register a terminal for the station and set **First line offered** to its line.
+1. On **Configure → Equipment → Terminals**, register a terminal for the station and set **First line offered** to its line.
 2. Click **Enrollment code**, open `/terminal/enrol` on the station and type the code, then open `/terminal/station` and leave it there.
 3. To sign on, hold your badge to the reader (or type its number and press Enter), and your PIN if the terminal asks for one.
 4. Click **Sign off** when you leave. Badging with someone else's badge switches to them.
@@ -1211,7 +1211,8 @@ job, stop or clock before sending again, since it may have arrived.
 
 A TV on the floor can show each line's state, running job, output, down time and OEE for the shift, in large type, without anyone signing in.
 
-1. On **Labor → Terminals**, register a terminal for the TV; **Offers the lines of** decides which lines it shows (an area, or one line).
+1. On **Configure → Equipment → Terminals**, register a terminal for the TV; its **Name** is the board's title and **Offers the lines of**
+   decides which lines it shows (the site, an area, or one line).
 2. Click **Enrollment code**, open `/terminal/enrol` in the TV's browser and type the code.
 3. Open `/terminal/board` on the TV (add `?line=EXT-01` to show one line full screen) and leave it running.
 
@@ -1221,7 +1222,9 @@ machine state but has no signal shows **No signal**, and down time counts no-sig
 signal, waiting, OEE below target, stops to code. Switching the terminal off stops the board at once. A line's calls for help that aren't
 resolved show under its name: amber while waiting, quiet once someone is on it, and red, with the line's frame, once escalated. Its
 maintenance requests that aren't closed, its machines' too, show under them with a dashed frame: up to three, the waiting ones first, with
-**and … more** after that.
+**and … more** after that. Samples its running job owes show too, amber when due and red when overdue, and its open handover items. One line
+fills the screen, two or four share it two by two, three sit side by side and more fill rows of three. The enrollment is kept in the TV
+browser's cookies for 400 days: use a browser that keeps them (not a private or guest window), or the board asks to be enrolled again.
 
 ### Answer calls for help from the Andon page
 
@@ -2752,11 +2755,11 @@ Your session lasts up to 12 hours. When it ends, or an administrator switches yo
 
 A password needs at least 10 characters, with two of: lower case, upper case, digits, symbols, and must not contain your user name. Five wrong passwords in a row lock you out for 15 minutes; an administrator can unlock you sooner by resetting your password.
 
-### Forgotten your password?
+### Forgot your password?
 
-Where whoever runs Pulaski has switched it on, the sign-in page shows **Forgotten your password?**:
+Where whoever runs Pulaski has switched it on, the sign-in page shows **Forgot your password?**:
 
-1. Click **Forgotten your password?**, type your **User name or e-mail**, and click **Send the link**. Pulaski says a link is on its way if that matches an account; it says the same either way, so nobody can find out who has an account.
+1. Click **Forgot your password?**, type your **User name or e-mail**, and click **Send the link**. Pulaski says a link is on its way if that matches an account; it says the same either way, so nobody can find out who has an account.
 2. Open the e-mail and its link within 30 minutes (or the time your organization set). The link works once.
 3. Type the **New password** twice and click **Change password**, then sign in with it. Pulaski e-mails you that the password was changed.
 

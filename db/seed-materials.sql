@@ -82,12 +82,12 @@ items(code, name, material_type, class_code, uom_code, lot_tracked) AS (
     -- Additives and fillers (14).
     SELECT a.code, a.name, 'raw', 'ADDITIVE', 'kg', true
     FROM (VALUES
-        ('ADD-CAZN-STAB', 'Calcium-zinc heat stabiliser'), ('ADD-SN-STAB', 'Organotin heat stabiliser'),
+        ('ADD-CAZN-STAB', 'Calcium-zinc heat stabilizer'), ('ADD-SN-STAB', 'Organotin heat stabilizer'),
         ('ADD-LUB-INT', 'Internal lubricant'), ('ADD-LUB-EXT', 'External lubricant, paraffin wax'),
         ('ADD-PE-WAX', 'Polyethylene wax'), ('ADD-ACR-IMP', 'Acrylic impact modifier'),
         ('ADD-CPE-IMP', 'Chlorinated PE impact modifier'), ('ADD-PA-ACR', 'Acrylic processing aid'),
         ('ADD-CACO3-1', 'Calcium carbonate filler, 1 µm coated'), ('ADD-CACO3-3', 'Calcium carbonate filler, 3 µm'),
-        ('ADD-TALC', 'Talc filler'), ('ADD-UV-HALS', 'UV stabiliser, HALS'),
+        ('ADD-TALC', 'Talc filler'), ('ADD-UV-HALS', 'UV stabilizer, HALS'),
         ('ADD-AO-1010', 'Primary antioxidant'), ('ADD-FR-ATH', 'Flame retardant, ATH')) AS a(code, name)
 
     UNION ALL
@@ -98,7 +98,7 @@ items(code, name, material_type, class_code, uom_code, lot_tracked) AS (
         ('MB-BR-8017', 'Chocolate brown masterbatch'), ('MB-AN-7016', 'Anthracite masterbatch'),
         ('MB-BG-1015', 'Light ivory masterbatch'), ('MB-BL-5015', 'Sky blue masterbatch'),
         ('MB-RD-3020', 'Traffic red masterbatch'), ('MB-GN-6018', 'Yellow-green masterbatch'),
-        ('MB-YL-1023', 'Traffic yellow masterbatch'), ('MB-UV-5', 'UV stabiliser masterbatch'),
+        ('MB-YL-1023', 'Traffic yellow masterbatch'), ('MB-UV-5', 'UV stabilizer masterbatch'),
         ('MB-AS-GMS', 'Antistatic masterbatch'), ('MB-SLIP-ER', 'Slip masterbatch, erucamide'),
         ('MB-AB-SIO2', 'Antiblock masterbatch')) AS m(code, name)
 

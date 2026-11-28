@@ -65,7 +65,11 @@ public static class AuditChanges
         }
 
         var end = parts[^1].StartsWith('v') && int.TryParse(parts[^1][1..], NumberStyles.None, CultureInfo.InvariantCulture, out _) ? parts.Length - 1 : parts.Length;
-        return string.Join(' ', parts[1..end]).Replace('_', ' ');
+        var words = string.Join(' ', parts[1..end]).Replace('_', ' ');
+        // Recorded event types keep their spelling (a contract); the trail shows the US one.
+        return words.Replace("cancelled", "canceled", StringComparison.Ordinal)
+            .Replace("signalled", "signaled", StringComparison.Ordinal)
+            .Replace("enrolment", "enrollment", StringComparison.Ordinal);
     }
 
     private static Dictionary<string, string?> Flatten(JsonElement element)

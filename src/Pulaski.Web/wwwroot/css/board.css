@@ -183,6 +183,11 @@
     text-align: center;
 }
 
+    /* The page's heading color is the light theme's ink, unreadable on the board's dark background. */
+    .board-message h1 {
+        color: var(--board-text);
+    }
+
 /* Calls for help (#158): a waiting call in the waiting color, an answered one quiet, an escalated one red and the line's frame with it. */
 .board-call {
     display: flex;
